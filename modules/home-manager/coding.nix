@@ -18,7 +18,9 @@
         vscode
         fnm
         jujutsu
+        neovim
         curl
+        ripgrep
         uv
         qdirstat
         htop
@@ -26,6 +28,9 @@
         docker-compose
       ];
 
+      # ------------------------------------------------------------------------
+      # Shell Configuration
+      # ------------------------------------------------------------------------
       programs.bash.enable = true;
       programs.bash.shellAliases = {
         nixos-switch = "sudo nixos-rebuild switch --flake ${config.home.homeDirectory}/dev/alex/nixfiles#${config.flake.nixosHostName}";
@@ -34,6 +39,11 @@
         eval "$(${pkgs.lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
       '';
 
+      # ------------------------------------------------------------------------
+      # Git Configuration
+      # ------------------------------------------------------------------------
+      # `lib.generators.toGitINI` cannot express both `[color] branch = auto` and `[color "branch"]`
+      # in one attrset, so the three `[color "..."]` blocks live in `includes` (raw snippet).
       programs.git = {
         enable = true;
         package = pkgs.git;
