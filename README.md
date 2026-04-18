@@ -7,6 +7,22 @@ Personal Nix setup with two entry points:
 
 The repo follows the same broad pattern as the reference configs: `flake-parts` for wiring, `import-tree` for auto-discovery, reusable modules under `modules/`, and thin host/profile files that pick what to enable.
 
+## Quick Start
+
+If you just installed Nix, keep the first run simple:
+
+1. Clone this repo and change into it.
+2. Run `nix flake check` to make sure the config evaluates.
+3. Apply the profile for your machine.
+
+```bash
+home-manager switch --flake .#macbook
+# or, on Linux
+sudo nixos-rebuild switch --flake .#workstation
+```
+
+To add a new module, create a `.nix` file under `modules/`, expose it under `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, then add it to `homes/macbook/default.nix` or `hosts/workstation/default.nix`.
+
 ## Layout
 
 - `modules/home-manager/` holds reusable user-level config such as terminal apps, shell setup, git, Jujutsu, macOS apps, coding tools, and optional Bitwarden integration.

@@ -7,6 +7,20 @@ This repository is a Nix flake for a single user with two entry points:
 
 The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/`, `hosts/`, and `homes/` are discovered automatically.
 
+## Quick Start
+
+If you are new to Nix, start by cloning the repo, entering it, and running `nix flake check`.
+
+Then apply the profile that matches the machine:
+
+```bash
+home-manager switch --flake .#macbook
+# or, on Linux
+sudo nixos-rebuild switch --flake .#workstation
+```
+
+To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `homes/macbook/default.nix` or `hosts/workstation/default.nix`.
+
 ## Layout
 
 - `modules/home-manager/` contains reusable Home Manager modules.
