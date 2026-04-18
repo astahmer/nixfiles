@@ -17,6 +17,7 @@ in
       hm.terminal
       hm.git
       hm.coding
+      hm.tools
 
       {
         home.homeDirectory = "/Users/${username}";

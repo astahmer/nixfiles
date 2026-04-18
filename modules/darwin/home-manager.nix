@@ -4,9 +4,11 @@ let
   hm = config.flake.modules.homeManager;
 in
 {
-  config.flake.modules.nixos.homeManager =
+  config.flake.modules.darwin.homeManager =
     { ... }:
     {
+      imports = [ inputs.home-manager.darwinModules.home-manager ];
+
       home-manager = {
         backupFileExtension = "hm-backup";
         extraSpecialArgs = { inherit inputs; };
@@ -14,7 +16,7 @@ in
         useUserPackages = true;
 
         users.${username} = {
-          home.homeDirectory = "/home/${username}";
+          home.homeDirectory = "/Users/${username}";
           home.username = username;
 
           imports = [
@@ -23,7 +25,6 @@ in
             hm.git
             hm.coding
             hm.tools
-            hm.launcher
           ];
         };
       };
