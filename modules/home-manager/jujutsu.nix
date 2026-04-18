@@ -45,12 +45,11 @@
 
           aliases = {
             d = [ "duplicate" ];
-            mine = [ "log" "-r" "mine()" ];
+            f = [ "git" "fetch" ];
+            l = [ "log" "-r" ];
+            stat = [ "log" "--stat" "-r" ];
+            #
             branch = [ "bookmark" "set" "--revision" "@" ];
-            vs = [ "log" "-r" "trunk()..closest_pushable(@)" ];
-            vsb = [ "log" "-r" "trunk()..closest_bookmark(@)" ];
-            tip = [ "log" "-r" "tip" ];
-            fixme = [ "fix" "-s@" "--include-unchanged-files" ];
             tug = [
               "bookmark"
               "move"
@@ -59,17 +58,26 @@
               "--to"
               "closest_pushable(@)"
             ];
-            l = [ "log" "-r" ];
+            #
             slice = [ "log" "-r" "slice()" ];
+            tip = [ "log" "-r" "tip" ];
+            mine = [ "log" "-r" "mine()" ];
+            #
+            vs = [ "log" "-r" "trunk()..closest_pushable(@)" ];
+            vsb = [ "log" "-r" "trunk()..closest_bookmark(@)" ];
+            #
             by = [ "log" "-n" "2" ];
             bk = [ "log" "-r" "bookmarks()" ];
             rb = [ "rebase" "-b" "@" "-o" "main@origin" ];
-            f = [ "git" "fetch" ];
           };
 
           templates = {
             new_description = ''"wip"'';
           };
+
+          remotes.origin = {
+            auto-track-bookmarks = "*";
+          }
 
           fix.tools.oxfmt = {
             command = [ "oxfmt" "--stdin-filepath=$path" ];
