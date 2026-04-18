@@ -1,0 +1,37 @@
+# nixfiles — Agent Guidelines
+
+This repository is a Nix flake for a single user with two entry points:
+
+- a NixOS host in `hosts/workstation`
+- a standalone macOS Home Manager profile in `homes/macbook`
+
+The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/`, `hosts/`, and `homes/` are discovered automatically.
+
+## Layout
+
+- `modules/home-manager/` contains reusable Home Manager modules.
+- `modules/nixos/` contains NixOS system modules.
+- `assets/.agents/` contains global Copilot skills and is linked into `~/.agents` by Home Manager.
+- `.references/` contains cloned reference repositories used for comparison and pattern mining.
+
+## Reference Repos
+
+- When cloning a reference repo into `.references/<name>`, keep its `AGENTS.md` at the repo root.
+- Read that `AGENTS.md` before inspecting the repo's implementation details.
+- Keep reference repos isolated from the main repo and do not edit them unless the user asks.
+
+## Nix Conventions
+
+- Prefer explicit package references like `pkgs.spotify`, `pkgs.git`, or `pkgs."name-with-hyphen"`.
+- Keep NixOS and Home Manager concerns split when the repo already has separate modules.
+- Use thin host/profile files that only wire modules together.
+
+## Apply Commands
+
+- `home-manager switch --flake .#macbook`
+- `sudo nixos-rebuild switch --flake .#workstation`
+
+## Notes for Agents
+
+- `assets/.agents` is the source of the global skills tree; update it when adding or changing global skills.
+- When adding new reusable repository conventions, document them here so future agents can find them quickly.

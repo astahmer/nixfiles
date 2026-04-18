@@ -19,6 +19,7 @@ in
       hm.git
       hm.jujutsu
       hm.coding
+      hm.agents
       hm.tools
       hm.macosApps
 
