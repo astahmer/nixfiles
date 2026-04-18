@@ -1,6 +1,6 @@
 { ... }:
 {
-  # Home Manager side: Sunshine
+  # NixOS side: Sunshine
   config.flake.modules.nixos.sunshine =
     { pkgs, ... }:
     {

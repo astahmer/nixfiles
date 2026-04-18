@@ -6,23 +6,23 @@
   config.flake.modules.homeManager.coding =
     { pkgs, ... }:
     {
-      home.packages = with pkgs; [
-        google-chrome
-        gh
-        jq
-        neovim
-        nixd
-        nixfmt
-        tmux
-        vscode
-        fnm
-        curl
-        ripgrep
-        uv
-        qdirstat
-        htop
-        devenv
-        docker-compose
+      home.packages = [
+        pkgs."google-chrome"
+        pkgs.gh
+        pkgs.jq
+        pkgs.neovim
+        pkgs.nixd
+        pkgs.nixfmt
+        pkgs.tmux
+        pkgs.vscode
+        pkgs.fnm
+        pkgs.curl
+        pkgs.ripgrep
+        pkgs.uv
+        pkgs.qdirstat
+        pkgs.htop
+        pkgs.devenv
+        pkgs."docker-compose"
       ];
     };
 }

@@ -10,6 +10,7 @@ in
     modules = [
       nixos.base
       nixos.coding
+      nixos.sunshine
       nixos.homeManager
 
       {

@@ -10,6 +10,7 @@ The repo follows the same broad pattern as the reference configs: `flake-parts` 
 ## Layout
 
 - `modules/home-manager/` holds reusable user-level config such as terminal apps, shell setup, git, Jujutsu, macOS apps, coding tools, and optional Bitwarden integration.
+- `modules/home-manager/linux-apps.nix` and `modules/home-manager/macos-apps.nix` hold platform-specific desktop app packages.
 - `modules/nixos/` holds Linux-only system modules like Nix-ld, Docker, and the shared NixOS baseline.
 - `hosts/` defines the NixOS machine.
 - `homes/` defines standalone Home Manager profiles for macOS.
@@ -44,12 +45,18 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/home-manager/shell.nix` for shell integrations and prompt tools
 - `modules/home-manager/jujutsu.nix` for Jujutsu config
 - `modules/home-manager/macos-apps.nix` for macOS app packages
+- `modules/home-manager/linux-apps.nix` for Linux desktop app packages
 - `modules/home-manager/tools.nix` for jjui, lazygit, lazydocker, and Zed
 - `modules/home-manager/launcher.nix` for Vicinae on Linux
 - `modules/home-manager/coding.nix` for dev tools
 - `modules/home-manager/git.nix` for git defaults
 - `modules/home-manager/bitwarden.nix` for Bitwarden desktop plus SSH agent socket wiring
 - `modules/nixos/coding.nix` for Nix-ld and Docker on Linux
+
+## Conventions
+
+- Use explicit package references in modules: `pkgs.spotify`, `pkgs.doppler`, `pkgs.git`, or `pkgs."name-with-hyphen"`.
+- Avoid `with pkgs;` for package lists in new modules or when updating existing ones.
 
 ## Common workflow
 
