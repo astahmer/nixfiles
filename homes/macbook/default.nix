@@ -15,9 +15,12 @@ in
     modules = [
       hm.base
       hm.terminal
+      hm.shell
       hm.git
+      hm.jujutsu
       hm.coding
       hm.tools
+      hm.macosApps
 
       {
         home.homeDirectory = "/Users/${username}";

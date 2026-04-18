@@ -1,0 +1,42 @@
+{ config, ... }:
+{
+  config.flake.modules.homeManager.shell =
+    { config, lib, pkgs, ... }:
+    let
+      jjPackage =
+        if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
+    in
+    {
+      programs.bash.enable = true;
+      programs.zsh.enable = true;
+
+      programs.starship = {
+        enable = true;
+        enableBashIntegration = true;
+        enableZshIntegration = true;
+      };
+
+      programs.mcfly = {
+        enable = true;
+        enableBashIntegration = true;
+        enableZshIntegration = true;
+      };
+
+      programs.direnv = {
+        enable = true;
+        enableBashIntegration = true;
+        enableZshIntegration = true;
+        nix-direnv.enable = true;
+      };
+
+      programs.bash.initExtra = lib.mkAfter ''
+        eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
+        eval "$(${lib.getExe jjPackage} util completion bash)"
+      '';
+
+      programs.zsh.initContent = lib.mkAfter ''
+        eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
+        eval "$(${lib.getExe jjPackage} util completion zsh)"
+      '';
+    };
+}

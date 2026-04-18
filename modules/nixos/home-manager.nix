@@ -20,10 +20,13 @@ in
           imports = [
             hm.base
             hm.terminal
+            hm.shell
             hm.git
+            hm.jujutsu
             hm.coding
             hm.tools
             hm.launcher
+            hm.nixosShell
           ];
         };
       };
