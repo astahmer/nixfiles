@@ -35,9 +35,28 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 
 This machine is managed with standalone Home Manager on macOS.
 
-Run:
+Run the steps below to enable flakes, install the `home-manager` CLI if needed, and apply the profile.
 
 ```bash
+# 1) Enable Nix flakes (if not already enabled)
+mkdir -p ~/.config/nix
+cat > ~/.config/nix/nix.conf <<'EOF'
+experimental-features = nix-command flakes
+EOF
+```
+
+```bash
+# 2) Install the `home-manager` CLI into your user profile (if missing)
+nix profile install nixpkgs#home-manager
+```
+
+```bash
+# 3) Open a new shell so your profile bins are on PATH (if needed)
+exec $SHELL
+```
+
+```bash
+# 4) Apply the Home Manager profile
 home-manager switch --flake .#macbook
 ```
 

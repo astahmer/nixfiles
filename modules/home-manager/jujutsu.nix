@@ -77,7 +77,7 @@
 
           remotes.origin = {
             auto-track-bookmarks = "*";
-          }
+          };
 
           fix.tools.oxfmt = {
             command = [ "oxfmt" "--stdin-filepath=$path" ];
