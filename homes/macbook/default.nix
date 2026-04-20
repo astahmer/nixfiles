@@ -23,10 +23,21 @@ in
       hm.tools
       hm.macosApps
 
-      {
-        home.homeDirectory = "/Users/${username}";
-        home.username = username;
-      }
+      ({ pkgs, lib, ... }:
+        lib.mkMerge [
+          {
+            home.homeDirectory = "/Users/${username}";
+            home.username = username;
+          }
+
+          # Temporary: on Darwin, avoid evaluating any contributed
+          # `home.packages` from other modules so evaluation doesn't
+          # attempt to build Linux-only packages. Remove this once
+          # modules are properly guarded.
+          (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
+            home.packages = [];
+          })
+        ])
     ];
   };
 }
