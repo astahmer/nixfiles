@@ -38,5 +38,19 @@
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
         eval "$(${lib.getExe jjPackage} util completion zsh)"
       '';
+
+      home.shellAliases = {
+        zshconfig = "code ~/.zshrc";
+        jjconfig = "code $(jj config path --user)";
+        opencodeconfig = "code ~/.config/opencode/opencode.json";
+        npmrc = "code ~/.npmrc";
+        gitconfig = "code ~/.gitconfig";
+        gitignore = "code ~/.gitignore";
+        sauce = "source ~/.zshrc";
+        ppnm = "pnpm";
+        pnpmi = "pnpm i";
+        copilot = "gh copilot suggest -t shell";
+        nts = "node --no-warnings=ExperimentalWarning --experimental-strip-types --experimental-transform-types --env-file-if-exists=.env";
+      };
     };
 }
