@@ -1,4 +1,3 @@
-- zsh aliases
 - check https://github.com/nix-community/awesome-nix
 - TODO Manage your macOS using Nix https://github.com/nix-darwin/nix-darwin
 - TODO skill to setup nix in a new repo (adding 3rd party deps etc)
