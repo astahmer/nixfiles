@@ -7,6 +7,7 @@
         pkgs.spotify
         pkgs.slack
         pkgs."whatsapp-electron"
+        pkgs.qdirstat
       ];
     };
 }
