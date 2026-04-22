@@ -36,7 +36,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Nix Conventions
 
-- Prefer explicit package references like `pkgs.spotify`, `pkgs.git`, or `pkgs."name-with-hyphen"`.
+- Never use `with` expressions. Always prefer explicit attribute references (for example: `pkgs.spotify`, `pkgs.git`, or `pkgs."name-with-hyphen"`) or fully-qualified attribute paths. This rule applies everywhere in modules, package lists, and functions — not just to `pkgs`.
 - Keep NixOS and Home Manager concerns split when the repo already has separate modules.
 - Use thin host/profile files that only wire modules together.
 

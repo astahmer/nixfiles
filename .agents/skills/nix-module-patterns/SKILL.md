@@ -10,7 +10,7 @@ description: Maintains this flake-parts/import-tree Nixfiles repo and its module
 - Keep reusable logic in `modules/<name>.nix`; `import-tree` discovers it automatically.
 - Keep NixOS and Home Manager concerns split unless a module truly spans both scopes.
 - Prefer dedicated platform modules over inline `lib.mkIf` branches when the repo already has a split.
-- Use explicit package references: `pkgs.spotify`, `pkgs.git`, `pkgs.doppler`, or `pkgs."name-with-hyphen"`. Avoid `with pkgs;` for package lists.
+- Never use `with` expressions. Use explicit package references instead: `pkgs.spotify`, `pkgs.git`, `pkgs.doppler`, or `pkgs."name-with-hyphen"`. Avoid `with pkgs;` or any `with` usage in modules, functions, or package lists.
 - Keep host and home files thin; wire modules in `hosts/<name>/default.nix` or `homes/<name>/default.nix`.
 
 ## Workflow

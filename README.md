@@ -90,8 +90,7 @@ Add your own hardware-specific config before treating it as a real machine profi
 
 ## Conventions
 
-- Use explicit package references in modules: `pkgs.spotify`, `pkgs.doppler`, `pkgs.git`, or `pkgs."name-with-hyphen"`.
-- Avoid `with pkgs;` for package lists in new modules or when updating existing ones.
+- Never use `with` expressions. Prefer explicit attribute references such as `pkgs.spotify`, `pkgs.doppler`, `pkgs.git`, or `pkgs."name-with-hyphen"`. Avoid `with pkgs;` or any `with` usage inside modules, functions, or package lists.
 
 ## Common workflow
 
