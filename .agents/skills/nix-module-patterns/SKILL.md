@@ -1,17 +1,17 @@
 ---
 name: nix-module-patterns
-description: Maintains this flake-parts/import-tree Nixfiles repo and its module conventions. Use when adding or refactoring NixOS or Home Manager modules, wiring hosts or homes, or applying repo conventions like explicit pkgs.<name> references.
+description: Maintains this flake-parts/import-tree Nixfiles repo and its module conventions. Use when adding or refactoring NixOS or Home Manager modules, wiring hosts or standalone Home Manager profiles, or applying repo conventions like explicit pkgs.<name> references.
 ---
 
 # Nix Module Patterns
 
 ## Quick Rules
 
-- Keep reusable logic in `modules/<name>.nix`; `import-tree` discovers it automatically.
+- Keep reusable logic in flat `modules/<name>.nix` files; `import-tree` discovers them automatically.
 - Keep NixOS and Home Manager concerns split unless a module truly spans both scopes.
 - Prefer dedicated platform modules over inline `lib.mkIf` branches when the repo already has a split.
 - Never use `with` expressions. Use explicit package references instead: `pkgs.spotify`, `pkgs.git`, `pkgs.doppler`, or `pkgs."name-with-hyphen"`. Avoid `with pkgs;` or any `with` usage in modules, functions, or package lists.
-- Keep host and home files thin; wire modules in `hosts/<name>/default.nix` or `homes/<name>/default.nix`.
+- Keep host files thin; wire modules in `hosts/<name>/default.nix`.
 
 ## Workflow
 

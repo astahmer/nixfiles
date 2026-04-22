@@ -3,7 +3,7 @@
 Personal Nix setup with two entry points:
 
 - a direct NixOS host in `hosts/`
-- a standalone Home Manager profile for macOS in `homes/`
+- a standalone Home Manager profile for macOS in `hosts/macbook`
 
 The repo follows the same broad pattern as the reference configs: `flake-parts` for wiring, `import-tree` for auto-discovery, reusable modules under `modules/`, and thin host/profile files that pick what to enable.
 
@@ -21,19 +21,19 @@ home-manager switch --flake .#macbook
 sudo nixos-rebuild switch --flake .#workstation
 ```
 
-To add a new module, create a `.nix` file under `modules/`, expose it under `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, then add it to `homes/macbook/default.nix` or `hosts/workstation/default.nix`.
+To add a new module, create a `.nix` file under `modules/`, expose it under `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, then add it to `hosts/macbook/default.nix` or `hosts/workstation/default.nix`. If one file needs both scopes, export both module attrs from that same file.
 
 ## Layout
 
-- `modules/home-manager/` holds reusable user-level config such as terminal apps, shell setup, git, Jujutsu, macOS apps, coding tools, and optional Bitwarden integration.
-- `modules/home-manager/linux-apps.nix` and `modules/home-manager/macos-apps.nix` hold platform-specific desktop app packages.
-- `modules/nixos/` holds Linux-only system modules like Nix-ld, Docker, and the shared NixOS baseline.
-- `hosts/` defines the NixOS machine.
-- `homes/` defines standalone Home Manager profiles for macOS.
+- `modules/` holds reusable modules. Some files export both Home Manager and NixOS modules when a concern spans both scopes.
+- `hosts/macbook/default.nix` wires the standalone Home Manager profile for macOS.
+- `hosts/workstation/default.nix` wires the NixOS host.
+- `assets/.agents/` contains global Copilot skills and is linked into `~/.agents` by Home Manager.
+- `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## macOS setup
 
-This machine is managed with standalone Home Manager on macOS.
+This profile is managed with standalone Home Manager on macOS.
 
 Run the steps below to enable flakes, install the `home-manager` CLI if needed, and apply the profile.
 
@@ -76,17 +76,18 @@ Add your own hardware-specific config before treating it as a real machine profi
 
 ## Modules worth reusing
 
-- `modules/home-manager/terminal.nix` for Ghostty on macOS and kitty on Linux
-- `modules/home-manager/shell.nix` for shell integrations and prompt tools
-- `modules/home-manager/jujutsu.nix` for Jujutsu config
-- `modules/home-manager/macos-apps.nix` for macOS app packages
-- `modules/home-manager/linux-apps.nix` for Linux desktop app packages
-- `modules/home-manager/tools.nix` for jjui, lazygit, lazydocker, and Zed
-- `modules/home-manager/launcher.nix` for Vicinae on Linux
-- `modules/home-manager/coding.nix` for dev tools
-- `modules/home-manager/git.nix` for git defaults
-- `modules/home-manager/bitwarden.nix` for Bitwarden desktop plus SSH agent socket wiring
-- `modules/nixos/coding.nix` for Nix-ld and Docker on Linux
+- `modules/base.nix` for the shared state versions plus the NixOS baseline
+- `modules/coding.nix` for macOS dev tools and Linux Nix-ld/Docker
+- `modules/terminal.nix` for Ghostty on macOS and kitty on Linux
+- `modules/shell.nix` for shell integrations and prompt tools
+- `modules/jujutsu.nix` for Jujutsu config
+- `modules/macos-apps.nix` for macOS app packages
+- `modules/linux-apps.nix` for Linux desktop app packages
+- `modules/tools.nix` for jjui, lazygit, and lazydocker
+- `modules/launcher.nix` for Vicinae on Linux
+- `modules/git.nix` for git defaults
+- `modules/bitwarden.nix` for Bitwarden desktop plus SSH agent socket wiring
+- `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
 
 ## Conventions
 

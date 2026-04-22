@@ -3,7 +3,7 @@
 This repository is a Nix flake for a single user with two entry points:
 
 - a NixOS host in `hosts/workstation`
-- a standalone macOS Home Manager profile in `homes/macbook`
+- a standalone macOS Home Manager profile in `hosts/macbook`
 
 The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/`, `hosts/`, and `homes/` are discovered automatically.
 
@@ -19,12 +19,13 @@ home-manager switch --flake .#macbook
 sudo nixos-rebuild switch --flake .#workstation
 ```
 
-To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `homes/macbook/default.nix` or `hosts/workstation/default.nix`.
+To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `hosts/macbook/default.nix` or `hosts/workstation/default.nix`. If the concern spans both scopes, keep both outputs in the same file.
 
 ## Layout
 
-- `modules/home-manager/` contains reusable Home Manager modules.
-- `modules/nixos/` contains NixOS system modules.
+- `modules/` contains reusable modules. Some files export both Home Manager and NixOS modules when needed.
+- `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
+- `hosts/workstation/default.nix` contains the NixOS host.
 - `assets/.agents/` contains global Copilot skills and is linked into `~/.agents` by Home Manager.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 

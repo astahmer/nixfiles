@@ -8,6 +8,7 @@ in
     specialArgs = { inherit inputs; };
 
     modules = [
+      inputs.home-manager.nixosModules.home-manager
       nixos.base
       nixos.coding
       nixos.ryu
