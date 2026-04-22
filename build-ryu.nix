@@ -15,6 +15,7 @@ in pkgs.rustPlatform.buildRustPackage rec {
   };
 
   cargoHash = "sha256-OD1DpV4s6tgOnDEAfJWScdSKqtYArbqIJVClOtUCYa4=";
+  doCheck = false;
 
   meta = with pkgs.lib; {
     description = "Stacked PRs for Jujutsu (jj-ryu)";

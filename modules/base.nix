@@ -3,6 +3,21 @@ let
   username = config.flake.username;
 in
 {
+  config.flake.modules.homeManager.base =
+    { ... }:
+    {
+      home.stateVersion = config.flake.homeStateVersion;
+
+      home.sessionVariables = {
+        EDITOR = "nvim";
+        VISUAL = "nvim";
+      };
+
+      programs.home-manager.enable = true;
+
+      xdg.enable = true;
+    };
+
   config.flake.modules.nixos.base =
     { pkgs, ... }:
     {

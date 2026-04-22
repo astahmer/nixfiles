@@ -27,8 +27,7 @@
         inputs.home-manager.flakeModules.home-manager
       ]
       ++ (inputs.import-tree ./modules).imports
-      ++ (inputs.import-tree ./hosts).imports
-      ++ (inputs.import-tree ./homes).imports;
+      ++ (inputs.import-tree ./hosts).imports;
 
       perSystem =
         { pkgs, ... }:
