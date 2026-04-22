@@ -47,7 +47,7 @@ EOF
 
 ```bash
 # 2) Install the `home-manager` CLI into your user profile (if missing)
-nix profile install nixpkgs#home-manager
+nix profile add nixpkgs#home-manager
 ```
 
 ```bash

@@ -22,7 +22,6 @@
           pkgs.uv
           pkgs.htop
           pkgs.devenv
-          pkgs."docker-compose"
         ];
       }
     ];

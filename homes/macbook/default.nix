@@ -35,7 +35,7 @@ in
           # attempt to build Linux-only packages. Remove this once
           # modules are properly guarded.
           (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
-            home.packages = [];
+            home.packages = lib.mkDefault [];
           })
         ])
     ];
