@@ -20,6 +20,7 @@
       programs.starship.settings = {
         character.vicmd_symbol = "";
 
+        aws.disabled = true;
         username.disabled = true;
 
         custom.jj = {
