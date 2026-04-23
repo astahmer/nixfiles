@@ -16,10 +16,12 @@ If you just installed Nix, keep the first run simple:
 3. Apply the profile for your machine.
 
 ```bash
-nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook
+nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook
 # or, on Linux
 sudo nixos-rebuild switch --flake .#workstation
 ```
+
+If Home Manager stops on an existing `*.backup` file from an older manual run, rerun the switch with `-b hm-backup`. That keeps the old files in `*.hm-backup` instead of trying to reuse the same backup suffix.
 
 To add a new module, create a `.nix` file under `modules/`, expose it under `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, then add it to `hosts/macbook/default.nix` or `hosts/workstation/default.nix`. If one file needs both scopes, export both module attrs from that same file.
 
@@ -47,7 +49,7 @@ EOF
 
 ```bash
 # 2) Apply the Home Manager profile
-nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook
+nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook
 ```
 
 The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
@@ -82,12 +84,12 @@ Add your own hardware-specific config before treating it as a real machine profi
 ## Updating `jj-ryu`
 
 `ryu-package.nix` is the single source of truth for the package definition.
-`build-ryu.nix` is only a helper for rebuilding that package in isolation while you refresh hashes.
+`scripts/build-ryu.nix` is only a helper for rebuilding that package in isolation while you refresh hashes.
 
 To bump upstream:
 
 1. Update the `rev` or `sha256` in `ryu-package.nix`.
-2. Run `nix build -f build-ryu.nix --no-link` to verify the package and refresh `cargoHash` if needed.
+2. Run `nix build -f scripts/build-ryu.nix --no-link` to verify the package and refresh `cargoHash` if needed.
 3. Re-run `nix run nixpkgs#home-manager -- build --flake .#macbook` or `nix flake check`.
 
 ## Conventions

@@ -21,8 +21,14 @@ in
       hm.jujutsu
       hm.ryu
       hm.coding
+      hm.vscode
       hm.agents
       hm.tools
+      ({ pkgs, ... }: {
+        home.packages = [ pkgs."karabiner-elements" ];
+
+        home.file.".config/karabiner/karabiner.json".source = ./karabiner.json;
+      })
       hm.macosApps
 
       ({ pkgs, lib, ... }:

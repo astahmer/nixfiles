@@ -26,7 +26,6 @@ in
         pkgs.tokei
         pkgs.tmux
         pkgs.tree
-        pkgs.vscode
         pkgs.zed-editor
         pkgs.fnm
         pkgs.curl

@@ -5,7 +5,7 @@
 - lint: https://github.com/nix-community/nixpkgs-lint
 - LSP: https://github.com/nix-community/nixd/
 - deadcode removal: https://github.com/astro/deadnix
-- fmt: https://github.com/numtide/treefmt-nix / https://github.com/kamadorueda/alejandra
+- fmt: https://github.com/numtide/treefmt-nix
 
 ## misc:
 - https://github.com/nix-community/comma

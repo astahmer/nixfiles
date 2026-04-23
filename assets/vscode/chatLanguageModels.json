@@ -1,0 +1,22 @@
+[
+    {
+        "name": "OpenAI",
+        "vendor": "openai",
+        "apiKey": "${input:chat.lm.secret.-4fa383f3}"
+    },
+    {
+        "name": "Copilot",
+        "vendor": "copilot",
+        "settings": {
+            "gpt-5.4": {
+                "reasoningEffort": "xhigh"
+            },
+            "gpt-5.4-mini": {
+                "reasoningEffort": "xhigh"
+            },
+            "gpt-5-mini": {
+                "reasoningEffort": "high"
+            }
+        }
+    }
+]

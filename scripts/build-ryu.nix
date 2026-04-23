@@ -5,4 +5,5 @@ let
   pkgs = import (builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz";
   }) { inherit system; };
-in import ./ryu-package.nix { inherit pkgs; }
+in
+import ../ryu-package.nix { inherit pkgs; }

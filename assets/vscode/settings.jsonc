@@ -1,0 +1,341 @@
+{
+    "[astro]": {
+        "editor.defaultFormatter": "astro-build.astro-vscode"
+    },
+    "[dockercompose]": {
+        "editor.autoIndent": "advanced",
+        "editor.defaultFormatter": "redhat.vscode-yaml",
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2
+    },
+    "[github-actions-workflow]": {
+        "editor.defaultFormatter": "redhat.vscode-yaml"
+    },
+    "[gleam]": {
+        "editor.defaultFormatter": "gleam.gleam"
+    },
+    "[handlebars]": {
+        "editor.formatOnSave": true
+    },
+    "[html]": {
+        "editor.defaultFormatter": "vscode.html-language-features"
+    },
+    "[javascript]": {
+        "editor.defaultFormatter": "vscode.typescript-language-features"
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "[sql]": {
+        "editor.defaultFormatter": "adpyke.vscode-sql-formatter"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "oxc.oxc-vscode"
+    },
+    "[vue]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[yaml]": {
+        "editor.defaultFormatter": "redhat.vscode-yaml"
+    },
+    "chat.agent.maxRequests": 5000,
+    "chat.instructionsFilesLocations": {
+        ".github/pre-prompt.local": true
+    },
+    "chat.mcp.autostart": "newAndOutdated",
+    "chat.mcp.gallery.enabled": true,
+    "chat.tools.terminal.autoApprove": {
+        "npm run build": true,
+        "pnpm": true,
+        "pnpm run bench": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "sed": true,
+        "vitest": true
+    },
+    "chat.viewSessions.orientation": "stacked",
+    "cucumberautocomplete.pureTextSteps": true,
+    "debug.allowBreakpointsEverywhere": true,
+    "debug.showInlineBreakpointCandidates": false,
+    "diffEditor.diffAlgorithm": "advanced",
+    "diffEditor.experimental.showMoves": true,
+    "diffEditor.ignoreTrimWhitespace": true,
+    "diffEditor.maxComputationTime": 0,
+    "diffEditor.renderSideBySide": true,
+    "diffEditor.useInlineViewWhenSpaceIsLimited": false,
+    "editor.accessibilitySupport": "off",
+    "editor.autoClosingDelete": "always",
+    "editor.codeActionWidget.includeNearbyQuickFixes": false,
+    "editor.defaultColorDecorators": "always",
+    "editor.defaultFormatter": "oxc.oxc-vscode",
+    "editor.formatOnSave": true,
+    "editor.guides.highlightActiveBracketPair": false,
+    "editor.guides.highlightActiveIndentation": false,
+    "editor.inlineSuggest.enabled": true,
+    "editor.lightbulb.enabled": "onCode",
+    "editor.minimap.enabled": false,
+    "editor.minimap.renderCharacters": false,
+    "editor.multiCursorPaste": "full",
+    "editor.occurrencesHighlight": "off",
+    "editor.overtypeOnPaste": false,
+    "editor.pasteAs.enabled": false,
+    "editor.pasteAs.preferences": [
+        "text.plain"
+    ],
+    "editor.quickSuggestions": {
+        "comments": "off",
+        "other": "on",
+        "strings": "on"
+    },
+    "editor.quickSuggestionsDelay": 50,
+    "editor.renderControlCharacters": false,
+    "editor.renderWhitespace": "none",
+    "editor.rulers": [
+        80,
+        120
+    ],
+    "editor.snippets.codeActions.enabled": false,
+    "editor.stickyScroll.enabled": true,
+    "editor.suggest.localityBonus": true,
+    "editor.suggest.showConstructors": false,
+    "editor.suggest.showDeprecated": false,
+    "editor.suggest.showEvents": false,
+    "editor.suggest.showFields": true,
+    "editor.suggest.showFiles": true,
+    "editor.suggest.showFolders": true,
+    "editor.suggest.showIssues": false,
+    "editor.suggest.showKeywords": true,
+    "editor.suggest.showModules": false,
+    "editor.suggest.showOperators": false,
+    "editor.suggest.showReferences": false,
+    "editor.suggest.showSnippets": true,
+    "editor.suggest.showStructs": false,
+    "editor.suggest.showWords": false,
+    "editor.suggest.snippetsPreventQuickSuggestions": true,
+    "emmet.showAbbreviationSuggestions": false,
+    "emmet.showExpandedAbbreviation": "never",
+    "explorer.autoRevealExclude": {
+        "**/node_modules": false
+    },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+        ".env": "*.env, .env*, env.d.ts",
+        ".gitignore": ".gitattributes, .gitmodules, .gitmessage, .mailmap, .git-blame*",
+        "*.cts": "${capture}.typegen.ts",
+        "*.js": "${capture}.js.map, ${capture}.min.js, ${capture}.d.ts",
+        "*.jsx": "${capture}.js",
+        "*.mts": "${capture}.typegen.ts",
+        "*.ts": "${capture}.js, ${capture}.typegen.ts, ${capture}.d.ts, ${capture}.*.ts",
+        "*.tsx": "${capture}.stories.ts",
+        "cargo.toml": "cargo.lock, cargo.lock, cargo.lock, cargo.lock, cargo.lock, cargo.lock, cargo.lock, cargo.lock, rustfmt.toml",
+        "dockerfile": ".dockerignore, dockerfile*",
+        "gemfile": ".ruby-version, gemfile.lock",
+        "go.mod": ".air*, go.sum",
+        "index.d.ts": "*.d.ts",
+        "next.config.*": "*.env, .babelrc, .codecov, .env*, .mocha*, .postcssrc.*, api-extractor.json, ava.config.*, babel.config.*, cypress.json, env.d.ts, jasmine.*, jest.config.*, jsconfig.*, karma*, next-env.d.ts, playwright.config.*, postcss.config.*, puppeteer.config.*, svgo.config.*, tailwind.config.*, tsconfig.*, tsdoc.*, unocss.config.*, vitest.config.*, webpack.config.*, windi.config.*",
+        "nuxt.config.*": "*.env, .babelrc, .codecov, .env*, .mocha*, .postcssrc.*, api-extractor.json, ava.config.*, babel.config.*, cypress.json, env.d.ts, jasmine.*, jest.config.*, jsconfig.*, karma*, playwright.config.*, postcss.config.*, puppeteer.config.*, svgo.config.*, tailwind.config.*, tsconfig.*, tsdoc.*, unocss.config.*, vitest.config.*, webpack.config.*, windi.config.*",
+        "package.json": ".browserslist*, .circleci*, .codecov, .commitlint*, .editorconfig, .eslint*, .flowconfig, .gitlab*, .gitpod*, .huskyrc*, .jshintrc, .markdownlint*, .mocha*, .node-version, .nodemon*, .npm*, .nvmrc, .pm2*, .pnpm*, .prettier*, .releaserc*, .sentry*, .stackblitz*, .stylelint*, .tazerc*, .textlint*, .travis*, .vscode*, .watchman*, .yamllint*, .yarnrc*, api-extractor.json, appveyor*, ava.config.*, azure-pipelines*, build.config.*, commitlint*, crowdin*, cypress.json, dangerfile*, gulp*, jasmine.*, jenkins*, jest.config.*, jsconfig.*, karma*, lerna*, lint-staged*, nest-cli.*, netlify*, nodemon*, nx.*, package-lock.json, playwright.config.*, pm2.*, pnpm*, prettier*, pullapprove*, puppeteer.config.*, renovate*, rollup.config.*, stylelint*, tsconfig.*, tsdoc.*, tslint*, tsup.config.*, turbo*, vercel*, vetur.config.*, vitest.config.*, webpack.config.*, workspace.json, yarn*",
+        "readme.md": "authors, backers.md, changelog*.md, code_of_conduct.md, codeowners, contributing.md, contributors, copying, credits, governance.md, history.md, license*, maintainers, readme*, security.md, sponsors.md",
+        "remix.config.*": "*.env, .babelrc, .codecov, .env*, .mocha*, .postcssrc.*, api-extractor.json, ava.config.*, babel.config.*, cypress.json, env.d.ts, jasmine.*, jest.config.*, jsconfig.*, karma*, playwright.config.*, postcss.config.*, puppeteer.config.*, remix.*, svgo.config.*, tailwind.config.*, tsconfig.*, tsdoc.*, unocss.config.*, vitest.config.*, webpack.config.*, windi.config.*",
+        "shims.d.ts": "*.d.ts",
+        "svelte.config.*": "*.env, .babelrc, .codecov, .env*, .mocha*, .postcssrc.*, api-extractor.json, ava.config.*, babel.config.*, cypress.json, env.d.ts, jasmine.*, jest.config.*, jsconfig.*, karma*, playwright.config.*, postcss.config.*, puppeteer.config.*, svgo.config.*, tailwind.config.*, tsconfig.*, tsdoc.*, unocss.config.*, vitest.config.*, webpack.config.*, windi.config.*",
+        "tsconfig.json": "tsconfig.*.json",
+        "vite.config.*": "*.env, .babelrc, .codecov, .env*, .mocha*, .postcssrc.*, api-extractor.json, ava.config.*, babel.config.*, cypress.json, env.d.ts, index.html, jasmine.*, jest.config.*, jsconfig.*, karma*, playwright.config.*, postcss.config.*, puppeteer.config.*, svgo.config.*, tailwind.config.*, tsconfig.*, tsdoc.*, unocss.config.*, vitest.config.*, webpack.config.*, windi.config.*",
+        "vue.config.*": "*.env, .babelrc, .codecov, .env*, .mocha*, .postcssrc.*, api-extractor.json, ava.config.*, babel.config.*, cypress.json, env.d.ts, jasmine.*, jest.config.*, jsconfig.*, karma*, playwright.config.*, postcss.config.*, puppeteer.config.*, svgo.config.*, tailwind.config.*, tsconfig.*, tsdoc.*, unocss.config.*, vitest.config.*, webpack.config.*, windi.config.*"
+    },
+    "extensions.autoUpdate": "onlyEnabledExtensions",
+    "files.associations": {
+        "*.json5": "json5"
+    },
+    "files.exclude": {
+        "**/.DS_Store": true,
+        "**/.git": true,
+        "**/.hg": true,
+        "**/.svn": true,
+        "**/CVS": true
+    },
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.netlify/**": true,
+        "**/.next/**": true,
+        "**/.pnpm/**": true,
+        "**/build/**": true,
+        "**/dist/**": true,
+        "**/docker/**": true,
+        "**/node_modules/**": true,
+        "**/packages/**/dist": true
+    },
+    "footsteps.highlightColorMaxOpacity": 0.3,
+    "git.allowNoVerifyCommit": true,
+    "git.autofetch": true,
+    "git.autoRepositoryDetection": "subFolders",
+    "git.confirmNoVerifyCommit": false,
+    "git.mergeEditor": false,
+    "git.openRepositoryInParentFolders": "never",
+    "git.suggestSmartCommit": false,
+    "github.copilot.advanced": {},
+    "github.copilot.chat.codesearch.enabled": true,
+    "github.copilot.chat.newWorkspace.useContext7": true,
+    "github.copilot.editor.enableCodeActions": false,
+    "github.copilot.enable": {
+        "*": false,
+        "markdown": true,
+        "plaintext": false,
+        "scminput": false
+    },
+    "github.copilot.nextEditSuggestions.enabled": false,
+    "githubPullRequests.fileListLayout": "tree",
+    "githubPullRequests.pullBranch": "never",
+    "gitlens.advanced.messages": {
+        "suppressGitDisabledWarning": true,
+        "suppressGitMissingWarning": true
+    },
+    "gitlens.ai.model": "vscode",
+    "gitlens.ai.vscode.model": "copilot:gpt-4.1",
+    "gitlens.launchpad.indicator.enabled": false,
+    "gitlens.rebaseEditor.ordering": "asc",
+    "gitlens.views.branches.branches.layout": "list",
+    "gitlens.views.commits.showBranchComparison": "branch",
+    "gitlens.views.repositories.files.layout": "tree",
+    "gitlens.views.scm.grouped.views": {
+        "branches": false,
+        "commits": false,
+        "contributors": true,
+        "launchpad": false,
+        "remotes": true,
+        "repositories": false,
+        "searchAndCompare": false,
+        "stashes": true,
+        "tags": true,
+        "worktrees": true
+    },
+    "gitlens.views.searchAndCompare.files.layout": "tree",
+    "gitTreeCompare.diffMode": "full",
+    "gitTreeCompare.showCheckboxes": true,
+    "html.autoClosingTags": false,
+    "ipynb.pasteImagesAsAttachments.enabled": false,
+    "js/ts.autoClosingTags.enabled": false,
+    "js/ts.experimental.useTsgo": false,
+    "js/ts.preferences.autoImportFileExcludePatterns": [
+        "@radix-ui/react*"
+    ],
+    "js/ts.preferences.autoImportSpecifierExcludeRegexes": [
+        "@radix-ui/react*"
+    ],
+    "js/ts.preferences.importModuleSpecifier": "project-relative",
+    "js/ts.preferences.includePackageJsonAutoImports": "on",
+    "js/ts.preferences.preferTypeOnlyAutoImports": true,
+    "js/ts.preferGoToSourceDefinition": true,
+    "js/ts.referencesCodeLens.enabled": false,
+    "js/ts.referencesCodeLens.showOnAllFunctions": false,
+    "js/ts.suggest.includeCompletionsForImportStatements": true,
+    "js/ts.tsserver.log": "off",
+    "js/ts.tsserver.maxMemory": 4096,
+    "js/ts.updateImportsOnPaste.enabled": false,
+    "js/ts.workspaceSymbols.scope": "currentProject",
+    "notebook.stickyScroll.enabled": true,
+    "npm.enableRunFromFolder": true,
+    "redhat.telemetry.enabled": false,
+    "search.collapseResults": "auto",
+    "search.exclude": {
+        "**/packages/**/dist": true
+    },
+    "search.followSymlinks": false,
+    "search.smartCase": true,
+    "security.promptForLocalFileProtocolHandling": false,
+    "security.workspace.trust.untrustedFiles": "open",
+    "smartClicks.rules": {
+        "bracket-pair": false,
+        "dash": false,
+        "html-attr": false,
+        "html-element": false,
+        "js-arrow-fn": false,
+        "js-assign": false,
+        "js-block": false,
+        "js-colon": false
+    },
+    "supermaven.enable": {
+        "*": true,
+        "gleam": false
+    },
+    "supermaven.enableFixWithSupermaven": false,
+    "supermaven.otherWarning": false,
+    "sync.gist": "45f7eb9d94749c030d6223ff090bec32",
+    "tailwindCSS.classFunctions": [
+        "className",
+        "cn",
+        "cx",
+        "cva"
+    ],
+    "tailwindCSS.experimental.configFile": null,
+    "terminal.integrated.env.osx": {
+        "ZDOTDIR": "/Users/astahmer/.config/zsh",
+        "FIG_NEW_SESSION": "1"
+    },
+    "terminal.integrated.scrollback": 3000,
+    "terminal.integrated.shell.linux": "/usr/bin/zsh",
+    "terminal.integrated.shell.osx": "/bin/zsh",
+    "terminal.integrated.suggest.enabled": true,
+    "terminal.integrated.tabs.title": "${activeEditorShort}${separator}${rootName}${separator}${profileName}",
+    "todohighlight.isEnable": true,
+    "todohighlight.keywords": [
+        {
+            "backgroundColor": "#f06292",
+            "color": "#fff",
+            "text": "eslint-disable"
+        },
+        {
+            "backgroundColor": "#0369a1",
+            "color": "#fff",
+            "text": "@ts-ignore"
+        },
+        {
+            "backgroundColor": "#0369a1",
+            "color": "#fff",
+            "text": "@ts-expect-error"
+        },
+        {
+            "backgroundColor": "#047857",
+            "color": "#fff",
+            "text": "TODO"
+        },
+        {
+            "backgroundColor": "#3b4468",
+            "color": "#fff",
+            "text": "console.log("
+        }
+    ],
+    "vsicons.dontShowNewVersionMessage": true,
+    "workbench.activityBar.location": "bottom",
+    "workbench.colorTheme": "Dark Modern",
+    "workbench.editor.labelFormat": "default",
+    "workbench.editor.limit.enabled": true,
+    "workbench.editor.limit.perEditorGroup": true,
+    "workbench.editor.limit.value": 5,
+    "workbench.editor.tabSizing": "shrink",
+    "workbench.iconTheme": "vscode-icons",
+    "workbench.secondarySideBar.defaultVisibility": "hidden",
+    "workbench.sideBar.location": "right",
+    "workbench.startupEditor": "none",
+    "terminal.integrated.sendKeybindingsToShell": false,
+    "nix.enableLanguageServer": true,
+    "nix.serverPath": "nixd",
+    "nix.serverSettings": {
+        "nixd": {
+            "formatting": {
+                "command": [
+                    "nixfmt"
+                ]
+            }
+        }
+    }
+}

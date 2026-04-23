@@ -5,15 +5,12 @@
     "editor.defaultFormatter": "jnoortheen.nix-ide",
   },
   "nix.enableLanguageServer": true,
-  "nix.serverPath": "/Users/astahmer/.nix-profile/bin/nixd",
-  "terminal.integrated.env.osx": {
-    "ZDOTDIR": "/Users/astahmer/.config/zsh"
-  },
+  "nix.serverPath": "nixd",
   "nix.serverSettings": {
     "nixd": {
       "formatting": {
         "command": [
-          "/Users/astahmer/.nix-profile/bin/nixfmt"
+          "nixfmt"
         ]
       },
       "nixpkgs": {

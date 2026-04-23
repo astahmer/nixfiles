@@ -33,19 +33,25 @@
         character.vicmd_symbol = "";
 
         aws.disabled = true;
+        gcloud.disabled = true;
+        azure.disabled = true;
+        kubernetes.disabled = true;
         docker_context.disabled = true;
         nodejs.disabled = true;
         username.disabled = true;
+        package.disabled = true;
+        git_commit.disabled = true;
+        git_state.disabled = true;
+        git_metrics.disabled = true;
+
+        cmd_duration = {
+          min_time = 1000;
+          format = "took [$duration]($style) ";
+        };
 
         custom.jj = {
           format = "$output ";
-          shell = [
-            "jj-starship"
-            "--no-jj-prefix"
-            "--no-jj-name"
-            "--no-git-prefix"
-            "--no-git-name"
-          ];
+          command = "jj-starship prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name";
           when = "jj-starship detect";
         };
 
@@ -78,9 +84,8 @@
       '';
 
       home.shellAliases = {
-        nixapply = "nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook";
+        nixapply = "nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
-        #
         zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";
         opencodeconfig = "code ~/.config/opencode/opencode.json";
@@ -88,7 +93,6 @@
         gitconfig = "code ~/.gitconfig";
         gitignore = "code ~/.gitignore";
         sauce = "source ~/.config/zsh/.zshrc";
-        #
         ppnm = "pnpm";
         pnpmi = "pnpm i";
         copilot = "gh copilot suggest -t shell";

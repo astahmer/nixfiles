@@ -1,0 +1,146 @@
+{
+  // Place your snippets for typescript here. Each snippet is defined under a snippet name and has a prefix, body and
+  // description. The prefix is what is used to trigger the snippet and the body will be expanded and inserted. Possible variables are:
+  // $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. Placeholders with the
+  // same ids are connected.
+  // Example:
+  // "Print to console": {
+  // 	"prefix": "log",
+  // 	"body": [
+  // 		"console.log('$1');",
+  // 		"$2"
+  // 	],
+  // 	"description": "Log output to console"
+  // }
+  "effect Context.Tag": {
+    "prefix": "efctag",
+    "body": ["class $1 extends Context.Tag(\"$1\")<$1, $2>() {}"],
+    "description": "context tag",
+  },
+  "effect Context.Reference": {
+    "prefix": "efref",
+    "body": ["class $1 extends Context.Reference<$1>()(\"$1\", { defaultValue: () => $2 }) {}"],
+    "description": "context reference",
+  },
+  "Effect.gen(function* () {...})": {
+    "prefix": "efgen",
+    "body": ["Effect.gen(function* () {", "  $1", "})"],
+    "description": "effect gen"
+  },
+  "Effect.fn(function* () {...})": {
+    "prefix": "effn",
+    "body": ["Effect.fn(function* () {", "  $1", "})"],
+    "description": "effect fn"
+  },
+  // "Effect import as E": {
+  //   "prefix": "efimp",
+  //   "body": ["import { Effect as E } from \"effect\""],
+  //   "description": "effect import"
+  // },
+  // "effect Layer import as L": {
+  //   "prefix": "efimpl",
+  //   "body": ["import { Layer as L } from \"effect\""],
+  //   "description": "layer import"
+  // },
+  // "effect Schema import as S": {
+  //   "prefix": "efimps",
+  //   "body": ["import { Schema as S } from \"@effect/schema\""],
+  //   "description": "schema import"
+  // },
+  "effect Schema.TaggedError": {
+    "prefix": "efserr",
+    "body": [
+      "class $1 extends Schema.TaggedError<$1>()(",
+      "  \"$1\",",
+      "  {",
+      "  ${2:cause: Schema.Any,}",
+      "  },",
+      ") {}"
+    ],
+    "description": "schema error"
+  },
+  // "Effect.tag": {
+  //   "prefix": "eftag",
+  //   "body": ["class $1 extends E.Tag(\"$1\")<$1, $2>() {}"],
+  //   "description": "effect tag"
+  // },
+  // "Effect yield*": {
+  //   "prefix": "efyi",
+  //   "body": ["yield* $1"],
+  //   "description": "effect yield"
+  // },
+  "Effect Schema.Class": {
+    "prefix": "efsc",
+    "body": [
+      "class $1 extends Schema.Class<$1>(\"$1\")({",
+      "    $2: $3,",
+      "}) {}"
+    ],
+    "description": "schema tagged request"
+  },
+  "effect Effect.Service": {
+    "prefix": "efs",
+    "body": [
+      "export class $1 extends Effect.Service<$1>()(\"$1\", {",
+      "    accessors: true,",
+      "    effect: $2,",
+      "}) {}"
+    ],
+    "description": "schema tagged request"
+  },
+  // "eimpr": {
+  //   "prefix": "efimpr",
+  //   "body": ["import { Record as ER } from \"effect\""],
+  //   "description": "effect import"
+  // },
+  // "esb": {
+  //   "prefix": "efsb",
+  //   "body": [
+  //     "interface $1 extends S.Schema.Type<typeof $1> {}",
+  //     "interface Encoded$1 extends S.Schema.Encoded<typeof $1> {}"
+  //   ],
+  //   "description": "schema type & encoded interface"
+  // },
+  // "esbt": {
+  //   "prefix": "efsbt",
+  //   "body": [
+  //     "type $1 = S.Schema.Type<typeof $1>",
+  //     "type Encoded$1 = S.Schema.Encoded<typeof $1>"
+  //   ],
+  //   "description": "schema type & encoded type"
+  // },
+  // "est": {
+  //   "prefix": "efst",
+  //   "body": ["interface $1 extends S.Schema.Type<typeof $1> {}"],
+  //   "description": "schema type interface"
+  // },
+  // "este": {
+  //   "prefix": "efste",
+  //   "body": [
+  //     "interface Encoded$1 extends S.Schema.Encoded<typeof $1> {}"
+  //   ],
+  //   "description": "schema encoded interface"
+  // },
+  // "estr": {
+  //   "prefix": "efstr",
+  //   "body": [
+  //     "class $1 extends S.TaggedRequest<$1>()(",
+  //     "  \"$1\",",
+  //     "  $2,",
+  //     "  $3,",
+  //     "  {$4}",
+  //     ") {}"
+  //   ],
+  //   "description": "schema tagged request"
+  // },
+  // "estt": {
+  //   "prefix": "efstt",
+  //   "body": ["type $1 = S.Schema.Type<typeof $1>"],
+  //   "description": "schema type type"
+  // },
+  // "estte": {
+  //   "prefix": "efstte",
+  //   "body": ["type Encoded$1 = S.Schema.Encoded<typeof $1>"],
+  //   "description": "schema encoded type"
+  // },
+}
