@@ -5,7 +5,7 @@ This repository is a Nix flake for a single user with two entry points:
 - a NixOS host in `hosts/workstation`
 - a standalone macOS Home Manager profile in `hosts/macbook`
 
-The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/`, `hosts/`, and `homes/` are discovered automatically.
+The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/` and `hosts/` are discovered automatically.
 
 ## Quick Start
 
@@ -14,7 +14,7 @@ If you are new to Nix, start by cloning the repo, entering it, and running `nix 
 Then apply the profile that matches the machine:
 
 ```bash
-home-manager switch --flake .#macbook
+nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook
 # or, on Linux
 sudo nixos-rebuild switch --flake .#workstation
 ```
@@ -43,7 +43,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Apply Commands
 
-- `home-manager switch --flake .#macbook`
+- `nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook`
 - `sudo nixos-rebuild switch --flake .#workstation`
 
 ## Notes for Agents

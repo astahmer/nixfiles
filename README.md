@@ -16,7 +16,7 @@ If you just installed Nix, keep the first run simple:
 3. Apply the profile for your machine.
 
 ```bash
-home-manager switch --flake .#macbook
+nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook
 # or, on Linux
 sudo nixos-rebuild switch --flake .#workstation
 ```
@@ -35,7 +35,7 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 
 This profile is managed with standalone Home Manager on macOS.
 
-Run the steps below to enable flakes, install the `home-manager` CLI if needed, and apply the profile.
+Run the steps below to enable flakes and apply the profile.
 
 ```bash
 # 1) Enable Nix flakes (if not already enabled)
@@ -46,18 +46,8 @@ EOF
 ```
 
 ```bash
-# 2) Install the `home-manager` CLI into your user profile (if missing)
-nix profile add nixpkgs#home-manager
-```
-
-```bash
-# 3) Open a new shell so your profile bins are on PATH (if needed)
-exec $SHELL
-```
-
-```bash
-# 4) Apply the Home Manager profile
-home-manager switch --flake .#macbook
+# 2) Apply the Home Manager profile
+nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook
 ```
 
 The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
@@ -88,6 +78,17 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/git.nix` for git defaults
 - `modules/bitwarden.nix` for Bitwarden desktop plus SSH agent socket wiring
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
+
+## Updating `jj-ryu`
+
+`ryu-package.nix` is the single source of truth for the package definition.
+`build-ryu.nix` is only a helper for rebuilding that package in isolation while you refresh hashes.
+
+To bump upstream:
+
+1. Update the `rev` or `sha256` in `ryu-package.nix`.
+2. Run `nix build -f build-ryu.nix --no-link` to verify the package and refresh `cargoHash` if needed.
+3. Re-run `nix run nixpkgs#home-manager -- build --flake .#macbook` or `nix flake check`.
 
 ## Conventions
 
