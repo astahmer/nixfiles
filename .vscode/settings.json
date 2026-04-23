@@ -1,0 +1,29 @@
+{
+  // ── Nix IDE + nixd language server ──────────────────────────
+  "[nix]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "jnoortheen.nix-ide",
+  },
+  "nix.enableLanguageServer": true,
+  "nix.serverPath": "nixd",
+  "nix.serverSettings": {
+    "nixd": {
+      "formatting": {
+        "command": [
+          "nixfmt"
+        ]
+      },
+      "nixpkgs": {
+        "expr": "import (builtins.getFlake \"${workspaceFolder}\").inputs.nixpkgs { }"
+      },
+      "options": {
+        "nixos": {
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.\"pc-fixe\".options"
+        },
+        "home-manager": {
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.\"pc-fixe\".options.home-manager.users.type.getSubOptions []"
+        }
+      }
+    }
+  }
+}

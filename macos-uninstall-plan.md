@@ -13,7 +13,7 @@ Keep Nix itself installed. Home Manager still depends on it.
 These apps are now managed by Home Manager and should no longer be kept by Homebrew:
 
 ```bash
-brew uninstall --cask orbstack slack shottr
+brew uninstall --cask background-music orbstack slack shottr karabiner-elements
 brew cleanup
 ```
 
@@ -31,7 +31,7 @@ If `where` shows `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, or any o
 remove that duplicate before relying on the Nix profile.
 
 ```bash
-for bin in jj jjui starship jj-starship comma deadnix nixd nixfmt; do
+for bin in bat code comma deadnix docker ffmpeg fnm fzf gh htop hyperfine jj jj-starship jjui jq lazydocker mcfly ncdu neovim nixd nixfmt rg tokei tree tmux uv yt-dlp zeditor; do
 	where "$bin"
 done
 ```
@@ -44,6 +44,12 @@ brew cleanup
 ```
 
 If `where starship` still shows `/usr/local/bin/starship`, remove that legacy binary separately with `sudo rm /usr/local/bin/starship`.
+
+If Background Music was ever installed outside Nix, remove the old app bundle too:
+
+```bash
+sudo rm -rf /Applications/Background\ Music.app
+```
 
 Do not install these tools through `brew`, `npm`, or `pnpm`; keep the Nix profile as the only source.
 

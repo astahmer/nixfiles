@@ -21,11 +21,19 @@
         character.vicmd_symbol = "";
 
         aws.disabled = true;
+        docker_context.disabled = true;
+        nodejs.disabled = true;
         username.disabled = true;
 
         custom.jj = {
           format = "$output ";
-          shell = [ "jj-starship" ];
+          shell = [
+            "jj-starship"
+            "--no-jj-prefix"
+            "--no-jj-name"
+            "--no-git-prefix"
+            "--no-git-name"
+          ];
           when = "jj-starship detect";
         };
 
@@ -52,6 +60,7 @@
       '';
 
       programs.zsh.initContent = lib.mkAfter ''
+        bindkey -e
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
         eval "$(${lib.getExe jjPackage} util completion zsh)"
       '';
