@@ -24,7 +24,30 @@ brew untap homebrew/homebrew-core
 brew untap homebrew/homebrew-cask
 ```
 
-## 2. Uninstall nix-darwin
+## 2. Audit the binaries that should come from Nix
+
+These commands should resolve only to Nix-managed paths such as `~/.nix-profile/bin` or `/nix/store`.
+If `where` shows `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, or any other global prefix,
+remove that duplicate before relying on the Nix profile.
+
+```bash
+for bin in jj jjui starship jj-starship comma deadnix nixd nixfmt; do
+	where "$bin"
+done
+```
+
+If Homebrew still owns any of the prompt tools, remove those copies as well:
+
+```bash
+brew uninstall jjui jj jj-starship
+brew cleanup
+```
+
+If `where starship` still shows `/usr/local/bin/starship`, remove that legacy binary separately with `sudo rm /usr/local/bin/starship`.
+
+Do not install these tools through `brew`, `npm`, or `pnpm`; keep the Nix profile as the only source.
+
+## 3. Uninstall nix-darwin
 
 Use the upstream uninstaller first:
 
@@ -38,7 +61,7 @@ If that command is not available for some reason, try the locally installed fall
 sudo darwin-uninstaller
 ```
 
-## 3. Remove the old nix-darwin checkout
+## 4. Remove the old nix-darwin checkout
 
 If you used the default `/etc/nix-darwin` checkout and no longer need it, remove it after the uninstaller completes:
 
@@ -46,11 +69,11 @@ If you used the default `/etc/nix-darwin` checkout and no longer need it, remove
 sudo rm -rf /etc/nix-darwin
 ```
 
-## 4. Verify the new setup
+## 5. Verify the new setup
 
 Run the Home Manager switch again and confirm the old casks are gone:
 
 ```bash
-home-manager switch --flake /Users/astahmer/dev/alex/nixfiles#macbook
+home-manager switch -b backup --flake /Users/astahmer/dev/alex/nixfiles#macbook
 brew list --cask
 ```

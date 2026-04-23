@@ -18,6 +18,8 @@
       };
 
       programs.starship.settings = {
+        character.vicmd_symbol = "";
+
         custom.jj = {
           format = "$output ";
           shell = [ "jj-starship" ];
@@ -52,7 +54,7 @@
       '';
 
       home.shellAliases = {
-        nixapply = "nix run nixpkgs#home-manager -- switch --flake .#macbook";
+        nixapply = "nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         zshconfig = "code ~/.zshrc";
         jjconfig = "code $(jj config path --user)";
