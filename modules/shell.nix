@@ -42,7 +42,7 @@
 
       home.shellAliases = {
         nixapply = "nix run nixpkgs#home-manager -- switch --flake .#macbook";
-        nixlint = "nix run nixpkgs#nixpkgs-lint -- .";
+        nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         zshconfig = "code ~/.zshrc";
         jjconfig = "code $(jj config path --user)";
         opencodeconfig = "code ~/.config/opencode/opencode.json";
