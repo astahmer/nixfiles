@@ -13,6 +13,7 @@ in
     extraSpecialArgs = { inherit inputs; };
 
     modules = [
+      inputs.nix-index-database.homeModules.default
       hm.base
       hm.terminal
       hm.shell

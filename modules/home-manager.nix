@@ -18,6 +18,7 @@ in
           home.username = username;
 
           imports = [
+              inputs.nix-index-database.homeModules.default
             hm.base
             hm.terminal
             hm.shell

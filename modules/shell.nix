@@ -20,6 +20,8 @@
       programs.starship.settings = {
         character.vicmd_symbol = "";
 
+        username.disabled = true;
+
         custom.jj = {
           format = "$output ";
           shell = [ "jj-starship" ];
