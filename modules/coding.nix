@@ -9,6 +9,9 @@ in
       home.packages = [
         pkgs."google-chrome"
         pkgs.gh
+        pkgs.comma
+        pkgs.deadnix
+        pkgs."jj-starship"
         pkgs.jq
         pkgs.neovim
         pkgs.nixd

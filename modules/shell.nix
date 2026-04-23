@@ -17,6 +17,17 @@
         enableZshIntegration = true;
       };
 
+      programs.starship.settings = {
+        custom.jj = {
+          format = "$output ";
+          shell = [ "jj-starship" ];
+          when = "jj-starship detect";
+        };
+
+        git_branch.disabled = true;
+        git_status.disabled = true;
+      };
+
       programs.mcfly = {
         enable = true;
         enableBashIntegration = true;
