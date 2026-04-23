@@ -1,8 +1,8 @@
-flakeConfig@{ ... }:
+{ config, ... }:
 {
   config.flake.modules.homeManager.nixosShell =
-    { config, ... }:
+    homeConfig@{ ... }:
     {
-      home.shellAliases.nixos-switch = "sudo nixos-rebuild switch --flake ${config.home.homeDirectory}/dev/alex/nixfiles#${flakeConfig.flake.nixosHostName}";
+      home.shellAliases.nixos-switch = "sudo nixos-rebuild switch --flake ${homeConfig.config.home.homeDirectory}/dev/alex/nixfiles#${config.flake.nixosHostName}";
     };
 }

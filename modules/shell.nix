@@ -41,7 +41,7 @@
       '';
 
       home.shellAliases = {
-        nixapply = "home-manager switch --flake .#macbook";
+        nixapply = "nix run nixpkgs#home-manager -- switch --flake .#macbook";
         nixlint = "nix run nixpkgs#nixpkgs-lint -- .";
         zshconfig = "code ~/.zshrc";
         jjconfig = "code $(jj config path --user)";
