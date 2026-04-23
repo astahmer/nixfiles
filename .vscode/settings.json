@@ -5,12 +5,15 @@
     "editor.defaultFormatter": "jnoortheen.nix-ide",
   },
   "nix.enableLanguageServer": true,
-  "nix.serverPath": "nixd",
+  "nix.serverPath": "/Users/astahmer/.nix-profile/bin/nixd",
+  "terminal.integrated.env.osx": {
+    "ZDOTDIR": "/Users/astahmer/.config/zsh"
+  },
   "nix.serverSettings": {
     "nixd": {
       "formatting": {
         "command": [
-          "nixfmt"
+          "/Users/astahmer/.nix-profile/bin/nixfmt"
         ]
       },
       "nixpkgs": {
@@ -18,10 +21,10 @@
       },
       "options": {
         "nixos": {
-          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.\"pc-fixe\".options"
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.workstation.options"
         },
         "home-manager": {
-          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.\"pc-fixe\".options.home-manager.users.type.getSubOptions []"
+          "expr": "(builtins.getFlake \"${workspaceFolder}\").homeConfigurations.macbook.options"
         }
       }
     }

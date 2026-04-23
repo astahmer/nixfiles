@@ -3,51 +3,7 @@
   config.flake.modules.homeManager.macosApps =
     { pkgs, lib, ... }:
     let
-      backgroundMusic = pkgs.stdenvNoCC.mkDerivation {
-        pname = "background-music";
-        version = "0.4.3";
-
-        src = pkgs.fetchurl {
-          url = "https://github.com/kyleneideck/BackgroundMusic/releases/download/v0.4.3/BackgroundMusic-0.4.3.pkg";
-          hash = "sha256-wcSKN8g69EzlC+5oh5hWyWsvbJc2DORhscfWU1Fb5/0=";
-        };
-
-        dontUnpack = true;
-        dontFixup = true;
-
-        nativeBuildInputs = [
-          pkgs.cpio
-          pkgs.gzip
-          pkgs.xar
-        ];
-
-        installPhase = ''
-          runHook preInstall
-
-          workdir=$(mktemp -d)
-          cd "$workdir"
-
-          xar -xf "$src"
-          cd Installer.pkg
-          gzip -dc Payload | cpio -idm
-
-          mkdir -p "$out/Applications"
-          cp -R "Applications/Background Music.app" "$out/Applications/"
-
-          mkdir -p "$out/Library/Audio/Plug-Ins/HAL"
-          cp -R "Library/Audio/Plug-Ins/HAL/Background Music Device.driver" \
-            "$out/Library/Audio/Plug-Ins/HAL/"
-
-          runHook postInstall
-        '';
-
-        meta = {
-          description = "macOS audio utility for per-app volume control and auto-pausing music";
-          homepage = "https://github.com/kyleneideck/BackgroundMusic";
-          license = lib.licenses.gpl2Plus;
-          platforms = lib.platforms.darwin;
-        };
-      };
+      backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
 
       karabinerConfig = builtins.toJSON {
         global = {
@@ -67,7 +23,8 @@
                     {
                       type = "basic";
                       from = {
-                        key_code = "q";
+                        # qwerty for cmd+q in azerty keyboards
+                        key_code = "a";
                         modifiers = {
                           mandatory = [ "left_command" ];
                           optional = [ "any" ];
@@ -82,7 +39,8 @@
                     {
                       type = "basic";
                       from = {
-                        key_code = "q";
+                        # qwerty for cmd+q in azerty keyboards
+                        key_code = "a";
                         modifiers = {
                           mandatory = [ "right_command" ];
                           optional = [ "any" ];
@@ -108,14 +66,20 @@
       };
     in
     {
+      imports = [ backgroundMusicModule ];
+
       home.packages = [
-        backgroundMusic
+        pkgs.spotify
+        pkgs.slack
+        pkgs."whatsapp-for-mac"
+        pkgs.shottr
+        pkgs.raycast
+        pkgs.caffeine
+        pkgs.monitorcontrol
         pkgs."karabiner-elements"
+        pkgs.discord
       ];
 
       home.file.".config/karabiner/karabiner.json".text = karabinerConfig;
-
-      home.file."Library/Audio/Plug-Ins/HAL/Background Music Device.driver".source =
-        "${backgroundMusic}/Library/Audio/Plug-Ins/HAL/Background Music Device.driver";
     };
 }

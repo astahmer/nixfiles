@@ -18,6 +18,7 @@ in
         pkgs.hyperfine
         pkgs."jj-starship"
         pkgs.jq
+        pkgs.httpie
         pkgs.ncdu
         pkgs.neovim
         pkgs.nixd

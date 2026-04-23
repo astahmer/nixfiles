@@ -6,6 +6,7 @@
       home.packages = [
         pkgs.spotify
         pkgs.slack
+        pkgs.discord
         pkgs."whatsapp-electron"
         pkgs.qdirstat
       ];

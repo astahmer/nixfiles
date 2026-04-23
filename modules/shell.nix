@@ -11,6 +11,18 @@
       programs.zsh.enable = true;
       programs.zsh.dotDir = "${config.xdg.configHome}/zsh";
 
+      home.file.".zshenv".text = ''
+        [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
+      '';
+
+      home.file.".zprofile".text = ''
+        [[ -f "$HOME/.config/zsh/.zprofile" ]] && source "$HOME/.config/zsh/.zprofile"
+      '';
+
+      home.file.".zshrc".text = ''
+        [[ -f "$HOME/.config/zsh/.zshrc" ]] && source "$HOME/.config/zsh/.zshrc"
+      '';
+
       programs.starship = {
         enable = true;
         enableBashIntegration = true;
@@ -68,13 +80,15 @@
       home.shellAliases = {
         nixapply = "nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
-        zshconfig = "code ~/.zshrc";
+        #
+        zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";
         opencodeconfig = "code ~/.config/opencode/opencode.json";
         npmrc = "code ~/.npmrc";
         gitconfig = "code ~/.gitconfig";
         gitignore = "code ~/.gitignore";
-        sauce = "source ~/.zshrc";
+        sauce = "source ~/.config/zsh/.zshrc";
+        #
         ppnm = "pnpm";
         pnpmi = "pnpm i";
         copilot = "gh copilot suggest -t shell";
