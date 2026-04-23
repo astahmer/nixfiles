@@ -18,6 +18,7 @@ in
         pkgs.nixfmt
         pkgs.tmux
         pkgs.vscode
+        pkgs.zed-editor
         pkgs.fnm
         pkgs.curl
         pkgs.ripgrep
