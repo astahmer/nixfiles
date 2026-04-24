@@ -90,6 +90,18 @@
 
       programs.zsh.initContent = lib.mkAfter ''
         bindkey -e
+
+        kill-port() {
+          local port="$1"
+
+          if [[ -z "$port" ]]; then
+            echo "Usage: kill-port <port>"
+            return 1
+          fi
+
+          lsof -ti:$port | xargs kill -9 2>/dev/null && echo "Killed process on port $port" || echo "No process found on port $port"
+        }
+
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
         eval "$(${lib.getExe jjPackage} util completion zsh)"
       '';
