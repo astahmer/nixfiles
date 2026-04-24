@@ -33,6 +33,7 @@ in
         pkgs."yt-dlp"
         pkgs.uv
         pkgs.htop
+        pkgs.btop
         pkgs.devenv
       ];
     };

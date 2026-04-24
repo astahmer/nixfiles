@@ -55,6 +55,17 @@
           when = "jj-starship detect";
         };
 
+        custom.nix = {
+          symbol = "❄️ ";
+          detect_files = [
+            "flake.nix"
+            "default.nix"
+            "shell.nix"
+          ];
+          format = "[$symbol]($style)";
+          style = "bold blue";
+        };
+
         git_branch.disabled = true;
         git_status.disabled = true;
       };

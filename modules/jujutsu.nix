@@ -47,6 +47,7 @@
             d = [ "duplicate" ];
             f = [ "git" "fetch" ];
             l = [ "log" "-r" ];
+            push = ["git" "push"];
             stat = [ "log" "--stat" "-r" ];
             #
             branch = [ "bookmark" "set" "--revision" "@" ];
