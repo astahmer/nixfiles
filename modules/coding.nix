@@ -20,16 +20,20 @@ in
               sha256 = "sha256-m/2o6+TRfJy5X1oYYbzAalK3MHezTdchSx7yvlOotUY=";
             };
 
-            nativeBuildInputs = [ pkgs.undmg ];
-
-            sourceRoot = ".";
+            dontUnpack = true;
+            dontFixup = true;
 
             installPhase = ''
               runHook preInstall
 
+              mount_point=$(mktemp -d)
+              /usr/bin/hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$src"
+
               mkdir -p "$out/Applications" "$out/bin"
-              cp -R "Zed.app" "$out/Applications/"
+              cp -R "$mount_point/Zed.app" "$out/Applications/"
               ln -s "$out/Applications/Zed.app/Contents/MacOS/Zed" "$out/bin/zeditor"
+
+              /usr/bin/hdiutil detach "$mount_point"
 
               runHook postInstall
             '';
