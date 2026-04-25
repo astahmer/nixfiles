@@ -11,6 +11,13 @@
       programs.zsh.enable = true;
       programs.zsh.dotDir = "${config.xdg.configHome}/zsh";
 
+      home.sessionVariables.HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
+
+      home.activation.ensureZshHistoryFile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        mkdir -p "${config.xdg.configHome}/zsh"
+        touch "${config.xdg.configHome}/zsh/.zsh_history"
+      '';
+
       home.file.".zshenv".text = ''
         [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
       '';
@@ -31,6 +38,7 @@
 
       programs.starship.settings = {
         character.vicmd_symbol = "";
+        command_timeout = 1000;
 
         aws.disabled = true;
         gcloud.disabled = true;
@@ -53,6 +61,7 @@
           format = "$output ";
           command = "jj-starship prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name";
           when = "jj-starship detect";
+          ignore_timeout = true;
         };
 
         custom.nix = {
