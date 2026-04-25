@@ -28,6 +28,11 @@
         esac
       '';
 
+      home.activation.disableSpotlightHotkeys = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        $DRY_RUN_CMD defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{enabled = false;}'
+        $DRY_RUN_CMD defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 '{enabled = false;}'
+      '';
+
       home.packages = [
         pkgs.spotify
         pkgs.slack
