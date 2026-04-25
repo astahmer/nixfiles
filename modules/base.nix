@@ -1,12 +1,15 @@
 { config, ... }:
 let
-  username = config.flake.username;
+  flakeConfig = config;
+  username = flakeConfig.flake.username;
 in
 {
   config.flake.modules.homeManager.base =
-    { ... }:
+    { config, ... }:
     {
-      home.stateVersion = config.flake.homeStateVersion;
+      home.stateVersion = flakeConfig.flake.homeStateVersion;
+
+      home.sessionPath = [ "${config.home.profileDirectory}/bin" ];
 
       home.sessionVariables = {
         EDITOR = "nvim";
@@ -43,6 +46,6 @@ in
         ];
       };
 
-      system.stateVersion = config.flake.nixosStateVersion;
+      system.stateVersion = flakeConfig.flake.nixosStateVersion;
     };
 }
