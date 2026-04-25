@@ -1,29 +1,18 @@
 {
-  // ── Nix IDE + nixd language server ──────────────────────────
-  "[nix]": {
-    "editor.formatOnSave": true,
-    "editor.defaultFormatter": "jnoortheen.nix-ide",
-  },
-  "nix.enableLanguageServer": true,
-  "nix.serverPath": "nixd",
-  "nix.serverSettings": {
-    "nixd": {
-      "formatting": {
-        "command": [
-          "nixfmt"
-        ]
-      },
-      "nixpkgs": {
-        "expr": "import (builtins.getFlake \"${workspaceFolder}\").inputs.nixpkgs { }"
-      },
-      "options": {
-        "nixos": {
-          "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.workstation.options"
-        },
-        "home-manager": {
-          "expr": "(builtins.getFlake \"${workspaceFolder}\").homeConfigurations.macbook.options"
+    // ── Nix IDE + nixd language server ──────────────────────────
+    "nix.serverSettings": {
+        "nixd": {
+            "nixpkgs": {
+                "expr": "import (builtins.getFlake \"${workspaceFolder}\").inputs.nixpkgs { }"
+            },
+            "options": {
+                "nixos": {
+                    "expr": "(builtins.getFlake \"${workspaceFolder}\").nixosConfigurations.workstation.options"
+                },
+                "home-manager": {
+                    "expr": "(builtins.getFlake \"${workspaceFolder}\").homeConfigurations.macbook.options"
+                }
+            }
         }
-      }
     }
-  }
 }

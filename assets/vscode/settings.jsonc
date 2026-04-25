@@ -327,6 +327,10 @@
     "workbench.sideBar.location": "right",
     "workbench.startupEditor": "none",
     "terminal.integrated.sendKeybindingsToShell": false,
+    "[nix]": {
+        "editor.defaultFormatter": "jnoortheen.nix-ide",
+        "editor.formatOnSave": true
+    },
     "nix.enableLanguageServer": true,
     "nix.serverPath": "nixd",
     "nix.serverSettings": {
