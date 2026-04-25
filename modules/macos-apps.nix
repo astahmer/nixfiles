@@ -29,8 +29,10 @@
       '';
 
       home.activation.disableSpotlightHotkeys = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        $DRY_RUN_CMD defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{enabled = false;}'
-        $DRY_RUN_CMD defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 65 '{enabled = false;}'
+        hotkeysPlist="$HOME/Library/Preferences/com.apple.symbolichotkeys.plist"
+        $DRY_RUN_CMD /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:64:enabled false" "$hotkeysPlist"
+        $DRY_RUN_CMD /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:65:enabled false" "$hotkeysPlist"
+        $DRY_RUN_CMD killall SystemUIServer 2>/dev/null || true
       '';
 
       home.packages = [
