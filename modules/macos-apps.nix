@@ -1,4 +1,4 @@
-{ config, ... }:
+{ ... }:
 {
   config.flake.modules.homeManager.macosApps =
     { pkgs, lib, ... }:
@@ -32,6 +32,7 @@
         hotkeysPlist="$HOME/Library/Preferences/com.apple.symbolichotkeys.plist"
         $DRY_RUN_CMD /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:64:enabled false" "$hotkeysPlist"
         $DRY_RUN_CMD /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:65:enabled false" "$hotkeysPlist"
+        $DRY_RUN_CMD killall cfprefsd 2>/dev/null || true
         $DRY_RUN_CMD killall SystemUIServer 2>/dev/null || true
       '';
 
