@@ -19,4 +19,4 @@ jobs:
 
       - name: Run nixpkgs-lint
         run: |
-          nix run nixpkgs#nixpkgs-lint -- .
+          nix run github:nix-community/nixpkgs-lint -- .
