@@ -21,9 +21,32 @@ description: It bootstraps repository flakes and direnv shells. Use when setting
 - Add repo-specific env vars and hooks in the flake shell so direnv applies them automatically.
 - If the repo already uses a version manager or language toolchain file, preserve that contract instead of replacing it.
 
+## Node With fnm
+
+- If the repo manages Node through fnm, put `pkgs.fnm` in the shell and let `shellHook` select the version on entry.
+- Keep the hook idempotent because direnv re-enters on every `cd`.
+- Do not add `pkgs.nodejs_*` when fnm is the source of truth for the Node version.
+
+Example:
+
+```nix
+packages = [
+  pkgs.fnm
+  pkgs.python3
+  pkgs.gnumake
+  pkgs.gcc
+];
+
+shellHook = ''
+  eval "$(fnm env)"
+  fnm use --silent-if-unchanged > /dev/null 2>&1
+  corepack enable > /dev/null 2>&1
+'';
+```
+
 ## Common Mappings
 
-- Node repos: add the matching `pkgs.nodejs_*` for the declared engine. Keep `pkgs.fnm` only when the repo already expects fnm or a Node version manager.
+- Node repos: if the repo expects fnm, add `pkgs.fnm` and select Node in `shellHook`; otherwise add the matching `pkgs.nodejs_*` for the declared engine.
 - Playwright repos: add the current nixpkgs Playwright package and keep browser/runtime dependencies in the shell instead of relying on npm downloads.
 - Mixed repos: include any native libraries, CLIs, code generators, formatters, and test runners that CI or local dev needs.
 
