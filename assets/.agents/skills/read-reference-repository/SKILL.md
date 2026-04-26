@@ -9,6 +9,8 @@ description: Reads and compares a cloned repository under `.references` for patt
 
 Start by finding the requested repo under `.references/<name>`, then read its `AGENTS.md` first if it exists.
 
+Check the workspace root `reference-repos.md` file first when you need the curated list of reference clones and the reason each one was added.
+
 Use the reference repo for pattern matching, comparison, and implementation examples. Prefer local file reads over web fetches when the repo is already cloned.
 
 ## Workflow
@@ -24,3 +26,4 @@ Use the reference repo for pattern matching, comparison, and implementation exam
 - Treat the reference repo as read-only unless the user explicitly asks to update it.
 - When comparing multiple reference repos, call out the shared conventions and the places where they differ.
 - Prefer concise, file-backed findings over broad summaries.
+- Keep `reference-repos.md` in sync with any new or removed reference clones.

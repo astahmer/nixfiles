@@ -18,9 +18,11 @@ If the target path already exists, do not overwrite it blindly. Inspect the exis
 3. Clone the remote into `.references/<name>`.
 4. If the cloned repository does not contain an `AGENTS.md`, create one from the local repo's `AGENTS.md` or a minimal repository-specific template.
 5. Report the created path and the remote URL used.
+6. Update the workspace `reference-repos.md` index when the curated set of references changes.
 
 ## Notes
 
 - Use the repository root of the current workspace, not the agent's own home directory.
 - Keep reference repositories isolated under `.references/` so they can be inspected without affecting the main repo.
 - When a reference repo already exists, treat it as a reusable local fixture rather than recreating it.
+- Keep a `reference-repos.md` file in the workspace root with the repo URL, local clone path, and a short reason for keeping each reference.
