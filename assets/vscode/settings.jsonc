@@ -1,3 +1,5 @@
+// Reference-only snapshot of the VS Code settings I keep in common.
+// This file is not applied to the live User Settings file.
 {
     "[astro]": {
         "editor.defaultFormatter": "astro-build.astro-vscode"
