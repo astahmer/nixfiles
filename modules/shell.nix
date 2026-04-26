@@ -1,8 +1,22 @@
 { config, ... }:
 {
   config.flake.modules.homeManager.shell =
-    { config, lib, pkgs, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     let
+      nixProfileBins = [
+        "${config.home.profileDirectory}/bin"
+        "/nix/var/nix/profiles/default/bin"
+      ];
+
+      nixPathSetup = ''
+        export PATH="${lib.concatStringsSep ":" nixProfileBins}:$PATH"
+      '';
+
       jjPackage =
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
     in
@@ -93,11 +107,15 @@
       };
 
       programs.bash.initExtra = lib.mkAfter ''
+        ${nixPathSetup}
+
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
         eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
       programs.zsh.initContent = lib.mkAfter ''
+        ${nixPathSetup}
+
         bindkey -e
 
         kill-port() {

@@ -9,7 +9,10 @@ in
     {
       home.stateVersion = flakeConfig.flake.homeStateVersion;
 
-      home.sessionPath = [ "${config.home.profileDirectory}/bin" ];
+      home.sessionPath = [
+        "${config.home.profileDirectory}/bin"
+        "/nix/var/nix/profiles/default/bin"
+      ];
 
       home.sessionVariables = {
         EDITOR = "nvim";
