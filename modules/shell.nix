@@ -115,27 +115,27 @@
 
       programs.zsh.initContent = lib.mkMerge [
         (lib.mkBefore ''
-        ${nixPathSetup}
+          ${nixPathSetup}
 
-        bindkey -e
+          bindkey -e
 
-        kill-port() {
-          local port="$1"
+          kill-port() {
+            local port="$1"
 
-          if [[ -z "$port" ]]; then
-            echo "Usage: kill-port <port>"
-            return 1
-          fi
+            if [[ -z "$port" ]]; then
+              echo "Usage: kill-port <port>"
+              return 1
+            fi
 
-          lsof -ti:$port | xargs kill -9 2>/dev/null && echo "Killed process on port $port" || echo "No process found on port $port"
-        }
+            lsof -ti:$port | xargs kill -9 2>/dev/null && echo "Killed process on port $port" || echo "No process found on port $port"
+          }
 
-        eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
-      '')
+          eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
+        '')
 
         (lib.mkAfter ''
-        eval "$(${lib.getExe jjPackage} util completion zsh)"
-      '')
+          eval "$(${lib.getExe jjPackage} util completion zsh)"
+        '')
       ];
 
       home.shellAliases = {
@@ -151,7 +151,7 @@
         ppnm = "pnpm";
         pnpmi = "pnpm i";
         ts = ", tsgo --noEmit";
-        copilot = "gh copilot suggest -t shell";
+        ai = "gh copilot suggest -t shell";
         nts = "node --no-warnings=ExperimentalWarning --experimental-strip-types --experimental-transform-types --env-file-if-exists=.env";
       };
     };

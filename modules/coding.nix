@@ -54,6 +54,7 @@ in
         pkgs.bat
         pkgs.docker
         pkgs.gh
+        pkgs."github-copilot-cli"
         pkgs.comma
         pkgs.deadnix
         pkgs.ffmpeg
