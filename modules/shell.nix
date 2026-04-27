@@ -113,7 +113,8 @@
         eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
-      programs.zsh.initContent = lib.mkAfter ''
+      programs.zsh.initContent = lib.mkMerge [
+        (lib.mkBefore ''
         ${nixPathSetup}
 
         bindkey -e
@@ -130,8 +131,12 @@
         }
 
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
+      '')
+
+        (lib.mkAfter ''
         eval "$(${lib.getExe jjPackage} util completion zsh)"
-      '';
+      '')
+      ];
 
       home.shellAliases = {
         nixapply = "nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook";
