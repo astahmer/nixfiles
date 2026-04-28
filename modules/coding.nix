@@ -7,6 +7,9 @@ in
     { pkgs, lib, ... }:
     let
       ghui = import ../ghui-package.nix { inherit pkgs; };
+      lightjj = pkgs.writeShellScriptBin "lightjj" ''
+        exec ${pkgs.comma}/bin/comma go run github.com/chronologos/lightjj/cmd/lightjj@latest "$@"
+      '';
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let
@@ -57,6 +60,7 @@ in
         pkgs.gh
         pkgs."github-copilot-cli"
         pkgs.comma
+        lightjj
         pkgs.deadnix
         pkgs.ffmpeg
         pkgs.fzf
