@@ -5,6 +5,7 @@
     let
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
+      cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
       kapModule = import ../macos/kap.nix { inherit pkgs lib; };
       cleanMyKeyboardId = "6468120888";
       mas = lib.getExe pkgs.mas;
@@ -14,6 +15,7 @@
       imports = [
         backgroundMusicModule
         cameracontrollerModule
+        cmdcmdModule
         kapModule
         # huesyncModule
       ];

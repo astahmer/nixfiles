@@ -4,8 +4,9 @@ let
 in
 {
   config.flake.modules.homeManager.coding =
-    { pkgs, ... }:
+    { pkgs, lib, ... }:
     let
+      ghui = import ../ghui-package.nix { inherit pkgs; };
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let
@@ -79,6 +80,10 @@ in
         pkgs.htop
         pkgs.btop
         pkgs.devenv
+      ]
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+        pkgs.bun
+        ghui
       ];
     };
 
