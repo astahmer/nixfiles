@@ -6,7 +6,7 @@ let
 
     src = pkgs.fetchzip {
       url = "https://github.com/peterp/cmdcmd/releases/download/v${version}/cmdcmd.zip";
-      hash = "sha256-FdGhAOr5h22H7G4X+CXzoyANinGgxXneXLXXeJc/SEQ=";
+      hash = "sha256-dFxc3KXy3jlNS/lAAZXrArEdz4tlPWRV6nbuXy1Md7o=";
       stripRoot = false;
     };
 
@@ -17,7 +17,7 @@ let
       runHook preInstall
 
       mkdir -p "$out/Applications"
-      cp -R cmdcmd.app "$out/Applications/"
+      cp -R "$src/cmdcmd.app" "$out/Applications/"
 
       runHook postInstall
     '';
