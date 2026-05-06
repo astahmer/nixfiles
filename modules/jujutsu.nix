@@ -45,12 +45,30 @@
 
           aliases = {
             d = [ "duplicate" ];
-            f = [ "git" "fetch" ];
-            l = [ "log" "-r" ];
-            push = ["git" "push"];
-            stat = [ "log" "--stat" "-r" ];
+            f = [
+              "git"
+              "fetch"
+            ];
+            l = [
+              "log"
+              "-r"
+            ];
+            push = [
+              "git"
+              "push"
+            ];
+            stat = [
+              "log"
+              "--stat"
+              "-r"
+            ];
             #
-            branch = [ "bookmark" "set" "--revision" "@" ];
+            branch = [
+              "bookmark"
+              "set"
+              "--revision"
+              "@"
+            ];
             tug = [
               "bookmark"
               "move"
@@ -60,17 +78,101 @@
               "closest_pushable(@)"
             ];
             #
-            slice = [ "log" "-r" "slice()" ];
-            tip = [ "log" "-r" "tip" ];
-            mine = [ "log" "-r" "mine()" ];
+            slice = [
+              "log"
+              "-r"
+              "slice()"
+            ];
+            tip = [
+              "log"
+              "-r"
+              "tip"
+            ];
+            mine = [
+              "log"
+              "-r"
+              "mine()"
+            ];
             #
-            vs = [ "log" "-r" "trunk()..closest_pushable(@)" ];
-            vsb = [ "log" "-r" "trunk()..closest_bookmark(@)" ];
+            vs = [
+              "log"
+              "-r"
+              "trunk()..closest_pushable(@)"
+            ];
+            vsb = [
+              "log"
+              "-r"
+              "trunk()..closest_bookmark(@)"
+            ];
             #
-            by = [ "log" "-n" "2" ];
-            bk = [ "log" "-r" "bookmarks()" ];
-            rb = [ "rebase" "-b" "@" "-o" "main@origin" ];
+            by = [
+              "log"
+              "-n"
+              "2"
+            ];
+            bk = [
+              "log"
+              "-r"
+              "bookmarks()"
+            ];
+            rb = [
+              "rebase"
+              "-b"
+              "@"
+              "-o"
+              "main@origin"
+            ];
+
+            # https://pksunkara.com/tech-notes/jujutsu-keeping-a-file-untracked/
+            ignore = [
+              "util"
+              "exec"
+              "--"
+              "bash"
+              "-c"
+              "jj"
+              "config"
+              "set"
+              "--repo"
+              "snapshot.auto-track"
+              "$(jj"
+              "config"
+              "get"
+              "snapshot.auto-track"
+              ")"
+              "&"
+              "~"
+              "$0"
+              "&&"
+              "jj"
+              "file"
+              "untrack"
+              "$0"
+            ];
           };
+
+          # https://pksunkara.com/tech-notes/jujutsu-managing-workspaces/
+          wo = [
+            "util"
+            "exec"
+            "--"
+            "bash"
+            "-c"
+            "jj"
+            "workspace"
+            "root"
+            "--name"
+            "$(jj"
+            "workspace"
+            "list"
+            "|"
+            "fzf"
+            "|"
+            "cut"
+            "-d:"
+            "-f1"
+            ")"
+          ];
 
           templates = {
             new_description = ''"wip"'';
@@ -81,7 +183,10 @@
           };
 
           fix.tools.oxfmt = {
-            command = [ "oxfmt" "--stdin-filepath=$path" ];
+            command = [
+              "oxfmt"
+              "--stdin-filepath=$path"
+            ];
             patterns = [
               "glob:'**/*.css'"
               "glob:'**/*.html'"

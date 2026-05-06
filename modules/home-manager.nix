@@ -31,6 +31,7 @@ in
             hm.tools
             hm.launcher
             hm.nixosShell
+            hm.work
           ];
         };
       };
