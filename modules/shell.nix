@@ -19,6 +19,63 @@
 
       jjPackage =
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
+
+      jjsearchFunction = ''
+        jjsearch() {
+          local mode="fixed"
+          local pattern
+
+          case "''${1-}" in
+            -r|--regex)
+              mode="regex"
+              shift
+              ;;
+          esac
+
+          pattern="$*"
+
+          if [[ -z "$pattern" ]]; then
+            echo "Usage: jjsearch [--regex] PATTERN"
+            return 2
+          fi
+
+          jj log -r 'closest_bookmark(@)::@' -p --git | awk -v pattern="$pattern" -v mode="$mode" '
+            function matches(line) {
+              if (mode == "regex") {
+                return line ~ pattern
+              }
+
+              return index(line, pattern)
+            }
+
+            $1 == "@" || $1 == "○" {
+              rev = $2
+              next
+            }
+
+            $2 == "diff" && $3 == "--git" {
+              file = $5
+              sub(/^b\//, "", file)
+              next
+            }
+
+            $2 == "+" {
+              line = substr($0, index($0, "+"))
+
+              if (matches(line)) {
+                key = rev SUBSEP file
+
+                if (key != last_key) {
+                  printf "%s %s\n", rev, file
+                  last_key = key
+                }
+
+                print line
+              }
+            }
+          '
+        }
+      '';
     in
     {
       programs.bash.enable = true;
@@ -110,6 +167,7 @@
         ${nixPathSetup}
 
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
+        ${jjsearchFunction}
         eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
@@ -131,6 +189,7 @@
           }
 
           eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
+          ${jjsearchFunction}
         '')
 
         (lib.mkAfter ''
