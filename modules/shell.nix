@@ -20,6 +20,15 @@
       jjPackage =
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
 
+      shellAliasNames = builtins.attrNames config.home.shellAliases;
+      shellAliasPattern = lib.concatStringsSep "|" (map lib.escapeRegex shellAliasNames);
+
+      shellAliasesFunction = ''
+                aliases() {
+                  alias | sed -E 's/^alias //' | grep -E '^(${shellAliasPattern})='
+                }
+      '';
+
       jjsearchFunction = ''
                 jjsearch() {
                   local mode="fixed"
@@ -210,6 +219,7 @@
 
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
         ${jjsearchFunction}
+        ${shellAliasesFunction}
         eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
@@ -232,6 +242,7 @@
 
           eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
           ${jjsearchFunction}
+          ${shellAliasesFunction}
         '')
 
         (lib.mkAfter ''
@@ -244,6 +255,8 @@
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";
+        jjaliases = "jj config list aliases --user | sed -E 's/^aliases\\.//'";
+        gitaliases = "git config --global --get-regexp '^alias\\.' | sed -E 's/^alias\\.//'";
         opencodeconfig = "code ~/.config/opencode/opencode.json";
         npmrc = "code ~/.npmrc";
         gitconfig = "code ~/.gitconfig";
