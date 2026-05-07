@@ -98,31 +98,70 @@
                       return index(line, pattern)
                     }
 
+                    function column(line) {
+                      if (mode == "regex") {
+                        match(line, pattern)
+                        return RSTART
+                      }
+
+                      return index(line, pattern)
+                    }
+
+                    function hunk_start(header,   range, parts) {
+                      if (match(header, /\+[0-9]+(,[0-9]+)?/)) {
+                        range = substr(header, RSTART + 1, RLENGTH - 1)
+                        split(range, parts, ",")
+
+                        return parts[1]
+                      }
+
+                      return 0
+                    }
+
                     NF >= 5 && $3 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
                       rev = $1
                       file = ""
+                      in_hunk = 0
                       next
                     }
 
                     $1 == "diff" && $2 == "--git" {
                       file = $4
                       sub(/^b\//, "", file)
+                      in_hunk = 0
                       next
                     }
 
-                    $1 == "+" {
+                    /^@@ / {
+                      new_line = hunk_start($0)
+                      in_hunk = 1
+                      next
+                    }
+
+                    in_hunk && substr($0, 1, 1) == "-" {
+                      next
+                    }
+
+                    in_hunk && substr($0, 1, 1) == " " {
+                      new_line++
+                      next
+                    }
+
+                    in_hunk && substr($0, 1, 1) == "+" {
                       line = substr($0, 2)
 
                       if (matches(line)) {
-                        key = rev SUBSEP file
+                        col = column(line)
 
-                        if (key != last_key) {
-                          printf "%s %s\n", rev, file
-                          last_key = key
+                        if (col < 1) {
+                          col = 1
                         }
 
+                        printf "%s %s:%d:%d\n", rev, file, new_line, col
                         print "+" line
                       }
+
+                      new_line++
                     }
                   '
                 }
