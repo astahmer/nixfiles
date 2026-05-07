@@ -44,6 +44,7 @@
             "slice(from)" = "ancestors(reachable(from, mutable()), 2)";
             tip = "exactly(heads(@-::~@), 1)";
             "branch_start(to)" = "heads(::to & trunk())+ & ::to";
+            "changes(from, to)" = "from..to";
           };
 
           aliases = {

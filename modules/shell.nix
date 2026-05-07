@@ -21,60 +21,102 @@
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
 
       jjsearchFunction = ''
-        jjsearch() {
-          local mode="fixed"
-          local pattern
+                jjsearch() {
+                  local mode="fixed"
+                  local from="main@origin"
+                  local to="@"
+                  local pattern
 
-          case "''${1-}" in
-            -r|--regex)
-              mode="regex"
-              shift
-              ;;
-          esac
+                  while [[ $# -gt 0 ]]; do
+                    case "$1" in
+                      -r|--regex)
+                        mode="regex"
+                        shift
+                        ;;
+                      -f|--from)
+                        if [[ $# -lt 2 ]]; then
+                          echo "jjsearch: missing value for $1" >&2
+                          return 2
+                        fi
 
-          pattern="$*"
+                        from="$2"
+                        shift 2
+                        ;;
+                      -t|--to)
+                        if [[ $# -lt 2 ]]; then
+                          echo "jjsearch: missing value for $1" >&2
+                          return 2
+                        fi
 
-          if [[ -z "$pattern" ]]; then
-            echo "Usage: jjsearch [--regex] PATTERN"
-            return 2
-          fi
+                        to="$2"
+                        shift 2
+                        ;;
+                      -h|--help)
+                        cat <<'EOF'
+        Usage: jjsearch [--regex] [--from REVSET] [--to REVSET] PATTERN
 
-          jj log -r 'closest_bookmark(@)::@' -p --git | awk -v pattern="$pattern" -v mode="$mode" '
-            function matches(line) {
-              if (mode == "regex") {
-                return line ~ pattern
-              }
+        Defaults: --from main@origin --to @
+        EOF
+                        return 0
+                        ;;
+                      --)
+                        shift
+                        break
+                        ;;
+                      -*)
+                        echo "jjsearch: unknown option: $1" >&2
+                        return 2
+                        ;;
+                      *)
+                        break
+                        ;;
+                    esac
+                  done
 
-              return index(line, pattern)
-            }
+                  pattern="$*"
 
-            $1 == "@" || $1 == "○" {
-              rev = $2
-              next
-            }
+                  if [[ -z "$pattern" ]]; then
+                    echo "jjsearch: missing search pattern" >&2
+                    return 2
+                  fi
 
-            $2 == "diff" && $3 == "--git" {
-              file = $5
-              sub(/^b\//, "", file)
-              next
-            }
+                  jj log -G -r "changes($from, $to)" -p --git | awk -v pattern="$pattern" -v mode="$mode" '
+                    function matches(line) {
+                      if (mode == "regex") {
+                        return line ~ pattern
+                      }
 
-            $2 == "+" {
-              line = substr($0, index($0, "+"))
+                      return index(line, pattern)
+                    }
 
-              if (matches(line)) {
-                key = rev SUBSEP file
+                    NF >= 5 && $3 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
+                      rev = $1
+                      file = ""
+                      next
+                    }
 
-                if (key != last_key) {
-                  printf "%s %s\n", rev, file
-                  last_key = key
+                    $1 == "diff" && $2 == "--git" {
+                      file = $4
+                      sub(/^b\//, "", file)
+                      next
+                    }
+
+                    $1 == "+" {
+                      line = substr($0, 2)
+
+                      if (matches(line)) {
+                        key = rev SUBSEP file
+
+                        if (key != last_key) {
+                          printf "%s %s\n", rev, file
+                          last_key = key
+                        }
+
+                        print "+" line
+                      }
+                    }
+                  '
                 }
-
-                print line
-              }
-            }
-          '
-        }
       '';
     in
     {
