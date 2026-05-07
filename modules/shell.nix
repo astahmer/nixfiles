@@ -149,6 +149,8 @@
         gitignore = "code ~/.gitignore";
         sauce = "source ~/.config/zsh/.zshrc";
         ppnm = "pnpm";
+        pn = "pnpm";
+        jjpush = "jj push";
         pnpmi = "pnpm i";
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
