@@ -62,9 +62,9 @@
           };
           rerere.enabled = lib.mkDefault true;
           diff.algorithm = lib.mkDefault "histogram";
+          core.pager = lib.mkDefault "delta";
           branch.sort = lib.mkDefault "-committerdate";
           tag.sort = lib.mkDefault "taggerdate";
-          pager.diff = lib.mkDefault false;
           alias = {
             go = lib.mkDefault "checkout";
             prev = lib.mkDefault "checkout -";
@@ -73,7 +73,7 @@
             rename = lib.mkDefault "branch -m";
             hist = lib.mkDefault ''log --pretty=format:"%h %ad | %s%d [%an]" --graph --date=short'';
             undo = lib.mkDefault "reset HEAD~ --mixed";
-            search = lib.mkDefault ''!git rev-list --all | xargs git grep -F'';
+            search = lib.mkDefault "!git rev-list --all | xargs git grep -F";
           };
         };
       };

@@ -19,6 +19,9 @@
           ui = {
             editor = "code --wait";
             conflict-marker-style = "git";
+            pager = "delta";
+            # https://docs.jj-vcs.dev/latest/config/#processing-contents-to-be-paged
+            diff-formatter = ":git";
             bookmark-list-sort-keys = [
               "committer-date-"
               "author-date-"
@@ -49,9 +52,13 @@
               "git"
               "fetch"
             ];
+            # `jj l` shows commits on the working-copy commit's (anonymous) bookmark
+            # compared to the `main` bookmark
+            # l = ["log", "-r", "(main..@):: | (main..@)-"]
             l = [
               "log"
               "-r"
+              "(trunk()..closest_bookmark(@)):: | (trunk()..closest_bookmark(@))-"
             ];
             push = [
               "git"
