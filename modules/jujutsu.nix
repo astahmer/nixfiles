@@ -157,49 +157,47 @@
               "untrack"
               "$0"
             ];
+            # https://pksunkara.com/tech-notes/jujutsu-managing-workspaces/
+            wo = [
+              "util"
+              "exec"
+              "--"
+              "bash"
+              "-c"
+              "jj"
+              "workspace"
+              "root"
+              "--name"
+              "$(jj"
+              "workspace"
+              "list"
+              "|"
+              "fzf"
+              "|"
+              "cut"
+              "-d:"
+              "-f1"
+              ")"
+            ];
+            wa = [
+              "util"
+              "exec"
+              "--"
+              "bash"
+              "-c"
+              "jj"
+              "workspace"
+              "add"
+              "--name"
+              "$0"
+              "$(jj"
+              "workspace"
+              "root"
+              "--name"
+              "default"
+              ").$0"
+            ];
           };
-
-          # https://pksunkara.com/tech-notes/jujutsu-managing-workspaces/
-          wo = [
-            "util"
-            "exec"
-            "--"
-            "bash"
-            "-c"
-            "jj"
-            "workspace"
-            "root"
-            "--name"
-            "$(jj"
-            "workspace"
-            "list"
-            "|"
-            "fzf"
-            "|"
-            "cut"
-            "-d:"
-            "-f1"
-            ")"
-          ];
-
-          wa = [
-            "util"
-            "exec"
-            "--"
-            "bash"
-            "-c"
-            "jj"
-            "workspace"
-            "add"
-            "--name"
-            "$0"
-            "$(jj"
-            "workspace"
-            "root"
-            "--name"
-            "default"
-            ").$0"
-          ];
 
           templates = {
             new_description = ''"wip"'';
