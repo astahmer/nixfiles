@@ -182,6 +182,25 @@
             ")"
           ];
 
+          wa = [
+            "util"
+            "exec"
+            "--"
+            "bash"
+            "-c"
+            "jj"
+            "workspace"
+            "add"
+            "--name"
+            "$0"
+            "$(jj"
+            "workspace"
+            "root"
+            "--name"
+            "default"
+            ").$0"
+          ];
+
           templates = {
             new_description = ''"wip"'';
           };
