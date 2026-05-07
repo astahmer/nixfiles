@@ -32,6 +32,7 @@
       jjsearchFunction = ''
                 jjsearch() {
                   local mode="fixed"
+                  local search_mode="present"
                   local from="main@origin"
                   local to="@"
                   local pattern
@@ -40,6 +41,10 @@
                     case "$1" in
                       -r|--regex)
                         mode="regex"
+                        shift
+                        ;;
+                      --history)
+                        search_mode="history"
                         shift
                         ;;
                       -f|--from)
@@ -62,9 +67,11 @@
                         ;;
                       -h|--help)
                         cat <<'EOF'
-        Usage: jjsearch [--regex] [--from REVSET] [--to REVSET] PATTERN
+        Usage: jjsearch [--history] [--regex] [--from REVSET] [--to REVSET] PATTERN
 
         Defaults: --from main@origin --to @
+        Default search mode: only lines still present in --to
+        Use --history to search each commit in the range
         EOF
                         return 0
                         ;;
@@ -89,7 +96,8 @@
                     return 2
                   fi
 
-                  jj log -G -r "changes($from, $to)" -p --git | awk -v pattern="$pattern" -v mode="$mode" '
+                  if [[ "$search_mode" == "history" ]]; then
+                    jj log -G -r "changes($from, $to)" -p --git | awk -v pattern="$pattern" -v mode="$mode" -v search_mode="$search_mode" '
                     function matches(line) {
                       if (mode == "regex") {
                         return line ~ pattern
@@ -118,7 +126,16 @@
                       return 0
                     }
 
-                    NF >= 5 && $3 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
+                    function emit_location(col) {
+                      if (search_mode == "history") {
+                        printf "%s %s:%d:%d\n", rev, file, new_line, col
+                        return
+                      }
+
+                      printf "%s:%d:%d\n", file, new_line, col
+                    }
+
+                    search_mode == "history" && NF >= 5 && $3 ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/ {
                       rev = $1
                       file = ""
                       in_hunk = 0
@@ -157,13 +174,87 @@
                           col = 1
                         }
 
-                        printf "%s %s:%d:%d\n", rev, file, new_line, col
+                        emit_location(col)
                         print "+" line
                       }
 
                       new_line++
                     }
                   '
+                  else
+                    jj diff --from "$from" --to "$to" --git | awk -v pattern="$pattern" -v mode="$mode" -v search_mode="$search_mode" '
+                    function matches(line) {
+                      if (mode == "regex") {
+                        return line ~ pattern
+                      }
+
+                      return index(line, pattern)
+                    }
+
+                    function column(line) {
+                      if (mode == "regex") {
+                        match(line, pattern)
+                        return RSTART
+                      }
+
+                      return index(line, pattern)
+                    }
+
+                    function hunk_start(header,   range, parts) {
+                      if (match(header, /\+[0-9]+(,[0-9]+)?/)) {
+                        range = substr(header, RSTART + 1, RLENGTH - 1)
+                        split(range, parts, ",")
+
+                        return parts[1]
+                      }
+
+                      return 0
+                    }
+
+                    function emit_location(col) {
+                      printf "%s:%d:%d\n", file, new_line, col
+                    }
+
+                    $1 == "diff" && $2 == "--git" {
+                      file = $4
+                      sub(/^b\//, "", file)
+                      in_hunk = 0
+                      next
+                    }
+
+                    /^@@ / {
+                      new_line = hunk_start($0)
+                      in_hunk = 1
+                      next
+                    }
+
+                    in_hunk && substr($0, 1, 1) == "-" {
+                      next
+                    }
+
+                    in_hunk && substr($0, 1, 1) == " " {
+                      new_line++
+                      next
+                    }
+
+                    in_hunk && substr($0, 1, 1) == "+" {
+                      line = substr($0, 2)
+
+                      if (matches(line)) {
+                        col = column(line)
+
+                        if (col < 1) {
+                          col = 1
+                        }
+
+                        emit_location(col)
+                        print "+" line
+                      }
+
+                      new_line++
+                    }
+                  '
+                  fi
                 }
       '';
     in
