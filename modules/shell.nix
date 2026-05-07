@@ -24,9 +24,9 @@
       shellAliasPattern = lib.concatStringsSep "|" (map lib.escapeRegex shellAliasNames);
 
       shellAliasesFunction = ''
-                aliases() {
-                  alias | sed -E 's/^alias //' | grep -E '^(${shellAliasPattern})='
-                }
+        aliases() {
+          alias | sed -E 's/^alias //' | grep -E '^(${shellAliasPattern})='
+        }
       '';
 
       jjsearchFunction = ''
@@ -383,6 +383,7 @@
       home.shellAliases = {
         nixapply = "nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
+        nixcheck = "nix-instantiate --parse $(git ls-files '*.nix') >/dev/null";
         zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";
         jjaliases = "jj config list aliases --user | sed -E 's/^aliases\\.//'";
