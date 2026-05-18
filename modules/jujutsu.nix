@@ -17,7 +17,7 @@
           };
 
           ui = {
-            editor = "code --wait";
+            editor = "code --wait --reuse-window";
             conflict-marker-style = "git";
             pager = "delta";
             # https://docs.jj-vcs.dev/latest/config/#processing-contents-to-be-paged

@@ -49,7 +49,7 @@
             name = lib.mkDefault "Alexandre Stahmer";
             email = lib.mkDefault "alexandre.stahmer@gmail.com";
           };
-          core.editor = lib.mkDefault "code --wait";
+          core.editor = lib.mkDefault "code --wait --reuse-window";
           init.defaultBranch = lib.mkDefault "main";
           pull.rebase = lib.mkDefault true;
           push = {
