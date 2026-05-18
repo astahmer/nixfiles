@@ -347,6 +347,9 @@
       programs.bash.initExtra = lib.mkAfter ''
         ${nixPathSetup}
 
+        shopt -s histappend
+        PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
+
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
         ${jjsearchFunction}
         ${shellAliasesFunction}
@@ -356,6 +359,10 @@
       programs.zsh.initContent = lib.mkMerge [
         (lib.mkBefore ''
           ${nixPathSetup}
+
+          setopt APPEND_HISTORY
+          setopt INC_APPEND_HISTORY
+          setopt SHARE_HISTORY
 
           bindkey -e
 
