@@ -1,4 +1,4 @@
-{ config, ... }:
+{ ... }:
 {
   config.flake.modules.homeManager.jujutsu =
     { pkgs, ... }:
@@ -17,7 +17,7 @@
           };
 
           ui = {
-            editor = "code --wait --reuse-window";
+            editor = "fresh";
             conflict-marker-style = "git";
             pager = "delta";
             # https://docs.jj-vcs.dev/latest/config/#processing-contents-to-be-paged

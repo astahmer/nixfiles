@@ -17,6 +17,7 @@ in
         modules = [
           inputs.nix-index-database.homeModules.default
           hm.base
+          hm.brew
           hm.terminal
           hm.shell
           hm.git

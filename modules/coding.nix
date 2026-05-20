@@ -8,9 +8,6 @@ in
     let
       ghui = import ../ghui-package.nix { inherit pkgs; };
       hunk = import ../hunk-package.nix { inherit pkgs; };
-      lightjj = pkgs.writeShellScriptBin "lightjj" ''
-        exec ${pkgs.comma}/bin/comma go run github.com/chronologos/lightjj/cmd/lightjj@latest "$@"
-      '';
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let
@@ -61,13 +58,13 @@ in
         pkgs.gh
         pkgs."github-copilot-cli"
         pkgs.comma
-        lightjj
         pkgs.delta
         hunk
         pkgs.deadnix
         pkgs.ffmpeg
         pkgs.fzf
         pkgs.hyperfine
+        pkgs.fresh-editor
         pkgs."jj-starship"
         pkgs.jq
         pkgs.httpie
