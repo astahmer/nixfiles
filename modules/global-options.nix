@@ -18,10 +18,22 @@
     description = "Name used for the standalone Home Manager profile.";
   };
 
+  options.flake.linuxHomeName = lib.mkOption {
+    type = lib.types.str;
+    default = "bazzite";
+    description = "Name used for the standalone Linux Home Manager profile.";
+  };
+
   options.flake.nixosSystem = lib.mkOption {
     type = lib.types.str;
     default = "x86_64-linux";
     description = "System string for the NixOS host.";
+  };
+
+  options.flake.linuxSystem = lib.mkOption {
+    type = lib.types.str;
+    default = "x86_64-linux";
+    description = "System string for the Linux Home Manager profile.";
   };
 
   options.flake.macSystem = lib.mkOption {
