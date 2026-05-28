@@ -130,6 +130,10 @@
               "-o"
               "main@origin"
             ];
+            rl = [
+              "resolve"
+              "-l"
+            ];
 
             # https://pksunkara.com/tech-notes/jujutsu-keeping-a-file-untracked/
             ignore = [
