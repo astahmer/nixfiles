@@ -1,4 +1,4 @@
-{ config, ... }:
+{ ... }:
 {
   config.flake.modules.homeManager.shell =
     {
@@ -270,6 +270,20 @@
         touch "${config.xdg.configHome}/zsh/.zsh_history"
       '';
 
+      home.activation.skepsisCheckout = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        deps_dir="${config.home.homeDirectory}/dev/deps"
+        skepsis_dir="$deps_dir/skepsis"
+
+        if [ ! -d "$skepsis_dir" ]; then
+          $DRY_RUN_CMD mkdir -p "$deps_dir"
+          $DRY_RUN_CMD ${lib.getExe pkgs.git} clone https://github.com/oxidecomputer/skepsis.git "$skepsis_dir"
+        fi
+
+        if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
+          $DRY_RUN_CMD sh -c 'cd "$1" && "$2" pnpm i' sh "$skepsis_dir" "${pkgs.nodejs_24}/bin/corepack"
+        fi
+      '';
+
       home.file.".zshenv".text = ''
         [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
       '';
@@ -402,6 +416,8 @@
         sauce = "source ~/.config/zsh/.zshrc";
         ppnm = "pnpm";
         pn = "pnpm";
+        # https://github.com/oxidecomputer/skepsis
+        sk = "${lib.getExe pkgs.nodejs_24} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
         jjpush = "jj push";
         pnpmi = "pnpm i";
         ts = ", tsgo --noEmit";
