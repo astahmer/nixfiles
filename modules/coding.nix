@@ -8,6 +8,7 @@ in
     let
       ghui = import ../ghui-package.nix { inherit pkgs; };
       hunk = import ../hunk-package.nix { inherit pkgs; };
+      lightjj = import ../lightjj-package.nix { inherit pkgs; };
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let
@@ -65,6 +66,7 @@ in
         pkgs.fzf
         pkgs.hyperfine
         pkgs.fresh-editor
+        lightjj
         pkgs."jj-starship"
         pkgs.jq
         pkgs.httpie

@@ -16,6 +16,10 @@
             max-new-file-size = "12MiB";
           };
 
+          git = {
+            write-change-id-header = true;
+          };
+
           ui = {
             editor = "fresh";
             conflict-marker-style = "git";
