@@ -12,11 +12,13 @@ in
       home.sessionPath = [
         "${config.home.profileDirectory}/bin"
         "/nix/var/nix/profiles/default/bin"
+        "${config.home.homeDirectory}/.local/share/pnpm"
       ];
 
       home.sessionVariables = {
         EDITOR = "nvim";
         VISUAL = "nvim";
+        PNPM_HOME = "${config.home.homeDirectory}/.local/share/pnpm";
       };
 
       programs.home-manager.enable = true;
