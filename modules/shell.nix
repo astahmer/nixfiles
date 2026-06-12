@@ -259,6 +259,8 @@
       '';
     in
     {
+      home.packages = [ pkgs.nodejs_24 ];
+
       programs.bash.enable = true;
       programs.zsh.enable = true;
       programs.zsh.dotDir = "${config.xdg.configHome}/zsh";
@@ -360,9 +362,15 @@
 
       programs.bash.initExtra = lib.mkAfter ''
         ${nixPathSetup}
+        export PNPM_HOME="$HOME/.local/share/pnpm"
+        export PATH="$PNPM_HOME:$PATH"
 
         shopt -s histappend
         PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
+
+        export COREPACK_ENABLE_AUTO_PIN=0
+        "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
+        "${pkgs.nodejs_24}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
         eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
         ${jjsearchFunction}
@@ -373,6 +381,8 @@
       programs.zsh.initContent = lib.mkMerge [
         (lib.mkBefore ''
           ${nixPathSetup}
+          export PNPM_HOME="$HOME/.local/share/pnpm"
+          export PATH="$PNPM_HOME:$PATH"
 
           setopt APPEND_HISTORY
           setopt INC_APPEND_HISTORY
@@ -390,6 +400,10 @@
 
             lsof -ti:$port | xargs kill -9 2>/dev/null && echo "Killed process on port $port" || echo "No process found on port $port"
           }
+
+          export COREPACK_ENABLE_AUTO_PIN=0
+          "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
+          "${pkgs.nodejs_24}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
           eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
           ${jjsearchFunction}
