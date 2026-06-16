@@ -298,8 +298,12 @@
         export PATH="${pnpmBin}:$PATH"
         export COREPACK_ENABLE_AUTO_PIN=0
 
-        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g cachebro@0.2.2 composto-ai@0.7.0 --allow-build=better-sqlite3 || true
+        mkdir -p "${pnpmHome}"
+
+        if ! command -v cachebro >/dev/null 2>&1 || ! command -v composto-mcp >/dev/null 2>&1; then
+          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
+          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g cachebro@0.2.2 composto-ai@0.7.0 --allow-build=better-sqlite3 || true
+        fi
       '';
 
       home.activation.writeGithubToken = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -332,7 +336,7 @@
         [ "Bearer {file:${config.home.homeDirectory}/.config/opencode/github-token}" ]
         (builtins.readFile ../assets/.cursor/mcp.json);
       home.file.".vscode/mcp.json".source = ../assets/vscode/mcp.json;
-
+      home.file."Library/Application Support/Code/User/mcp.json".source = ../assets/vscode/mcp.json;
       home.file.".zshenv".text = ''
         [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
       '';
