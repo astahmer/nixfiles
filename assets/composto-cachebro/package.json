@@ -1,0 +1,16 @@
+{
+  "name": "composto-cachebro",
+  "version": "0.1.0",
+  "description": "IR-aware read cache: composto compression + cachebro session diffs",
+  "type": "module",
+  "bin": {
+    "composto-cachebro": "src/serve.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

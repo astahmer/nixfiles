@@ -2,4 +2,5 @@
 result
 .direnv
 *.local.md
-my-wsl-opencode
+assets/composto-cachebro/node_modules
+.composto

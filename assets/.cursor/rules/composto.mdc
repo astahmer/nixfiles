@@ -1,24 +1,16 @@
 ---
-description: Composto MCP — LOD reads, context pack, blast radius before edits
+description: Composto reads via composto-cachebro MCP + blast radius before edits
 alwaysApply: true
 ---
 
-# Composto MCP
+# Composto
 
-MCP runs tools. Skill `composto-ir` says when + which LOD layer.
+## Reads — composto-cachebro MCP
 
-## Reads — LOD zoom (L0→L1→L2→L3)
+Use `composto-cachebro` `read_file` (not built-in Read, not bare `composto_ir`).
 
-- **L0/L1** first — survey + understand
-- **L2** — what changed (bug/PR)
-- **L3** — exact source only when needed
+LOD zoom via `layer`: L0 outline → L1 default → L3 exact source.
 
-`composto_ir` instead of `read_file` unless user wants full raw file.
+Re-read unchanged → token-saving shortcut. After edit → IR diff.
 
-Multi-file: `composto_context` + `target` + `budget: 4000`.
-
-## Before edits
-
-`composto_blastradius` on `src/`/`lib/`/`app/` files. `high` → surface risk.
-
-No `composto_scan`. No `composto_benchmark` unless asked.
+Multi-file trace: `composto_context`. Before edits: `composto_blastradius`.

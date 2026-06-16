@@ -1,5 +1,8 @@
 {
     "mcpServers": {
+        "composto-cachebro": {
+            "command": "composto-cachebro"
+        },
         "composto": {
             "command": "composto-mcp",
             "env": {

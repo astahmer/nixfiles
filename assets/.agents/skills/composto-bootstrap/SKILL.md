@@ -11,7 +11,7 @@ Composto = IR compression + git-history blast radius. **MCP runs tools. Skills s
 
 | Tool | When |
 |------|------|
-| `composto_ir` | Read/explore code at chosen LOD (see `composto-ir` skill) |
+| `composto-cachebro` `read_file` | Session-cached IR reads (default) |
 | `composto_context` | Multi-file bug/trace — `target` + `budget: 4000` |
 | `composto_blastradius` | Before editing non-trivial source |
 

@@ -1,12 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "cachebro": {
-      "enabled": false,
+    "composto-cachebro": {
+      "enabled": true,
       "type": "local",
       "command": [
-        "cachebro",
-        "serve"
+        "composto-cachebro"
       ]
     },
     "composto": {

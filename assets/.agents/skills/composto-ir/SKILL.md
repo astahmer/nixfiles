@@ -7,7 +7,7 @@ description: Composto IR LOD zoom — L0 outline → L1 meaning → L2 delta →
 
 Think **zoom on a file**. Start wide, drill in only when needed. Four layers (L0–L3), not five.
 
-Use **`composto_ir`** MCP tool (or `composto ir <file> <layer>` CLI).
+Use **`composto-cachebro` MCP `read_file`** (preferred) or `composto ir <file> <layer>` CLI.
 
 ## Layers
 

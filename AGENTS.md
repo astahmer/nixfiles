@@ -26,7 +26,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `modules/` contains reusable modules. Some files export both Home Manager and NixOS modules when needed.
 - `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
 - `hosts/workstation/default.nix` contains the NixOS host.
-- `assets/.agents/` — global agent tree (`AGENTS.md`, instructions, hooks, skills). Linked to `~/.agents` by Home Manager. Also mirrored to `~/.copilot/` for VS Code defaults.
+- `assets/.agents/` — global agent tree. `assets/composto-cachebro/` — IR + session-diff read MCP.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## Reference Repos
