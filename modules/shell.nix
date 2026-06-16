@@ -303,10 +303,14 @@
       '';
 
       home.activation.writeGithubToken = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        token="$GITHUB_TOKEN"
+        token="$(cat "${config.home.homeDirectory}/.config/opencode/github-token" 2>/dev/null || true)"
 
         if [ -z "$token" ]; then
-          token="$GH_TOKEN"
+          token="''${GITHUB_TOKEN:-}"
+        fi
+
+        if [ -z "$token" ]; then
+          token="''${GH_TOKEN:-}"
         fi
 
         if [ -z "$token" ] && command -v gh >/dev/null 2>&1; then

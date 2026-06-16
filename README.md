@@ -58,6 +58,21 @@ nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook
 
 The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
 
+### GitHub token for MCP tools
+
+The Home Manager activation hook in `modules/shell.nix` writes a stable token file at `~/.config/opencode/github-token` for the MCP clients used by the editor integrations.
+
+Resolution order is:
+
+1. Reuse the existing file at `~/.config/opencode/github-token` if it already exists.
+2. Use `GITHUB_TOKEN` if it is set in the current environment.
+3. Fall back to `GH_TOKEN` if that is set instead.
+4. If neither env var is present, ask the `gh` CLI for the current authenticated token with `gh auth token`.
+
+The MCP config files under `assets/.config/opencode/opencode.json` and `assets/.cursor/mcp.json` point at that file via `Bearer {file:...}`, which avoids the brittle `env:GITHUB_TOKEN` lookup that can fail during activation when the variable is unset.
+
+If you want a fresh token written during a switch, make sure `gh` is logged in or export `GITHUB_TOKEN`/`GH_TOKEN` before running Home Manager.
+
 ## Linux setup
 
 The Linux profile is managed with standalone Home Manager and is meant to cover Bazzite-style setups without requiring NixOS.
