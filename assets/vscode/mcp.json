@@ -1,5 +1,20 @@
 {
 	"servers": {
+		"cachebro": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"cachebro",
+				"serve"
+			],
+			"env": {}
+		},
+		"composto": {
+			"type": "stdio",
+			"command": "composto-mcp",
+			"args": [],
+			"env": {}
+		},
 		"context7": {
 			"type": "http",
 			"url": "https://mcp.context7.com/mcp"

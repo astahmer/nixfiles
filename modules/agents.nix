@@ -1,4 +1,4 @@
-{ config, ... }:
+{ ... }:
 {
   config.flake.modules.homeManager.agents =
     { ... }:

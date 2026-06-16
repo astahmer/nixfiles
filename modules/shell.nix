@@ -299,8 +299,35 @@
         export COREPACK_ENABLE_AUTO_PIN=0
 
         $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
+        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g cachebro@0.2.2 composto-ai@0.7.0 --allow-build=better-sqlite3 || true
       '';
+
+      home.activation.writeGithubToken = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        token="$GITHUB_TOKEN"
+
+        if [ -z "$token" ]; then
+          token="$GH_TOKEN"
+        fi
+
+        if [ -z "$token" ] && command -v gh >/dev/null 2>&1; then
+          token="$(gh auth token 2>/dev/null || true)"
+        fi
+
+        if [ -n "$token" ]; then
+          mkdir -p "${config.home.homeDirectory}/.config/opencode"
+          printf '%s' "$token" > "${config.home.homeDirectory}/.config/opencode/github-token"
+        fi
+      '';
+
+      home.file.".config/opencode/opencode.json".text = builtins.replaceStrings
+        [ "Bearer {env:GITHUB_TOKEN}" ]
+        [ "Bearer {file:${config.home.homeDirectory}/.config/opencode/github-token}" ]
+        (builtins.readFile ../assets/.config/opencode/opencode.json);
+      home.file.".cursor/mcp.json".text = builtins.replaceStrings
+        [ "Bearer {env:GITHUB_TOKEN}" ]
+        [ "Bearer {file:${config.home.homeDirectory}/.config/opencode/github-token}" ]
+        (builtins.readFile ../assets/.cursor/mcp.json);
+      home.file.".vscode/mcp.json".source = ../assets/vscode/mcp.json;
 
       home.file.".zshenv".text = ''
         [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
@@ -454,6 +481,7 @@
         pnpmi = "pnpm i";
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
+        caveman-init = "npx -y github:JuliusBrussee/caveman -- --with-init";
         nts = "node --no-warnings=ExperimentalWarning --experimental-strip-types --experimental-transform-types --env-file-if-exists=.env";
       };
     };

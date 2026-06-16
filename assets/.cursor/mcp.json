@@ -3,17 +3,17 @@
         "composto": {
             "command": "composto-mcp"
         },
-        // "cachebro": {
-        //     "command": "npx",
-        //     "args": [
-        //         "cachebro",
-        //         "serve"
-        //     ]
-        // },
+        "cachebro": {
+            "command": "npx",
+            "args": [
+                "cachebro",
+                "serve"
+            ]
+        },
         "github": {
             "url": "https://api.githubcopilot.com/mcp/",
             "headers": {
-                "Authorization": "Bearer ${GITHUB_TOKEN}"
+                "Authorization": "Bearer {env:GITHUB_TOKEN}"
             }
         }
     }
