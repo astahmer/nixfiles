@@ -49,3 +49,12 @@ pnpm fmt
 
 - if Effect is available, see [Effect](./effect.md) for more.
 - if there are no memory tools available, see [Memory](./memory.md) for more.
+
+## Unacceptable Comments
+
+- Comments that repeat what code does
+- Commented-out code (delete it)
+- Obvious comments ("increment counter")
+- Comments instead of good naming
+
+Code should be self-documenting. If you need a comment to explain WHAT the code does, consider refactoring to make it clearer.

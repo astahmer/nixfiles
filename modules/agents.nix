@@ -1,13 +1,17 @@
 { ... }:
 {
   config.flake.modules.homeManager.agents =
-    { config, lib, ... }:
+    { ... }:
     {
       home.file.".agents".source = ../assets/.agents;
+      home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
 
-      home.activation.linkCopilotSkills = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        mkdir -p "${config.home.homeDirectory}/.copilot"
-        ln -sfn "${config.home.homeDirectory}/.agents/skills" "${config.home.homeDirectory}/.copilot/skills"
-      '';
+      # VS Code / Copilot default user-profile paths (also mirrored under ~/.agents/).
+      home.file.".copilot/instructions/copilot.instructions.md".source =
+        ../assets/.agents/instructions/copilot.instructions.md;
+      home.file.".copilot/hooks/rtk-rewrite.json".source =
+        ../assets/.agents/hooks/rtk-rewrite.json;
+      home.file.".copilot/hooks/composto-rewrite.json".source =
+        ../assets/.agents/hooks/composto-rewrite.json;
     };
 }

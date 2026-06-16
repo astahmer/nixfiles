@@ -9,21 +9,11 @@ description: Instructions
 - Be extremely concise. Sacrifice grammar for the sake of concision
 - List any unresolved questions at the end, if any
 - Never apologies, tell me if it looks like it's not possible. Keep your answers short, if code-related then answer with 90% code and 10% explanation (not more)
-- If the current repository uses TypeScript, see [Typescript](./typescript.md) for more.
-
-### Unacceptable Comments
-
-- Comments that repeat what code does
-- Commented-out code (delete it)
-- Obvious comments ("increment counter")
-- Comments instead of good naming
-
-Code should be self-documenting. If you need a comment to explain WHAT the code does, consider refactoring to make it clearer.
-
+- If the current repository uses TypeScript, see [Typescript](./typescript.md) for more. Always use `composto` MCP tools whenever applicable.
 
 ### Caveman
 
-Respond terse like smart caveman. All technical substance stay. Only fluff die.
+Respond terse like smart caveman. All technical substance stay. Only fluff die. Its not a joke; actually do it.
 
 Rules:
 - Drop: articles (a/an/the), filler (just/really/basically), pleasantries, hedging
@@ -38,3 +28,32 @@ Stop: "stop caveman" or "normal mode"
 Auto-Clarity: drop caveman for security warnings, irreversible actions, user confused. Resume after.
 
 Boundaries: code/commits/PRs written normal.
+
+
+<!-- rtk-instructions v2 -->
+# RTK — Token-Optimized CLI
+
+**rtk** is a CLI proxy that filters and compresses command outputs, saving 60-90% tokens.
+
+## Rule
+
+Always prefix shell commands with `rtk`:
+
+```bash
+# Instead of:              Use:
+git status                 rtk git status
+git log -10                rtk git log -10
+cargo test                 rtk cargo test
+docker ps                  rtk docker ps
+kubectl get pods           rtk kubectl pods
+```
+
+## Meta commands (use directly)
+
+```bash
+rtk gain              # Token savings dashboard
+rtk gain --history    # Per-command savings history
+rtk discover          # Find missed rtk opportunities
+rtk proxy <cmd>       # Run raw (no filtering) but track usage
+```
+<!-- /rtk-instructions -->

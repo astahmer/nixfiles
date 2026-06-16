@@ -1,0 +1,12 @@
+{
+    "hooks": {
+        "PreToolUse": [
+            {
+                "type": "command",
+                "command": "composto hook github pretooluse",
+                "cwd": ".",
+                "timeout": 5
+            }
+        ]
+    }
+}
