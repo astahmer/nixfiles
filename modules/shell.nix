@@ -8,6 +8,9 @@
       ...
     }:
     let
+      pnpmHome = "${config.home.homeDirectory}/.local/share/pnpm";
+      pnpmBin = "${pnpmHome}/bin";
+
       nixProfileBins = [
         "${config.home.profileDirectory}/bin"
         "/nix/var/nix/profiles/default/bin"
@@ -259,7 +262,10 @@
       '';
     in
     {
-      home.packages = [ pkgs.nodejs_24 ];
+      home.packages = [
+        pkgs.nodejs_24
+      ]
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.llvmPackages.libcxxClang ];
 
       programs.bash.enable = true;
       programs.zsh.enable = true;
@@ -284,6 +290,15 @@
         if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
           $DRY_RUN_CMD sh -c 'cd "$1" && "$2" pnpm i' sh "$skepsis_dir" "${pkgs.nodejs_24}/bin/corepack"
         fi
+      '';
+
+      home.activation.compostoInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        export PNPM_HOME="${pnpmHome}"
+        export PATH="${pnpmBin}:$PATH"
+        export COREPACK_ENABLE_AUTO_PIN=0
+
+        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
+        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3
       '';
 
       home.file.".zshenv".text = ''
@@ -361,28 +376,29 @@
       };
 
       programs.bash.initExtra = lib.mkAfter ''
-        ${nixPathSetup}
-        export PNPM_HOME="$HOME/.local/share/pnpm"
-        export PATH="$PNPM_HOME:$PATH"
+              ${nixPathSetup}
+              export PNPM_HOME="${pnpmHome}"
+              export PATH="${pnpmBin}:$PATH"
 
-        shopt -s histappend
-        PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
+              shopt -s histappend
+              PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
 
-        export COREPACK_ENABLE_AUTO_PIN=0
-        "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-        "${pkgs.nodejs_24}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
+              export COREPACK_ENABLE_AUTO_PIN=0
+              "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
+              "${pkgs.nodejs_24}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
-        eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
-        ${jjsearchFunction}
-        ${shellAliasesFunction}
-        eval "$(${lib.getExe jjPackage} util completion bash)"
+              eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
+        export PATH="${pnpmBin}:$PATH"
+              ${jjsearchFunction}
+              ${shellAliasesFunction}
+              eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
       programs.zsh.initContent = lib.mkMerge [
         (lib.mkBefore ''
           ${nixPathSetup}
-          export PNPM_HOME="$HOME/.local/share/pnpm"
-          export PATH="$PNPM_HOME:$PATH"
+          export PNPM_HOME="${pnpmHome}"
+          export PATH="${pnpmBin}:$PATH"
 
           setopt APPEND_HISTORY
           setopt INC_APPEND_HISTORY
@@ -406,6 +422,7 @@
           "${pkgs.nodejs_24}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
           eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
+          export PATH="${pnpmBin}:$PATH"
           ${jjsearchFunction}
           ${shellAliasesFunction}
         '')
