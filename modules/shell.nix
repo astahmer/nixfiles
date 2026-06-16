@@ -264,6 +264,7 @@
     {
       home.packages = [
         pkgs.nodejs_24
+        pkgs.rtk
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.llvmPackages.libcxxClang ];
 
@@ -292,13 +293,13 @@
         fi
       '';
 
-      home.activation.compostoInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      home.activation.aiCliInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         export PNPM_HOME="${pnpmHome}"
         export PATH="${pnpmBin}:$PATH"
         export COREPACK_ENABLE_AUTO_PIN=0
 
         $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3
+        $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
       '';
 
       home.file.".zshenv".text = ''
