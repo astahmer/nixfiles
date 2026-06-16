@@ -1,68 +1,59 @@
 ---
 name: composto-ir
-description: Generate Health-Aware IR for any file — compressed code representation with health signals. Use when you need to understand or share file context with minimal tokens.
+description: Composto IR LOD zoom — L0 outline → L1 meaning → L2 delta → L3 exact source. Use instead of read_file unless user wants full raw file.
 ---
 
-# Composto IR — Health-Aware Intermediate Representation
+# Composto IR — level of detail (LOD)
 
-Generate compressed, health-annotated code representation. Send meaning, not code.
+Think **zoom on a file**. Start wide, drill in only when needed. Four layers (L0–L3), not five.
 
-## How to Run
+Use **`composto_ir`** MCP tool (or `composto ir <file> <layer>` CLI).
 
-```bash
-# L0: Structure Map (~10 tokens) — just file outline
-npx composto ir <file> L0
+## Layers
 
-# L1: Health-Aware Generic IR (~85 tokens) — compressed code + health
-npx composto ir <file> L1
+| Layer | ~tokens | Question | What you get |
+|-------|---------|----------|--------------|
+| **L0** | ~10 | "What's in this file?" | Names + line refs (FN, CLASS) |
+| **L1** | ~85 | "What does it do?" | Compressed IR + health tags |
+| **L2** | ~65 | "What changed?" | Git delta + surrounding IR + blame |
+| **L3** | variable | "Show exact code" | Raw source (full file or line slice) |
 
-# L2: Delta Context (~65 tokens) — only what changed + health
-npx composto ir <file> L2
+Health tags on L1/L2 when file unhealthy: `[HOT:…]`, `[FIX:…]`, `[COV:↓]`, `[INCON]`.
 
-# L3: Raw Source — original code (fallback)
-npx composto ir <file> L3
+## Zoom workflow (default)
+
+```
+1. New file / survey repo     → L0 (or L1 if file small & you need behaviour now)
+2. Understand behaviour       → L1
+3. Bug/regression/PR review   → L2 on changed files, L1 for neighbours
+4. Need exact string/format   → L3 (whole file or function line range)
 ```
 
-## Layer Selection Guide
+### Typical paths (from upstream composto)
 
-| Need | Layer | Tokens |
-|---|---|---|
-| "What's in this file?" | L0 | ~10 |
-| "What does this file do?" | L1 | ~85 |
-| "What changed recently?" | L2 | ~65 |
-| "Show me the exact code" | L3 | variable |
+| Task | LOD |
+|------|-----|
+| Architecture overview | L1 all relevant files |
+| Fix a bug | L3 target file, L1 context files |
+| Review a PR | L2 changed files, L1 context |
+| Repo/file inventory | L0 everywhere |
 
-## Reading the Output
+### Multi-file trace
 
-### L0 — Structure Map
+`composto_context` with `target: "<symbol-or-file>"` and `budget: 4000` — packs L0/L1/L3 mix automatically (target often L3, neighbours L0/L1).
+
+## When NOT to zoom to L3 early
+
+Stay L0/L1 until you know **which** function/block matters. Jump L3 only for:
+
+- Exact error strings, regex, literals
+- Format-sensitive edits
+- User asked "show me the file"
+
+## MCP call
+
 ```
-src/auth/session.ts
-  FN:createSession L5
-  FN:validateToken L23
-  CLASS:SessionManager L45
+composto_ir file=<path> layer=L0|L1|L2|L3
 ```
 
-### L1 — Health-Aware IR
-```
-USE:jsonwebtoken{sign,verify}
-FN:createSession({credentials}) [HOT:12/30 FIX:67% COV:↓ INCON]
-  VAR:token = sign(credentials, secret)
-  RET {token, expiresAt}
-```
-
-Health annotations (only on unhealthy code):
-- `[HOT:12/30]` — 12 changes in last 30 commits (hotspot)
-- `[FIX:67%]` — 67% of changes were bug fixes
-- `[COV:↓]` — test coverage declining
-- `[INCON]` — inconsistent patterns from multiple authors
-
-## When to Use
-
-- **Instead of reading full files**: L1 gives you the meaning in 75% fewer tokens
-- **When providing context to other LLM calls**: Send IR instead of raw source
-- **When explaining code to the user**: L0 for overview, L1 for detail
-- **When a file has health issues**: IR includes the health context automatically
-
-## The Key Insight
-
-Raw source code wastes tokens on syntax, indentation, and boilerplate that LLMs already know. Health-Aware IR strips the noise and adds health signals that raw source never had. **Less tokens, more insight.**
+Default layer if omitted: **L1**.

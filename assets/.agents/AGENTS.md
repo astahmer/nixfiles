@@ -35,25 +35,34 @@ Respond terse like smart caveman. All technical substance stay. Only fluff die. 
 
 Always prefer composto MCP tools over built-in read/search when exploring code.
 
-## Before editing existing source (not tests/generated/lockfiles/node_modules/dist)
+**MCP = execution. Skills = when/how.** Don't duplicate — read `composto-ir` skill for LOD zoom; call MCP tools to run it.
 
-Call `composto_blastradius` on target file first.
+## MCP tools (keep registered)
 
-- `high`: tell user risk before edit
-- `medium`: note briefly, proceed
-- `low`/`unknown`: proceed silent
+| Tool | Use |
+|------|-----|
+| `composto_ir` | Read code at LOD L0–L3 (default reads) |
+| `composto_context` | Multi-file trace — `target` + `budget: 4000` |
+| `composto_blastradius` | Before editing source |
 
-Hook also runs on Edit/Write — don't skip because hook exists.
+Hooks also run blast radius on Edit/Write. Skip `composto_benchmark` unless user asks.
 
-## Understanding code (default for reads)
+**No `composto_scan`** — disabled here (too many false positives).
 
-Use `composto_ir` layer `L1` instead of reading full file — unless user asked for exact source, regex, or formatting.
+## LOD zoom (reads)
 
-- `composto_context` with `target` + `budget: 4000` for bug/trace across files
-- `composto_scan` before commit/review on changed paths
-- Skip `composto_benchmark` unless user asks token savings
+Start wide, drill in:
 
-See skills: `composto-bootstrap`, `composto-ir`, `composto-scan`, `composto-trends`.
+1. **L0** — file map ("what's here?")
+2. **L1** — behaviour ("what does it do?") — default for most reads
+3. **L2** — recent delta ("what changed?") — bugs, PR review
+4. **L3** — exact source — strings, formatting, or zoomed function block
+
+See skill `composto-ir`. Refactor/hotspots: skill `composto-trends`.
+
+## Before edits
+
+`composto_blastradius` on target (not tests/generated/lockfiles/node_modules/dist). `high` → warn user. `medium` → brief note.
 
 <!-- rtk-instructions v2 -->
 # RTK — Token-Optimized CLI

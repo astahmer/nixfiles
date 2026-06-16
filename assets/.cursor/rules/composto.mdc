@@ -1,28 +1,24 @@
 ---
-description: When to prefer composto MCP tools over built-in file tools
+description: Composto MCP — LOD reads, context pack, blast radius before edits
 alwaysApply: true
 ---
 
 # Composto MCP
 
-`composto` MCP server registered. Prefer over built-in tools:
+MCP runs tools. Skill `composto-ir` says when + which LOD layer.
 
-## Before editing `src/`, `lib/`, `app/` files
+## Reads — LOD zoom (L0→L1→L2→L3)
 
-`composto_blastradius` first. `high` → surface risk. `medium` → brief note. `low`/`unknown` → proceed.
+- **L0/L1** first — survey + understand
+- **L2** — what changed (bug/PR)
+- **L3** — exact source only when needed
 
-Skip: tests, generated, lockfiles, `node_modules/`, `dist/`.
+`composto_ir` instead of `read_file` unless user wants full raw file.
 
-## Understanding code
+Multi-file: `composto_context` + `target` + `budget: 4000`.
 
-`composto_ir` layer `L1` instead of `read_file` unless exact strings/format needed.
+## Before edits
 
-## Bug/trace
+`composto_blastradius` on `src/`/`lib/`/`app/` files. `high` → surface risk.
 
-`composto_context` with `target` + `budget: 4000`.
-
-## Pre-commit
-
-`composto_scan` on changed paths.
-
-Don't call `composto_benchmark` unless user asks.
+No `composto_scan`. No `composto_benchmark` unless asked.

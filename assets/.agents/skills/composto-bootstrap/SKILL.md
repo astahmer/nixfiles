@@ -1,31 +1,27 @@
 ---
 name: composto-bootstrap
-description: Use at the start of every session — initializes Composto proactive monitoring and Health-Aware IR capabilities
+description: Composto session primer — points to IR LOD workflow and trends. MCP tools do execution; skills say when.
 ---
 
-# Composto — Proactive AI Team Companion
+# Composto bootstrap
 
-You have access to Composto, a proactive codebase health tool. It provides:
+Composto = IR compression + git-history blast radius. **MCP runs tools. Skills say when.**
 
-1. **Health-Aware IR** — Compressed code representation enriched with health signals. Less tokens, more insight.
-2. **Watcher Engine** — Detects security issues, debug artifacts, and code smells automatically.
-3. **Trend Analysis** — Tracks codebase health over time: hotspots, decay, inconsistencies.
+## MCP tools (use these)
 
-## Available Skills
+| Tool | When |
+|------|------|
+| `composto_ir` | Read/explore code at chosen LOD (see `composto-ir` skill) |
+| `composto_context` | Multi-file bug/trace — `target` + `budget: 4000` |
+| `composto_blastradius` | Before editing non-trivial source |
 
-- `composto-scan` — Scan the codebase for issues (security, console.log, etc.)
-- `composto-trends` — Analyze codebase health trends from git history
-- `composto-ir` — Generate Health-Aware IR for any file
+Skip `composto_benchmark` unless user asks token stats.
 
-## When to Use
+## Skills (workflow only)
 
-- **Before writing code**: Run `composto-scan` to check for existing issues
-- **Before refactoring**: Run `composto-trends` to find the areas that need it most
-- **When sending code to LLM context**: Use `composto-ir` instead of raw source — 60-75% fewer tokens, more information
+- **`composto-ir`** — LOD zoom: L0→L1→L2→L3. Start here for reads.
+- **`composto-trends`** — Before refactor / recurring-bug hunt.
 
-## Quick Start
+## Hooks
 
-When the user asks you to work on code, proactively:
-1. Run a scan if you haven't already this session
-2. Check trends for files you're about to modify
-3. Use IR output when you need to understand file structure
+Edit/Write hooks already run blast radius. Still call `composto_blastradius` when unsure — hook may passthrough on low/unknown.
