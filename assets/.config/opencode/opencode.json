@@ -14,7 +14,10 @@
       "type": "local",
       "command": [
         "composto-mcp"
-      ]
+      ],
+      "environment": {
+        "COMPOSTO_BLASTRADIUS": "1"
+      }
     },
     "github": {
       "enabled": true,

@@ -56,6 +56,10 @@
         "~/.agents/hooks": true,
         "~/.copilot/hooks": true
     },
+    "chat.agentSkillsLocations": {
+        "~/.agents/skills": true,
+        "~/.copilot/skills": true
+    },
     "chat.mcp.autostart": "newAndOutdated",
     "chat.mcp.gallery.enabled": true,
     "chat.tools.terminal.autoApprove": {

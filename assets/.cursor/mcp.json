@@ -1,7 +1,10 @@
 {
     "mcpServers": {
         "composto": {
-            "command": "composto-mcp"
+            "command": "composto-mcp",
+            "env": {
+                "COMPOSTO_BLASTRADIUS": "1"
+            }
         },
         // "cachebro": {
         //     "command": "npx",

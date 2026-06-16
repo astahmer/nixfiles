@@ -13,7 +13,9 @@
 			"type": "stdio",
 			"command": "composto-mcp",
 			"args": [],
-			"env": {}
+			"env": {
+				"COMPOSTO_BLASTRADIUS": "1"
+			}
 		},
 		"io.github.ChromeDevTools/chrome-devtools-mcp": {
 			"command": "npx",

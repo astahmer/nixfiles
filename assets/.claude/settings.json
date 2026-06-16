@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "composto": {
+      "command": "composto-mcp",
+      "env": {
+        "COMPOSTO_BLASTRADIUS": "1"
+      }
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "composto hook claude-code pretooluse"
+          }
+        ]
+      }
+    ]
+  }
+}

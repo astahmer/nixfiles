@@ -3,7 +3,7 @@
         "PreToolUse": [
             {
                 "type": "command",
-                "command": "composto hook github pretooluse",
+                "command": "composto hook claude-code pretooluse",
                 "cwd": ".",
                 "timeout": 5
             }

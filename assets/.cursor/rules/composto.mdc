@@ -1,0 +1,28 @@
+---
+description: When to prefer composto MCP tools over built-in file tools
+alwaysApply: true
+---
+
+# Composto MCP
+
+`composto` MCP server registered. Prefer over built-in tools:
+
+## Before editing `src/`, `lib/`, `app/` files
+
+`composto_blastradius` first. `high` → surface risk. `medium` → brief note. `low`/`unknown` → proceed.
+
+Skip: tests, generated, lockfiles, `node_modules/`, `dist/`.
+
+## Understanding code
+
+`composto_ir` layer `L1` instead of `read_file` unless exact strings/format needed.
+
+## Bug/trace
+
+`composto_context` with `target` + `budget: 4000`.
+
+## Pre-commit
+
+`composto_scan` on changed paths.
+
+Don't call `composto_benchmark` unless user asks.
