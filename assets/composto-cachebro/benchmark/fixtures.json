@@ -1,0 +1,10 @@
+{
+  "sourceRepo": ".references/composto",
+  "description": "Files from composto docs/benchmark-proof.md (simple → hard)",
+  "files": [
+    "src/trends/hotspot.ts",
+    "src/ir/layers.ts",
+    "src/watcher/detector.ts",
+    "src/ir/ast-walker.ts"
+  ]
+}
