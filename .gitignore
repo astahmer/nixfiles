@@ -3,5 +3,6 @@ result
 .direnv
 *.local.md
 node_modules
+assets/readbro/node_modules
 .readbro
 .composto

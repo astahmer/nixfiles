@@ -1,10 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { computeDiff } from "./differ.mjs";
-import { estimateTokens, findRepoRoot, generatePayload } from "./ir.mjs";
+import { computeDiff } from "./differ.ts";
+import { estimateTokens, generatePayload, type IrLayer, type Representation } from "./ir.ts";
+import { findRepoRoot } from "./repo-root.ts";
 
-/** Shared across all MCP processes for the same repo DB. */
 const REPO_SCOPE = "repo";
 
 const SCHEMA = `
@@ -40,11 +40,9 @@ CREATE TABLE IF NOT EXISTS session_stats (
 INSERT OR IGNORE INTO stats (key, value) VALUES ('tokens_saved', 0);
 `;
 
-function cacheKey(absPath, layer) {
-  return `${absPath}\0${layer}`;
-}
+const cacheKey = (absPath: string, layer: IrLayer): string => `${absPath}\0${layer}`;
 
-export function repoDbPath(absPath) {
+export const repoDbPath = (absPath: string): string => {
   if (process.env.READBRO_DIR) {
     const dir = resolve(process.env.READBRO_DIR);
     mkdirSync(dir, { recursive: true });
@@ -54,24 +52,37 @@ export function repoDbPath(absPath) {
   const dir = join(root, ".readbro");
   mkdirSync(dir, { recursive: true });
   return join(dir, "cache.db");
-}
+};
 
-/** @deprecated use repoDbPath */
-export function defaultDbPath() {
-  const dir = resolve(process.env.READBRO_DIR ?? ".readbro");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  return resolve(dir, "cache.db");
-}
+export type ReadFileOptions = {
+  readonly layer?: IrLayer;
+  readonly force?: boolean;
+};
+
+export type ReadFileResult = {
+  readonly cached: boolean;
+  readonly content: string;
+  readonly sourceHash: string;
+  readonly layer: IrLayer;
+  readonly representation: Representation;
+  readonly linesChanged?: number;
+  readonly diff?: string;
+  readonly totalTokens: number;
+};
+
+export type CacheStats = {
+  readonly filesTracked: number;
+  readonly tokensSaved: number;
+  readonly repoTokensSaved: number;
+};
+
+type DbConn = { readonly db: DatabaseSync; readonly dbPath: string };
 
 export class IrCacheStore {
-  #fixedDbPath;
-  #connections = new Map();
+  readonly #fixedDbPath: string | null;
+  readonly #connections = new Map<string, DbConn>();
 
-  /**
-   * @param {string | { dbPath?: string }} dbPathOrOptions
-   *   Fixed DB path for tests/benchmarks, or options object.
-   */
-  constructor(dbPathOrOptions = {}) {
+  constructor(dbPathOrOptions: string | { readonly dbPath?: string } = {}) {
     if (typeof dbPathOrOptions === "string") {
       this.#fixedDbPath = dbPathOrOptions;
     } else {
@@ -79,7 +90,7 @@ export class IrCacheStore {
     }
   }
 
-  #connectionFor(absPath) {
+  #connectionFor(absPath: string): DbConn {
     const dbPath = this.#fixedDbPath ?? repoDbPath(absPath);
     let conn = this.#connections.get(dbPath);
     if (!conn) {
@@ -92,7 +103,7 @@ export class IrCacheStore {
     return conn;
   }
 
-  #addTokensSaved(db, tokens) {
+  #addTokensSaved(db: DatabaseSync, tokens: number): void {
     db.prepare("UPDATE stats SET value = value + ? WHERE key = 'tokens_saved'").run(tokens);
     db
       .prepare(
@@ -102,7 +113,7 @@ export class IrCacheStore {
       .run(REPO_SCOPE, tokens, tokens);
   }
 
-  readFile(filePath, options = {}) {
+  readFile(filePath: string, options: ReadFileOptions = {}): ReadFileResult {
     const absPath = resolve(filePath);
     const layer = options.layer ?? "L1";
     const force = options.force ?? false;
@@ -128,15 +139,13 @@ export class IrCacheStore {
 
     const lastRead = db
       .prepare("SELECT source_hash FROM session_reads WHERE session_id = ? AND cache_key = ?")
-      .get(REPO_SCOPE, key);
+      .get(REPO_SCOPE, key) as { source_hash: string } | undefined;
 
     if (lastRead && lastRead.source_hash === sourceHash) {
       this.#addTokensSaved(db, payloadTokens);
-      db.prepare("UPDATE session_reads SET read_at = ? WHERE session_id = ? AND cache_key = ?").run(
-        now,
-        REPO_SCOPE,
-        key,
-      );
+      db
+        .prepare("UPDATE session_reads SET read_at = ? WHERE session_id = ? AND cache_key = ?")
+        .run(now, REPO_SCOPE, key);
       const label = `[readbro: unchanged IR (${layer}, ${representation}), ~${payloadTokens} tokens saved]`;
       return {
         cached: true,
@@ -154,7 +163,7 @@ export class IrCacheStore {
     if (lastRead) {
       const oldRow = db
         .prepare("SELECT payload FROM ir_versions WHERE cache_key = ? AND source_hash = ?")
-        .get(key, lastRead.source_hash);
+        .get(key, lastRead.source_hash) as { payload: string } | undefined;
 
       this.#setLastRead(db, key, sourceHash, now);
 
@@ -189,7 +198,14 @@ export class IrCacheStore {
     };
   }
 
-  #storeVersion(db, key, sourceHash, payload, representation, now) {
+  #storeVersion(
+    db: DatabaseSync,
+    key: string,
+    sourceHash: string,
+    payload: string,
+    representation: Representation,
+    now: number,
+  ): void {
     db
       .prepare(
         `INSERT OR IGNORE INTO ir_versions (cache_key, source_hash, payload, repr, created_at)
@@ -198,7 +214,7 @@ export class IrCacheStore {
       .run(key, sourceHash, payload, representation, now);
   }
 
-  #setLastRead(db, key, sourceHash, now) {
+  #setLastRead(db: DatabaseSync, key: string, sourceHash: string, now: number): void {
     db
       .prepare(
         `INSERT OR REPLACE INTO session_reads (session_id, cache_key, source_hash, read_at)
@@ -207,32 +223,30 @@ export class IrCacheStore {
       .run(REPO_SCOPE, key, sourceHash, now);
   }
 
-  getStats() {
+  getStats(): CacheStats {
     let filesTracked = 0;
     let tokensSaved = 0;
     let repoTokensSaved = 0;
 
     for (const { db } of this.#connections.values()) {
-      const files = db.prepare("SELECT COUNT(DISTINCT cache_key) as c FROM ir_versions").get();
-      const tokens = db.prepare("SELECT value FROM stats WHERE key = 'tokens_saved'").get();
+      const files = db.prepare("SELECT COUNT(DISTINCT cache_key) as c FROM ir_versions").get() as
+        | { c: number }
+        | undefined;
+      const tokens = db.prepare("SELECT value FROM stats WHERE key = 'tokens_saved'").get() as
+        | { value: number }
+        | undefined;
       const repoTokens = db
         .prepare("SELECT value FROM session_stats WHERE session_id = ? AND key = 'tokens_saved'")
-        .get(REPO_SCOPE);
+        .get(REPO_SCOPE) as { value: number } | undefined;
       filesTracked += files?.c ?? 0;
       tokensSaved += tokens?.value ?? 0;
       repoTokensSaved += repoTokens?.value ?? 0;
     }
 
-    return {
-      filesTracked,
-      tokensSaved,
-      repoTokensSaved,
-      /** @deprecated use repoTokensSaved */
-      sessionTokensSaved: repoTokensSaved,
-    };
+    return { filesTracked, tokensSaved, repoTokensSaved };
   }
 
-  clear(filePath) {
+  clear(filePath?: string): void {
     const targets = filePath
       ? [this.#connectionFor(resolve(filePath))]
       : [...this.#connections.values()];

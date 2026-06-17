@@ -1,10 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { relative } from "node:path";
-import { findRepoRoot } from "./repo-root.mjs";
+import { relative, resolve } from "node:path";
+import { findRepoRoot } from "./repo-root.ts";
 
-export { findRepoRoot, isWorkingCopyRoot, workingCopyKind } from "./repo-root.mjs";
+export type IrLayer = "L0" | "L1" | "L2" | "L3";
+
+export type Representation = "raw" | "raw-fallback" | "ir";
 
 const CODE_EXT = new Set([
   ".ts",
@@ -18,18 +20,22 @@ const CODE_EXT = new Set([
   ".rs",
 ]);
 
-export function contentHash(content) {
-  return createHash("sha256").update(content).digest("hex").slice(0, 16);
-}
+export const contentHash = (content: string): string =>
+  createHash("sha256").update(content).digest("hex").slice(0, 16);
 
-export function estimateTokens(text) {
-  return Math.ceil(text.length * 0.75);
-}
+export const estimateTokens = (text: string): number => Math.ceil(text.length * 0.75);
 
-export function generatePayload(absPath, layer) {
+export type IrPayload = {
+  readonly payload: string;
+  readonly sourceHash: string;
+  readonly representation: Representation;
+};
+
+export const generatePayload = (absPath: string, layer: IrLayer): IrPayload => {
   const source = readFileSync(absPath, "utf-8");
   const sourceHash = contentHash(source);
-  const ext = absPath.slice(absPath.lastIndexOf(".")).toLowerCase();
+  const dot = absPath.lastIndexOf(".");
+  const ext = dot === -1 ? "" : absPath.slice(dot).toLowerCase();
 
   if (layer === "L3") {
     return { payload: source, sourceHash, representation: "raw" };
@@ -53,4 +59,4 @@ export function generatePayload(absPath, layer) {
   }
 
   return { payload: source, sourceHash, representation: "raw-fallback" };
-}
+};

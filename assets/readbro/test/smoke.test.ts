@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { IrCacheStore } from "../src/cache.mjs";
+import { IrCacheStore } from "../src/cache.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "readbro-"));
 const dbPath = join(tmp, "cache.db");
@@ -29,7 +29,7 @@ test("IR cache: first read full, second unchanged, third diff after edit", () =>
   writeFileSync(file, "export const answer = 2;\nexport const extra = true;\n");
   const r3 = cache.readFile(file, { layer: "L1" });
   assert.equal(r3.cached, true);
-  assert.ok(r3.linesChanged > 0 || r3.diff);
+  assert.ok((r3.linesChanged ?? 0) > 0 || r3.diff);
 });
 
 test("repo cache shared across separate store instances", () => {

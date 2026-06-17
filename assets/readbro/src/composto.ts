@@ -1,8 +1,16 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
-import { findRepoRoot } from "./ir.mjs";
+import { findRepoRoot } from "./repo-root.ts";
 
-export function runCompostoCli(args, startPath = process.cwd()) {
+export type CompostoIntent =
+  | "refactor"
+  | "bugfix"
+  | "feature"
+  | "test"
+  | "docs"
+  | "unknown";
+
+export const runCompostoCli = (args: Array<string>, startPath = process.cwd()): string => {
   const cwd = findRepoRoot(resolve(startPath));
   const result = spawnSync("composto", args, {
     cwd,
@@ -17,4 +25,4 @@ export function runCompostoCli(args, startPath = process.cwd()) {
     throw new Error(output || `composto exited ${result.status}`);
   }
   return output;
-}
+};

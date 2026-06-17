@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { IrCacheStore } from "../src/cache.mjs";
-import { estimateTokens, generatePayload } from "../src/ir.mjs";
+import { IrCacheStore } from "../src/cache.ts";
+import { estimateTokens, generatePayload } from "../src/ir.ts";
 import { LAYERS, PROOF_FILES } from "./scenarios.mjs";
 import { RawCacheStore } from "./raw-cache.mjs";
 

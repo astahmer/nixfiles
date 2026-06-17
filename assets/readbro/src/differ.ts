@@ -1,11 +1,26 @@
-/** Line-based unified diff (from cachebro SDK, MIT). */
+export type DiffLine = {
+  readonly type: "keep" | "add" | "remove";
+  readonly line: string;
+  readonly oldLine: number;
+  readonly newLine: number;
+};
 
-export function computeDiff(oldContent, newContent, filePath) {
+export type DiffResult = {
+  readonly diff: string;
+  readonly linesChanged: number;
+  readonly hasChanges: boolean;
+};
+
+export const computeDiff = (
+  oldContent: string,
+  newContent: string,
+  filePath: string,
+): DiffResult => {
   const oldLines = oldContent.split("\n");
   const newLines = newContent.split("\n");
   const lcs = longestCommonSubsequence(oldLines, newLines);
 
-  const rawLines = [];
+  const rawLines: Array<DiffLine> = [];
   let oldIdx = 0;
   let newIdx = 0;
   let lcsIdx = 0;
@@ -19,16 +34,37 @@ export function computeDiff(oldContent, newContent, filePath) {
       newIdx < newLines.length &&
       newLines[newIdx] === lcs[lcsIdx]
     ) {
-      rawLines.push({ type: "keep", line: oldLines[oldIdx], oldLine: oldIdx + 1, newLine: newIdx + 1 });
+      rawLines.push({
+        type: "keep",
+        line: oldLines[oldIdx]!,
+        oldLine: oldIdx + 1,
+        newLine: newIdx + 1,
+      });
       oldIdx++;
       newIdx++;
       lcsIdx++;
-    } else if (newIdx < newLines.length && (lcsIdx >= lcs.length || newLines[newIdx] !== lcs[lcsIdx])) {
-      rawLines.push({ type: "add", line: newLines[newIdx], oldLine: oldIdx + 1, newLine: newIdx + 1 });
+    } else if (
+      newIdx < newLines.length &&
+      (lcsIdx >= lcs.length || newLines[newIdx] !== lcs[lcsIdx])
+    ) {
+      rawLines.push({
+        type: "add",
+        line: newLines[newIdx]!,
+        oldLine: oldIdx + 1,
+        newLine: newIdx + 1,
+      });
       newIdx++;
       linesChanged++;
-    } else if (oldIdx < oldLines.length && (lcsIdx >= lcs.length || oldLines[oldIdx] !== lcs[lcsIdx])) {
-      rawLines.push({ type: "remove", line: oldLines[oldIdx], oldLine: oldIdx + 1, newLine: newIdx + 1 });
+    } else if (
+      oldIdx < oldLines.length &&
+      (lcsIdx >= lcs.length || oldLines[oldIdx] !== lcs[lcsIdx])
+    ) {
+      rawLines.push({
+        type: "remove",
+        line: oldLines[oldIdx]!,
+        oldLine: oldIdx + 1,
+        newLine: newIdx + 1,
+      });
       oldIdx++;
       linesChanged++;
     }
@@ -39,22 +75,22 @@ export function computeDiff(oldContent, newContent, filePath) {
   }
 
   const CONTEXT = 3;
-  const hunkGroups = [];
-  let currentHunk = [];
+  const hunkGroups: Array<Array<DiffLine>> = [];
+  let currentHunk: Array<DiffLine> = [];
   let lastChangeIdx = -999;
 
   for (let i = 0; i < rawLines.length; i++) {
-    const line = rawLines[i];
+    const line = rawLines[i]!;
     if (line.type !== "keep") {
       if (i - lastChangeIdx > CONTEXT * 2 + 1 && currentHunk.length > 0) {
         hunkGroups.push(currentHunk);
         currentHunk = [];
         for (let c = Math.max(0, i - CONTEXT); c < i; c++) {
-          currentHunk.push(rawLines[c]);
+          currentHunk.push(rawLines[c]!);
         }
       } else if (currentHunk.length === 0) {
         for (let c = Math.max(0, i - CONTEXT); c < i; c++) {
-          currentHunk.push(rawLines[c]);
+          currentHunk.push(rawLines[c]!);
         }
       }
       currentHunk.push(line);
@@ -65,11 +101,11 @@ export function computeDiff(oldContent, newContent, filePath) {
   }
   if (currentHunk.length > 0) hunkGroups.push(currentHunk);
 
-  const hunks = [];
+  const hunks: Array<string> = [];
   for (const hunk of hunkGroups) {
     if (hunk.length === 0) continue;
-    const firstLine = hunk[0];
-    const lastLine = hunk[hunk.length - 1];
+    const firstLine = hunk[0]!;
+    const lastLine = hunk[hunk.length - 1]!;
     hunks.push(
       `@@ -${firstLine.oldLine},${lastLine.oldLine - firstLine.oldLine + 1} +${firstLine.newLine},${lastLine.newLine - firstLine.newLine + 1} @@`,
     );
@@ -85,28 +121,28 @@ export function computeDiff(oldContent, newContent, filePath) {
     linesChanged,
     hasChanges: true,
   };
-}
+};
 
-function longestCommonSubsequence(a, b) {
+const longestCommonSubsequence = (a: Array<string>, b: Array<string>): Array<string> => {
   const m = a.length;
   const n = b.length;
-  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  const dp = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
-      else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      if (a[i - 1] === b[j - 1]) dp[i]![j] = dp[i - 1]![j - 1]! + 1;
+      else dp[i]![j] = Math.max(dp[i - 1]![j]!, dp[i]![j - 1]!);
     }
   }
-  const result = [];
+  const result: Array<string> = [];
   let i = m;
   let j = n;
   while (i > 0 && j > 0) {
     if (a[i - 1] === b[j - 1]) {
-      result.unshift(a[i - 1]);
+      result.unshift(a[i - 1]!);
       i--;
       j--;
-    } else if (dp[i - 1][j] > dp[i][j - 1]) i--;
+    } else if (dp[i - 1]![j]! > dp[i]![j - 1]!) i--;
     else j--;
   }
   return result;
-}
+};

@@ -118,6 +118,21 @@ Typical flow:
 3. read_file(path, L3)     → only if L1 isn't enough for the edit
 ```
 
+## CLI
+
+`readbro` with no args starts the MCP server (Cursor/Copilot config unchanged).
+
+| Command | Action |
+|---------|--------|
+| `readbro read <path>` | Read one file (`--layer`, `--force`) |
+| `readbro reads <paths...>` | Batch read |
+| `readbro context` | Pack context (`--path`, `--budget`, `--target`) |
+| `readbro blast <file>` | Blast radius (`--intent`) |
+| `readbro stats` | Full cache breakdown |
+| `readbro gain` | Token savings summary (rtk-style) |
+| `readbro clear` | Clear repo cache (`--path` optional) |
+| `readbro mcp` | MCP server explicitly |
+
 ## Repo caching
 
 readbro stores read state in **`.readbro/cache.db` at the working-copy root** — git clone, git worktree, jj repo, or jj workspace each get their own cache. Shared across all agent sessions in that working copy (`READBRO_DIR` overrides location).

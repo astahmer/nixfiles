@@ -1,20 +1,28 @@
 {
   "name": "readbro",
-  "version": "0.2.0",
-  "description": "IR-aware read cache MCP for coding agents (composto compression + session diffs)",
+  "version": "0.3.0",
+  "description": "IR-aware read cache MCP + CLI for coding agents",
   "type": "module",
+  "packageManager": "pnpm@11.5.2",
   "bin": {
-    "readbro": "src/serve.mjs"
+    "readbro": "./src/main.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "zod": "^3.24.0"
+    "@effect/ai": "0.36.0",
+    "@effect/cli": "0.75.2",
+    "@effect/platform-node": "0.96.1",
+    "effect": "3.21.3"
   },
   "scripts": {
-    "benchmark": "node benchmark/run.mjs",
-    "test": "node --test test/smoke.test.mjs"
+    "benchmark": "node --experimental-transform-types --experimental-strip-types benchmark/run.mjs",
+    "test": "node --experimental-transform-types --experimental-strip-types --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   }
 }
