@@ -120,7 +120,7 @@ Typical flow:
 
 ## Repo caching
 
-readbro stores read state in **`.readbro/cache.db` at the git/jj repo root** (or `READBRO_DIR` if set). The cache is **shared across all agent sessions** working in the same repo — not per MCP process.
+readbro stores read state in **`.readbro/cache.db` at the working-copy root** — git clone, git worktree, jj repo, or jj workspace each get their own cache. Shared across all agent sessions in that working copy (`READBRO_DIR` overrides location).
 
 If session A reads `src/auth.ts` and session B reads the same unchanged file later, session B gets the short "unchanged" notice instead of the full IR again.
 

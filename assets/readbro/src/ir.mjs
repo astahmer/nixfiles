@@ -1,7 +1,10 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
+import { findRepoRoot } from "./repo-root.mjs";
+
+export { findRepoRoot, isWorkingCopyRoot, workingCopyKind } from "./repo-root.mjs";
 
 const CODE_EXT = new Set([
   ".ts",
@@ -17,16 +20,6 @@ const CODE_EXT = new Set([
 
 export function contentHash(content) {
   return createHash("sha256").update(content).digest("hex").slice(0, 16);
-}
-
-export function findRepoRoot(filePath) {
-  let dir = resolve(filePath);
-  if (existsSync(dir) && statSync(dir).isFile()) dir = dirname(dir);
-  while (dir !== dirname(dir)) {
-    if (existsSync(join(dir, ".git"))) return dir;
-    dir = dirname(dir);
-  }
-  return dirname(resolve(filePath));
 }
 
 export function estimateTokens(text) {
