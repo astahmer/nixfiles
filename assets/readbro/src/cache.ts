@@ -143,6 +143,10 @@ export type GlobStats = {
   readonly savedTokens: number;
   readonly durationMs: number;
   readonly fileCount: number;
+  readonly cacheHits: number;
+  readonly fullReads: number;
+  readonly diffReads: number;
+  readonly hitRatePct: number;
 };
 
 export type CacheStats = {
@@ -150,7 +154,9 @@ export type CacheStats = {
   readonly sinceMs?: number;
   readonly glob?: string;
   readonly groupGlobs?: ReadonlyArray<string>;
+  readonly discoveredGlobs?: ReadonlyArray<string>;
   readonly byDir?: number;
+  readonly discoverGlobs?: number;
   readonly sessionId: string;
   readonly filesTracked: number;
   readonly totalReads: number;
@@ -772,7 +778,9 @@ export class IrCacheStore {
       sinceMs: query.sinceMs,
       glob: query.glob,
       groupGlobs: query.groupGlobs,
+      discoveredGlobs: undefined,
       byDir: query.byDir,
+      discoverGlobs: query.discoverGlobs,
       sessionId: this.#sessionId,
       filesTracked,
       totalReads,

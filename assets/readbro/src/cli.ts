@@ -6,7 +6,7 @@ import * as Option from "effect/Option";
 import { McpLayer } from "./mcp.ts";
 import { Readbro } from "./readbro.ts";
 import { parseSince } from "./stats-query.ts";
-import type { StatsQuery } from "./stats-query.ts";
+import type { StatsQuery, StatsRequest } from "./stats-query.ts";
 
 const layer = Options.choice("layer", ["L0", "L1", "L2", "L3"]).pipe(
   Options.withDescription("IR layer (default L1)"),
@@ -43,28 +43,76 @@ const byDir = Options.integer("by-dir").pipe(
   Options.optional,
 );
 
+const discoverGlobs = Options.integer("discover-globs").pipe(
+  Options.withDescription("Auto-rank top N busiest path prefixes"),
+  Options.optional,
+);
+
+const json = Options.boolean("json").pipe(
+  Options.withDescription("Emit machine-readable JSON"),
+  Options.withDefault(false),
+);
+
+const verbose = Options.boolean("verbose").pipe(
+  Options.withDescription("Show breakdown tables (layer, repr, outcome, glob, recent)"),
+  Options.withDefault(false),
+);
+
 const statsQueryFromCli = (input: {
   scope: "repo" | "session";
   since: Option.Option<string>;
   glob: Option.Option<string>;
   groupGlob: ReadonlyArray<string>;
   byDir: Option.Option<number>;
+  discoverGlobs: Option.Option<number>;
 }): StatsQuery => {
-  const query: StatsQuery = { scope: input.scope };
-  let next = query;
+  let query: StatsQuery = { scope: input.scope };
+
   if (Option.isSome(input.since)) {
-    next = { ...next, sinceMs: parseSince(input.since.value) };
+    query = { ...query, sinceMs: parseSince(input.since.value) };
   }
   if (Option.isSome(input.glob)) {
-    next = { ...next, glob: input.glob.value };
+    query = { ...query, glob: input.glob.value };
   }
   if (input.groupGlob.length > 0) {
-    next = { ...next, groupGlobs: input.groupGlob };
+    query = { ...query, groupGlobs: input.groupGlob };
   }
   if (Option.isSome(input.byDir)) {
-    next = { ...next, byDir: input.byDir.value };
+    query = { ...query, byDir: input.byDir.value };
   }
-  return next;
+  if (Option.isSome(input.discoverGlobs)) {
+    query = { ...query, discoverGlobs: input.discoverGlobs.value };
+  }
+
+  return query;
+};
+
+const statsRequestFromCli = (input: {
+  scope: "repo" | "session";
+  since: Option.Option<string>;
+  glob: Option.Option<string>;
+  groupGlob: ReadonlyArray<string>;
+  byDir: Option.Option<number>;
+  discoverGlobs: Option.Option<number>;
+  json: boolean;
+  verbose: boolean;
+}): StatsRequest => ({
+  query: statsQueryFromCli(input),
+  format: {
+    json: input.json,
+    verbose: input.verbose,
+  },
+});
+
+const statsOptions = {
+  scope,
+  since,
+  glob,
+  groupGlob,
+  byDir,
+  discoverGlobs,
+  json,
+  verbose,
 };
 
 const read = Command.make(
@@ -132,41 +180,19 @@ const blast = Command.make(
     }),
 ).pipe(Command.withDescription("Blast radius before editing"));
 
-const stats = Command.make(
-  "stats",
-  {
-    scope,
-    since,
-    glob,
-    groupGlob,
-    byDir,
-  },
-  ({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd }) =>
-    Effect.gen(function* () {
-      const rb = yield* Readbro;
-      yield* Console.log(
-        yield* rb.stats(statsQueryFromCli({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd })),
-      );
-    }),
-).pipe(Command.withDescription("Repo cache stats"));
+const stats = Command.make("stats", statsOptions, (input) =>
+  Effect.gen(function* () {
+    const rb = yield* Readbro;
+    yield* Console.log(yield* rb.stats(statsRequestFromCli(input)));
+  }),
+).pipe(Command.withDescription("Repo cache summary"));
 
-const gain = Command.make(
-  "gain",
-  {
-    scope,
-    since,
-    glob,
-    groupGlob,
-    byDir,
-  },
-  ({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd }) =>
-    Effect.gen(function* () {
-      const rb = yield* Readbro;
-      yield* Console.log(
-        yield* rb.gain(statsQueryFromCli({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd })),
-      );
-    }),
-).pipe(Command.withDescription("Token savings summary"));
+const gain = Command.make("gain", statsOptions, (input) =>
+  Effect.gen(function* () {
+    const rb = yield* Readbro;
+    yield* Console.log(yield* rb.gain(statsRequestFromCli(input)));
+  }),
+).pipe(Command.withDescription("Token savings with top files"));
 
 const clear = Command.make(
   "clear",

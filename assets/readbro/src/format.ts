@@ -1,4 +1,5 @@
-import type { CacheStats, ReadFileResult, ReadOutcome } from "./cache.ts";
+import type { CacheStats, GlobStats, ReadFileResult, ReadOutcome } from "./cache.ts";
+import type { StatsFormat } from "./stats-query.ts";
 import { formatSinceLabel } from "./stats-query.ts";
 
 export const formatTokenCount = (tokens: number): string => {
@@ -41,14 +42,18 @@ export const formatImpact = (saved: number, maxSaved: number, width = 10): strin
   return `${"█".repeat(filled)}${"░".repeat(width - filled)}`;
 };
 
-export const truncatePath = (filePath: string, maxLen = 28): string => {
-  if (filePath.length <= maxLen) {
-    return filePath;
+const pad = (value: string, width: number): string =>
+  value.length >= width ? value : value + " ".repeat(width - value.length);
+
+const outcomeLabel = (outcome: ReadOutcome): string => {
+  switch (outcome) {
+    case "cache_hit":
+      return "unchanged";
+    case "diff":
+      return "diff";
+    case "full":
+      return "full";
   }
-  const tail = maxLen - 3;
-  const start = Math.ceil(tail * 0.35);
-  const end = tail - start;
-  return `${filePath.slice(0, start)}...${filePath.slice(-end)}`;
 };
 
 const formatRecentIcon = (outcome: ReadOutcome, savedPct: number): string => {
@@ -64,20 +69,6 @@ const formatRecentIcon = (outcome: ReadOutcome, savedPct: number): string => {
   return "•";
 };
 
-const pad = (value: string, width: number): string =>
-  value.length >= width ? value : value + " ".repeat(width - value.length);
-
-const outcomeLabel = (outcome: ReadOutcome): string => {
-  switch (outcome) {
-    case "cache_hit":
-      return "unchanged";
-    case "diff":
-      return "diff";
-    case "full":
-      return "full";
-  }
-};
-
 const statsTitle = (stats: CacheStats): string => {
   const scope = stats.scope === "session" ? "Session Scope" : "Repo Scope";
   const since = stats.sinceMs ? `, last ${formatSinceLabel(stats.sinceMs)}` : "";
@@ -86,8 +77,12 @@ const statsTitle = (stats: CacheStats): string => {
     stats.groupGlobs && stats.groupGlobs.length > 0
       ? `, groups ${stats.groupGlobs.join(", ")}`
       : "";
+  const discovered =
+    stats.discoveredGlobs && stats.discoveredGlobs.length > 0
+      ? `, discovered ${stats.discoveredGlobs.length}`
+      : "";
   const byDir = stats.byDir !== undefined ? `, by-dir ${stats.byDir}` : "";
-  return `readbro Token Savings (${scope}${since}${glob}${groups}${byDir})`;
+  return `readbro Token Savings (${scope}${since}${glob}${groups}${discovered}${byDir})`;
 };
 
 const formatSummary = (stats: CacheStats): string[] => {
@@ -108,16 +103,86 @@ const formatSummary = (stats: CacheStats): string[] => {
     lines.push(`Session id:        ${stats.sessionId}`);
   }
 
-  lines.push("");
+  return lines;
+};
+
+const formatTopFiles = (stats: CacheStats): string[] => {
+  if (stats.byFile.length === 0) {
+    return [];
+  }
+
+  const lines = ["", "Top Files (by tokens saved)", "─".repeat(60)];
+  stats.byFile.forEach((row, index) => {
+    lines.push(` ${String(index + 1).padStart(2)}. ${row.filePath}`);
+    lines.push(
+      `     layer ${row.layer} · ${row.reads} reads · raw ${formatTokenCount(row.rawTokens)} · saved ${formatTokenCount(row.savedTokens)} · ${formatPct(row.avgSavedPct)}`,
+    );
+  });
+  return lines;
+};
+
+const formatDiscoveredGlobs = (stats: CacheStats): string[] => {
+  if (!stats.discoveredGlobs || stats.discoveredGlobs.length === 0 || stats.byGlob.length === 0) {
+    return [];
+  }
+
+  const lines = ["", "Top Paths (discovered)", "─".repeat(60)];
+  const ranked = stats.byGlob.slice(0, stats.discoveredGlobs.length);
+  ranked.forEach((row, index) => {
+    lines.push(
+      ` ${String(index + 1).padStart(2)}. ${row.pattern}`,
+      `     ${row.reads} reads · ${row.fileCount} files · hit ${formatPct(row.hitRatePct)} · saved ${formatTokenCount(row.savedTokens)}`,
+    );
+  });
+  return lines;
+};
+
+const formatByGlobTable = (rows: ReadonlyArray<GlobStats>): string[] => {
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const lines = [
+    "",
+    "By Glob",
+    "─".repeat(96),
+    "  #  Pattern                              Files  Count  Saved     Hit%    Full  Diff  Time      Impact",
+    "─".repeat(96),
+  ];
+  const maxSaved = Math.max(...rows.map((row) => row.savedTokens), 0);
+
+  rows.forEach((row, index) => {
+    lines.push(
+      ` ${String(index + 1).padStart(2)}.  ${pad(row.pattern, 36)}  ${pad(
+        row.fileCount.toLocaleString(),
+        5,
+      )}  ${pad(row.reads.toLocaleString(), 5)}  ${pad(
+        formatTokenCount(row.savedTokens),
+        8,
+      )}  ${pad(formatPct(row.hitRatePct), 6)}  ${pad(
+        row.fullReads.toLocaleString(),
+        4,
+      )}  ${pad(row.diffReads.toLocaleString(), 4)}  ${pad(
+        formatDuration(row.durationMs),
+        8,
+      )}  ${formatImpact(row.savedTokens, maxSaved)}`,
+    );
+  });
+  lines.push("─".repeat(96));
+  return lines;
+};
+
+const formatBreakdownTables = (stats: CacheStats): string[] => {
+  const lines: string[] = [];
 
   if (stats.byLayer.length > 0) {
     lines.push(
+      "",
       "By Layer",
       "─".repeat(79),
-      `  #  Layer  Count  Raw       Billed    Saved     Time      Avg%    Impact    `,
+      "  #  Layer  Count  Raw       Billed    Saved     Time      Avg%    Impact",
       "─".repeat(79),
     );
-
     const maxLayerSaved = Math.max(...stats.byLayer.map((row) => row.savedTokens), 0);
     stats.byLayer.forEach((row, index) => {
       const avgPct = row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0;
@@ -134,17 +199,17 @@ const formatSummary = (stats: CacheStats): string[] => {
         )}  ${pad(formatPct(avgPct), 6)}  ${formatImpact(row.savedTokens, maxLayerSaved)}`,
       );
     });
-    lines.push("─".repeat(79), "");
+    lines.push("─".repeat(79));
   }
 
   if (stats.byRepresentation.length > 0) {
     lines.push(
+      "",
       "By Representation",
       "─".repeat(79),
-      `  #  Repr           Count  Raw       Billed    Saved     Time      Avg%    Impact    `,
+      "  #  Repr           Count  Raw       Billed    Saved     Time      Avg%    Impact",
       "─".repeat(79),
     );
-
     const maxReprSaved = Math.max(...stats.byRepresentation.map((row) => row.savedTokens), 0);
     stats.byRepresentation.forEach((row, index) => {
       const avgPct = row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0;
@@ -161,17 +226,17 @@ const formatSummary = (stats: CacheStats): string[] => {
         )}  ${pad(formatPct(avgPct), 6)}  ${formatImpact(row.savedTokens, maxReprSaved)}`,
       );
     });
-    lines.push("─".repeat(79), "");
+    lines.push("─".repeat(79));
   }
 
   if (stats.byOutcome.length > 0) {
     lines.push(
+      "",
       "By Outcome",
       "─".repeat(79),
-      `  #  Outcome     Count  Raw       Saved     Time      Avg%    Impact    `,
+      "  #  Outcome     Count  Raw       Saved     Time      Avg%    Impact",
       "─".repeat(79),
     );
-
     const maxOutcomeSaved = Math.max(...stats.byOutcome.map((row) => row.savedTokens), 0);
     stats.byOutcome.forEach((row, index) => {
       const avgPct = row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0;
@@ -188,38 +253,40 @@ const formatSummary = (stats: CacheStats): string[] => {
         )}`,
       );
     });
-    lines.push("─".repeat(79), "");
+    lines.push("─".repeat(79));
   }
 
-  if (stats.byGlob.length > 0) {
-    lines.push(
-      "By Glob",
-      "─".repeat(79),
-      `  #  Pattern                       Files  Count  Raw       Saved     Time      Avg%    Impact    `,
-      "─".repeat(79),
-    );
-
-    const maxGlobSaved = Math.max(...stats.byGlob.map((row) => row.savedTokens), 0);
-    stats.byGlob.forEach((row, index) => {
-      const avgPct = row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0;
-      lines.push(
-        ` ${String(index + 1).padStart(2)}.  ${pad(truncatePath(row.pattern, 28), 28)}  ${pad(
-          row.fileCount.toLocaleString(),
-          5,
-        )}  ${pad(row.reads.toLocaleString(), 5)}  ${pad(
-          formatTokenCount(row.rawTokens),
-          8,
-        )}  ${pad(formatTokenCount(row.savedTokens), 8)}  ${pad(
-          formatDuration(row.durationMs),
-          8,
-        )}  ${pad(formatPct(avgPct), 6)}  ${formatImpact(row.savedTokens, maxGlobSaved)}`,
-      );
-    });
-    lines.push("─".repeat(79), "");
-  }
-
+  lines.push(...formatByGlobTable(stats.byGlob));
   return lines;
 };
+
+const formatRecentReads = (stats: CacheStats): string[] => {
+  if (stats.recent.length === 0) {
+    return [];
+  }
+
+  const lines = ["", "Recent Reads", "─".repeat(60)];
+  for (const row of stats.recent) {
+    const when = new Date(row.readAt);
+    const stamp = `${String(when.getMonth() + 1).padStart(2, "0")}-${String(when.getDate()).padStart(
+      2,
+      "0",
+    )} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
+    const savedPct = row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0;
+    const icon = formatRecentIcon(row.outcome, savedPct);
+    const savedLabel =
+      row.savedTokens > 0
+        ? `-${formatPct(savedPct)} (${formatTokenCount(row.savedTokens)})`
+        : "full read";
+    lines.push(
+      `${stamp} ${icon} ${row.layer}/${row.representation} ${row.filePath}`,
+      `          ${savedLabel} · ${formatDuration(row.durationMs)}`,
+    );
+  }
+  return lines;
+};
+
+export const formatStatsJson = (stats: CacheStats): string => JSON.stringify(stats, null, 2);
 
 export const formatReadResult = (
   result: ReadFileResult,
@@ -240,57 +307,37 @@ export const formatReadResult = (
   return text;
 };
 
-export const formatStats = (stats: CacheStats): string => {
+export const formatStats = (stats: CacheStats, format: StatsFormat = {}): string => {
+  if (format.json) {
+    return formatStatsJson(stats);
+  }
+
   const lines = formatSummary(stats);
-  lines.push("Tip: run `readbro gain` for per-file breakdown and recent reads.");
+  if (format.verbose) {
+    lines.push(...formatBreakdownTables(stats));
+  } else {
+    lines.push("", "Tip: `readbro stats --verbose` for layer/repr/outcome/glob breakdown.");
+  }
   return lines.join("\n");
 };
 
-export const formatGain = (stats: CacheStats): string => {
-  const lines = formatSummary(stats);
-
-  if (stats.byFile.length > 0) {
-    lines.push(
-      "By File",
-      "─".repeat(71),
-      `  #  File                          Layer  Count  Saved     Avg%    Impact    `,
-      "─".repeat(71),
-    );
-
-    const maxFileSaved = Math.max(...stats.byFile.map((row) => row.savedTokens), 0);
-    stats.byFile.forEach((row, index) => {
-      lines.push(
-        ` ${String(index + 1).padStart(2)}.  ${pad(truncatePath(row.filePath, 28), 28)}  ${pad(
-          row.layer,
-          5,
-        )}  ${pad(row.reads.toLocaleString(), 5)}  ${pad(
-          formatTokenCount(row.savedTokens),
-          8,
-        )}  ${pad(formatPct(row.avgSavedPct), 6)}  ${formatImpact(row.savedTokens, maxFileSaved)}`,
-      );
-    });
-    lines.push("─".repeat(71), "");
+export const formatGain = (stats: CacheStats, format: StatsFormat = {}): string => {
+  if (format.json) {
+    return formatStatsJson(stats);
   }
 
-  if (stats.recent.length > 0) {
-    lines.push("Recent Reads", "─".repeat(66));
-    for (const row of stats.recent) {
-      const when = new Date(row.readAt);
-      const stamp = `${String(when.getMonth() + 1).padStart(2, "0")}-${String(when.getDate()).padStart(
-        2,
-        "0",
-      )} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}`;
-      const savedPct = row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0;
-      const icon = formatRecentIcon(row.outcome, savedPct);
-      const label = truncatePath(row.filePath, 20);
-      const savedLabel =
-        row.savedTokens > 0
-          ? `-${formatPct(savedPct)} (${formatTokenCount(row.savedTokens)})`
-          : "full read";
-      lines.push(
-        `${stamp} ${icon} ${pad(`${row.layer}/${row.representation} ${label}`, 32)} ${savedLabel} ${formatDuration(row.durationMs)}`,
-      );
-    }
+  const lines = formatSummary(stats);
+  lines.push(...formatTopFiles(stats));
+
+  if (stats.discoverGlobs && !format.verbose) {
+    lines.push(...formatDiscoveredGlobs(stats));
+  }
+
+  if (format.verbose) {
+    lines.push(...formatBreakdownTables(stats));
+    lines.push(...formatRecentReads(stats));
+  } else if (!stats.discoverGlobs) {
+    lines.push("", "Tip: `readbro gain --verbose` for glob tables and recent reads.");
   }
 
   return lines.join("\n");

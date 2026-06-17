@@ -7,6 +7,7 @@ import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import type { ReadbroError } from "./errors.ts";
 import { Readbro, ReadbroLive } from "./readbro.ts";
+import { statsRequestFromMcp } from "./stats-query.ts";
 
 const textResult = (text: string, isError = false) =>
   new McpSchema.CallToolResult({
@@ -131,9 +132,26 @@ export const McpLayer = Layer.effectDiscard(
 
     yield* registerTool(
       "session_status",
-      "readbro session cache stats.",
-      null,
-      () => rb.stats({ scope: "session" }),
+      "readbro session cache stats. Optional filters: scope, since, glob, discover_globs, json, verbose.",
+      Schema.Struct({
+        scope: Schema.optional(Schema.Literal("repo", "session")),
+        since: Schema.optional(Schema.String),
+        glob: Schema.optional(Schema.String),
+        discover_globs: Schema.optional(Schema.Number),
+        json: Schema.optional(Schema.Boolean),
+        verbose: Schema.optional(Schema.Boolean),
+      }),
+      (payload) => {
+        const p = payload as {
+          scope?: "repo" | "session";
+          since?: string;
+          glob?: string;
+          discover_globs?: number;
+          json?: boolean;
+          verbose?: boolean;
+        };
+        return rb.stats(statsRequestFromMcp(p));
+      },
     );
 
     yield* registerTool(

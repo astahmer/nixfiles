@@ -64,8 +64,26 @@ test("MCP tools/call session_status returns cache stats", async () => {
   assert.equal(result.isError, false);
   assert.match(text, /readbro Token Savings/);
   assert.match(text, /Session Scope/);
-  assert.match(text, /Raw tokens/);
-  assert.match(text, /Billed tokens/);
+  assert.doesNotMatch(text, /By Layer/);
+
+  client.close();
+});
+
+test("MCP session_status accepts glob and json filters", async () => {
+  const child = spawnReadbroMcp();
+  const client = new McpClient(child);
+  await client.initialize();
+
+  const response = await client.request("tools/call", {
+    name: "session_status",
+    arguments: { json: true, scope: "session" },
+  });
+
+  const result = asCallToolResult(response);
+  const text = result.content?.[0]?.text ?? "";
+  assert.equal(result.isError, false);
+  const parsed = JSON.parse(text) as { scope: string };
+  assert.equal(parsed.scope, "session");
 
   client.close();
 });

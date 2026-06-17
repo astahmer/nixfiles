@@ -9,7 +9,7 @@ import type { ReadbroError } from "./errors.ts";
 import { toReadbroError } from "./errors.ts";
 import { formatGain, formatReadResult, formatStats } from "./format.ts";
 import type { IrLayer } from "./ir.ts";
-import type { StatsQuery } from "./stats-query.ts";
+import type { StatsRequest } from "./stats-query.ts";
 
 export class Readbro extends Context.Tag("@readbro/Readbro")<
   Readbro,
@@ -31,8 +31,8 @@ export class Readbro extends Context.Tag("@readbro/Readbro")<
       file: string,
       intent?: CompostoIntent,
     ) => Effect.Effect<string, ReadbroError>;
-    readonly stats: (query?: StatsQuery) => Effect.Effect<string>;
-    readonly gain: (query?: StatsQuery) => Effect.Effect<string>;
+    readonly stats: (request?: StatsRequest) => Effect.Effect<string>;
+    readonly gain: (request?: StatsRequest) => Effect.Effect<string>;
     readonly clear: (path?: string) => Effect.Effect<string>;
   }
 >() {}
@@ -89,9 +89,11 @@ const make = Effect.sync(() => {
       catch: toReadbroError,
     });
 
-  const stats = (query?: StatsQuery) => Effect.sync(() => formatStats(cache.getStats(query)));
+  const stats = (request?: StatsRequest) =>
+    Effect.sync(() => formatStats(cache.getStats(request?.query), request?.format));
 
-  const gain = (query?: StatsQuery) => Effect.sync(() => formatGain(cache.getStats(query)));
+  const gain = (request?: StatsRequest) =>
+    Effect.sync(() => formatGain(cache.getStats(request?.query), request?.format));
 
   const clear = (path?: string) =>
     Effect.sync(() => {

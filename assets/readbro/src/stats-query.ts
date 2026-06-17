@@ -7,12 +7,24 @@ export type StatsQuery = {
   readonly glob?: string;
   readonly groupGlobs?: ReadonlyArray<string>;
   readonly byDir?: number;
+  readonly discoverGlobs?: number;
+};
+
+export type StatsFormat = {
+  readonly json?: boolean;
+  readonly verbose?: boolean;
+};
+
+export type StatsRequest = {
+  readonly query?: StatsQuery;
+  readonly format?: StatsFormat;
 };
 
 export const usesPathGrouping = (query: StatsQuery): boolean =>
   query.glob !== undefined ||
   (query.groupGlobs !== undefined && query.groupGlobs.length > 0) ||
-  query.byDir !== undefined;
+  query.byDir !== undefined ||
+  query.discoverGlobs !== undefined;
 
 const SINCE_PATTERN = /^(\d+)([dhm])$/;
 
@@ -38,4 +50,34 @@ export const formatSinceLabel = (sinceMs: number): string => {
     return `${sinceMs / 60_000}m`;
   }
   return `${Math.round(sinceMs / 1000)}s`;
+};
+
+export const statsRequestFromMcp = (payload: {
+  readonly scope?: StatsScope;
+  readonly since?: string;
+  readonly glob?: string;
+  readonly discover_globs?: number;
+  readonly json?: boolean;
+  readonly verbose?: boolean;
+}): StatsRequest => {
+  const query: StatsQuery = { scope: payload.scope ?? "session" };
+  let next = query;
+
+  if (payload.since) {
+    next = { ...next, sinceMs: parseSince(payload.since) };
+  }
+  if (payload.glob) {
+    next = { ...next, glob: payload.glob };
+  }
+  if (payload.discover_globs !== undefined) {
+    next = { ...next, discoverGlobs: payload.discover_globs };
+  }
+
+  return {
+    query: next,
+    format: {
+      json: payload.json,
+      verbose: payload.verbose,
+    },
+  };
 };
