@@ -53,7 +53,7 @@ test("getStats reads repo db without a prior read in this process", () => {
   mkdirSync(repo, { recursive: true });
   mkdirSync(join(repo, ".git"));
   const file = join(repo, "tracked.ts");
-  writeFileSync(file, "export const tracked = true;\n");
+  writeFileSync(file, `${"export const tracked = true;\n".repeat(50)}`);
 
   const db = join(tmp, "stats-only.db");
   const writer = new IrCacheStore(db);
@@ -63,8 +63,12 @@ test("getStats reads repo db without a prior read in this process", () => {
   const reader = new IrCacheStore(db);
   const stats = reader.getStats(repo);
   assert.ok(stats.filesTracked >= 1);
-  assert.ok(stats.repoTokensSaved > 0);
-  assert.ok(stats.tokensSaved > 0);
+  assert.ok(stats.totalReads >= 2);
+  assert.ok(stats.rawTokens > 0);
+  assert.ok(stats.billedTokens > 0);
+  assert.ok(stats.savedTokens > 0);
+  assert.ok(stats.byLayer.length >= 1);
+  assert.equal(stats.byLayer[0]?.layer, "L1");
 });
 
 test("layer L3 caches raw content", () => {

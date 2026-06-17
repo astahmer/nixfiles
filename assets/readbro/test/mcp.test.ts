@@ -61,8 +61,9 @@ test("MCP tools/call session_status returns cache stats", async () => {
 
   const text = response.result?.content?.[0]?.text as string;
   assert.equal(response.result?.isError, false);
-  assert.match(text, /readbro cache/);
-  assert.match(text, /files tracked/);
+  assert.match(text, /readbro Token Savings/);
+  assert.match(text, /Raw tokens/);
+  assert.match(text, /Billed tokens/);
 
   client.close();
 });

@@ -56,8 +56,8 @@ const make = Effect.sync(() => {
       });
       const stats = cache.getStats();
       let footer = "";
-      if (stats.repoTokensSaved > 0) {
-        footer = `\n\n[~${stats.repoTokensSaved.toLocaleString()} tokens saved in repo cache]`;
+      if (stats.savedTokens > 0) {
+        footer = `\n\n[~${stats.savedTokens.toLocaleString()} tokens saved in repo cache]`;
       }
       return parts.join("\n\n") + footer;
     });
