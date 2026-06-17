@@ -69,8 +69,8 @@ export function simulateComposto(workDir, steps, layer) {
   return { billed, rawEquivalent, label: `composto (${layer} only)` };
 }
 
-export function simulateReadbro(workDir, steps, layer, dbPath, sessionId) {
-  const cache = new IrCacheStore(dbPath, sessionId);
+export function simulateReadbro(workDir, steps, layer, dbPath) {
+  const cache = new IrCacheStore(dbPath);
   let billed = 0;
   let rawEquivalent = 0;
   for (const step of steps) {
@@ -107,7 +107,6 @@ export function runScenario(workDir, scenario, runId) {
           steps,
           layer,
           join(workDir, `.bench-${runId}-ir-${layer}.db`),
-          `rb-${runId}-${layer}`,
         ),
     ]),
   ];

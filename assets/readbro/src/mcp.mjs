@@ -1,10 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { z } from "zod";
 import { runCompostoCli } from "./composto-cli.mjs";
-import { defaultDbPath, IrCacheStore } from "./cache.mjs";
+import { IrCacheStore } from "./cache.mjs";
 
 function formatReadResult(result, stats) {
   let text = "";
@@ -15,15 +14,14 @@ function formatReadResult(result, stats) {
   } else {
     text = `[readbro: layer ${result.layer}, ${result.representation}]\n${result.content}`;
   }
-  if (result.cached && stats.sessionTokensSaved > 0) {
-    text += `\n\n[~${stats.sessionTokensSaved.toLocaleString()} tokens saved this session]`;
+  if (result.cached && stats.repoTokensSaved > 0) {
+    text += `\n\n[~${stats.repoTokensSaved.toLocaleString()} tokens saved in repo cache]`;
   }
   return text;
 }
 
 export async function startMcpServer() {
-  const sessionId = randomUUID();
-  const cache = new IrCacheStore(defaultDbPath(), sessionId);
+  const cache = new IrCacheStore();
 
   const server = new McpServer({
     name: "readbro",
@@ -37,8 +35,9 @@ export async function startMcpServer() {
 
   server.tool(
     "read_file",
-    `Read a file with composto IR + session cache. ALWAYS use instead of built-in Read.
+    `Read a file with composto IR + repo cache. ALWAYS use instead of built-in Read.
 First read: IR (L1 default). Unchanged re-read: short notice. After edit: IR diff.
+Shared across agent sessions in the same git repo (.readbro/cache.db).
 layer=L3 for exact source. force=true bypasses cache.`,
     {
       path: z.string().describe("Path to the file"),
@@ -69,7 +68,7 @@ layer=L3 for exact source. force=true bypasses cache.`,
       for (const path of paths) {
         try {
           const result = cache.readFile(path, { layer: layer ?? "L1" });
-          parts.push(`=== ${path} ===\n${formatReadResult(result, { sessionTokensSaved: 0 })}`);
+          parts.push(`=== ${path} ===\n${formatReadResult(result, { repoTokensSaved: 0 })}`);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           parts.push(`=== ${path} ===\nError: ${message}`);
@@ -77,8 +76,8 @@ layer=L3 for exact source. force=true bypasses cache.`,
       }
       const stats = cache.getStats();
       let footer = "";
-      if (stats.sessionTokensSaved > 0) {
-        footer = `\n\n[~${stats.sessionTokensSaved.toLocaleString()} tokens saved this session]`;
+      if (stats.repoTokensSaved > 0) {
+        footer = `\n\n[~${stats.repoTokensSaved.toLocaleString()} tokens saved in repo cache]`;
       }
       return { content: [{ type: "text", text: parts.join("\n\n") + footer }] };
     },
@@ -108,7 +107,7 @@ layer=L3 for exact source. force=true bypasses cache.`,
 
   server.tool(
     "blast_radius",
-    "Git-history risk before editing a file. high → warn user. Hook also runs on Edit/Write.",
+    "Git-history risk before editing a file. high → warn user.",
     {
       file: z.string().describe("File path to assess"),
       intent: z
@@ -130,21 +129,35 @@ layer=L3 for exact source. force=true bypasses cache.`,
     },
   );
 
-  server.tool("session_status", "readbro cache stats: files tracked, tokens saved.", {}, async () => {
+  server.tool("session_status", "readbro repo cache stats: files tracked, tokens saved.", {}, async () => {
     const stats = cache.getStats();
     const text = [
       "readbro:",
       `  Files tracked: ${stats.filesTracked}`,
-      `  Tokens saved (session): ~${stats.sessionTokensSaved.toLocaleString()}`,
-      `  Tokens saved (total): ~${stats.tokensSaved.toLocaleString()}`,
+      `  Tokens saved (repo): ~${stats.repoTokensSaved.toLocaleString()}`,
+      `  Tokens saved (all time): ~${stats.tokensSaved.toLocaleString()}`,
     ].join("\n");
     return { content: [{ type: "text", text }] };
   });
 
-  server.tool("session_clear", "Clear readbro session cache.", {}, async () => {
-    cache.clear();
-    return { content: [{ type: "text", text: "Cache cleared." }] };
-  });
+  server.tool(
+    "session_clear",
+    "Clear readbro repo cache. Optional path scopes to that file's git root.",
+    {
+      path: z.string().optional().describe("File in the repo to clear; omit to clear all open repo DBs"),
+    },
+    async ({ path }) => {
+      cache.clear(path);
+      return {
+        content: [
+          {
+            type: "text",
+            text: path ? `Cache cleared for ${resolve(path)} repo.` : "Cache cleared for all open repos.",
+          },
+        ],
+      };
+    },
+  );
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

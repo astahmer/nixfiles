@@ -14,7 +14,7 @@ Always on. Terse caveman talk — overrides all other tone/style rules unless us
 
 | Tool | Use |
 |------|------|
-| `read_file` / `read_files` | All file reads — IR + session cache |
+| `read_file` / `read_files` | All file reads — IR + repo cache |
 | `pack_context` | Multi-file trace — `budget: 4000`, optional `target` |
 | `blast_radius` | Before editing non-trivial source (call explicitly) |
 | `session_status` / `session_clear` | Cache stats / reset |

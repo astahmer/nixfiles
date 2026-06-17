@@ -10,7 +10,7 @@ description: >
 
 readbro is the **only** MCP server you should use for reading files. Do not use the IDE's built-in Read tool or read tools from other MCP servers — they return full raw source every time and waste context tokens.
 
-readbro compresses source files into composto IR (intermediate representation), caches what you have already seen in the session, and on re-reads returns either a short "unchanged" notice or a compact diff instead of the full file again.
+readbro compresses source files into composto IR (intermediate representation), caches what has been read in the repo, and on re-reads returns either a short "unchanged" notice or a compact diff instead of the full file again.
 
 ## Tools
 
@@ -118,9 +118,11 @@ Typical flow:
 3. read_file(path, L3)     → only if L1 isn't enough for the edit
 ```
 
-## Session caching
+## Repo caching
 
-readbro tracks what you have read **per MCP session** in a SQLite cache (`.readbro/cache.db` in the project, or `READBRO_DIR` env).
+readbro stores read state in **`.readbro/cache.db` at the git/jj repo root** (or `READBRO_DIR` if set). The cache is **shared across all agent sessions** working in the same repo — not per MCP process.
+
+If session A reads `src/auth.ts` and session B reads the same unchanged file later, session B gets the short "unchanged" notice instead of the full IR again.
 
 ### Unchanged re-read
 
@@ -143,7 +145,9 @@ If the file changed since your last read at that layer, readbro returns a unifie
 
 ### Manual edits (no agent involved)
 
-**Yes — external changes are detected automatically.** On every `read_file` call, readbro reads the file from disk and hashes its content (`SHA-256`, truncated). The cache compares this hash to the hash from your last read in this session.
+**Yes — external changes are detected automatically.** On every `read_file` call, readbro reads the file from disk and hashes its content (`SHA-256`, truncated). The cache compares this hash to the last read hash **for that repo** (any prior session counts).
+
+Worktrees/workspaces don't share cache — different files on disk. Sessions in same working copy still share cache.
 
 - User edits a file in their editor → next `read_file` sees new hash → returns diff or full IR
 - User saves outside the agent → same behaviour
@@ -154,8 +158,8 @@ If the file changed since your last read at that layer, readbro returns a unifie
 ### Cache management
 
 ```
-session_status()   → files tracked, tokens saved this session
-session_clear()    → reset session cache (e.g. after large context shift)
+session_status()   → files tracked, tokens saved in repo cache
+session_clear()    → reset repo cache (optional path scopes to one git root)
 ```
 ## Quick reference
 

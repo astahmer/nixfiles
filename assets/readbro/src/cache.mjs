@@ -1,8 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { computeDiff } from "./differ.mjs";
-import { estimateTokens, generatePayload } from "./ir.mjs";
+import { estimateTokens, findRepoRoot, generatePayload } from "./ir.mjs";
+
+/** Shared across all MCP processes for the same repo DB. */
+const REPO_SCOPE = "repo";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS ir_versions (
@@ -41,25 +44,62 @@ function cacheKey(absPath, layer) {
   return `${absPath}\0${layer}`;
 }
 
-export class IrCacheStore {
-  #db;
-  #sessionId;
+export function repoDbPath(absPath) {
+  if (process.env.READBRO_DIR) {
+    const dir = resolve(process.env.READBRO_DIR);
+    mkdirSync(dir, { recursive: true });
+    return join(dir, "cache.db");
+  }
+  const root = findRepoRoot(absPath);
+  const dir = join(root, ".readbro");
+  mkdirSync(dir, { recursive: true });
+  return join(dir, "cache.db");
+}
 
-  constructor(dbPath, sessionId) {
-    mkdirSync(dirname(dbPath), { recursive: true });
-    this.#db = new DatabaseSync(dbPath);
-    this.#db.exec(SCHEMA);
-    this.#sessionId = sessionId;
+/** @deprecated use repoDbPath */
+export function defaultDbPath() {
+  const dir = resolve(process.env.READBRO_DIR ?? ".readbro");
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  return resolve(dir, "cache.db");
+}
+
+export class IrCacheStore {
+  #fixedDbPath;
+  #connections = new Map();
+
+  /**
+   * @param {string | { dbPath?: string }} dbPathOrOptions
+   *   Fixed DB path for tests/benchmarks, or options object.
+   */
+  constructor(dbPathOrOptions = {}) {
+    if (typeof dbPathOrOptions === "string") {
+      this.#fixedDbPath = dbPathOrOptions;
+    } else {
+      this.#fixedDbPath = dbPathOrOptions.dbPath ?? null;
+    }
   }
 
-  #addTokensSaved(tokens) {
-    this.#db.prepare("UPDATE stats SET value = value + ? WHERE key = 'tokens_saved'").run(tokens);
-    this.#db
+  #connectionFor(absPath) {
+    const dbPath = this.#fixedDbPath ?? repoDbPath(absPath);
+    let conn = this.#connections.get(dbPath);
+    if (!conn) {
+      mkdirSync(dirname(dbPath), { recursive: true });
+      const db = new DatabaseSync(dbPath);
+      db.exec(SCHEMA);
+      conn = { db, dbPath };
+      this.#connections.set(dbPath, conn);
+    }
+    return conn;
+  }
+
+  #addTokensSaved(db, tokens) {
+    db.prepare("UPDATE stats SET value = value + ? WHERE key = 'tokens_saved'").run(tokens);
+    db
       .prepare(
         `INSERT INTO session_stats (session_id, key, value) VALUES (?, 'tokens_saved', ?)
          ON CONFLICT(session_id, key) DO UPDATE SET value = value + ?`,
       )
-      .run(this.#sessionId, tokens, tokens);
+      .run(REPO_SCOPE, tokens, tokens);
   }
 
   readFile(filePath, options = {}) {
@@ -68,13 +108,14 @@ export class IrCacheStore {
     const force = options.force ?? false;
     const now = Date.now();
     const key = cacheKey(absPath, layer);
+    const { db } = this.#connectionFor(absPath);
 
     const { payload, sourceHash, representation } = generatePayload(absPath, layer);
     const payloadTokens = estimateTokens(payload);
 
     if (force) {
-      this.#storeVersion(key, sourceHash, payload, representation, now);
-      this.#setSessionRead(key, sourceHash, now);
+      this.#storeVersion(db, key, sourceHash, payload, representation, now);
+      this.#setLastRead(db, key, sourceHash, now);
       return {
         cached: false,
         content: payload,
@@ -85,15 +126,17 @@ export class IrCacheStore {
       };
     }
 
-    const lastRead = this.#db
+    const lastRead = db
       .prepare("SELECT source_hash FROM session_reads WHERE session_id = ? AND cache_key = ?")
-      .get(this.#sessionId, key);
+      .get(REPO_SCOPE, key);
 
     if (lastRead && lastRead.source_hash === sourceHash) {
-      this.#addTokensSaved(payloadTokens);
-      this.#db
-        .prepare("UPDATE session_reads SET read_at = ? WHERE session_id = ? AND cache_key = ?")
-        .run(now, this.#sessionId, key);
+      this.#addTokensSaved(db, payloadTokens);
+      db.prepare("UPDATE session_reads SET read_at = ? WHERE session_id = ? AND cache_key = ?").run(
+        now,
+        REPO_SCOPE,
+        key,
+      );
       const label = `[readbro: unchanged IR (${layer}, ${representation}), ~${payloadTokens} tokens saved]`;
       return {
         cached: true,
@@ -106,20 +149,20 @@ export class IrCacheStore {
       };
     }
 
-    this.#storeVersion(key, sourceHash, payload, representation, now);
+    this.#storeVersion(db, key, sourceHash, payload, representation, now);
 
     if (lastRead) {
-      const oldRow = this.#db
+      const oldRow = db
         .prepare("SELECT payload FROM ir_versions WHERE cache_key = ? AND source_hash = ?")
         .get(key, lastRead.source_hash);
 
-      this.#setSessionRead(key, sourceHash, now);
+      this.#setLastRead(db, key, sourceHash, now);
 
       if (oldRow) {
         const diffResult = computeDiff(oldRow.payload, payload, filePath);
         if (diffResult.hasChanges) {
           const saved = Math.max(0, payloadTokens - estimateTokens(diffResult.diff));
-          this.#addTokensSaved(saved);
+          this.#addTokensSaved(db, saved);
           return {
             cached: true,
             content: diffResult.diff,
@@ -133,7 +176,7 @@ export class IrCacheStore {
         }
       }
     } else {
-      this.#setSessionRead(key, sourceHash, now);
+      this.#setLastRead(db, key, sourceHash, now);
     }
 
     return {
@@ -146,8 +189,8 @@ export class IrCacheStore {
     };
   }
 
-  #storeVersion(key, sourceHash, payload, representation, now) {
-    this.#db
+  #storeVersion(db, key, sourceHash, payload, representation, now) {
+    db
       .prepare(
         `INSERT OR IGNORE INTO ir_versions (cache_key, source_hash, payload, repr, created_at)
          VALUES (?, ?, ?, ?, ?)`,
@@ -155,37 +198,50 @@ export class IrCacheStore {
       .run(key, sourceHash, payload, representation, now);
   }
 
-  #setSessionRead(key, sourceHash, now) {
-    this.#db
+  #setLastRead(db, key, sourceHash, now) {
+    db
       .prepare(
         `INSERT OR REPLACE INTO session_reads (session_id, cache_key, source_hash, read_at)
          VALUES (?, ?, ?, ?)`,
       )
-      .run(this.#sessionId, key, sourceHash, now);
+      .run(REPO_SCOPE, key, sourceHash, now);
   }
 
   getStats() {
-    const files = this.#db.prepare("SELECT COUNT(DISTINCT cache_key) as c FROM ir_versions").get();
-    const tokens = this.#db.prepare("SELECT value FROM stats WHERE key = 'tokens_saved'").get();
-    const sessionTokens = this.#db
-      .prepare("SELECT value FROM session_stats WHERE session_id = ? AND key = 'tokens_saved'")
-      .get(this.#sessionId);
+    let filesTracked = 0;
+    let tokensSaved = 0;
+    let repoTokensSaved = 0;
+
+    for (const { db } of this.#connections.values()) {
+      const files = db.prepare("SELECT COUNT(DISTINCT cache_key) as c FROM ir_versions").get();
+      const tokens = db.prepare("SELECT value FROM stats WHERE key = 'tokens_saved'").get();
+      const repoTokens = db
+        .prepare("SELECT value FROM session_stats WHERE session_id = ? AND key = 'tokens_saved'")
+        .get(REPO_SCOPE);
+      filesTracked += files?.c ?? 0;
+      tokensSaved += tokens?.value ?? 0;
+      repoTokensSaved += repoTokens?.value ?? 0;
+    }
+
     return {
-      filesTracked: files?.c ?? 0,
-      tokensSaved: tokens?.value ?? 0,
-      sessionTokensSaved: sessionTokens?.value ?? 0,
+      filesTracked,
+      tokensSaved,
+      repoTokensSaved,
+      /** @deprecated use repoTokensSaved */
+      sessionTokensSaved: repoTokensSaved,
     };
   }
 
-  clear() {
-    this.#db.exec(
-      "DELETE FROM ir_versions; DELETE FROM session_reads; DELETE FROM session_stats; UPDATE stats SET value = 0;",
-    );
-  }
-}
+  clear(filePath) {
+    const targets = filePath
+      ? [this.#connectionFor(resolve(filePath))]
+      : [...this.#connections.values()];
 
-export function defaultDbPath() {
-  const dir = resolve(process.env.READBRO_DIR ?? ".readbro");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  return resolve(dir, "cache.db");
+    for (const { db, dbPath } of targets) {
+      db.exec(
+        "DELETE FROM ir_versions; DELETE FROM session_reads; DELETE FROM session_stats; UPDATE stats SET value = 0;",
+      );
+      this.#connections.delete(dbPath);
+    }
+  }
 }

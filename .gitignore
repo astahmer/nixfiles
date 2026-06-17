@@ -3,4 +3,5 @@ result
 .direnv
 *.local.md
 node_modules
+.readbro
 .composto
