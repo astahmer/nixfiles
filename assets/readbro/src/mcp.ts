@@ -5,6 +5,7 @@ import * as JSONSchema from "effect/JSONSchema";
 import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
+import type { ReadbroError } from "./errors.ts";
 import { Readbro, ReadbroLive } from "./readbro.ts";
 
 const textResult = (text: string, isError = false) =>
@@ -13,8 +14,7 @@ const textResult = (text: string, isError = false) =>
     content: [{ type: "text", text }],
   });
 
-const errorResult = (error: unknown) =>
-  textResult(`Error: ${error instanceof Error ? error.message : String(error)}`, true);
+const errorResult = (error: ReadbroError) => textResult(`Error: ${error.message}`, true);
 
 const LayerSchema = Schema.Literal("L0", "L1", "L2", "L3");
 const IntentSchema = Schema.Literal(
@@ -30,7 +30,7 @@ const registerTool = (
   name: string,
   description: string,
   parameters: Schema.Schema.Any,
-  run: (payload: unknown) => Effect.Effect<string, Error>,
+  run: (payload: unknown) => Effect.Effect<string, ReadbroError>,
 ) =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;

@@ -5,6 +5,8 @@ import { resolve } from "node:path";
 import { IrCacheStore } from "./cache.ts";
 import type { CompostoIntent } from "./composto.ts";
 import { runCompostoCli } from "./composto.ts";
+import type { ReadbroError } from "./errors.ts";
+import { toReadbroError } from "./errors.ts";
 import { formatGain, formatReadResult, formatStats } from "./format.ts";
 import type { IrLayer } from "./ir.ts";
 
@@ -23,11 +25,11 @@ export class Readbro extends Context.Tag("@readbro/Readbro")<
       readonly path?: string;
       readonly budget?: number;
       readonly target?: string;
-    }) => Effect.Effect<string, Error>;
+    }) => Effect.Effect<string, ReadbroError>;
     readonly blastRadius: (
       file: string,
       intent?: CompostoIntent,
-    ) => Effect.Effect<string, Error>;
+    ) => Effect.Effect<string, ReadbroError>;
     readonly stats: () => Effect.Effect<string>;
     readonly gain: () => Effect.Effect<string>;
     readonly clear: (path?: string) => Effect.Effect<string>;
@@ -72,7 +74,7 @@ const make = Effect.sync(() => {
         if (options.target) args.push(`--target=${options.target}`);
         return runCompostoCli(args, abs);
       },
-      catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+      catch: toReadbroError,
     });
 
   const blastRadius = (file: string, intent?: CompostoIntent) =>
@@ -83,7 +85,7 @@ const make = Effect.sync(() => {
         if (intent) args.push(`--intent=${intent}`);
         return runCompostoCli(args, abs);
       },
-      catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+      catch: toReadbroError,
     });
 
   const stats = () => Effect.sync(() => formatStats(cache.getStats()));
