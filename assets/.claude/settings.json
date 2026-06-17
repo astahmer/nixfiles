@@ -1,12 +1,4 @@
 {
-  "mcpServers": {
-    "composto": {
-      "command": "composto-mcp",
-      "env": {
-        "COMPOSTO_BLASTRADIUS": "1"
-      }
-    }
-  },
   "hooks": {
     "PreToolUse": [
       {

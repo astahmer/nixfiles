@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { IrCacheStore } from "../src/cache.mjs";
 
-const tmp = mkdtempSync(join(tmpdir(), "composto-cachebro-"));
+const tmp = mkdtempSync(join(tmpdir(), "readbro-"));
 const dbPath = join(tmp, "cache.db");
 const session = "test-session";
 

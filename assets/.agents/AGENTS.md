@@ -1,7 +1,7 @@
 ---
 applyTo: '**'
 alwaysApply: true
-description: Global agent instructions — tone, composto, rtk
+description: Global agent instructions — tone, readbro, rtk
 ---
 
 # Priority
@@ -31,40 +31,37 @@ Respond terse like smart caveman. All technical substance stay. Only fluff die. 
 - Code tasks: ~90% code, ~10% explanation max
 - TypeScript repos: see [typescript.md](./typescript.md)
 
-# Composto
+# readbro MCP
 
-**Reads:** `composto-cachebro` MCP `read_file` / `read_files` — composto IR + session cache (unchanged shortcut, IR diffs). Prefer over built-in Read and bare `composto_ir`.
+**Only MCP for reads.** Never use built-in Read / read_file from other servers.
 
 | Tool | Use |
 |------|-----|
-| `composto-cachebro` `read_file` | Default file read — layer `L0`–`L3` (default `L1`) |
-| `composto_context` | Multi-file trace — `target` + `budget: 4000` |
-| `composto_blastradius` | Before editing source |
-| `composto_ir` | One-off IR without session cache (fallback only) |
+| `read_file` / `read_files` | All file reads — IR + session cache |
+| `pack_context` | Multi-file trace — `budget: 4000`, optional `target` |
+| `blast_radius` | Before editing source (hook also runs on Edit/Write) |
+| `session_status` / `session_clear` | Cache stats / reset |
 
-Hooks run blast radius on Edit/Write. No `composto_scan`. No `composto_benchmark` unless asked.
-
-## LOD zoom (reads via composto-cachebro)
-
-Start wide, drill in — pass `layer` on `read_file`:
+## LOD zoom (`layer` on read_file)
 
 1. **L0** — file map
-2. **L1** — behaviour (default)
+2. **L1** — behaviour (**default**)
 3. **L2** — delta intent (CLI may fall back; prefer re-read after edits)
-4. **L3** — exact raw source
+3. **L3** — exact raw source
 
-Re-read same unchanged file → `[unchanged IR … tokens saved]`. After edit → IR unified diff.
+Re-read unchanged → token-saving shortcut. After edit → IR diff.
 
-See skill `composto-ir`. Refactor/hotspots: `composto-trends`.
+See skills: `readbro`.
 
 ## Before edits
 
-`composto_blastradius` on target (not tests/generated/lockfiles/node_modules/dist). `high` → warn. `medium` → brief note.
+`blast_radius` on target (skip tests/generated/lockfiles/node_modules/dist). `high` → warn. `medium` → brief note.
+
 
 <!-- rtk-instructions v2 -->
 # RTK — Token-Optimized CLI
 
-**rtk** filters/compresses command output. 60-90% token savings.
+**rtk** filters/compresses common command output. 60-90% token savings.
 
 Always prefix shell commands with `rtk`:
 

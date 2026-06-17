@@ -1,22 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "composto-cachebro": {
+    "readbro": {
       "enabled": true,
       "type": "local",
       "command": [
-        "composto-cachebro"
+        "readbro"
       ]
-    },
-    "composto": {
-      "enabled": true,
-      "type": "local",
-      "command": [
-        "composto-mcp"
-      ],
-      "environment": {
-        "COMPOSTO_BLASTRADIUS": "1"
-      }
     },
     "github": {
       "enabled": true,

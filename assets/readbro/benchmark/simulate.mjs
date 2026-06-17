@@ -69,7 +69,7 @@ export function simulateComposto(workDir, steps, layer) {
   return { billed, rawEquivalent, label: `composto (${layer} only)` };
 }
 
-export function simulateCompostoCachebro(workDir, steps, layer, dbPath, sessionId) {
+export function simulateReadbro(workDir, steps, layer, dbPath, sessionId) {
   const cache = new IrCacheStore(dbPath, sessionId);
   let billed = 0;
   let rawEquivalent = 0;
@@ -85,7 +85,7 @@ export function simulateCompostoCachebro(workDir, steps, layer, dbPath, sessionI
     const result = cache.readFile(abs, { layer });
     billed += payloadTokens(result);
   }
-  return { billed, rawEquivalent, label: `composto-cachebro (${layer})` };
+  return { billed, rawEquivalent, label: `readbro (${layer})` };
 }
 
 export function savings(billed, rawEquivalent) {
@@ -102,12 +102,12 @@ export function runScenario(workDir, scenario, runId) {
     ...LAYERS.flatMap((layer) => [
       () => simulateComposto(workDir, steps, layer),
       () =>
-        simulateCompostoCachebro(
+        simulateReadbro(
           workDir,
           steps,
           layer,
           join(workDir, `.bench-${runId}-ir-${layer}.db`),
-          `ccb-${runId}-${layer}`,
+          `rb-${runId}-${layer}`,
         ),
     ]),
   ];

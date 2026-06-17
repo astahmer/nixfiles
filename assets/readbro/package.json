@@ -1,10 +1,10 @@
 {
-  "name": "composto-cachebro",
-  "version": "0.1.0",
-  "description": "IR-aware read cache: composto compression + cachebro session diffs",
+  "name": "readbro",
+  "version": "0.2.0",
+  "description": "IR-aware read cache MCP for coding agents (composto compression + session diffs)",
   "type": "module",
   "bin": {
-    "composto-cachebro": "src/serve.mjs"
+    "readbro": "src/serve.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

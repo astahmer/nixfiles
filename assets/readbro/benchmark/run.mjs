@@ -21,7 +21,7 @@ function resolveSourceRepo() {
 }
 
 function prepareWorkdir(sourceRepo) {
-  const workDir = mkdtempSync(join(tmpdir(), "composto-cachebro-bench-"));
+  const workDir = mkdtempSync(join(tmpdir(), "readbro-bench-"));
   mkdirSync(join(workDir, ".git"));
   const allFiles = [...new Set([...fixtures.files, ...(fixtures.largeFiles ?? [])])];
   for (const rel of allFiles) {
@@ -78,13 +78,13 @@ function printSummary(allRows) {
     console.log(`  ${pad(label, 28)} ${avg.toFixed(1)}%`);
   }
 
-  const ccbL1 = byLabel.get("composto-cachebro (L1)");
+  const rbL1 = byLabel.get("readbro (L1)");
   const compL1 = byLabel.get("composto (L1 only)");
-  if (ccbL1 && compL1) {
+  if (rbL1 && compL1) {
     const delta =
-      ccbL1.reduce((a, b) => a + b, 0) / ccbL1.length -
+      rbL1.reduce((a, b) => a + b, 0) / rbL1.length -
       compL1.reduce((a, b) => a + b, 0) / compL1.length;
-    console.log(`\n  composto-cachebro (L1) vs composto (L1 only): +${delta.toFixed(1)}pp avg`);
+    console.log(`\n  readbro (L1) vs composto (L1 only): +${delta.toFixed(1)}pp avg`);
   }
 }
 
@@ -93,7 +93,7 @@ function main() {
   const workDir = prepareWorkdir(sourceRepo);
   const allRows = [];
 
-  console.log("# composto-cachebro benchmark");
+  console.log("# readbro benchmark");
   console.log("");
   console.log(`Fixtures: ${fixtures.files.length} proof + ${(fixtures.largeFiles ?? []).length} large files`);
   console.log(`Source: ${sourceRepo}`);

@@ -1,21 +1,8 @@
 {
     "mcpServers": {
-        "composto-cachebro": {
-            "command": "composto-cachebro"
+        "readbro": {
+            "command": "readbro"
         },
-        "composto": {
-            "command": "composto-mcp",
-            "env": {
-                "COMPOSTO_BLASTRADIUS": "1"
-            }
-        },
-        // "cachebro": {
-        //     "command": "npx",
-        //     "args": [
-        //         "cachebro",
-        //         "serve"
-        //     ]
-        // },
         "github": {
             "url": "https://api.githubcopilot.com/mcp/",
             "headers": {

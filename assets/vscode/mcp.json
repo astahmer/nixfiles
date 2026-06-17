@@ -1,18 +1,10 @@
 {
 	"servers": {
-		"composto-cachebro": {
+		"readbro": {
 			"type": "stdio",
-			"command": "composto-cachebro",
+			"command": "readbro",
 			"args": [],
 			"env": {}
-		},
-		"composto": {
-			"type": "stdio",
-			"command": "composto-mcp",
-			"args": [],
-			"env": {
-				"COMPOSTO_BLASTRADIUS": "1"
-			}
 		},
 		"io.github.ChromeDevTools/chrome-devtools-mcp": {
 			"command": "npx",

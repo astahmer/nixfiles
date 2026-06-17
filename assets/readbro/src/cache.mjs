@@ -94,7 +94,7 @@ export class IrCacheStore {
       this.#db
         .prepare("UPDATE session_reads SET read_at = ? WHERE session_id = ? AND cache_key = ?")
         .run(now, this.#sessionId, key);
-      const label = `[composto-cachebro: unchanged IR (${layer}, ${representation}), ~${payloadTokens} tokens saved]`;
+      const label = `[readbro: unchanged IR (${layer}, ${representation}), ~${payloadTokens} tokens saved]`;
       return {
         cached: true,
         content: label,
@@ -185,7 +185,7 @@ export class IrCacheStore {
 }
 
 export function defaultDbPath() {
-  const dir = resolve(process.env.COMPOSTO_CACHEBRO_DIR ?? ".composto-cachebro");
+  const dir = resolve(process.env.READBRO_DIR ?? ".readbro");
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return resolve(dir, "cache.db");
 }
