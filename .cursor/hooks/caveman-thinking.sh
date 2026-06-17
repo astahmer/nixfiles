@@ -1,0 +1,1 @@
+../../assets/.cursor/hooks/caveman-thinking.sh

@@ -1,6 +1,11 @@
 {
     "version": 1,
     "hooks": {
+        "sessionStart": [
+            {
+                "command": "./hooks/caveman-thinking.sh"
+            }
+        ],
         "preToolUse": [
             {
                 "matcher": "Shell",

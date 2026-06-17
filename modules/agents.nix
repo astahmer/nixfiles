@@ -50,6 +50,10 @@
 
       home.file.".agents".source = ../assets/.agents;
       home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
+      home.file.".cursor/hooks/caveman-thinking.sh" = {
+        source = ../assets/.cursor/hooks/caveman-thinking.sh;
+        executable = true;
+      };
       home.file.".cursor/rules".source = ../assets/.cursor/rules;
       home.file.".claude/settings.json".source = ../assets/.claude/settings.json;
 

@@ -27,6 +27,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
 - `hosts/workstation/default.nix` contains the NixOS host.
 - `assets/.agents/` — global agent tree. `readbro-package.nix` — readbro MCP (built via pnpm + `fetchPnpmDeps`). Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them with a store-pinned `readbro` binary. Optional workspace test config: `.cursor/mcp.json` (repo-local `node assets/readbro/src/main.ts`). Run tests with `./assets/readbro/run-tests` (bypasses pnpm when its store is read-only).
+- Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook` to apply.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## Reference Repos

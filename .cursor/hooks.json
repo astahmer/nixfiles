@@ -1,11 +1,16 @@
 {
-  "version": 1,
-  "hooks": {
-    "preToolUse": [
-      {
-        "matcher": "Shell",
-        "command": "rtk hook cursor"
-      }
-    ]
-  }
+    "version": 1,
+    "hooks": {
+        "sessionStart": [
+            {
+                "command": "./hooks/caveman-thinking.sh"
+            }
+        ],
+        "preToolUse": [
+            {
+                "matcher": "Shell",
+                "command": "rtk hook cursor"
+            }
+        ]
+    }
 }
