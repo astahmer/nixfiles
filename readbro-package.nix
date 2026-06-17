@@ -3,11 +3,11 @@ let
   inherit (pkgs)
     lib
     stdenv
+    bun
     nodejs_24
     pnpm_11
     fetchPnpmDeps
     pnpmConfigHook
-    makeWrapper
     ;
 
   src = lib.cleanSourceWith {
@@ -17,10 +17,9 @@ let
       let
         base = builtins.baseNameOf path;
       in
-      !(base == "node_modules" || base == "result" || base == "bin");
+      !(base == "node_modules" || base == "result" || base == "bin" || base == "readbro");
   };
 
-  # Runtime uses node --experimental-transform-types; devDependencies are local-only.
   pnpmInstallFlags = [ "--prod" ];
 
   prePnpmInstall = ''
@@ -35,10 +34,10 @@ stdenv.mkDerivation (finalAttrs: {
   inherit src pnpmInstallFlags prePnpmInstall;
 
   nativeBuildInputs = [
+    bun
     nodejs_24
     pnpmConfigHook
     pnpm_11
-    makeWrapper
   ];
 
   # Fetched with pnpm 11 (lockfile v9). Regenerate: set hash to "" and rebuild.
@@ -55,19 +54,16 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-+UymkxOxRq5/NZHX9PYPiyLAdRkTUDhq0oYNAh6frD8=";
   };
 
+  buildPhase = ''
+    runHook preBuild
+    bun build ./src/main.ts --compile --minify --bytecode --outfile readbro
+    runHook postBuild
+  '';
+
   installPhase = ''
     runHook preInstall
-
-    app="$out/lib/readbro"
-    mkdir -p "$app" "$out/bin"
-    cp -r src package.json node_modules "$app/"
-
-    makeWrapper ${nodejs_24}/bin/node "$out/bin/readbro" \
-      --add-flags "--no-warnings=ExperimentalWarning" \
-      --add-flags "--experimental-transform-types" \
-      --add-flags "--experimental-strip-types" \
-      --add-flags "$app/src/main.ts"
-
+    mkdir -p "$out/bin"
+    cp readbro "$out/bin/readbro"
     runHook postInstall
   '';
 

@@ -3,10 +3,9 @@ import * as Console from "effect/Console";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import { McpLayer } from "./mcp.ts";
 import { Readbro } from "./readbro.ts";
-import { parseSince } from "./stats-query.ts";
-import type { StatsQuery, StatsRequest } from "./stats-query.ts";
+import { statsRequestFromInput } from "./stats-cli.ts";
+import type { StatsRequest } from "./stats-query.ts";
 
 const layer = Options.choice("layer", ["L0", "L1", "L2", "L3"]).pipe(
   Options.withDescription("IR layer (default L1)"),
@@ -68,35 +67,6 @@ const verbose = Options.boolean("verbose").pipe(
   Options.withDefault(false),
 );
 
-const statsQueryFromCli = (input: {
-  scope: "repo" | "session";
-  since: Option.Option<string>;
-  glob: Option.Option<string>;
-  groupGlob: ReadonlyArray<string>;
-  byDir: Option.Option<number>;
-  discoverGlobs: Option.Option<number>;
-}): StatsQuery => {
-  let query: StatsQuery = { scope: input.scope };
-
-  if (Option.isSome(input.since)) {
-    query = { ...query, sinceMs: parseSince(input.since.value) };
-  }
-  if (Option.isSome(input.glob)) {
-    query = { ...query, glob: input.glob.value };
-  }
-  if (input.groupGlob.length > 0) {
-    query = { ...query, groupGlobs: input.groupGlob };
-  }
-  if (Option.isSome(input.byDir)) {
-    query = { ...query, byDir: input.byDir.value };
-  }
-  if (Option.isSome(input.discoverGlobs)) {
-    query = { ...query, discoverGlobs: input.discoverGlobs.value };
-  }
-
-  return query;
-};
-
 const statsRequestFromCli = (input: {
   scope: "repo" | "session";
   since: Option.Option<string>;
@@ -106,13 +76,17 @@ const statsRequestFromCli = (input: {
   discoverGlobs: Option.Option<number>;
   json: boolean;
   verbose: boolean;
-}): StatsRequest => ({
-  query: statsQueryFromCli(input),
-  format: {
+}): StatsRequest =>
+  statsRequestFromInput({
+    scope: input.scope,
+    since: Option.getOrUndefined(input.since),
+    glob: Option.getOrUndefined(input.glob),
+    groupGlob: input.groupGlob,
+    byDir: Option.getOrUndefined(input.byDir),
+    discoverGlobs: Option.getOrUndefined(input.discoverGlobs),
     json: input.json,
     verbose: input.verbose,
-  },
-});
+  });
 
 const statsOptions = {
   scope,
@@ -231,9 +205,12 @@ const clear = Command.make(
     }),
 ).pipe(Command.withDescription("Clear repo cache"));
 
-const mcp = Command.make("mcp", {}, () => Layer.launch(McpLayer)).pipe(
-  Command.withDescription("Run MCP server on stdio"),
-);
+const mcp = Command.make("mcp", {}, () =>
+  Effect.gen(function* () {
+    const { McpLayer } = yield* Effect.promise(() => import("./mcp.ts"));
+    return yield* Layer.launch(McpLayer);
+  }),
+).pipe(Command.withDescription("Run MCP server on stdio"));
 
 export const root = Command.make("readbro").pipe(
   Command.withSubcommands([read, reads, context, blast, stats, gain, clear, mcp]),

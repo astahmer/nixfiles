@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import { openDatabase, type SQLInputValue, type SqlDatabase } from "./sqlite.ts";
 import { mkdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { computeDiff } from "./differ.ts";
@@ -175,7 +175,7 @@ export type CacheStats = {
   readonly recent: ReadonlyArray<RecentRead>;
 };
 
-type DbConn = { readonly db: DatabaseSync; readonly dbPath: string };
+type DbConn = { readonly db: SqlDatabase; readonly dbPath: string };
 
 type EventFilter = { readonly sql: string; readonly params: ReadonlyArray<SQLInputValue> };
 
@@ -198,7 +198,7 @@ export class IrCacheStore {
 
   readonly sessionId = (): string => this.#sessionId;
 
-  #ensureSchema(db: DatabaseSync): void {
+  #ensureSchema(db: SqlDatabase): void {
     const metaTable = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_meta'")
       .get() as { name: string } | undefined;
@@ -236,7 +236,7 @@ export class IrCacheStore {
     let conn = this.#connections.get(dbPath);
     if (!conn) {
       mkdirSync(dirname(dbPath), { recursive: true });
-      const db = new DatabaseSync(dbPath);
+      const db = openDatabase(dbPath);
       this.#ensureSchema(db);
       conn = { db, dbPath };
       this.#connections.set(dbPath, conn);
@@ -265,7 +265,7 @@ export class IrCacheStore {
   }
 
   #logRead(
-    db: DatabaseSync,
+    db: SqlDatabase,
     filePath: string,
     layer: IrLayer,
     representation: Representation,
@@ -450,7 +450,7 @@ export class IrCacheStore {
   }
 
   #storeVersion(
-    db: DatabaseSync,
+    db: SqlDatabase,
     filePath: string,
     layer: IrLayer,
     sourceHash: string,
@@ -465,7 +465,7 @@ export class IrCacheStore {
   }
 
   #priorZoomLayer(
-    db: DatabaseSync,
+    db: SqlDatabase,
     filePath: string,
     layer: IrLayer,
     sourceHash: string,
@@ -491,7 +491,7 @@ export class IrCacheStore {
   }
 
   #setLastRead(
-    db: DatabaseSync,
+    db: SqlDatabase,
     filePath: string,
     layer: IrLayer,
     sourceHash: string,
