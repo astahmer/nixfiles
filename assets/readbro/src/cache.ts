@@ -9,8 +9,9 @@ import { aggregateEvents, type ReadEventRow } from "./stats-aggregate.ts";
 import type { StatsQuery, StatsScope } from "./stats-query.ts";
 import { usesPathGrouping } from "./stats-query.ts";
 
-const REPO_SCOPE = "repo";
 const SCHEMA_VERSION = 3;
+
+const LAYER_RANK: Record<IrLayer, number> = { L0: 0, L1: 1, L2: 2, L3: 3 };
 
 const CREATE_SCHEMA = `
 CREATE TABLE ir_versions (
@@ -72,7 +73,7 @@ export type ReadFileOptions = {
   readonly force?: boolean;
 };
 
-export type ReadOutcome = "full" | "cache_hit" | "diff";
+export type ReadOutcome = "full" | "cache_hit" | "diff" | "zoom";
 
 export type ReadFileResult = {
   readonly cached: boolean;
@@ -350,16 +351,18 @@ export class IrCacheStore {
       });
     }
 
+    const sessionId = this.#sessionId;
+
     const lastRead = db
       .prepare(
         "SELECT source_hash FROM session_reads WHERE session_id = ? AND file_path = ? AND layer = ?",
       )
-      .get(REPO_SCOPE, absPath, layer) as { source_hash: string } | undefined;
+      .get(sessionId, absPath, layer) as { source_hash: string } | undefined;
 
     if (lastRead && lastRead.source_hash === sourceHash) {
       db.prepare(
         "UPDATE session_reads SET read_at = ? WHERE session_id = ? AND file_path = ? AND layer = ?",
-      ).run(now, REPO_SCOPE, absPath, layer);
+      ).run(now, sessionId, absPath, layer);
       const label = `[readbro: unchanged IR (${layer}, ${representation}), ~${payloadTokens} tokens saved]`;
       return finish({
         cached: true,
@@ -403,6 +406,35 @@ export class IrCacheStore {
         }
       }
     } else {
+      const priorZoom = this.#priorZoomLayer(db, absPath, layer, sourceHash);
+      if (priorZoom) {
+        const zoomRow = db
+          .prepare(
+            "SELECT payload FROM ir_versions WHERE file_path = ? AND layer = ? AND source_hash = ?",
+          )
+          .get(absPath, priorZoom, sourceHash) as { payload: string } | undefined;
+
+        if (zoomRow) {
+          const diffResult = computeDiff(zoomRow.payload, payload, filePath);
+          this.#setLastRead(db, absPath, layer, sourceHash, now);
+          if (diffResult.hasChanges) {
+            const header = `[readbro: zoom ${priorZoom}→${layer}, ${diffResult.linesChanged} IR lines, ${representation}]`;
+            const billedTokens = estimateTokens(`${header}\n${diffResult.diff}`);
+            return finish({
+              cached: true,
+              content: diffResult.diff,
+              diff: diffResult.diff,
+              sourceHash,
+              layer,
+              representation,
+              linesChanged: diffResult.linesChanged,
+              billedTokens,
+              outcome: "zoom",
+            });
+          }
+        }
+      }
+
       this.#setLastRead(db, absPath, layer, sourceHash, now);
     }
 
@@ -432,6 +464,32 @@ export class IrCacheStore {
     ).run(filePath, layer, sourceHash, payload, representation, now);
   }
 
+  #priorZoomLayer(
+    db: DatabaseSync,
+    filePath: string,
+    layer: IrLayer,
+    sourceHash: string,
+  ): IrLayer | undefined {
+    const currentRank = LAYER_RANK[layer];
+    const rows = db
+      .prepare(
+        `SELECT layer FROM session_reads
+         WHERE session_id = ? AND file_path = ? AND source_hash = ?`,
+      )
+      .all(this.#sessionId, filePath, sourceHash) as Array<{ layer: IrLayer }>;
+
+    let best: IrLayer | undefined;
+    let bestRank = -1;
+    for (const row of rows) {
+      const rank = LAYER_RANK[row.layer];
+      if (rank < currentRank && rank > bestRank) {
+        best = row.layer;
+        bestRank = rank;
+      }
+    }
+    return best;
+  }
+
   #setLastRead(
     db: DatabaseSync,
     filePath: string,
@@ -442,7 +500,7 @@ export class IrCacheStore {
     db.prepare(
       `INSERT OR REPLACE INTO session_reads (session_id, file_path, layer, source_hash, read_at)
        VALUES (?, ?, ?, ?, ?)`,
-    ).run(REPO_SCOPE, filePath, layer, sourceHash, now);
+    ).run(this.#sessionId, filePath, layer, sourceHash, now);
   }
 
   getStats(query: StatsQuery = {}): CacheStats {

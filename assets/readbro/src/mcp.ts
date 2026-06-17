@@ -33,6 +33,8 @@ const ReadFileSchema = Schema.Struct({
   force: Schema.optional(Schema.Boolean),
   max_lines: Schema.optional(Schema.Number),
   offset: Schema.optional(Schema.Number),
+  target: Schema.optional(Schema.String),
+  budget: Schema.optional(Schema.Number),
 });
 
 const StatsFilterSchema = Schema.Struct({
@@ -86,8 +88,9 @@ export const McpLayer = Layer.effectDiscard(
         "Read one file via composto IR + repo cache. ALWAYS use instead of built-in Read.",
         "DEFAULT layer L1 (behaviour IR). Do NOT use L3 for exploration — L3 returns full raw source.",
         "Layers: L0=structure, L1=behaviour (default), L2=delta, L3=raw (avoid; auto-capped).",
-        "Re-read unchanged file at same layer → short cache notice.",
+        "Re-read unchanged file at same layer in this session → short cache notice.",
         "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); pass max_lines: -1 for full raw.",
+        "Optional target: symbol search via composto context (repo root scan; use with class/function name).",
       ].join(" "),
       ReadFileSchema,
       (payload) => {
@@ -97,12 +100,16 @@ export const McpLayer = Layer.effectDiscard(
           force?: boolean;
           max_lines?: number;
           offset?: number;
+          target?: string;
+          budget?: number;
         };
         return rb.readFile(p.path, {
           layer: p.layer,
           force: p.force,
           maxLines: p.max_lines,
           offset: p.offset,
+          target: p.target,
+          budget: p.budget,
         });
       },
     );
@@ -133,7 +140,7 @@ export const McpLayer = Layer.effectDiscard(
 
     yield* registerTool(
       "pack_context",
-      "Multi-file bug/trace context within token budget. Prefer over many L3 reads on large files.",
+      "Symbol-aware context pack within token budget. path: directory (default .) or file + target (symbol name). composto scans from repo root — not a single file path alone.",
       Schema.Struct({
         path: Schema.optional(Schema.String),
         budget: Schema.optional(Schema.Number),

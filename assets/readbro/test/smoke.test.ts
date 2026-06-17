@@ -32,20 +32,23 @@ test("IR cache: first read full, second unchanged, third diff after edit", () =>
   assert.ok((r3.linesChanged ?? 0) > 0 || r3.diff);
 });
 
-test("repo cache shared across separate store instances", () => {
+test("new session gets full read when another session already read unchanged file", () => {
   const repo = join(tmp, "repo-shared");
   mkdirSync(repo, { recursive: true });
   mkdirSync(join(repo, ".git"));
   const file = join(repo, "shared.ts");
   writeFileSync(file, "export const x = 1;\n");
 
-  const cacheA = new IrCacheStore(dbPath);
-  const cacheB = new IrCacheStore(dbPath);
+  const cacheA = new IrCacheStore({ dbPath, sessionId: "shared-a" });
+  const cacheB = new IrCacheStore({ dbPath, sessionId: "shared-b" });
 
   cacheA.readFile(file, { layer: "L1" });
   const r2 = cacheB.readFile(file, { layer: "L1" });
-  assert.equal(r2.cached, true);
-  assert.match(r2.content, /unchanged IR/);
+  assert.equal(r2.outcome, "full");
+  assert.equal(r2.cached, false);
+
+  const r3 = cacheB.readFile(file, { layer: "L1" });
+  assert.equal(r3.outcome, "cache_hit");
 });
 
 test("getStats reads repo db without a prior read in this process", () => {

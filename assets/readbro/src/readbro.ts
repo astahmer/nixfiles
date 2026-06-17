@@ -2,6 +2,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { resolve } from "node:path";
+import { statSync } from "node:fs";
 import { IrCacheStore } from "./cache.ts";
 import type { CompostoIntent } from "./composto.ts";
 import { runCompostoCli } from "./composto.ts";
@@ -9,6 +10,7 @@ import type { ReadbroError } from "./errors.ts";
 import { toReadbroError } from "./errors.ts";
 import { formatGain, formatReadResult, formatStats } from "./format.ts";
 import type { ReadbroReadOptions } from "./read-options.ts";
+import { findRepoRoot } from "./repo-root.ts";
 import type { StatsRequest } from "./stats-query.ts";
 
 export class Readbro extends Context.Tag("@readbro/Readbro")<
@@ -37,8 +39,15 @@ export class Readbro extends Context.Tag("@readbro/Readbro")<
 const make = Effect.sync(() => {
   const cache = new IrCacheStore();
 
-  const readFile = (path: string, options: ReadbroReadOptions = {}) =>
-    Effect.sync(() => {
+  const readFile = (path: string, options: ReadbroReadOptions = {}) => {
+    if (options.target) {
+      return packContext({
+        path,
+        target: options.target,
+        budget: options.budget,
+      });
+    }
+    return Effect.sync(() => {
       const { maxLines, offset, force, layer } = options;
       const result = cache.readFile(path, { layer, force });
       return formatReadResult(result, cache.getStats({ scope: "repo" }), {
@@ -46,6 +55,7 @@ const make = Effect.sync(() => {
         offset,
       });
     });
+  };
 
   const readFiles = (paths: Array<string>, options: ReadbroReadOptions = {}) =>
     Effect.sync(() => {
@@ -74,9 +84,22 @@ const make = Effect.sync(() => {
     Effect.try({
       try: () => {
         const abs = resolve(options.path ?? ".");
-        const args = ["context", abs, `--budget=${options.budget ?? 4000}`];
+        const root = findRepoRoot(abs);
+        let isFile = false;
+        try {
+          isFile = statSync(abs).isFile();
+        } catch {
+          // path may not exist yet; composto will surface the error
+        }
+        if (isFile && !options.target) {
+          throw new Error(
+            "pack_context: path is a file — pass target (symbol/class name). composto context scans from repo root, not a single file path.",
+          );
+        }
+        const contextPath = isFile ? root : abs;
+        const args = ["context", contextPath, `--budget=${options.budget ?? 4000}`];
         if (options.target) args.push(`--target=${options.target}`);
-        return runCompostoCli(args, abs);
+        return runCompostoCli(args, root);
       },
       catch: toReadbroError,
     });

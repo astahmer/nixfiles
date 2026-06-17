@@ -5,4 +5,6 @@ export type ReadbroReadOptions = {
   readonly force?: boolean;
   readonly maxLines?: number;
   readonly offset?: number;
+  readonly target?: string;
+  readonly budget?: number;
 };

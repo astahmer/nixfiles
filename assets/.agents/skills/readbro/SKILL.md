@@ -33,8 +33,10 @@ Always prefer this over built-in Read.
 - `path` — file to read (required)
 - `layer` — `L0` | `L1` | `L2` | `L3` (default `L1`)
 - `force` — bypass cache and return full payload (default `false`)
-- `max_lines` — cap output lines (`L3`/raw auto-capped; `-1` = unlimited)
+- `max_lines` — cap output lines (`L3`/raw auto-capped to 200; `-1` = full file, no cap)
 - `offset` — start at 0-based line (optional)
+- `target` — optional symbol/class name → runs `composto context` from repo root (use instead of L3 for one symbol)
+- `budget` — token budget when `target` is set (default `4000`)
 
 **Example — survey a module:**
 
@@ -80,17 +82,25 @@ When you need several files at once, prefer one `read_files` call over many `rea
 read_files({ paths: ["src/a.ts", "src/b.ts", "src/c.ts"], layer: "L1" })
 ```
 
-### `pack_context` — multi-file bug traces
+### `pack_context` — symbol search & multi-file bug traces
 
-Use when a bug spans multiple files and you need neighbours packed within a token budget:
+`composto context` scans from a **directory** (repo root), not a single file path. To focus on one symbol in a known file, pass the file path **and** `target`:
 
 ```
-pack_context({ path: ".", budget: 4000, target: "handleAuth" })
+pack_context({ path: "src/auth/middleware.ts", budget: 4000, target: "handleAuth" })
 ```
 
-- `path` — project root (default `.`)
+Or search the whole repo:
+
+```
+pack_context({ path: ".", budget: 4000, target: "ReplayAccountingImportUseCase" })
+```
+
+Same via `read_file` with `target` (delegates to `pack_context`).
+
+- `path` — directory (default `.`) or file + required `target`
 - `budget` — max tokens (default `4000`)
-- `target` — optional symbol or file to focus; that file stays raw, neighbours are IR
+- `target` — symbol, class, or function name to focus (required when `path` is a file)
 
 ### `blast_radius` — before editing
 
@@ -124,10 +134,10 @@ Typical flow:
 ```
 1. read_file(path, L0)     → "what's in this file?"
 2. read_file(path, L1)     → "how does it work?" (stop here most of the time)
-3. read_file(path, L3)     → only tiny files or explicit line window
+3. read_file(path, L3)     → only tiny files or explicit line window, or max_lines: -1 when you really need all raw
 ```
 
-**Do not** read the same file at L1, L2, and L3 — each layer is a separate cache key and triples token cost.
+**Drilling L0 → L1 → L3 is fine** when you need more detail. Within the same session, zooming to a higher layer returns an IR **diff** from the last lower layer (not the full payload again). Avoid hopping layers without drilling — e.g. reading L1, then L2, then L3 when L1 already answered the question wastes tokens.
 
 ## CLI
 
@@ -146,21 +156,23 @@ Typical flow:
 
 ## Repo caching
 
-readbro stores read state in **`.readbro/cache.db` at the working-copy root** — git clone, git worktree, jj repo, or jj workspace each get their own cache. Shared across all agent sessions in that working copy (`READBRO_DIR` overrides location).
+readbro stores IR payloads in **`.readbro/cache.db` at the working-copy root** (git clone, git worktree, jj repo, or jj workspace each get their own cache. `READBRO_DIR` overrides). **Billing is per MCP session** — each agent conversation has its own `session_id` (or `READBRO_SESSION_ID`).
 
-If session A reads `src/auth.ts` and session B reads the same unchanged file later, session B gets the short "unchanged" notice instead of the full IR again.
+### First read in a session
 
-### Unchanged re-read
+Always returns the **full** IR/raw payload for that layer, even if another session read the same file earlier.
 
-If you read the same file at the same layer again and the **file content on disk has not changed**, readbro returns a short notice instead of the full IR:
+### Unchanged re-read (same session, same layer)
+
+If you read the same file at the same layer again and the **file on disk has not changed**, readbro returns a short notice:
 
 ```
 [readbro: unchanged IR (L1, ir), ~842 tokens saved]
 ```
 
-### After a change — IR diff
+### After a file change (same session, same layer)
 
-If the file changed since your last read at that layer, readbro returns a unified diff of the IR (not necessarily the raw source diff):
+Returns a unified diff of the IR vs what this session last saw at that layer:
 
 ```
 [readbro: 3 IR lines changed, layer L1, ir]
@@ -169,15 +181,19 @@ If the file changed since your last read at that layer, readbro returns a unifie
 ...
 ```
 
-### Manual edits (no agent involved)
+### Layer zoom (same session, same file hash)
 
-**Yes — external changes are detected automatically.** On every `read_file` call, readbro reads the file from disk and hashes its content (`SHA-256`, truncated). The cache compares this hash to the last read hash **for that repo** (any prior session counts).
+When you drill L0 → L1 (or L1 → L2, etc.) in one session, readbro sends a **zoom diff** from the prior layer instead of repeating everything:
 
-Worktrees/workspaces don't share cache — different files on disk. Sessions in same working copy still share cache.
+```
+[readbro: zoom L0→L1, 12 IR lines, ir]
+```
 
-- User edits a file in their editor → next `read_file` sees new hash → returns diff or full IR
-- User saves outside the agent → same behaviour
-- No watcher or hook is required; detection happens at read time
+### New session vs warm repo
+
+Session A reads `src/auth.ts` → full IR. Session B (new conversation) reads the same unchanged file → **full IR again** (B has not seen it yet). Session B's second read → unchanged notice.
+
+`ir_versions` in the DB is shared across sessions (for diff computation); **what gets billed** is session-scoped.
 
 `force: true` skips the cache and always returns the full current payload.
 
@@ -198,4 +214,4 @@ session_clear()    → reset repo cache
 | Bug across files | `pack_context` |
 | Before editing | `blast_radius` |
 | Bypass cache | `read_file` with `force: true` |
-| Find hotspots | `composto trends .` then `read_file` |
+| Find one symbol | `read_file` or `pack_context` with `target` |

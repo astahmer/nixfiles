@@ -150,7 +150,7 @@ const addGlob = (map: Map<string, GlobAccumulator>, pattern: string, row: ReadEv
       existing.cacheHits += 1;
     } else if (row.outcome === "full") {
       existing.fullReads += 1;
-    } else {
+    } else if (row.outcome === "diff" || row.outcome === "zoom") {
       existing.diffReads += 1;
     }
     return;
@@ -165,7 +165,7 @@ const addGlob = (map: Map<string, GlobAccumulator>, pattern: string, row: ReadEv
     durationMs: row.duration_ms,
     cacheHits: row.outcome === "cache_hit" ? 1 : 0,
     fullReads: row.outcome === "full" ? 1 : 0,
-    diffReads: row.outcome === "diff" ? 1 : 0,
+    diffReads: row.outcome === "diff" || row.outcome === "zoom" ? 1 : 0,
     files: new Set([`${row.file_path}\0${row.layer}`]),
   });
 };

@@ -25,11 +25,12 @@ Full guide: see skill **readbro**.
 
 ## LOD zoom (`layer` on read_file)
 
-1. **L0** — file map
-2. **L1** — behaviour (**default** — use this)
-3. **L3** — full raw source (**avoid** — 2500-line file ≈ 150K tokens; auto-capped to 200 lines)
+1. **L0** — file map (symbols, structure)
+2. **L1** — behaviour IR (**default**)
+3. **L2** — delta intent (may fall back to L1)
+4. **L3** — full raw source (**avoid** — auto-capped to 200 lines; `max_lines: -1` for full)
 
-Do **not** read L1 then L2 then L3 on the same file. Pick one layer. Re-read unchanged file → short cache notice.
+**Drill L0 → L1 → L3 when needed.** Same session zoom (e.g. L0 then L1) sends an IR **diff** from the prior layer, not the full payload again. Re-read same layer unchanged → short cache notice (per session).
 
 <!-- rtk-instructions v2 -->
 # RTK — Token-Optimized CLI
