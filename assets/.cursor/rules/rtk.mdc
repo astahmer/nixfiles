@@ -1,0 +1,14 @@
+---
+description: RTK — always prefix shell commands
+alwaysApply: true
+---
+
+# RTK
+
+**Every Shell command starts with `rtk`.** No bare `git`, `cargo`, `pnpm`, `rg`, etc.
+
+Hook (`rtk hook cursor`) rewrites misses — still write `rtk` yourself.
+
+Meta: `rtk gain`, `rtk gain --history`, `rtk discover`, `rtk proxy <cmd>`
+
+Full guide: `~/.agents/skills/rtk/SKILL.md`
