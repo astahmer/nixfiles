@@ -27,12 +27,22 @@ const IntentSchema = Schema.Literal(
   "unknown",
 );
 
-// Effect's JSON schema for Struct({}) is anyOf object|array — Cursor MCP rejects it.
-const emptyInputSchema = {
-  type: "object",
-  properties: {},
-  additionalProperties: false,
-} as McpSchema.Tool["inputSchema"];
+const ReadFileSchema = Schema.Struct({
+  path: Schema.String,
+  layer: Schema.optional(LayerSchema),
+  force: Schema.optional(Schema.Boolean),
+  max_lines: Schema.optional(Schema.Number),
+  offset: Schema.optional(Schema.Number),
+});
+
+const StatsFilterSchema = Schema.Struct({
+  scope: Schema.optional(Schema.Literal("repo", "session")),
+  since: Schema.optional(Schema.String),
+  glob: Schema.optional(Schema.String),
+  discover_globs: Schema.optional(Schema.Number),
+  json: Schema.optional(Schema.Boolean),
+  verbose: Schema.optional(Schema.Boolean),
+});
 
 const registerTool = (
   name: string,
@@ -44,7 +54,11 @@ const registerTool = (
     const server = yield* McpServer.McpServer;
     const inputSchema =
       parameters === null
-        ? emptyInputSchema
+        ? ({
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          } as McpSchema.Tool["inputSchema"])
         : (JSONSchema.make(parameters) as McpSchema.Tool["inputSchema"]);
     const tool = new McpSchema.Tool({
       name,
@@ -68,41 +82,58 @@ export const McpLayer = Layer.effectDiscard(
 
     yield* registerTool(
       "read_file",
-      `Read a file with composto IR + repo cache. ALWAYS use instead of built-in Read.`,
-      Schema.Struct({
-        path: Schema.String,
-        layer: Schema.optional(LayerSchema),
-        force: Schema.optional(Schema.Boolean),
-      }),
+      [
+        "Read one file via composto IR + repo cache. ALWAYS use instead of built-in Read.",
+        "DEFAULT layer L1 (behaviour IR). Do NOT use L3 for exploration — L3 returns full raw source.",
+        "Layers: L0=structure, L1=behaviour (default), L2=delta, L3=raw (avoid; auto-capped).",
+        "Re-read unchanged file at same layer → short cache notice.",
+        "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); pass max_lines: -1 for full raw.",
+      ].join(" "),
+      ReadFileSchema,
       (payload) => {
         const p = payload as {
           path: string;
           layer?: Schema.Schema.Type<typeof LayerSchema>;
           force?: boolean;
+          max_lines?: number;
+          offset?: number;
         };
-        return rb.readFile(p.path, { layer: p.layer, force: p.force });
+        return rb.readFile(p.path, {
+          layer: p.layer,
+          force: p.force,
+          maxLines: p.max_lines,
+          offset: p.offset,
+        });
       },
     );
 
     yield* registerTool(
       "read_files",
-      "Batch read with IR caching.",
+      "Batch read with IR caching. Same layer/max_lines/offset for all paths. Prefer L1 unless you need raw.",
       Schema.Struct({
         paths: Schema.Array(Schema.String),
         layer: Schema.optional(LayerSchema),
+        max_lines: Schema.optional(Schema.Number),
+        offset: Schema.optional(Schema.Number),
       }),
       (payload) => {
         const p = payload as {
           paths: Array<string>;
           layer?: Schema.Schema.Type<typeof LayerSchema>;
+          max_lines?: number;
+          offset?: number;
         };
-        return rb.readFiles(p.paths, { layer: p.layer });
+        return rb.readFiles(p.paths, {
+          layer: p.layer,
+          maxLines: p.max_lines,
+          offset: p.offset,
+        });
       },
     );
 
     yield* registerTool(
       "pack_context",
-      "Multi-file bug/trace context within token budget.",
+      "Multi-file bug/trace context within token budget. Prefer over many L3 reads on large files.",
       Schema.Struct({
         path: Schema.optional(Schema.String),
         budget: Schema.optional(Schema.Number),
@@ -132,15 +163,8 @@ export const McpLayer = Layer.effectDiscard(
 
     yield* registerTool(
       "session_status",
-      "readbro session cache stats. Optional filters: scope, since, glob, discover_globs, json, verbose.",
-      Schema.Struct({
-        scope: Schema.optional(Schema.Literal("repo", "session")),
-        since: Schema.optional(Schema.String),
-        glob: Schema.optional(Schema.String),
-        discover_globs: Schema.optional(Schema.Number),
-        json: Schema.optional(Schema.Boolean),
-        verbose: Schema.optional(Schema.Boolean),
-      }),
+      "Repo health snapshot — totals, efficiency, files tracked. Optional: scope, since, glob, discover_globs, json, verbose.",
+      StatsFilterSchema,
       (payload) => {
         const p = payload as {
           scope?: "repo" | "session";
@@ -151,6 +175,24 @@ export const McpLayer = Layer.effectDiscard(
           verbose?: boolean;
         };
         return rb.stats(statsRequestFromMcp(p));
+      },
+    );
+
+    yield* registerTool(
+      "session_gain",
+      "Where savings come from — top files + optional path/glob drill-down. Same filters as session_status.",
+      StatsFilterSchema,
+      (payload) => {
+        const p = payload as {
+          scope?: "repo" | "session";
+          since?: string;
+          glob?: string;
+          discover_globs?: number;
+          json?: boolean;
+          verbose?: boolean;
+        };
+        const request = statsRequestFromMcp(p);
+        return rb.gain({ ...request, query: { ...request.query, scope: request.query?.scope ?? "session" } });
       },
     );
 

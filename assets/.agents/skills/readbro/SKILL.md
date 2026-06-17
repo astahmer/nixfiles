@@ -20,7 +20,8 @@ readbro compresses source files into composto IR (intermediate representation), 
 | `read_files` | Batch read several paths with the same layer |
 | `pack_context` | Pack multiple files into a token budget for bug traces |
 | `blast_radius` | Assess edit risk from git history before changing a file |
-| `session_status` | Show cache stats (files tracked, tokens saved) |
+| `session_status` | Repo health snapshot — totals, efficiency, files tracked |
+| `session_gain` | Where savings come from — top files, glob/path drill-down |
 | `session_clear` | Reset the session cache |
 
 ### `read_file` — primary read path
@@ -32,6 +33,8 @@ Always prefer this over built-in Read.
 - `path` — file to read (required)
 - `layer` — `L0` | `L1` | `L2` | `L3` (default `L1`)
 - `force` — bypass cache and return full payload (default `false`)
+- `max_lines` — cap output lines (`L3`/raw auto-capped; `-1` = unlimited)
+- `offset` — start at 0-based line (optional)
 
 **Example — survey a module:**
 
@@ -49,13 +52,19 @@ read_file({ path: "src/auth/middleware.ts" })
 
 Layer L1 returns compressed IR describing what the file does, not every line of source.
 
-**Example — need exact source:**
+**Example — need exact source (rare):**
 
 ```
 read_file({ path: "src/auth/middleware.ts", layer: "L3" })
 ```
 
-Layer L3 returns raw file content. Use only when you need exact strings, formatting, or line-accurate edits.
+Layer L3 returns raw file content. **Avoid for exploration** — a 2500-line spec file can cost ~150K tokens. L3/raw auto-truncates to 200 lines unless `max_lines: -1`. Prefer L1; use `pack_context` for multi-file traces.
+
+**Example — line window on raw:**
+
+```
+read_file({ path: "src/big.spec.ts", layer: "L3", max_lines: 120, offset: 0 })
+```
 
 **Example — force refresh after external change:**
 
@@ -108,15 +117,17 @@ Start broad, drill only when needed:
 | **L0** | File map — symbols, structure | Surveying unfamiliar code |
 | **L1** | Compressed IR — behaviour | Default for understanding logic |
 | **L2** | Delta intent (may fall back) | After edits; prefer re-read at L1 |
-| **L3** | Exact raw source | Strings, formatting, precise line edits |
+| **L3** | Exact raw source | **Rare** — small files or `max_lines`; never for survey |
 
 Typical flow:
 
 ```
 1. read_file(path, L0)     → "what's in this file?"
-2. read_file(path, L1)     → "how does it work?"
-3. read_file(path, L3)     → only if L1 isn't enough for the edit
+2. read_file(path, L1)     → "how does it work?" (stop here most of the time)
+3. read_file(path, L3)     → only tiny files or explicit line window
 ```
+
+**Do not** read the same file at L1, L2, and L3 — each layer is a separate cache key and triples token cost.
 
 ## CLI
 
@@ -128,8 +139,8 @@ Typical flow:
 | `readbro reads <paths...>` | Batch read |
 | `readbro context` | Pack context (`--path`, `--budget`, `--target`) |
 | `readbro blast <file>` | Blast radius (`--intent`) |
-| `readbro stats` | Full cache breakdown |
-| `readbro gain` | Token savings summary (rtk-style) |
+| `readbro stats` | Repo health snapshot (summary; `--verbose` for breakdown) |
+| `readbro gain` | Where savings come from — top files (`--verbose` for globs/recent) |
 | `readbro clear` | Clear repo cache (`--path` optional) |
 | `readbro mcp` | MCP server explicitly |
 
@@ -173,16 +184,17 @@ Worktrees/workspaces don't share cache — different files on disk. Sessions in 
 ### Cache management
 
 ```
-session_status()   → files tracked, tokens saved in repo cache
-session_clear()    → reset repo cache (optional path scopes to one git root)
+session_status()   → repo health snapshot (totals, efficiency)
+session_gain()     → top files + savings drill-down
+session_clear()    → reset repo cache
 ```
 ## Quick reference
 
 | Task | Tool |
 |------|------|
 | Survey repo | `read_file` L0 or L1 |
-| Understand logic | `read_file` L1 |
-| Exact source | `read_file` L3 |
+| Understand logic | `read_file` L1 (**default**) |
+| Exact source | `read_file` L3 + `max_lines` (avoid bare L3 on large files) |
 | Bug across files | `pack_context` |
 | Before editing | `blast_radius` |
 | Bypass cache | `read_file` with `force: true` |

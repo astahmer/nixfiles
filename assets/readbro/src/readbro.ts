@@ -8,19 +8,16 @@ import { runCompostoCli } from "./composto.ts";
 import type { ReadbroError } from "./errors.ts";
 import { toReadbroError } from "./errors.ts";
 import { formatGain, formatReadResult, formatStats } from "./format.ts";
-import type { IrLayer } from "./ir.ts";
+import type { ReadbroReadOptions } from "./read-options.ts";
 import type { StatsRequest } from "./stats-query.ts";
 
 export class Readbro extends Context.Tag("@readbro/Readbro")<
   Readbro,
   {
-    readonly readFile: (
-      path: string,
-      options?: { readonly layer?: IrLayer; readonly force?: boolean },
-    ) => Effect.Effect<string>;
+    readonly readFile: (path: string, options?: ReadbroReadOptions) => Effect.Effect<string>;
     readonly readFiles: (
       paths: Array<string>,
-      options?: { readonly layer?: IrLayer },
+      options?: ReadbroReadOptions,
     ) => Effect.Effect<string>;
     readonly packContext: (options: {
       readonly path?: string;
@@ -40,20 +37,26 @@ export class Readbro extends Context.Tag("@readbro/Readbro")<
 const make = Effect.sync(() => {
   const cache = new IrCacheStore();
 
-  const readFile = (
-    path: string,
-    options?: { readonly layer?: IrLayer; readonly force?: boolean },
-  ) =>
+  const readFile = (path: string, options: ReadbroReadOptions = {}) =>
     Effect.sync(() => {
-      const result = cache.readFile(path, options);
-      return formatReadResult(result, cache.getStats({ scope: "repo" }));
+      const { maxLines, offset, force, layer } = options;
+      const result = cache.readFile(path, { layer, force });
+      return formatReadResult(result, cache.getStats({ scope: "repo" }), {
+        maxLines,
+        offset,
+      });
     });
 
-  const readFiles = (paths: Array<string>, options?: { readonly layer?: IrLayer }) =>
+  const readFiles = (paths: Array<string>, options: ReadbroReadOptions = {}) =>
     Effect.sync(() => {
+      const { maxLines, offset, force, layer } = options;
       const parts = paths.map((path) => {
-        const result = cache.readFile(path, options);
-        return `=== ${path} ===\n${formatReadResult(result, { savedTokens: 0 }, false)}`;
+        const result = cache.readFile(path, { layer, force });
+        return `=== ${path} ===\n${formatReadResult(result, { savedTokens: 0 }, {
+          showFooter: false,
+          maxLines,
+          offset,
+        })}`;
       });
       const stats = cache.getStats({ scope: "repo" });
       let footer = "";

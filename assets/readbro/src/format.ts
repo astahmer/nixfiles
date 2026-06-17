@@ -1,6 +1,8 @@
 import type { CacheStats, GlobStats, ReadFileResult, ReadOutcome } from "./cache.ts";
+import type { ReadbroReadOptions } from "./read-options.ts";
 import type { StatsFormat } from "./stats-query.ts";
 import { formatSinceLabel } from "./stats-query.ts";
+import { applyLineWindow, effectiveMaxLines, lineWindowNotice } from "./truncate.ts";
 
 export const formatTokenCount = (tokens: number): string => {
   const sign = tokens < 0 ? "-" : "";
@@ -288,19 +290,60 @@ const formatRecentReads = (stats: CacheStats): string[] => {
 
 export const formatStatsJson = (stats: CacheStats): string => JSON.stringify(stats, null, 2);
 
+const readAdvisories = (result: ReadFileResult): string[] => {
+  const lines: string[] = [];
+  if (result.layer === "L3" || result.representation === "raw") {
+    lines.push(
+      "[readbro: L3/raw returns full source — use L1 (default) for behaviour IR unless you need exact text]",
+    );
+  }
+  if (result.representation === "raw-fallback" && result.layer !== "L3") {
+    lines.push(
+      "[readbro: composto IR unavailable — returned raw source. Ensure `composto` is on PATH; prefer L1 after fixing]",
+    );
+  }
+  return lines;
+};
+
 export const formatReadResult = (
   result: ReadFileResult,
   stats: Pick<CacheStats, "savedTokens">,
-  showFooter = true,
+  options: ReadbroReadOptions & { readonly showFooter?: boolean } = {},
 ): string => {
-  let text = "";
+  const showFooter = options.showFooter ?? true;
+  const advisories = readAdvisories(result);
+  const parts: string[] = [];
+
   if (result.cached && result.linesChanged === 0) {
-    text = result.content;
-  } else if (result.cached && result.diff) {
-    text = `[readbro: ${result.linesChanged} IR lines changed, layer ${result.layer}, ${result.representation}]\n${result.diff}`;
+    parts.push(result.content);
   } else {
-    text = `[readbro: layer ${result.layer}, ${result.representation}]\n${result.content}`;
+    const maxLines = effectiveMaxLines({
+      layer: result.layer,
+      representation: result.representation,
+      maxLines: options.maxLines,
+    });
+    const window = applyLineWindow(
+      result.cached && result.diff ? result.diff : result.content,
+      { offset: options.offset, maxLines },
+    );
+    const windowNotice = lineWindowNotice(window);
+
+    if (result.cached && result.diff) {
+      parts.push(
+        `[readbro: ${result.linesChanged} IR lines changed, layer ${result.layer}, ${result.representation}]`,
+      );
+    } else {
+      parts.push(`[readbro: layer ${result.layer}, ${result.representation}]`);
+    }
+
+    if (windowNotice) {
+      parts.push(windowNotice);
+    }
+    parts.push(...advisories);
+    parts.push(window.text);
   }
+
+  let text = parts.join("\n");
   if (showFooter && result.cached && stats.savedTokens > 0) {
     text += `\n\n[~${stats.savedTokens.toLocaleString()} tokens saved in repo cache]`;
   }

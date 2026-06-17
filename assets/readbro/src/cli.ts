@@ -18,6 +18,16 @@ const force = Options.boolean("force").pipe(
   Options.withDefault(false),
 );
 
+const maxLines = Options.integer("max-lines").pipe(
+  Options.withDescription("Limit output lines (L3/raw default cap; -1 = unlimited)"),
+  Options.optional,
+);
+
+const offset = Options.integer("offset").pipe(
+  Options.withDescription("Start output at this 0-based line"),
+  Options.optional,
+);
+
 const scope = Options.choice("scope", ["repo", "session"]).pipe(
   Options.withDescription("Stats scope: repo lifetime or current session"),
   Options.withDefault("repo"),
@@ -121,12 +131,19 @@ const read = Command.make(
     path: Args.text({ name: "path" }),
     layer,
     force,
+    maxLines,
+    offset,
   },
-  ({ path, layer: lyr, force: f }) =>
+  ({ path, layer: lyr, force: f, maxLines: ml, offset: off }) =>
     Effect.gen(function* () {
       const rb = yield* Readbro;
       yield* Console.log(
-        yield* rb.readFile(path, { layer: Option.getOrUndefined(lyr), force: f }),
+        yield* rb.readFile(path, {
+          layer: Option.getOrUndefined(lyr),
+          force: f,
+          maxLines: Option.getOrUndefined(ml),
+          offset: Option.getOrUndefined(off),
+        }),
       );
     }),
 ).pipe(Command.withDescription("Read one file with IR cache"));
@@ -136,11 +153,19 @@ const reads = Command.make(
   {
     paths: Args.text({ name: "paths" }).pipe(Args.repeated),
     layer,
+    maxLines,
+    offset,
   },
-  ({ paths, layer: lyr }) =>
+  ({ paths, layer: lyr, maxLines: ml, offset: off }) =>
     Effect.gen(function* () {
       const rb = yield* Readbro;
-      yield* Console.log(yield* rb.readFiles(paths, { layer: Option.getOrUndefined(lyr) }));
+      yield* Console.log(
+        yield* rb.readFiles(paths, {
+          layer: Option.getOrUndefined(lyr),
+          maxLines: Option.getOrUndefined(ml),
+          offset: Option.getOrUndefined(off),
+        }),
+      );
     }),
 ).pipe(Command.withDescription("Batch read files"));
 

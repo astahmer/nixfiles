@@ -17,17 +17,19 @@ Always on. **Every reply starts with `OUGABOUGA`** then terse caveman talk — *
 | `read_file` / `read_files` | All file reads — IR + repo cache |
 | `pack_context` | Multi-file trace — `budget: 4000`, optional `target` |
 | `blast_radius` | Before editing non-trivial source (call explicitly) |
-| `session_status` / `session_clear` | Cache stats / reset |
+| `session_status` | Repo health snapshot — totals, efficiency (`verbose`/`json` for more) |
+| `session_gain` | Where savings come from — top files, glob drill-down |
+| `session_clear` | Reset repo cache |
 
 Full guide: see skill **readbro**.
 
 ## LOD zoom (`layer` on read_file)
 
 1. **L0** — file map
-2. **L1** — behaviour (**default**)
-3. **L3** — exact raw source
+2. **L1** — behaviour (**default** — use this)
+3. **L3** — full raw source (**avoid** — 2500-line file ≈ 150K tokens; auto-capped to 200 lines)
 
-Re-read unchanged file → short cached notice. File changed on disk (including manual edits) → IR diff on next read.
+Do **not** read L1 then L2 then L3 on the same file. Pick one layer. Re-read unchanged file → short cache notice.
 
 <!-- rtk-instructions v2 -->
 # RTK — Token-Optimized CLI

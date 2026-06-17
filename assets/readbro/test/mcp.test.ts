@@ -11,6 +11,7 @@ const EXPECTED_TOOLS = [
   "pack_context",
   "blast_radius",
   "session_status",
+  "session_gain",
   "session_clear",
 ] as const;
 
