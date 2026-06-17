@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { computeDiff } from "./differ.ts";
 import { estimateTokens, generatePayload, type IrLayer, type Representation } from "./ir.ts";
 import { findRepoRoot } from "./repo-root.ts";
+import { aggregateEvents, type ReadEventRow } from "./stats-aggregate.ts";
 import type { StatsQuery, StatsScope } from "./stats-query.ts";
+import { usesPathGrouping } from "./stats-query.ts";
 
 const REPO_SCOPE = "repo";
 const SCHEMA_VERSION = 3;
@@ -133,9 +135,22 @@ export type OutcomeStats = {
   readonly durationMs: number;
 };
 
+export type GlobStats = {
+  readonly pattern: string;
+  readonly reads: number;
+  readonly rawTokens: number;
+  readonly billedTokens: number;
+  readonly savedTokens: number;
+  readonly durationMs: number;
+  readonly fileCount: number;
+};
+
 export type CacheStats = {
   readonly scope: StatsScope;
   readonly sinceMs?: number;
+  readonly glob?: string;
+  readonly groupGlobs?: ReadonlyArray<string>;
+  readonly byDir?: number;
   readonly sessionId: string;
   readonly filesTracked: number;
   readonly totalReads: number;
@@ -148,13 +163,14 @@ export type CacheStats = {
   readonly byLayer: ReadonlyArray<LayerStats>;
   readonly byRepresentation: ReadonlyArray<RepresentationStats>;
   readonly byOutcome: ReadonlyArray<OutcomeStats>;
+  readonly byGlob: ReadonlyArray<GlobStats>;
   readonly byFile: ReadonlyArray<FileStats>;
   readonly recent: ReadonlyArray<RecentRead>;
 };
 
 type DbConn = { readonly db: DatabaseSync; readonly dbPath: string };
 
-type EventFilter = { readonly sql: string; readonly params: ReadonlyArray<unknown> };
+type EventFilter = { readonly sql: string; readonly params: ReadonlyArray<SQLInputValue> };
 
 export class IrCacheStore {
   readonly #fixedDbPath: string | null;
@@ -223,7 +239,7 @@ export class IrCacheStore {
 
   #eventFilter(query: StatsQuery): EventFilter {
     const conditions: string[] = [];
-    const params: unknown[] = [];
+    const params: SQLInputValue[] = [];
     const scope = query.scope ?? "repo";
 
     if (scope === "session") {
@@ -429,18 +445,6 @@ export class IrCacheStore {
     this.#connectionFor(anchor);
     const filter = this.#eventFilter({ ...query, scope });
 
-    let filesTracked = 0;
-    let totalReads = 0;
-    let rawTokens = 0;
-    let billedTokens = 0;
-    let savedTokens = 0;
-    let totalDurationMs = 0;
-    const layerMap = new Map<IrLayer, LayerStats>();
-    const representationMap = new Map<Representation, RepresentationStats>();
-    const outcomeMap = new Map<ReadOutcome, OutcomeStats>();
-    const fileMap = new Map<string, FileStats & { billedTokens: number }>();
-    const recent: RecentRead[] = [];
-
     const displayPath = (filePath: string): string => {
       try {
         const root = findRepoRoot(anchor);
@@ -452,6 +456,41 @@ export class IrCacheStore {
       }
       return filePath;
     };
+
+    if (usesPathGrouping(query)) {
+      const events: ReadEventRow[] = [];
+      for (const { db } of this.#connections.values()) {
+        const rows = db
+          .prepare(
+            `SELECT
+               read_at, session_id, file_path, layer, repr,
+               raw_tokens, billed_tokens, saved_tokens, outcome, duration_ms
+             FROM read_events
+             ${filter.sql}
+             ORDER BY read_at DESC`,
+          )
+          .all(...filter.params) as ReadEventRow[];
+        events.push(...rows);
+      }
+      return aggregateEvents({
+        events,
+        query,
+        sessionId: this.#sessionId,
+        displayPath,
+      });
+    }
+
+    let filesTracked = 0;
+    let totalReads = 0;
+    let rawTokens = 0;
+    let billedTokens = 0;
+    let savedTokens = 0;
+    let totalDurationMs = 0;
+    const layerMap = new Map<IrLayer, LayerStats>();
+    const representationMap = new Map<Representation, RepresentationStats>();
+    const outcomeMap = new Map<ReadOutcome, OutcomeStats>();
+    const fileMap = new Map<string, FileStats & { billedTokens: number }>();
+    const recent: RecentRead[] = [];
 
     for (const { db } of this.#connections.values()) {
       const useEventFiles =
@@ -731,6 +770,9 @@ export class IrCacheStore {
     return {
       scope,
       sinceMs: query.sinceMs,
+      glob: query.glob,
+      groupGlobs: query.groupGlobs,
+      byDir: query.byDir,
       sessionId: this.#sessionId,
       filesTracked,
       totalReads,
@@ -743,6 +785,7 @@ export class IrCacheStore {
       byLayer,
       byRepresentation,
       byOutcome,
+      byGlob: [],
       byFile,
       recent: recent.sort((a, b) => b.readAt - a.readAt).slice(0, 10),
     };

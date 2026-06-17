@@ -79,4 +79,44 @@ test("since filter limits stats to recent reads", () => {
   assert.equal(none.totalReads, 0);
 });
 
+test("glob filter and group-glob ranking", () => {
+  const repo = join(tmp, "repo-glob");
+  mkdirSync(repo, { recursive: true });
+  mkdirSync(join(repo, ".git"));
+  mkdirSync(join(repo, "assets", "readbro", "src"), { recursive: true });
+  mkdirSync(join(repo, "modules"), { recursive: true });
+
+  const readbroFile = join(repo, "assets", "readbro", "src", "app.ts");
+  const moduleFile = join(repo, "modules", "shell.nix");
+  const payload = `${"export const x = 1;\n".repeat(40)}`;
+  writeFileSync(readbroFile, payload);
+  writeFileSync(moduleFile, payload);
+
+  const db = join(tmp, "glob.db");
+  const cache = new IrCacheStore(db);
+  cache.readFile(readbroFile, { layer: "L1" });
+  cache.readFile(readbroFile, { layer: "L1" });
+  cache.readFile(moduleFile, { layer: "L1" });
+
+  const filtered = cache.getStats({
+    anchorPath: repo,
+    glob: "assets/**/*.ts",
+  });
+  assert.equal(filtered.totalReads, 2);
+  assert.equal(filtered.byGlob.length, 1);
+  assert.equal(filtered.byGlob[0]?.pattern, "assets/**/*.ts");
+
+  const grouped = cache.getStats({
+    anchorPath: repo,
+    groupGlobs: ["assets/**", "modules/**"],
+  });
+  assert.equal(grouped.byGlob.length, 2);
+  assert.ok(grouped.byGlob.some((row) => row.pattern === "assets/**"));
+  assert.ok(grouped.byGlob.some((row) => row.pattern === "modules/**"));
+
+  const byDir = cache.getStats({ anchorPath: repo, byDir: 2 });
+  assert.ok(byDir.byGlob.some((row) => row.pattern === "assets/readbro/**"));
+  assert.ok(byDir.byGlob.some((row) => row.pattern === "modules/shell.nix"));
+});
+
 rmSync(tmp, { recursive: true, force: true });

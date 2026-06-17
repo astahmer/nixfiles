@@ -4,7 +4,15 @@ export type StatsQuery = {
   readonly anchorPath?: string;
   readonly scope?: StatsScope;
   readonly sinceMs?: number;
+  readonly glob?: string;
+  readonly groupGlobs?: ReadonlyArray<string>;
+  readonly byDir?: number;
 };
+
+export const usesPathGrouping = (query: StatsQuery): boolean =>
+  query.glob !== undefined ||
+  (query.groupGlobs !== undefined && query.groupGlobs.length > 0) ||
+  query.byDir !== undefined;
 
 const SINCE_PATTERN = /^(\d+)([dhm])$/;
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { McpClient, spawnReadbroMcp } from "./mcp-client.ts";
+import { McpClient, asCallToolResult, asInitializeResult, asToolsListResult, spawnReadbroMcp } from "./mcp-client.ts";
 
 const EXPECTED_TOOLS = [
   "read_file",
@@ -19,9 +19,10 @@ test("MCP initialize returns readbro server info", async () => {
   const client = new McpClient(child);
 
   const response = await client.initialize();
-  assert.equal(response.result?.serverInfo?.name, "readbro");
-  assert.equal(response.result?.serverInfo?.version, "0.3.0");
-  assert.equal(response.result?.capabilities?.tools?.listChanged, true);
+  const result = asInitializeResult(response);
+  assert.equal(result.serverInfo?.name, "readbro");
+  assert.equal(result.serverInfo?.version, "0.3.0");
+  assert.equal(result.capabilities?.tools?.listChanged, true);
 
   client.close();
 });
@@ -32,8 +33,7 @@ test("MCP tools/list exposes all readbro tools", async () => {
   await client.initialize();
 
   const response = await client.request("tools/list");
-  const tools = response.result?.tools as Array<{ name: string; inputSchema: { type?: string } }>;
-  assert.ok(Array.isArray(tools));
+  const tools = asToolsListResult(response).tools ?? [];
 
   const names = tools.map((tool) => tool.name).sort();
   assert.deepEqual(names, [...EXPECTED_TOOLS].sort());
@@ -59,8 +59,9 @@ test("MCP tools/call session_status returns cache stats", async () => {
     arguments: {},
   });
 
-  const text = response.result?.content?.[0]?.text as string;
-  assert.equal(response.result?.isError, false);
+  const result = asCallToolResult(response);
+  const text = result.content?.[0]?.text ?? "";
+  assert.equal(result.isError, false);
   assert.match(text, /readbro Token Savings/);
   assert.match(text, /Session Scope/);
   assert.match(text, /Raw tokens/);
@@ -86,8 +87,9 @@ test("MCP tools/call read_file returns IR for a temp file", async () => {
     arguments: { path: file, layer: "L1" },
   });
 
-  const text = response.result?.content?.[0]?.text as string;
-  assert.equal(response.result?.isError, false);
+  const result = asCallToolResult(response);
+  const text = result.content?.[0]?.text ?? "";
+  assert.equal(result.isError, false);
   assert.ok(text.length > 0);
 
   client.close();

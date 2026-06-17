@@ -14,6 +14,34 @@ export type JsonRpcMessage = {
   error?: { code: number; message: string };
 };
 
+export type McpInitializeResult = {
+  readonly serverInfo?: { readonly name?: string; readonly version?: string };
+  readonly capabilities?: { readonly tools?: { readonly listChanged?: boolean } };
+};
+
+export type McpToolDescriptor = {
+  readonly name: string;
+  readonly inputSchema: { readonly type?: string };
+};
+
+export type McpToolsListResult = {
+  readonly tools?: ReadonlyArray<McpToolDescriptor>;
+};
+
+export type McpCallToolResult = {
+  readonly content?: ReadonlyArray<{ readonly type: string; readonly text: string }>;
+  readonly isError?: boolean;
+};
+
+export const asInitializeResult = (message: JsonRpcMessage): McpInitializeResult =>
+  (message.result ?? {}) as McpInitializeResult;
+
+export const asToolsListResult = (message: JsonRpcMessage): McpToolsListResult =>
+  (message.result ?? {}) as McpToolsListResult;
+
+export const asCallToolResult = (message: JsonRpcMessage): McpCallToolResult =>
+  (message.result ?? {}) as McpCallToolResult;
+
 export const spawnReadbroMcp = (): ChildProcessWithoutNullStreams =>
   spawn(
     "node",

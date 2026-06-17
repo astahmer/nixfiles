@@ -81,7 +81,13 @@ const outcomeLabel = (outcome: ReadOutcome): string => {
 const statsTitle = (stats: CacheStats): string => {
   const scope = stats.scope === "session" ? "Session Scope" : "Repo Scope";
   const since = stats.sinceMs ? `, last ${formatSinceLabel(stats.sinceMs)}` : "";
-  return `readbro Token Savings (${scope}${since})`;
+  const glob = stats.glob ? `, glob ${stats.glob}` : "";
+  const groups =
+    stats.groupGlobs && stats.groupGlobs.length > 0
+      ? `, groups ${stats.groupGlobs.join(", ")}`
+      : "";
+  const byDir = stats.byDir !== undefined ? `, by-dir ${stats.byDir}` : "";
+  return `readbro Token Savings (${scope}${since}${glob}${groups}${byDir})`;
 };
 
 const formatSummary = (stats: CacheStats): string[] => {
@@ -180,6 +186,33 @@ const formatSummary = (stats: CacheStats): string[] => {
           row.savedTokens,
           maxOutcomeSaved,
         )}`,
+      );
+    });
+    lines.push("─".repeat(79), "");
+  }
+
+  if (stats.byGlob.length > 0) {
+    lines.push(
+      "By Glob",
+      "─".repeat(79),
+      `  #  Pattern                       Files  Count  Raw       Saved     Time      Avg%    Impact    `,
+      "─".repeat(79),
+    );
+
+    const maxGlobSaved = Math.max(...stats.byGlob.map((row) => row.savedTokens), 0);
+    stats.byGlob.forEach((row, index) => {
+      const avgPct = row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0;
+      lines.push(
+        ` ${String(index + 1).padStart(2)}.  ${pad(truncatePath(row.pattern, 28), 28)}  ${pad(
+          row.fileCount.toLocaleString(),
+          5,
+        )}  ${pad(row.reads.toLocaleString(), 5)}  ${pad(
+          formatTokenCount(row.rawTokens),
+          8,
+        )}  ${pad(formatTokenCount(row.savedTokens), 8)}  ${pad(
+          formatDuration(row.durationMs),
+          8,
+        )}  ${pad(formatPct(avgPct), 6)}  ${formatImpact(row.savedTokens, maxGlobSaved)}`,
       );
     });
     lines.push("─".repeat(79), "");

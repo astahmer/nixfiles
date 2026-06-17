@@ -28,15 +28,43 @@ const since = Options.text("since").pipe(
   Options.optional,
 );
 
+const glob = Options.text("glob").pipe(
+  Options.withDescription("Only include files matching glob (e.g. assets/readbro/**/*.ts)"),
+  Options.optional,
+);
+
+const groupGlob = Options.text("group-glob").pipe(
+  Options.withDescription("Group and rank stats by glob pattern (repeatable)"),
+  Options.repeated,
+);
+
+const byDir = Options.integer("by-dir").pipe(
+  Options.withDescription("Group stats by path prefix depth (e.g. 2 → assets/readbro/**)"),
+  Options.optional,
+);
+
 const statsQueryFromCli = (input: {
   scope: "repo" | "session";
   since: Option.Option<string>;
+  glob: Option.Option<string>;
+  groupGlob: ReadonlyArray<string>;
+  byDir: Option.Option<number>;
 }): StatsQuery => {
   const query: StatsQuery = { scope: input.scope };
+  let next = query;
   if (Option.isSome(input.since)) {
-    return { ...query, sinceMs: parseSince(input.since.value) };
+    next = { ...next, sinceMs: parseSince(input.since.value) };
   }
-  return query;
+  if (Option.isSome(input.glob)) {
+    next = { ...next, glob: input.glob.value };
+  }
+  if (input.groupGlob.length > 0) {
+    next = { ...next, groupGlobs: input.groupGlob };
+  }
+  if (Option.isSome(input.byDir)) {
+    next = { ...next, byDir: input.byDir.value };
+  }
+  return next;
 };
 
 const read = Command.make(
@@ -109,11 +137,16 @@ const stats = Command.make(
   {
     scope,
     since,
+    glob,
+    groupGlob,
+    byDir,
   },
-  ({ scope: sc, since: sn }) =>
+  ({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd }) =>
     Effect.gen(function* () {
       const rb = yield* Readbro;
-      yield* Console.log(yield* rb.stats(statsQueryFromCli({ scope: sc, since: sn })));
+      yield* Console.log(
+        yield* rb.stats(statsQueryFromCli({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd })),
+      );
     }),
 ).pipe(Command.withDescription("Repo cache stats"));
 
@@ -122,11 +155,16 @@ const gain = Command.make(
   {
     scope,
     since,
+    glob,
+    groupGlob,
+    byDir,
   },
-  ({ scope: sc, since: sn }) =>
+  ({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd }) =>
     Effect.gen(function* () {
       const rb = yield* Readbro;
-      yield* Console.log(yield* rb.gain(statsQueryFromCli({ scope: sc, since: sn })));
+      yield* Console.log(
+        yield* rb.gain(statsQueryFromCli({ scope: sc, since: sn, glob: gl, groupGlob: gg, byDir: bd })),
+      );
     }),
 ).pipe(Command.withDescription("Token savings summary"));
 
