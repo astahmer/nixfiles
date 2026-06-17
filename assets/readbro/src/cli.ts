@@ -5,6 +5,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { McpLayer } from "./mcp.ts";
 import { Readbro } from "./readbro.ts";
+import { parseSince } from "./stats-query.ts";
+import type { StatsQuery } from "./stats-query.ts";
 
 const layer = Options.choice("layer", ["L0", "L1", "L2", "L3"]).pipe(
   Options.withDescription("IR layer (default L1)"),
@@ -15,6 +17,27 @@ const force = Options.boolean("force").pipe(
   Options.withDescription("Bypass cache"),
   Options.withDefault(false),
 );
+
+const scope = Options.choice("scope", ["repo", "session"]).pipe(
+  Options.withDescription("Stats scope: repo lifetime or current session"),
+  Options.withDefault("repo"),
+);
+
+const since = Options.text("since").pipe(
+  Options.withDescription("Only include reads since duration (e.g. 7d, 24h, 30m)"),
+  Options.optional,
+);
+
+const statsQueryFromCli = (input: {
+  scope: "repo" | "session";
+  since: Option.Option<string>;
+}): StatsQuery => {
+  const query: StatsQuery = { scope: input.scope };
+  if (Option.isSome(input.since)) {
+    return { ...query, sinceMs: parseSince(input.since.value) };
+  }
+  return query;
+};
 
 const read = Command.make(
   "read",
@@ -81,18 +104,30 @@ const blast = Command.make(
     }),
 ).pipe(Command.withDescription("Blast radius before editing"));
 
-const stats = Command.make("stats", {}, () =>
-  Effect.gen(function* () {
-    const rb = yield* Readbro;
-    yield* Console.log(yield* rb.stats());
-  }),
+const stats = Command.make(
+  "stats",
+  {
+    scope,
+    since,
+  },
+  ({ scope: sc, since: sn }) =>
+    Effect.gen(function* () {
+      const rb = yield* Readbro;
+      yield* Console.log(yield* rb.stats(statsQueryFromCli({ scope: sc, since: sn })));
+    }),
 ).pipe(Command.withDescription("Repo cache stats"));
 
-const gain = Command.make("gain", {}, () =>
-  Effect.gen(function* () {
-    const rb = yield* Readbro;
-    yield* Console.log(yield* rb.gain());
-  }),
+const gain = Command.make(
+  "gain",
+  {
+    scope,
+    since,
+  },
+  ({ scope: sc, since: sn }) =>
+    Effect.gen(function* () {
+      const rb = yield* Readbro;
+      yield* Console.log(yield* rb.gain(statsQueryFromCli({ scope: sc, since: sn })));
+    }),
 ).pipe(Command.withDescription("Token savings summary"));
 
 const clear = Command.make(

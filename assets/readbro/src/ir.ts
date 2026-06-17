@@ -29,20 +29,29 @@ export type IrPayload = {
   readonly payload: string;
   readonly sourceHash: string;
   readonly representation: Representation;
+  readonly durationMs: number;
 };
 
 export const generatePayload = (absPath: string, layer: IrLayer): IrPayload => {
+  const started = performance.now();
   const source = readFileSync(absPath, "utf-8");
   const sourceHash = contentHash(source);
   const dot = absPath.lastIndexOf(".");
   const ext = dot === -1 ? "" : absPath.slice(dot).toLowerCase();
 
+  const finish = (payload: string, representation: Representation): IrPayload => ({
+    payload,
+    sourceHash,
+    representation,
+    durationMs: Math.max(0, Math.round(performance.now() - started)),
+  });
+
   if (layer === "L3") {
-    return { payload: source, sourceHash, representation: "raw" };
+    return finish(source, "raw");
   }
 
   if (!CODE_EXT.has(ext)) {
-    return { payload: source, sourceHash, representation: "raw-fallback" };
+    return finish(source, "raw-fallback");
   }
 
   const repoRoot = findRepoRoot(absPath);
@@ -55,8 +64,8 @@ export const generatePayload = (absPath: string, layer: IrLayer): IrPayload => {
 
   const ir = result.stdout?.trim() ?? "";
   if (result.status === 0 && ir.length > 0) {
-    return { payload: ir, sourceHash, representation: "ir" };
+    return finish(ir, "ir");
   }
 
-  return { payload: source, sourceHash, representation: "raw-fallback" };
+  return finish(source, "raw-fallback");
 };

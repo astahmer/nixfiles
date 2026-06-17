@@ -61,7 +61,7 @@ test("getStats reads repo db without a prior read in this process", () => {
   writer.readFile(file, { layer: "L1" });
 
   const reader = new IrCacheStore(db);
-  const stats = reader.getStats(repo);
+  const stats = reader.getStats({ anchorPath: repo });
   assert.ok(stats.filesTracked >= 1);
   assert.ok(stats.totalReads >= 2);
   assert.ok(stats.rawTokens > 0);

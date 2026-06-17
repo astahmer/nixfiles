@@ -9,6 +9,7 @@ import type { ReadbroError } from "./errors.ts";
 import { toReadbroError } from "./errors.ts";
 import { formatGain, formatReadResult, formatStats } from "./format.ts";
 import type { IrLayer } from "./ir.ts";
+import type { StatsQuery } from "./stats-query.ts";
 
 export class Readbro extends Context.Tag("@readbro/Readbro")<
   Readbro,
@@ -30,8 +31,8 @@ export class Readbro extends Context.Tag("@readbro/Readbro")<
       file: string,
       intent?: CompostoIntent,
     ) => Effect.Effect<string, ReadbroError>;
-    readonly stats: () => Effect.Effect<string>;
-    readonly gain: () => Effect.Effect<string>;
+    readonly stats: (query?: StatsQuery) => Effect.Effect<string>;
+    readonly gain: (query?: StatsQuery) => Effect.Effect<string>;
     readonly clear: (path?: string) => Effect.Effect<string>;
   }
 >() {}
@@ -45,16 +46,16 @@ const make = Effect.sync(() => {
   ) =>
     Effect.sync(() => {
       const result = cache.readFile(path, options);
-      return formatReadResult(result, cache.getStats());
+      return formatReadResult(result, cache.getStats({ scope: "repo" }));
     });
 
   const readFiles = (paths: Array<string>, options?: { readonly layer?: IrLayer }) =>
     Effect.sync(() => {
       const parts = paths.map((path) => {
         const result = cache.readFile(path, options);
-        return `=== ${path} ===\n${formatReadResult(result, { repoTokensSaved: 0 }, false)}`;
+        return `=== ${path} ===\n${formatReadResult(result, { savedTokens: 0 }, false)}`;
       });
-      const stats = cache.getStats();
+      const stats = cache.getStats({ scope: "repo" });
       let footer = "";
       if (stats.savedTokens > 0) {
         footer = `\n\n[~${stats.savedTokens.toLocaleString()} tokens saved in repo cache]`;
@@ -88,9 +89,9 @@ const make = Effect.sync(() => {
       catch: toReadbroError,
     });
 
-  const stats = () => Effect.sync(() => formatStats(cache.getStats()));
+  const stats = (query?: StatsQuery) => Effect.sync(() => formatStats(cache.getStats(query)));
 
-  const gain = () => Effect.sync(() => formatGain(cache.getStats()));
+  const gain = (query?: StatsQuery) => Effect.sync(() => formatGain(cache.getStats(query)));
 
   const clear = (path?: string) =>
     Effect.sync(() => {

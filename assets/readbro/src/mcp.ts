@@ -131,9 +131,9 @@ export const McpLayer = Layer.effectDiscard(
 
     yield* registerTool(
       "session_status",
-      "readbro repo cache stats.",
+      "readbro session cache stats.",
       null,
-      () => rb.stats(),
+      () => rb.stats({ scope: "session" }),
     );
 
     yield* registerTool(

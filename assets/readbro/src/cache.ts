@@ -1,12 +1,14 @@
+import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { computeDiff } from "./differ.ts";
 import { estimateTokens, generatePayload, type IrLayer, type Representation } from "./ir.ts";
 import { findRepoRoot } from "./repo-root.ts";
+import type { StatsQuery, StatsScope } from "./stats-query.ts";
 
 const REPO_SCOPE = "repo";
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const CREATE_SCHEMA = `
 CREATE TABLE ir_versions (
@@ -31,12 +33,15 @@ CREATE TABLE session_reads (
 CREATE TABLE read_events (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   read_at       INTEGER NOT NULL,
+  session_id    TEXT NOT NULL,
   file_path     TEXT NOT NULL,
   layer         TEXT NOT NULL,
+  repr          TEXT NOT NULL,
   raw_tokens    INTEGER NOT NULL,
   billed_tokens INTEGER NOT NULL,
   saved_tokens  INTEGER NOT NULL,
-  outcome       TEXT NOT NULL
+  outcome       TEXT NOT NULL,
+  duration_ms   INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE schema_meta (
@@ -58,6 +63,8 @@ export const repoDbPath = (absPath: string): string => {
   return join(dir, "cache.db");
 };
 
+const defaultSessionId = (): string => process.env.READBRO_SESSION_ID ?? randomUUID().slice(0, 8);
+
 export type ReadFileOptions = {
   readonly layer?: IrLayer;
   readonly force?: boolean;
@@ -77,6 +84,7 @@ export type ReadFileResult = {
   readonly billedTokens: number;
   readonly savedTokens: number;
   readonly outcome: ReadOutcome;
+  readonly durationMs: number;
 };
 
 export type LayerStats = {
@@ -85,6 +93,16 @@ export type LayerStats = {
   readonly rawTokens: number;
   readonly billedTokens: number;
   readonly savedTokens: number;
+  readonly durationMs: number;
+};
+
+export type RepresentationStats = {
+  readonly representation: Representation;
+  readonly reads: number;
+  readonly rawTokens: number;
+  readonly billedTokens: number;
+  readonly savedTokens: number;
+  readonly durationMs: number;
 };
 
 export type FileStats = {
@@ -100,9 +118,11 @@ export type RecentRead = {
   readonly readAt: number;
   readonly filePath: string;
   readonly layer: IrLayer;
+  readonly representation: Representation;
   readonly rawTokens: number;
   readonly savedTokens: number;
   readonly outcome: ReadOutcome;
+  readonly durationMs: number;
 };
 
 export type OutcomeStats = {
@@ -110,16 +130,23 @@ export type OutcomeStats = {
   readonly reads: number;
   readonly rawTokens: number;
   readonly savedTokens: number;
+  readonly durationMs: number;
 };
 
 export type CacheStats = {
+  readonly scope: StatsScope;
+  readonly sinceMs?: number;
+  readonly sessionId: string;
   readonly filesTracked: number;
   readonly totalReads: number;
   readonly rawTokens: number;
   readonly billedTokens: number;
   readonly savedTokens: number;
   readonly savedPct: number;
+  readonly totalDurationMs: number;
+  readonly avgDurationMs: number;
   readonly byLayer: ReadonlyArray<LayerStats>;
+  readonly byRepresentation: ReadonlyArray<RepresentationStats>;
   readonly byOutcome: ReadonlyArray<OutcomeStats>;
   readonly byFile: ReadonlyArray<FileStats>;
   readonly recent: ReadonlyArray<RecentRead>;
@@ -127,17 +154,26 @@ export type CacheStats = {
 
 type DbConn = { readonly db: DatabaseSync; readonly dbPath: string };
 
+type EventFilter = { readonly sql: string; readonly params: ReadonlyArray<unknown> };
+
 export class IrCacheStore {
   readonly #fixedDbPath: string | null;
+  readonly #sessionId: string;
   readonly #connections = new Map<string, DbConn>();
 
-  constructor(dbPathOrOptions: string | { readonly dbPath?: string } = {}) {
+  constructor(
+    dbPathOrOptions: string | { readonly dbPath?: string; readonly sessionId?: string } = {},
+  ) {
     if (typeof dbPathOrOptions === "string") {
       this.#fixedDbPath = dbPathOrOptions;
+      this.#sessionId = defaultSessionId();
     } else {
       this.#fixedDbPath = dbPathOrOptions.dbPath ?? null;
+      this.#sessionId = dbPathOrOptions.sessionId ?? defaultSessionId();
     }
   }
+
+  readonly sessionId = (): string => this.#sessionId;
 
   #ensureSchema(db: DatabaseSync): void {
     const metaTable = db
@@ -185,20 +221,55 @@ export class IrCacheStore {
     return conn;
   }
 
+  #eventFilter(query: StatsQuery): EventFilter {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    const scope = query.scope ?? "repo";
+
+    if (scope === "session") {
+      conditions.push("session_id = ?");
+      params.push(this.#sessionId);
+    }
+    if (query.sinceMs) {
+      conditions.push("read_at >= ?");
+      params.push(Date.now() - query.sinceMs);
+    }
+
+    return {
+      sql: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "",
+      params,
+    };
+  }
+
   #logRead(
     db: DatabaseSync,
     filePath: string,
     layer: IrLayer,
+    representation: Representation,
     rawTokens: number,
     billedTokens: number,
     outcome: ReadOutcome,
+    durationMs: number,
     readAt: number,
   ): void {
     const savedTokens = rawTokens - billedTokens;
     db.prepare(
-      `INSERT INTO read_events (read_at, file_path, layer, raw_tokens, billed_tokens, saved_tokens, outcome)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run(readAt, filePath, layer, rawTokens, billedTokens, savedTokens, outcome);
+      `INSERT INTO read_events (
+         read_at, session_id, file_path, layer, repr,
+         raw_tokens, billed_tokens, saved_tokens, outcome, duration_ms
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      readAt,
+      this.#sessionId,
+      filePath,
+      layer,
+      representation,
+      rawTokens,
+      billedTokens,
+      savedTokens,
+      outcome,
+      durationMs,
+    );
   }
 
   readFile(filePath: string, options: ReadFileOptions = {}): ReadFileResult {
@@ -208,24 +279,38 @@ export class IrCacheStore {
     const now = Date.now();
     const { db } = this.#connectionFor(absPath);
 
-    const { payload, sourceHash, representation } = generatePayload(absPath, layer);
+    const { payload, sourceHash, representation, durationMs } = generatePayload(absPath, layer);
     const payloadTokens = estimateTokens(payload);
 
     const finish = (
-      result: Omit<ReadFileResult, "totalTokens" | "billedTokens" | "savedTokens" | "outcome"> & {
+      result: Omit<
+        ReadFileResult,
+        "totalTokens" | "billedTokens" | "savedTokens" | "outcome" | "durationMs"
+      > & {
         readonly billedTokens: number;
         readonly outcome: ReadOutcome;
       },
     ): ReadFileResult => {
       const billedTokens = result.billedTokens;
       const savedTokens = payloadTokens - billedTokens;
-      this.#logRead(db, absPath, layer, payloadTokens, billedTokens, result.outcome, now);
+      this.#logRead(
+        db,
+        absPath,
+        layer,
+        representation,
+        payloadTokens,
+        billedTokens,
+        result.outcome,
+        durationMs,
+        now,
+      );
       return {
         ...result,
         totalTokens: payloadTokens,
         billedTokens,
         savedTokens,
         outcome: result.outcome,
+        durationMs,
       };
     };
 
@@ -338,16 +423,20 @@ export class IrCacheStore {
     ).run(REPO_SCOPE, filePath, layer, sourceHash, now);
   }
 
-  getStats(anchorPath: string = process.cwd()): CacheStats {
-    const anchor = resolve(anchorPath);
+  getStats(query: StatsQuery = {}): CacheStats {
+    const anchor = resolve(query.anchorPath ?? process.cwd());
+    const scope = query.scope ?? "repo";
     this.#connectionFor(anchor);
+    const filter = this.#eventFilter({ ...query, scope });
 
     let filesTracked = 0;
     let totalReads = 0;
     let rawTokens = 0;
     let billedTokens = 0;
     let savedTokens = 0;
+    let totalDurationMs = 0;
     const layerMap = new Map<IrLayer, LayerStats>();
+    const representationMap = new Map<Representation, RepresentationStats>();
     const outcomeMap = new Map<ReadOutcome, OutcomeStats>();
     const fileMap = new Map<string, FileStats & { billedTokens: number }>();
     const recent: RecentRead[] = [];
@@ -365,20 +454,37 @@ export class IrCacheStore {
     };
 
     for (const { db } of this.#connections.values()) {
-      const files = db
-        .prepare("SELECT COUNT(DISTINCT file_path || char(1) || layer) as c FROM ir_versions")
-        .get() as { c: number } | undefined;
+      const useEventFiles =
+        scope === "session" || query.sinceMs !== undefined;
+      const files = useEventFiles
+        ? (db
+            .prepare(
+              `SELECT COUNT(DISTINCT file_path || char(1) || layer) as c FROM read_events ${filter.sql}`,
+            )
+            .get(...filter.params) as { c: number } | undefined)
+        : (db
+            .prepare("SELECT COUNT(DISTINCT file_path || char(1) || layer) as c FROM ir_versions")
+            .get() as { c: number } | undefined);
+
       const totals = db
         .prepare(
           `SELECT
              COUNT(*) as reads,
              COALESCE(SUM(raw_tokens), 0) as raw_tokens,
              COALESCE(SUM(billed_tokens), 0) as billed_tokens,
-             COALESCE(SUM(saved_tokens), 0) as saved_tokens
-           FROM read_events`,
+             COALESCE(SUM(saved_tokens), 0) as saved_tokens,
+             COALESCE(SUM(duration_ms), 0) as duration_ms
+           FROM read_events
+           ${filter.sql}`,
         )
-        .get() as
-        | { reads: number; raw_tokens: number; billed_tokens: number; saved_tokens: number }
+        .get(...filter.params) as
+        | {
+            reads: number;
+            raw_tokens: number;
+            billed_tokens: number;
+            saved_tokens: number;
+            duration_ms: number;
+          }
         | undefined;
 
       const outcomeRows = db
@@ -387,16 +493,19 @@ export class IrCacheStore {
              outcome,
              COUNT(*) as reads,
              COALESCE(SUM(raw_tokens), 0) as raw_tokens,
-             COALESCE(SUM(saved_tokens), 0) as saved_tokens
+             COALESCE(SUM(saved_tokens), 0) as saved_tokens,
+             COALESCE(SUM(duration_ms), 0) as duration_ms
            FROM read_events
+           ${filter.sql}
            GROUP BY outcome
            ORDER BY saved_tokens DESC`,
         )
-        .all() as Array<{
+        .all(...filter.params) as Array<{
         outcome: ReadOutcome;
         reads: number;
         raw_tokens: number;
         saved_tokens: number;
+        duration_ms: number;
       }>;
 
       const layerRows = db
@@ -406,17 +515,43 @@ export class IrCacheStore {
              COUNT(*) as reads,
              COALESCE(SUM(raw_tokens), 0) as raw_tokens,
              COALESCE(SUM(billed_tokens), 0) as billed_tokens,
-             COALESCE(SUM(saved_tokens), 0) as saved_tokens
+             COALESCE(SUM(saved_tokens), 0) as saved_tokens,
+             COALESCE(SUM(duration_ms), 0) as duration_ms
            FROM read_events
+           ${filter.sql}
            GROUP BY layer
            ORDER BY saved_tokens DESC`,
         )
-        .all() as Array<{
+        .all(...filter.params) as Array<{
         layer: IrLayer;
         reads: number;
         raw_tokens: number;
         billed_tokens: number;
         saved_tokens: number;
+        duration_ms: number;
+      }>;
+
+      const representationRows = db
+        .prepare(
+          `SELECT
+             repr,
+             COUNT(*) as reads,
+             COALESCE(SUM(raw_tokens), 0) as raw_tokens,
+             COALESCE(SUM(billed_tokens), 0) as billed_tokens,
+             COALESCE(SUM(saved_tokens), 0) as saved_tokens,
+             COALESCE(SUM(duration_ms), 0) as duration_ms
+           FROM read_events
+           ${filter.sql}
+           GROUP BY repr
+           ORDER BY saved_tokens DESC`,
+        )
+        .all(...filter.params) as Array<{
+        repr: Representation;
+        reads: number;
+        raw_tokens: number;
+        billed_tokens: number;
+        saved_tokens: number;
+        duration_ms: number;
       }>;
 
       const fileRows = db
@@ -429,11 +564,12 @@ export class IrCacheStore {
              COALESCE(SUM(saved_tokens), 0) as saved_tokens,
              COALESCE(AVG(CAST(saved_tokens AS REAL) / NULLIF(raw_tokens, 0) * 100), 0) as avg_saved_pct
            FROM read_events
+           ${filter.sql}
            GROUP BY file_path, layer
            ORDER BY saved_tokens DESC
            LIMIT 10`,
         )
-        .all() as Array<{
+        .all(...filter.params) as Array<{
         file_path: string;
         layer: IrLayer;
         reads: number;
@@ -444,18 +580,21 @@ export class IrCacheStore {
 
       const recentRows = db
         .prepare(
-          `SELECT read_at, file_path, layer, raw_tokens, saved_tokens, outcome
+          `SELECT read_at, file_path, layer, repr, raw_tokens, saved_tokens, outcome, duration_ms
            FROM read_events
+           ${filter.sql}
            ORDER BY read_at DESC
            LIMIT 10`,
         )
-        .all() as Array<{
+        .all(...filter.params) as Array<{
         read_at: number;
         file_path: string;
         layer: IrLayer;
+        repr: Representation;
         raw_tokens: number;
         saved_tokens: number;
         outcome: ReadOutcome;
+        duration_ms: number;
       }>;
 
       filesTracked += files?.c ?? 0;
@@ -463,6 +602,7 @@ export class IrCacheStore {
       rawTokens += totals?.raw_tokens ?? 0;
       billedTokens += totals?.billed_tokens ?? 0;
       savedTokens += totals?.saved_tokens ?? 0;
+      totalDurationMs += totals?.duration_ms ?? 0;
 
       for (const row of outcomeRows) {
         const existing = outcomeMap.get(row.outcome);
@@ -472,6 +612,7 @@ export class IrCacheStore {
             reads: existing.reads + row.reads,
             rawTokens: existing.rawTokens + row.raw_tokens,
             savedTokens: existing.savedTokens + row.saved_tokens,
+            durationMs: existing.durationMs + row.duration_ms,
           });
         } else {
           outcomeMap.set(row.outcome, {
@@ -479,6 +620,7 @@ export class IrCacheStore {
             reads: row.reads,
             rawTokens: row.raw_tokens,
             savedTokens: row.saved_tokens,
+            durationMs: row.duration_ms,
           });
         }
       }
@@ -492,6 +634,7 @@ export class IrCacheStore {
             rawTokens: existing.rawTokens + row.raw_tokens,
             billedTokens: existing.billedTokens + row.billed_tokens,
             savedTokens: existing.savedTokens + row.saved_tokens,
+            durationMs: existing.durationMs + row.duration_ms,
           });
         } else {
           layerMap.set(row.layer, {
@@ -500,6 +643,30 @@ export class IrCacheStore {
             rawTokens: row.raw_tokens,
             billedTokens: row.billed_tokens,
             savedTokens: row.saved_tokens,
+            durationMs: row.duration_ms,
+          });
+        }
+      }
+
+      for (const row of representationRows) {
+        const existing = representationMap.get(row.repr);
+        if (existing) {
+          representationMap.set(row.repr, {
+            representation: row.repr,
+            reads: existing.reads + row.reads,
+            rawTokens: existing.rawTokens + row.raw_tokens,
+            billedTokens: existing.billedTokens + row.billed_tokens,
+            savedTokens: existing.savedTokens + row.saved_tokens,
+            durationMs: existing.durationMs + row.duration_ms,
+          });
+        } else {
+          representationMap.set(row.repr, {
+            representation: row.repr,
+            reads: row.reads,
+            rawTokens: row.raw_tokens,
+            billedTokens: row.billed_tokens,
+            savedTokens: row.saved_tokens,
+            durationMs: row.duration_ms,
           });
         }
       }
@@ -540,29 +707,41 @@ export class IrCacheStore {
           readAt: row.read_at,
           filePath: displayPath(row.file_path),
           layer: row.layer,
+          representation: row.repr,
           rawTokens: row.raw_tokens,
           savedTokens: row.saved_tokens,
           outcome: row.outcome,
+          durationMs: row.duration_ms,
         })),
       );
     }
 
     const byLayer = [...layerMap.values()].sort((a, b) => b.savedTokens - a.savedTokens);
+    const byRepresentation = [...representationMap.values()].sort(
+      (a, b) => b.savedTokens - a.savedTokens,
+    );
     const byOutcome = [...outcomeMap.values()].sort((a, b) => b.savedTokens - a.savedTokens);
     const byFile = [...fileMap.values()]
       .sort((a, b) => b.savedTokens - a.savedTokens)
       .slice(0, 10)
       .map(({ billedTokens: _billed, ...row }) => row);
     const savedPct = rawTokens > 0 ? (savedTokens / rawTokens) * 100 : 0;
+    const avgDurationMs = totalReads > 0 ? totalDurationMs / totalReads : 0;
 
     return {
+      scope,
+      sinceMs: query.sinceMs,
+      sessionId: this.#sessionId,
       filesTracked,
       totalReads,
       rawTokens,
       billedTokens,
       savedTokens,
       savedPct,
+      totalDurationMs,
+      avgDurationMs,
       byLayer,
+      byRepresentation,
       byOutcome,
       byFile,
       recent: recent.sort((a, b) => b.readAt - a.readAt).slice(0, 10),
