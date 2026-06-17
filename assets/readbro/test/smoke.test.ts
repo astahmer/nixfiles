@@ -48,6 +48,25 @@ test("repo cache shared across separate store instances", () => {
   assert.match(r2.content, /unchanged IR/);
 });
 
+test("getStats reads repo db without a prior read in this process", () => {
+  const repo = join(tmp, "repo-stats");
+  mkdirSync(repo, { recursive: true });
+  mkdirSync(join(repo, ".git"));
+  const file = join(repo, "tracked.ts");
+  writeFileSync(file, "export const tracked = true;\n");
+
+  const db = join(tmp, "stats-only.db");
+  const writer = new IrCacheStore(db);
+  writer.readFile(file, { layer: "L1" });
+  writer.readFile(file, { layer: "L1" });
+
+  const reader = new IrCacheStore(db);
+  const stats = reader.getStats(repo);
+  assert.ok(stats.filesTracked >= 1);
+  assert.ok(stats.repoTokensSaved > 0);
+  assert.ok(stats.tokensSaved > 0);
+});
+
 test("layer L3 caches raw content", () => {
   const repo = join(tmp, "repo2");
   mkdirSync(repo, { recursive: true });

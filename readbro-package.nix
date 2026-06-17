@@ -19,11 +19,20 @@ let
       in
       !(base == "node_modules" || base == "result" || base == "bin");
   };
+
+  # Runtime uses node --experimental-transform-types; devDependencies are local-only.
+  pnpmInstallFlags = [ "--prod" ];
+
+  prePnpmInstall = ''
+    export CI=true
+    export pnpm_config_child_concurrency=1
+    export pnpm_config_network_concurrency=1
+  '';
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "readbro";
   version = "0.3.0";
-  inherit src;
+  inherit src pnpmInstallFlags prePnpmInstall;
 
   nativeBuildInputs = [
     nodejs_24
@@ -39,13 +48,12 @@ stdenv.mkDerivation (finalAttrs: {
       version
       src
       prePnpmInstall
+      pnpmInstallFlags
       ;
     pnpm = pnpm_11;
     fetcherVersion = 3;
-    hash = "sha256-ebQt/UcG9QCHxTjgXvL5d86smRU5+5Ml22PJLYG6e3w=";
+    hash = "sha256-+UymkxOxRq5/NZHX9PYPiyLAdRkTUDhq0oYNAh6frD8=";
   };
-
-  prePnpmInstall = "export CI=true";
 
   installPhase = ''
     runHook preInstall

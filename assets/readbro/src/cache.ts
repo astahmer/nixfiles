@@ -223,7 +223,10 @@ export class IrCacheStore {
       .run(REPO_SCOPE, key, sourceHash, now);
   }
 
-  getStats(): CacheStats {
+  getStats(anchorPath: string = process.cwd()): CacheStats {
+    // Stats/gain CLI and session_status may run before any read opens the repo DB.
+    this.#connectionFor(resolve(anchorPath));
+
     let filesTracked = 0;
     let tokensSaved = 0;
     let repoTokensSaved = 0;
@@ -247,6 +250,10 @@ export class IrCacheStore {
   }
 
   clear(filePath?: string): void {
+    if (!filePath && this.#connections.size === 0) {
+      this.#connectionFor(process.cwd());
+    }
+
     const targets = filePath
       ? [this.#connectionFor(resolve(filePath))]
       : [...this.#connections.values()];
