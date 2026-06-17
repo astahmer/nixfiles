@@ -491,7 +491,6 @@
         pnpmi = "pnpm i";
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
-        caveman-init = "npx -y github:JuliusBrussee/caveman -- --with-init";
         nts = "node --no-warnings=ExperimentalWarning --experimental-strip-types --experimental-transform-types --env-file-if-exists=.env";
       };
     };

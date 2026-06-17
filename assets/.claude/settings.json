@@ -1,15 +1,1 @@
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "composto hook claude-code pretooluse"
-          }
-        ]
-      }
-    ]
-  }
-}
+{}

@@ -5,12 +5,12 @@ alwaysApply: true
 
 # readbro
 
-Single MCP for file reads + composto-powered context/risk. **Never use built-in Read.**
+Single MCP for file reads. **Never use built-in Read.**
 
 | Tool | When |
 |------|------|
 | `read_file` / `read_files` | All file reads — LOD via `layer` (default L1) |
 | `pack_context` | Multi-file bug/trace — `budget: 4000`, optional `target` |
-| `blast_radius` | Before editing non-trivial source |
+| `blast_radius` | Before editing non-trivial source — call explicitly |
 
-Edit/Write hooks also run blast radius. Call `blast_radius` when unsure.
+Full guide: `~/.agents/skills/readbro/SKILL.md`

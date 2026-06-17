@@ -3,8 +3,8 @@
   "hooks": {
     "preToolUse": [
       {
-        "matcher": "Edit|Write",
-        "command": "composto hook cursor pretooluse"
+        "matcher": "Shell",
+        "command": "rtk hook cursor"
       }
     ]
   }
