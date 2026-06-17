@@ -2,5 +2,5 @@
 result
 .direnv
 *.local.md
-assets/composto-cachebro/node_modules
+node_modules
 .composto

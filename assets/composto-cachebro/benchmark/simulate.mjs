@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { IrCacheStore } from "../src/cache.mjs";
 import { estimateTokens, generatePayload } from "../src/ir.mjs";
-import { LAYERS } from "./scenarios.mjs";
+import { LAYERS, PROOF_FILES } from "./scenarios.mjs";
 import { RawCacheStore } from "./raw-cache.mjs";
 
 function payloadTokens(result) {
@@ -94,12 +94,7 @@ export function savings(billed, rawEquivalent) {
 }
 
 export function runScenario(workDir, scenario, runId) {
-  const files = scenario.files ?? [
-    "src/trends/hotspot.ts",
-    "src/ir/layers.ts",
-    "src/watcher/detector.ts",
-    "src/ir/ast-walker.ts",
-  ];
+  const files = scenario.files ?? PROOF_FILES;
   const steps = scenario.steps(files);
   const strategies = [
     () => simulateRaw(workDir, steps),

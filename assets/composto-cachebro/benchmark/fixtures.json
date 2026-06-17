@@ -1,10 +1,17 @@
 {
   "sourceRepo": ".references/composto",
-  "description": "Files from composto docs/benchmark-proof.md (simple → hard)",
+  "description": "composto benchmark-proof + large src files",
   "files": [
     "src/trends/hotspot.ts",
     "src/ir/layers.ts",
     "src/watcher/detector.ts",
+    "src/ir/ast-walker.ts"
+  ],
+  "largeFiles": [
+    "src/context/packer.ts",
+    "src/mcp/server.ts",
+    "src/cli/init.ts",
+    "src/cli/commands.ts",
     "src/ir/ast-walker.ts"
   ]
 }
