@@ -71,6 +71,12 @@ stdenv.mkDerivation (finalAttrs: {
     runHook postInstall
   '';
 
+  checkPhase = ''
+    runHook preCheck
+    node --experimental-transform-types --experimental-strip-types --test test/*.test.ts
+    runHook postCheck
+  '';
+
   meta = {
     description = "IR-aware read cache MCP + CLI for coding agents";
     license = lib.licenses.mit;

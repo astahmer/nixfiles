@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "readbro": {
+      "command": "node",
+      "args": [
+        "--no-warnings=ExperimentalWarning",
+        "--experimental-transform-types",
+        "--experimental-strip-types",
+        "assets/readbro/src/main.ts"
+      ]
+    }
+  }
+}

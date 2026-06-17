@@ -26,18 +26,29 @@ const IntentSchema = Schema.Literal(
   "unknown",
 );
 
+// Effect's JSON schema for Struct({}) is anyOf object|array — Cursor MCP rejects it.
+const emptyInputSchema = {
+  type: "object",
+  properties: {},
+  additionalProperties: false,
+} as McpSchema.Tool["inputSchema"];
+
 const registerTool = (
   name: string,
   description: string,
-  parameters: Schema.Schema.Any,
+  parameters: Schema.Schema.Any | null,
   run: (payload: unknown) => Effect.Effect<string, ReadbroError>,
 ) =>
   Effect.gen(function* () {
     const server = yield* McpServer.McpServer;
+    const inputSchema =
+      parameters === null
+        ? emptyInputSchema
+        : (JSONSchema.make(parameters) as McpSchema.Tool["inputSchema"]);
     const tool = new McpSchema.Tool({
       name,
       description,
-      inputSchema: JSONSchema.make(parameters) as McpSchema.Tool["inputSchema"],
+      inputSchema,
     });
 
     yield* server.addTool({
@@ -121,7 +132,7 @@ export const McpLayer = Layer.effectDiscard(
     yield* registerTool(
       "session_status",
       "readbro repo cache stats.",
-      Schema.Struct({}),
+      null,
       () => rb.stats(),
     );
 

@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "description": "IR-aware read cache MCP + CLI for coding agents",
   "type": "module",
-  "packageManager": "pnpm@11.5.2",
+  "packageManager": "pnpm@11.6.0",
   "bin": {
     "readbro": "./src/main.ts"
   },
@@ -15,7 +15,8 @@
   },
   "scripts": {
     "benchmark": "node --experimental-transform-types --experimental-strip-types benchmark/run.mjs",
-    "test": "node --experimental-transform-types --experimental-strip-types --test test/*.test.ts",
+    "test": "./run-tests",
+    "test:node": "node --experimental-transform-types --experimental-strip-types --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -327,18 +327,6 @@
         fi
       '';
 
-      home.file.".config/opencode/opencode.json".text =
-        builtins.replaceStrings
-          [ "Bearer {env:GITHUB_TOKEN}" ]
-          [ "Bearer {file:${config.home.homeDirectory}/.config/opencode/github-token}" ]
-          (builtins.readFile ../assets/.config/opencode/opencode.json);
-      home.file.".cursor/mcp.json".text =
-        builtins.replaceStrings
-          [ "Bearer {env:GITHUB_TOKEN}" ]
-          [ "Bearer {file:${config.home.homeDirectory}/.config/opencode/github-token}" ]
-          (builtins.readFile ../assets/.cursor/mcp.json);
-      home.file.".vscode/mcp.json".source = ../assets/vscode/mcp.json;
-      home.file."Library/Application Support/Code/User/mcp.json".source = ../assets/vscode/mcp.json;
       home.file.".zshenv".text = ''
         [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
       '';
