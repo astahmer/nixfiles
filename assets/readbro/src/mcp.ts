@@ -116,7 +116,7 @@ export const McpLayer = Layer.effectDiscard(
 
     yield* registerTool(
       "read_files",
-      "Batch read with IR caching. Same layer/max_lines/offset for all paths. Prefer L1 unless you need raw.",
+      "Batch read with IR caching. Same layer/max_lines/offset for all paths. Prefer over parallel read_file when opening 3+ files or plan docs.",
       Schema.Struct({
         paths: Schema.Array(Schema.String),
         layer: Schema.optional(LayerSchema),
@@ -140,7 +140,7 @@ export const McpLayer = Layer.effectDiscard(
 
     yield* registerTool(
       "pack_context",
-      "Symbol-aware context pack within token budget. path: directory (default .) or file + target (symbol name). composto scans from repo root — not a single file path alone.",
+      "Symbol-aware context pack within token budget. path: directory (default .) or file + target (symbol name). Use for cross-file traces. composto scans from repo root.",
       Schema.Struct({
         path: Schema.optional(Schema.String),
         budget: Schema.optional(Schema.Number),

@@ -8,6 +8,21 @@ export type IrLayer = "L0" | "L1" | "L2" | "L3";
 
 export type Representation = "raw" | "raw-fallback" | "ir";
 
+/** Extensions composto cannot IR-compress — L1 returns raw with an advisory. */
+export const NON_CODE_EXT = new Set([
+  ".md",
+  ".markdown",
+  ".txt",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".nix",
+  ".sql",
+  ".sh",
+  ".env",
+]);
+
 const CODE_EXT = new Set([
   ".ts",
   ".tsx",

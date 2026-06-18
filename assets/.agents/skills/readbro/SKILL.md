@@ -96,7 +96,7 @@ Or search the whole repo:
 pack_context({ path: ".", budget: 4000, target: "ReplayAccountingImportUseCase" })
 ```
 
-Same via `read_file` with `target` (delegates to `pack_context`).
+Same via `read_file` with `target` (delegates to `pack_context`). If the symbol is missing in a file, readbro appends **nearby symbol names** from that file and suggests repo-wide `pack_context(path: ".", target: ...)`.
 
 - `path` — directory (default `.`) or file + required `target`
 - `budget` — max tokens (default `4000`)
@@ -201,9 +201,24 @@ Session A reads `src/auth.ts` → full IR. Session B (new conversation) reads th
 
 ```
 session_status()   → repo health snapshot (totals, efficiency)
-session_gain()     → top files + savings drill-down
+session_gain()     → top files + savings drill-down (MCP defaults to session scope)
 session_clear()    → reset repo cache
 ```
+
+## Non-code files
+
+Markdown, YAML, Nix, and other non-code extensions have **no composto IR**. L1 returns raw with an advisory — use `max_lines` to cap plan docs, or `read_files` to batch them.
+
+## Path mistakes
+
+When a path does not exist, readbro runs `git ls-files` and returns **did you mean?** suggestions.
+
+## Audit workflows
+
+1. `read_files` L1 on spec batch → provides summary + import graph in IR
+2. `pack_context(path: ".", target: "SomeUseCase")` for cross-file traces
+3. Shell trace scripts for union counts readbro does not compute yet
+
 ## Quick reference
 
 | Task | Tool |

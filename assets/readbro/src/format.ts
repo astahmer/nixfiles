@@ -1,5 +1,6 @@
 import type { CacheStats, ClearResult, GlobStats, ReadFileResult, ReadOutcome, SessionSummary, UsageEvent } from "./cache.ts";
 import type { HistoryFormat } from "./history-query.ts";
+import { NON_CODE_EXT } from "./ir.ts";
 import type { ReadbroReadOptions } from "./read-options.ts";
 import type { StatsFormat } from "./stats-query.ts";
 import { formatSinceLabel } from "./stats-query.ts";
@@ -310,7 +311,7 @@ const formatRecentReads = (stats: CacheStats): string[] => {
 
 export const formatStatsJson = (stats: CacheStats): string => JSON.stringify(stats, null, 2);
 
-const readAdvisories = (result: ReadFileResult): string[] => {
+const readAdvisories = (result: ReadFileResult, filePath?: string): string[] => {
   const lines: string[] = [];
   if (result.layer === "L3" || result.representation === "raw") {
     lines.push(
@@ -318,9 +319,18 @@ const readAdvisories = (result: ReadFileResult): string[] => {
     );
   }
   if (result.representation === "raw-fallback" && result.layer !== "L3") {
-    lines.push(
-      "[readbro: composto IR unavailable — returned raw source. Ensure `composto` is on PATH; prefer L1 after fixing]",
-    );
+    const ext = filePath?.includes(".")
+      ? filePath.slice(filePath.lastIndexOf(".")).toLowerCase()
+      : "";
+    if (NON_CODE_EXT.has(ext)) {
+      lines.push(
+        `[readbro: no composto IR for ${ext} — L1 returns raw. Use max_lines to cap, or read_files to batch plan docs]`,
+      );
+    } else {
+      lines.push(
+        "[readbro: composto IR unavailable — returned raw source. Run `readbro doctor`; ensure `composto` is on PATH]",
+      );
+    }
   }
   return lines;
 };
@@ -328,10 +338,10 @@ const readAdvisories = (result: ReadFileResult): string[] => {
 export const formatReadResult = (
   result: ReadFileResult,
   stats: Pick<CacheStats, "savedTokens">,
-  options: ReadbroReadOptions & { readonly showFooter?: boolean } = {},
+  options: ReadbroReadOptions & { readonly showFooter?: boolean; readonly filePath?: string } = {},
 ): string => {
   const showFooter = options.showFooter ?? true;
-  const advisories = readAdvisories(result);
+  const advisories = readAdvisories(result, options.filePath);
   const parts: string[] = [];
 
   if (result.cached && result.linesChanged === 0) {
