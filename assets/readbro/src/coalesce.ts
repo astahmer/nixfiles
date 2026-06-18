@@ -28,6 +28,8 @@ let flushTimer: ReturnType<typeof setTimeout> | null = null;
 const isCoalescable = (options: ReadbroReadOptions): boolean =>
   normalizeTargets(options.target).length === 0 &&
   options.offset === undefined &&
+  options.around_line === undefined &&
+  (options.ranges === undefined || options.ranges.length === 0) &&
   options.force !== true;
 
 const groupKey = (options: ReadbroReadOptions): string =>

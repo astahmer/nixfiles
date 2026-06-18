@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { IrCacheStore } from "../src/cache.ts";
 import { formatReadResult } from "../src/format.ts";
-import { applyLineWindow, effectiveMaxLines } from "../src/truncate.ts";
+import { applyLineRanges, applyLineWindow, effectiveMaxLines } from "../src/truncate.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "readbro-truncate-"));
 
@@ -44,6 +44,18 @@ test("applyLineWindow supports offset", () => {
   const window = applyLineWindow(text, { offset: 1, maxLines: 2 });
   assert.equal(window.text, "b\nc");
   assert.equal(window.truncated, true);
+});
+
+test("applyLineRanges returns multiple chunks", () => {
+  const text = Array.from({ length: 10 }, (_, index) => `line${index + 1}`).join("\n");
+  const result = applyLineRanges(text, [
+    [2, 3],
+    [8, 9],
+  ]);
+  assert.match(result.text, /--- lines 2-3 ---/);
+  assert.match(result.text, /--- lines 8-9 ---/);
+  assert.match(result.text, /line2/);
+  assert.match(result.text, /line8/);
 });
 
 rmSync(tmp, { recursive: true, force: true });

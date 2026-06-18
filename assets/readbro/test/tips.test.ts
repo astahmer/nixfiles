@@ -82,6 +82,17 @@ test("appendMcpFooter skips JSON responses", () => {
   assert.equal(appendMcpFooter("session_status", {}, json), json);
 });
 
+test("session footer on read_file with batch suggest", () => {
+  const coach = new McpTipCoach({ tips: TINY_TIPS, repeatWarnCooldownMs: 60_000, batchWarnCooldownMs: 60_000 });
+  coach.recordToolCall("read_file", { path: "a.ts" });
+  coach.recordToolCall("read_file", { path: "b.ts" });
+  coach.recordToolCall("read_file", { path: "c.ts" });
+  const footer = coach.sessionFooter("read_file", { path: "d.ts" });
+  assert.ok(footer);
+  assert.match(footer!, /read_file ·/);
+  assert.match(footer!, /suggest: read_file/);
+});
+
 test("READBRO_TIPS has unique ids", () => {
   const ids = READBRO_TIPS.map((tip) => tip.id);
   assert.equal(ids.length, new Set(ids).size);

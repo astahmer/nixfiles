@@ -74,3 +74,49 @@ export const lineWindowNotice = (result: LineWindowResult): string | null => {
   }
   return `[readbro: showing lines ${result.shownFrom}-${result.shownTo} of ${result.totalLines} — use L1 for behaviour IR, or max_lines: -1 for full raw]`;
 };
+
+export const applyLineRanges = (
+  text: string,
+  ranges: ReadonlyArray<readonly [number, number]>,
+): LineWindowResult => {
+  const lines = text.split("\n");
+  const totalLines = lines.length;
+  if (ranges.length === 0 || totalLines === 0) {
+    return {
+      text,
+      totalLines,
+      shownFrom: 1,
+      shownTo: totalLines,
+      truncated: false,
+    };
+  }
+
+  const chunks: Array<string> = [];
+  let shownFrom = totalLines;
+  let shownTo = 0;
+
+  for (const [start, end] of ranges) {
+    const from = Math.max(1, Math.min(start, totalLines));
+    const to = Math.max(from, Math.min(end, totalLines));
+    shownFrom = Math.min(shownFrom, from);
+    shownTo = Math.max(shownTo, to);
+    const slice = lines.slice(from - 1, to);
+    chunks.push(`--- lines ${from}-${to} ---\n${slice.join("\n")}`);
+  }
+
+  return {
+    text: chunks.join("\n\n"),
+    totalLines,
+    shownFrom: shownFrom === totalLines ? 0 : shownFrom,
+    shownTo,
+    truncated: true,
+  };
+};
+
+export const rangesNotice = (
+  ranges: ReadonlyArray<readonly [number, number]>,
+  totalLines: number,
+): string => {
+  const desc = ranges.map(([start, end]) => `${start}-${end}`).join(", ");
+  return `[readbro: showing ranges ${desc} of ${totalLines} lines — use full: true for entire file]`;
+};

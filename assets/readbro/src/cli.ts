@@ -33,6 +33,16 @@ const offset = Options.integer("offset").pipe(
   Options.optional,
 );
 
+const aroundLine = Options.integer("around-line").pipe(
+  Options.withDescription("Center a line window on this 1-based line (implies L3)"),
+  Options.optional,
+);
+
+const contextLines = Options.integer("context").pipe(
+  Options.withDescription("Lines before/after around_line (default 40)"),
+  Options.optional,
+);
+
 const scope = Options.choice("scope", ["repo", "session"]).pipe(
   Options.withDescription("Stats scope: repo lifetime or current session"),
   Options.withDefault("repo"),
@@ -144,10 +154,12 @@ const read = Command.make(
     full,
     maxLines,
     offset,
+    aroundLine,
+    context: contextLines,
     target: Options.text("target").pipe(Options.optional),
     budget: Options.integer("budget").pipe(Options.optional),
   },
-  ({ paths, layer: lyr, force: f, full: readFull, maxLines: ml, offset: off, target, budget }) =>
+  ({ paths, layer: lyr, force: f, full: readFull, maxLines: ml, offset: off, aroundLine: around, context: ctx, target, budget }) =>
     Effect.gen(function* () {
       if (paths.length === 0) {
         return yield* Effect.dieMessage("readbro read: pass at least one file path");
@@ -161,6 +173,8 @@ const read = Command.make(
           full: readFull,
           maxLines: Option.getOrUndefined(ml),
           offset: Option.getOrUndefined(off),
+          around_line: Option.getOrUndefined(around),
+          context: Option.getOrUndefined(ctx),
           target: Option.getOrUndefined(target),
           budget: Option.getOrUndefined(budget),
         }),

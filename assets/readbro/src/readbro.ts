@@ -19,11 +19,13 @@ import {
 import { doctorExitCode, formatDoctor, runDoctor } from "./doctor.ts";
 import type { ClearOptions, HistoryFormat, SessionsQuery, UsageQuery } from "./history-query.ts";
 import type { ReadbroReadOptions, SymbolTarget } from "./read-options.ts";
-import { normalizeTargets, resolveReadOptions } from "./read-options.ts";
+import { normalizeTargets, resolveReadOptions, type ResolvedReadWindows } from "./read-options.ts";
+import { mergeSymbolRanges } from "./read-windows.ts";
 import { findRepoRoot } from "./repo-root.ts";
 import type { StatsRequest } from "./stats-query.ts";
 import { formatSessionAudit, runSessionAudit } from "./audit.ts";
 import { guardSymbolOutput } from "./symbol-guard.ts";
+import type { NumericRange } from "./read-windows.ts";
 
 export type SearchSymbolOptions = {
   readonly path?: string;
@@ -68,28 +70,47 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
       cache.logUsage(usageSource === "mcp" ? (mcpName ?? cliName) : cliName, detail);
     };
 
-    const readOneFile = (path: string, options: ReadbroReadOptions) => {
+    const formatSliceOptions = (
+      filePath: string,
+      options: ReadbroReadOptions,
+      showFooter: boolean,
+    ): string => {
       const resolved = resolveReadOptions(options);
+      const abs = resolve(filePath);
+      const numericRanges: ReadonlyArray<NumericRange> = mergeSymbolRanges(abs, resolved);
+      const sliceContent = resolved.sliceContent || numericRanges.length > 0;
       const { maxLines, offset, force, layer } = resolved;
-      const priorStats = cache.getSessionPathStats(path);
-      const result = cache.readFile(path, { layer, force, offset, maxLines });
+      const priorStats = cache.getSessionPathStats(filePath);
+      const result = cache.readFile(filePath, {
+        layer,
+        force: force || sliceContent,
+        offset: numericRanges.length > 0 ? undefined : offset,
+        maxLines: numericRanges.length > 0 ? undefined : maxLines,
+      });
       return formatReadResult(result, cache.getStats({ scope: "repo" }), {
         maxLines,
         offset,
-        filePath: path,
+        numericRanges: numericRanges.length > 0 ? numericRanges : undefined,
+        filePath,
         sessionReadNumber: priorStats.readCount + 1,
         sessionPathStats: priorStats,
-        showFooter: false,
+        showFooter,
       });
     };
 
-    const resolveSearchTargets = (options: SearchSymbolOptions): Array<string> =>
-      normalizeTargets(options.target);
+    const readOneFile = (path: string, options: ReadbroReadOptions) =>
+      formatSliceOptions(path, options, false);
 
-    const searchSymbol = (options: SearchSymbolOptions) =>
+    const hasSliceWindows = (resolved: ResolvedReadWindows): boolean =>
+      resolved.sliceContent === true;
+
+    const hasSearchTarget = (options: ReadbroReadOptions) =>
+      normalizeTargets(options.target).length > 0;
+
+    const runSearchSymbol = (options: SearchSymbolOptions) =>
       Effect.tryPromise({
         try: async () => {
-          const targets = resolveSearchTargets(options);
+          const targets = normalizeTargets(options.target);
           const detail = [options.path ?? ".", ...targets].filter(Boolean).join(" ");
           logUsage("symbol", "search_symbol", detail);
 
@@ -145,11 +166,20 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         catch: toReadbroError,
       });
 
-    const hasSearchTarget = (options: ReadbroReadOptions) =>
-      normalizeTargets(options.target).length > 0;
+    const searchSymbol = (options: SearchSymbolOptions) =>
+      runSearchSymbol(options);
 
     const readFile = (path: string | ReadonlyArray<string>, options: ReadbroReadOptions = {}) => {
       const resolved = resolveReadOptions(options);
+      if (hasSearchTarget(resolved) && hasSliceWindows(resolved)) {
+        return Effect.fail(
+          new ReadbroUnknownError({
+            cause: new Error(
+              "read_file: target cannot be combined with around_line/ranges — use search_symbol or line windows separately",
+            ),
+          }),
+        );
+      }
       if (hasSearchTarget(resolved)) {
         const paths = typeof path === "string" ? [path] : [...path];
         if (paths.length > 1) {
@@ -190,16 +220,7 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         logUsage(paths.length === 1 ? "read" : "read", "read_file", detail);
 
         if (paths.length === 1) {
-          const { maxLines, offset, force, layer } = resolved;
-          const priorStats = cache.getSessionPathStats(paths[0]!);
-          const result = cache.readFile(paths[0]!, { layer, force, offset, maxLines });
-          return formatReadResult(result, cache.getStats({ scope: "repo" }), {
-            maxLines,
-            offset,
-            filePath: paths[0],
-            sessionReadNumber: priorStats.readCount + 1,
-            sessionPathStats: priorStats,
-          });
+          return formatSliceOptions(paths[0]!, options, true);
         }
 
         const parts = paths.map((filePath) => `=== ${filePath} ===\n${readOneFile(filePath, resolved)}`);

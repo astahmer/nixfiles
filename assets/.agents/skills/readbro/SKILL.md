@@ -66,6 +66,8 @@ Always prefer this over built-in Read when you know where to look (but maybe not
 - `target` / `budget` — **shorthand for search_symbol** (single path only; `target` string or array)
 - `force` — bypass cache and return full payload (default `false`)
 - `full` — shorthand for full raw read (implies `L3`, no line cap)
+- `around_line` / `context` — center on stack-trace line (implies `L3`, default ±40 lines)
+- `ranges` — `[[start,end], ...]` or symbol names (resolved via L0)
 - `max_lines` — cap output lines (`L3`/raw auto-capped to 200; `-1` or `full: true` = no cap)
 - `offset` — start at 0-based line (optional)
 

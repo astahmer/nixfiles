@@ -10,6 +10,7 @@ import type { ReadbroError } from "./errors.ts";
 import { ReadbroUnknownError } from "./errors.ts";
 import { coalescedReadFile } from "./coalesce.ts";
 import { Readbro, ReadbroLiveMcp } from "./readbro.ts";
+import type { ReadbroReadOptions } from "./read-options.ts";
 import { appendMcpFooter } from "./tips.ts";
 import { statsRequestFromMcp } from "./stats-query.ts";
 
@@ -42,6 +43,9 @@ const ReadFileSchema = Schema.Struct({
   full: Schema.optional(Schema.Boolean),
   max_lines: Schema.optional(Schema.Number),
   offset: Schema.optional(Schema.Number),
+  around_line: Schema.optional(Schema.Number),
+  context: Schema.optional(Schema.Number),
+  ranges: Schema.optional(Schema.Array(Schema.Unknown)),
   target: Schema.optional(TargetSchema),
   budget: Schema.optional(Schema.Number),
 });
@@ -106,6 +110,7 @@ export const McpLayer = Layer.effectDiscard(
         "Directories are rejected — pass file paths. Use search_symbol for symbol lookup across a tree.",
         "Exploratory reads (no symbol): DEFAULT layer L1. L0=structure survey. Do NOT use L3 for exploration.",
         "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); full: true or max_lines: -1 for full raw.",
+        "Line windows: around_line (+ optional context), or ranges: [[start,end], ...] or symbol names resolved via L0.",
       ].join(" "),
       ReadFileSchema,
       (payload) => {
@@ -116,7 +121,9 @@ export const McpLayer = Layer.effectDiscard(
           force?: boolean;
           full?: boolean;
           max_lines?: number;
-          offset?: number;
+          around_line?: number;
+          context?: number;
+          ranges?: ReadonlyArray<unknown>;
           target?: string | Array<string>;
           budget?: number;
         };
@@ -134,6 +141,9 @@ export const McpLayer = Layer.effectDiscard(
           full: p.full,
           maxLines: p.max_lines,
           offset: p.offset,
+          around_line: p.around_line,
+          context: p.context,
+          ranges: p.ranges as ReadbroReadOptions["ranges"],
           target: p.target,
           budget: p.budget,
         });

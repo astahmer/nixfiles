@@ -7,6 +7,12 @@ export const normalizeTargets = (target?: SymbolTarget): Array<string> => {
   return typeof target === "string" ? [target] : [...target];
 };
 
+export type RangeInput =
+  | readonly [number, number]
+  | readonly [string, string]
+  | string
+  | ReadonlyArray<number | string>;
+
 export type ReadbroReadOptions = {
   readonly layer?: IrLayer;
   readonly force?: boolean;
@@ -15,15 +21,9 @@ export type ReadbroReadOptions = {
   readonly target?: SymbolTarget;
   readonly budget?: number;
   readonly full?: boolean;
+  readonly around_line?: number;
+  readonly context?: number;
+  readonly ranges?: ReadonlyArray<RangeInput>;
 };
 
-export const resolveReadOptions = (options: ReadbroReadOptions = {}): ReadbroReadOptions => {
-  if (options.full === true) {
-    return {
-      ...options,
-      layer: options.layer ?? "L3",
-      maxLines: -1,
-    };
-  }
-  return options;
-};
+export { resolveReadWindows as resolveReadOptions, type ResolvedReadWindows } from "./read-windows.ts";

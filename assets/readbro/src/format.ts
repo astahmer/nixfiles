@@ -6,7 +6,8 @@ import { formatRepeatPathNotice } from "./session-context.ts";
 import type { SessionPathStats } from "./session-context.ts";
 import type { StatsFormat } from "./stats-query.ts";
 import { formatSinceLabel } from "./stats-query.ts";
-import { applyLineWindow, effectiveMaxLines, lineWindowNotice } from "./truncate.ts";
+import { applyLineWindow, applyLineRanges, effectiveMaxLines, lineWindowNotice, rangesNotice } from "./truncate.ts";
+import type { NumericRange } from "./read-windows.ts";
 
 export const formatTokenCount = (tokens: number): string => {
   const sign = tokens < 0 ? "-" : "";
@@ -343,13 +344,15 @@ export const formatReadResult = (
     readonly filePath?: string;
     readonly sessionReadNumber?: number;
     readonly sessionPathStats?: SessionPathStats;
+    readonly numericRanges?: ReadonlyArray<NumericRange>;
   } = {},
 ): string => {
   const showFooter = options.showFooter ?? true;
   const advisories = readAdvisories(result, options.filePath);
   const parts: string[] = [];
+  const numericRanges = options.numericRanges ?? [];
 
-  if (result.cached && result.linesChanged === 0) {
+  if (result.cached && result.linesChanged === 0 && numericRanges.length === 0) {
     parts.push(result.content);
     const repeatNotice = formatRepeatPathNotice({
       displayPath: options.filePath ?? "file",
@@ -362,16 +365,20 @@ export const formatReadResult = (
       parts.push(repeatNotice);
     }
   } else {
+    const content = result.cached && result.diff ? result.diff : result.content;
     const maxLines = effectiveMaxLines({
       layer: result.layer,
       representation: result.representation,
       maxLines: options.maxLines,
     });
-    const window = applyLineWindow(
-      result.cached && result.diff ? result.diff : result.content,
-      { offset: options.offset, maxLines },
-    );
-    const windowNotice = lineWindowNotice(window);
+    const window =
+      numericRanges.length > 0
+        ? applyLineRanges(content, numericRanges)
+        : applyLineWindow(content, { offset: options.offset, maxLines });
+    const windowNotice =
+      numericRanges.length > 0
+        ? rangesNotice(numericRanges, window.totalLines)
+        : lineWindowNotice(window);
 
     if (result.cached && result.diff) {
       parts.push(

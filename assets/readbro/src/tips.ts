@@ -58,6 +58,10 @@ export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
     text: "Test failure? search_symbol({ target: \"FailingClass\" }) + read_file({ path: [\"spec.ts\", \"impl.ts\"], layer: \"L1\" }).",
   },
   {
+    id: "around-line",
+    text: "Stack trace line? read_file({ path: \"spec.ts\", around_line: 223, layer: \"L3\" }) — not offset pagination.",
+  },
+  {
     id: "session-audit",
     text: "Batching mistakes? Run readbro audit in the repo to see repeat paths and coalesce candidates.",
   },
@@ -140,7 +144,8 @@ export class McpTipCoach {
   #readFileCalls = 0;
   #batchCalls = 0;
   #uniquePaths = new Set<string>();
-  #toolCalls = 0;
+  #recentBatchCandidates: Array<string> = [];
+  #lastFooterAt = 0;
 
   constructor(options: McpTipCoachOptions = {}) {
     this.#tips = options.tips ?? READBRO_TIPS;
@@ -165,9 +170,6 @@ export class McpTipCoach {
   }
 
   recordToolCall(tool: string, payload: unknown): void {
-    const now = Date.now();
-    this.#toolCalls += 1;
-    let singlePathReads = 0;
     let path: string | undefined;
 
     if (tool === "read_file") {
@@ -180,7 +182,6 @@ export class McpTipCoach {
         this.#uniquePaths.add(item);
       }
       if (!hasTarget && count === 1 && paths[0]) {
-        singlePathReads = 1;
         path = paths[0];
         const layer =
           typeof payload === "object" && payload !== null && "layer" in payload
@@ -189,9 +190,26 @@ export class McpTipCoach {
         const entry = this.#pathReads.get(path) ?? { count: 0, layers: new Set<string>() };
         entry.layers.add(layer);
         this.#pathReads.set(path, { count: entry.count + 1, layers: entry.layers });
+
+        if (!this.#recentBatchCandidates.includes(path)) {
+          this.#recentBatchCandidates.push(path);
+        }
+        if (this.#recentBatchCandidates.length > 6) {
+          this.#recentBatchCandidates = this.#recentBatchCandidates.slice(-6);
+        }
       }
     }
 
+    let singlePathReads = 0;
+    if (tool === "read_file") {
+      const { count, hasTarget, paths } = readFilePathCount(payload);
+      if (!hasTarget && count === 1 && paths[0]) {
+        singlePathReads = 1;
+        path = paths[0];
+      }
+    }
+
+    const now = Date.now();
     this.#recentCalls.push({ tool, at: now, singlePathReads, path });
     if (this.#recentCalls.length > 16) {
       this.#recentCalls = this.#recentCalls.slice(-16);
@@ -275,20 +293,45 @@ export class McpTipCoach {
     );
   }
 
-  sessionFooter(): string | null {
-    if (this.#readFileCalls < 3) {
+  batchSuggestLine(): string | null {
+    if (this.#recentBatchCandidates.length < 2) {
+      return null;
+    }
+    const paths = this.#recentBatchCandidates.slice(-4).map((item) => JSON.stringify(item));
+    return `suggest: read_file({ path: [${paths.join(", ")}], layer: "L1" })`;
+  }
+
+  sessionFooter(tool: string, payload: unknown): string | null {
+    if (tool !== "read_file") {
       return null;
     }
 
     const extraRoundTrips = Math.max(0, this.#readFileCalls - this.#batchCalls - this.#uniquePaths.size);
-    if (extraRoundTrips < 2 && this.#batchCalls > 0) {
+    const repeatActive =
+      readFilePathCount(payload).paths[0] !== undefined &&
+      this.pathReadCount(readFilePathCount(payload).paths[0]!) >= 2;
+    const shouldShow =
+      this.#readFileCalls >= 4 || extraRoundTrips >= 2 || repeatActive || this.#batchCalls === 0;
+
+    if (!shouldShow) {
       return null;
     }
 
-    return (
+    const now = Date.now();
+    if (this.#lastFooterAt > 0 && now - this.#lastFooterAt < 8_000) {
+      return null;
+    }
+    this.#lastFooterAt = now;
+
+    const lines = [
       `[readbro session] ${this.#readFileCalls} read_file · ${this.#uniquePaths.size} unique paths · ` +
-      `${this.#batchCalls} batches · est. +${extraRoundTrips} round-trips`
-    );
+        `${this.#batchCalls} batches · est. +${extraRoundTrips} round-trips`,
+    ];
+    const suggest = this.batchSuggestLine();
+    if (suggest) {
+      lines.push(suggest);
+    }
+    return lines.join("\n");
   }
 
   footerFor(tool: string, payload: unknown): string | null {
@@ -298,11 +341,9 @@ export class McpTipCoach {
       parts.push(hint);
     }
 
-    if (this.#toolCalls % 4 === 0) {
-      const session = this.sessionFooter();
-      if (session) {
-        parts.push(session);
-      }
+    const session = this.sessionFooter(tool, payload);
+    if (session) {
+      parts.push(session);
     }
 
     const tip = this.nextTip();
