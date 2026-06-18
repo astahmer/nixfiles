@@ -1,4 +1,5 @@
-import type { CacheStats, GlobStats, ReadFileResult, ReadOutcome } from "./cache.ts";
+import type { CacheStats, ClearResult, GlobStats, ReadFileResult, ReadOutcome, SessionSummary, UsageEvent } from "./cache.ts";
+import type { HistoryFormat } from "./history-query.ts";
 import type { ReadbroReadOptions } from "./read-options.ts";
 import type { StatsFormat } from "./stats-query.ts";
 import { formatSinceLabel } from "./stats-query.ts";
@@ -28,6 +29,23 @@ export const formatDuration = (ms: number): string => {
   const mins = Math.floor(ms / 60_000);
   const secs = Math.round((ms % 60_000) / 1000);
   return `${mins}m${secs}s`;
+};
+
+export const formatRelativeTime = (timestamp: number, now = Date.now()): string => {
+  const delta = Math.max(0, now - timestamp);
+  if (delta < 60_000) {
+    return `${Math.max(1, Math.round(delta / 1000))}s ago`;
+  }
+  if (delta < 3_600_000) {
+    return `${Math.round(delta / 60_000)}m ago`;
+  }
+  if (delta < 86_400_000) {
+    return `${Math.round(delta / 3_600_000)}h ago`;
+  }
+  if (delta < 30 * 86_400_000) {
+    return `${Math.round(delta / 86_400_000)}d ago`;
+  }
+  return new Date(timestamp).toISOString().slice(0, 10);
 };
 
 export const formatBar = (pct: number, width = 24): string => {
@@ -386,4 +404,65 @@ export const formatGain = (stats: CacheStats, format: StatsFormat = {}): string 
   }
 
   return lines.join("\n");
+};
+
+export const formatUsageList = (
+  events: ReadonlyArray<UsageEvent>,
+  format: HistoryFormat = {},
+): string => {
+  if (format.json) {
+    return JSON.stringify(events, null, 2);
+  }
+  if (events.length === 0) {
+    return "No recent usage recorded.";
+  }
+
+  const lines = ["Recent Usage", "─".repeat(72)];
+  for (const row of events) {
+    const detail = row.detail ? ` ${row.detail}` : "";
+    lines.push(
+      `${formatRelativeTime(row.usedAt).padEnd(8)} ${row.source.padEnd(3)} ${row.sessionId.padEnd(8)} ${row.name}${detail}`,
+    );
+  }
+  lines.push("", "Tip: `readbro ls --grep read` or `--session <id>` to filter.");
+  return lines.join("\n");
+};
+
+export const formatSessionsList = (
+  sessions: ReadonlyArray<SessionSummary>,
+  format: HistoryFormat = {},
+): string => {
+  if (format.json) {
+    return JSON.stringify(sessions, null, 2);
+  }
+  if (sessions.length === 0) {
+    return "No sessions recorded.";
+  }
+
+  const lines = ["Recent Sessions", "─".repeat(72)];
+  for (const row of sessions) {
+    lines.push(
+      `${row.sessionId.padEnd(8)}  ${formatRelativeTime(row.lastAt).padEnd(8)}  ${String(row.reads).padStart(4)} reads  saved ${formatTokenCount(row.savedTokens).padStart(6)} (${formatPct(row.savedPct).padStart(5)})  active ${formatRelativeTime(row.lastAt)}`,
+    );
+  }
+  lines.push("", "Tip: `readbro sessions --grep abc` or `--skip 20` to paginate.");
+  return lines.join("\n");
+};
+
+export const formatClearResult = (result: ClearResult, path?: string): string => {
+  if (result.fullClear) {
+    return path
+      ? `Cache cleared for ${path} working copy.`
+      : "Cache cleared for all open repo databases.";
+  }
+
+  const scope = path ? ` for ${path}` : "";
+  const label = result.olderThanMs ? formatSinceLabel(result.olderThanMs) : "cutoff";
+  return [
+    `Pruned cache older than ${label}${scope}:`,
+    `  read events:    ${result.readEvents.toLocaleString()}`,
+    `  usage events:   ${result.usageEvents.toLocaleString()}`,
+    `  session reads:  ${result.sessionReads.toLocaleString()}`,
+    `  ir versions:    ${result.irVersions.toLocaleString()}`,
+  ].join("\n");
 };

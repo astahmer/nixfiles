@@ -97,7 +97,7 @@ Cache lives at **`.readbro/cache.db`** in the working-copy root (`READBRO_DIR` o
 
 ## CLI
 
-Fast path (`gain`, `stats`, `clear`) skips Effect startup (~30 ms warm). MCP and other commands load the full stack lazily.
+Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`) skips Effect startup (~30 ms warm). MCP and other commands load the full stack lazily.
 
 | Command | Action |
 |---------|--------|
@@ -109,7 +109,9 @@ Fast path (`gain`, `stats`, `clear`) skips Effect startup (~30 ms warm). MCP and
 | `readbro blast <file>` | Blast radius (`--intent`) |
 | `readbro stats` | Repo health snapshot (`--verbose`, filters) |
 | `readbro gain` | Top savings (`--verbose` for globs) |
-| `readbro clear` | Clear cache (`--path` optional) |
+| `readbro ls` | Recent command/tool usage (`-n`, `--grep`, `--session`) |
+| `readbro sessions` | Recent session ids with savings (`--limit`, `--skip`) |
+| `readbro clear` | Clear cache (`--path`, `--older-than 7d`) |
 
 ## Development
 
@@ -135,7 +137,7 @@ Workspace-local MCP override (repo root `.cursor/mcp.json`):
 
 ```
 main.ts
-  ├─ fast path → fast-stats.ts (gain / stats / clear)
+  ├─ fast path → fast-stats.ts (gain / stats / clear / ls / sessions)
   └─ MCP / CLI → main-effect.ts → Effect + @effect/cli + @effect/ai
        └─ readbro.ts → cache.ts (SQLite) + ir.ts (composto) + format.ts
 ```
@@ -154,7 +156,7 @@ main.ts
 
 1. **Single executable** — `bun build --compile --minify --bytecode` (`readbro-package.nix`). Nix still fetches deps with pnpm; Bun only compiles.
 2. **SQLite adapter** — `node:sqlite` for Node tests; `bun:sqlite` in the binary (`node:sqlite` fails under `bun compile`).
-3. **Fast path** — `gain`, `stats`, `clear` bypass Effect; `main.ts` routes to `fast-stats.ts` or lazy-loads `main-effect.ts` for MCP.
+3. **Fast path** — `gain`, `stats`, `clear`, `ls`, and `sessions` bypass Effect; `main.ts` routes to `fast-stats.ts` or lazy-loads `main-effect.ts` for MCP.
 
 **Result (nix-built binary, warm):**
 

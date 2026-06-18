@@ -6,7 +6,7 @@ import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import type { ReadbroError } from "./errors.ts";
-import { Readbro, ReadbroLive } from "./readbro.ts";
+import { Readbro, ReadbroLiveMcp } from "./readbro.ts";
 import { statsRequestFromMcp } from "./stats-query.ts";
 
 const textResult = (text: string, isError = false) =>
@@ -211,12 +211,12 @@ export const McpLayer = Layer.effectDiscard(
       }),
       (payload) => {
         const p = payload as { path?: string };
-        return rb.clear(p.path);
+        return rb.clear({ path: p.path });
       },
     );
   }),
 ).pipe(
-  Layer.provide(ReadbroLive),
+  Layer.provide(ReadbroLiveMcp),
   Layer.provide(
     McpServer.layerStdio({
       name: "readbro",

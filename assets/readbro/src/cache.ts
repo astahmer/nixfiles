@@ -8,8 +8,9 @@ import { findRepoRoot } from "./repo-root.ts";
 import { aggregateEvents, type ReadEventRow } from "./stats-aggregate.ts";
 import type { StatsQuery, StatsScope } from "./stats-query.ts";
 import { usesPathGrouping } from "./stats-query.ts";
+import type { ClearOptions, SessionsQuery, UsageQuery } from "./history-query.ts";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const LAYER_RANK: Record<IrLayer, number> = { L0: 0, L1: 1, L2: 2, L3: 3 };
 
@@ -45,6 +46,15 @@ CREATE TABLE read_events (
   saved_tokens  INTEGER NOT NULL,
   outcome       TEXT NOT NULL,
   duration_ms   INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE usage_events (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  used_at     INTEGER NOT NULL,
+  session_id  TEXT NOT NULL,
+  source      TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  detail      TEXT
 );
 
 CREATE TABLE schema_meta (
@@ -128,6 +138,33 @@ export type RecentRead = {
   readonly durationMs: number;
 };
 
+export type UsageEvent = {
+  readonly usedAt: number;
+  readonly sessionId: string;
+  readonly source: "cli" | "mcp";
+  readonly name: string;
+  readonly detail?: string;
+};
+
+export type SessionSummary = {
+  readonly sessionId: string;
+  readonly firstAt: number;
+  readonly lastAt: number;
+  readonly reads: number;
+  readonly rawTokens: number;
+  readonly savedTokens: number;
+  readonly savedPct: number;
+};
+
+export type ClearResult = {
+  readonly readEvents: number;
+  readonly usageEvents: number;
+  readonly sessionReads: number;
+  readonly irVersions: number;
+  readonly olderThanMs?: number;
+  readonly fullClear: boolean;
+};
+
 export type OutcomeStats = {
   readonly outcome: ReadOutcome;
   readonly reads: number;
@@ -182,17 +219,24 @@ type EventFilter = { readonly sql: string; readonly params: ReadonlyArray<SQLInp
 export class IrCacheStore {
   readonly #fixedDbPath: string | null;
   readonly #sessionId: string;
+  readonly #usageSource: "cli" | "mcp";
   readonly #connections = new Map<string, DbConn>();
 
   constructor(
-    dbPathOrOptions: string | { readonly dbPath?: string; readonly sessionId?: string } = {},
+    dbPathOrOptions: string | {
+      readonly dbPath?: string;
+      readonly sessionId?: string;
+      readonly usageSource?: "cli" | "mcp";
+    } = {},
   ) {
     if (typeof dbPathOrOptions === "string") {
       this.#fixedDbPath = dbPathOrOptions;
       this.#sessionId = defaultSessionId();
+      this.#usageSource = "cli";
     } else {
       this.#fixedDbPath = dbPathOrOptions.dbPath ?? null;
       this.#sessionId = dbPathOrOptions.sessionId ?? defaultSessionId();
+      this.#usageSource = dbPathOrOptions.usageSource ?? "cli";
     }
   }
 
@@ -210,6 +254,20 @@ export class IrCacheStore {
       if (versionRow?.version === SCHEMA_VERSION) {
         return;
       }
+      if (versionRow?.version === 3 && SCHEMA_VERSION === 4) {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS usage_events (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            used_at     INTEGER NOT NULL,
+            session_id  TEXT NOT NULL,
+            source      TEXT NOT NULL,
+            name        TEXT NOT NULL,
+            detail      TEXT
+          );
+        `);
+        db.prepare("UPDATE schema_meta SET version = ?").run(SCHEMA_VERSION);
+        return;
+      }
     } else {
       const hasTables = db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' LIMIT 1")
@@ -224,6 +282,7 @@ export class IrCacheStore {
       DROP TABLE IF EXISTS ir_versions;
       DROP TABLE IF EXISTS session_reads;
       DROP TABLE IF EXISTS read_events;
+      DROP TABLE IF EXISTS usage_events;
       DROP TABLE IF EXISTS stats;
       DROP TABLE IF EXISTS session_stats;
       DROP TABLE IF EXISTS schema_meta;
@@ -857,7 +916,168 @@ export class IrCacheStore {
     };
   }
 
-  clear(filePath?: string): void {
+  #logUsage(
+    db: SqlDatabase,
+    name: string,
+    source: "cli" | "mcp",
+    detail?: string,
+    usedAt = Date.now(),
+  ): void {
+    db.prepare(
+      `INSERT INTO usage_events (used_at, session_id, source, name, detail)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(usedAt, this.#sessionId, source, name, detail ?? null);
+  }
+
+  logUsage(name: string, detail?: string, source?: "cli" | "mcp"): void {
+    const { db } = this.#connectionFor(process.cwd());
+    this.#logUsage(db, name, source ?? this.#usageSource, detail);
+  }
+
+  listUsage(query: UsageQuery = {}): ReadonlyArray<UsageEvent> {
+    const anchor = resolve(query.anchorPath ?? process.cwd());
+    this.#connectionFor(anchor);
+
+    const conditions: string[] = [];
+    const params: SQLInputValue[] = [];
+
+    if (query.sinceMs) {
+      conditions.push("used_at >= ?");
+      params.push(Date.now() - query.sinceMs);
+    }
+    if (query.sessionId) {
+      conditions.push("session_id LIKE ?");
+      params.push(`${query.sessionId}%`);
+    }
+    if (query.source) {
+      conditions.push("source = ?");
+      params.push(query.source);
+    }
+    if (query.grep) {
+      conditions.push("(LOWER(name) LIKE ? OR LOWER(COALESCE(detail, '')) LIKE ?)");
+      const pattern = `%${query.grep.toLowerCase()}%`;
+      params.push(pattern, pattern);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const limit = query.limit ?? 10;
+    const skip = query.skip ?? 0;
+
+    const rows: UsageEvent[] = [];
+    for (const { db } of this.#connections.values()) {
+      const result = db
+        .prepare(
+          `SELECT used_at, session_id, source, name, detail
+           FROM usage_events
+           ${where}
+           ORDER BY used_at DESC`,
+        )
+        .all(...params) as Array<{
+        used_at: number;
+        session_id: string;
+        source: "cli" | "mcp";
+        name: string;
+        detail: string | null;
+      }>;
+      rows.push(
+        ...result.map((row) => ({
+          usedAt: row.used_at,
+          sessionId: row.session_id,
+          source: row.source,
+          name: row.name,
+          detail: row.detail ?? undefined,
+        })),
+      );
+    }
+
+    return rows.sort((a, b) => b.usedAt - a.usedAt).slice(skip, skip + limit);
+  }
+
+  listSessions(query: SessionsQuery = {}): ReadonlyArray<SessionSummary> {
+    const anchor = resolve(query.anchorPath ?? process.cwd());
+    this.#connectionFor(anchor);
+
+    const conditions: string[] = [];
+    const params: SQLInputValue[] = [];
+
+    if (query.sinceMs) {
+      conditions.push("read_at >= ?");
+      params.push(Date.now() - query.sinceMs);
+    }
+    if (query.grep) {
+      conditions.push("LOWER(session_id) LIKE ?");
+      params.push(`%${query.grep.toLowerCase()}%`);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const limit = query.limit ?? 20;
+    const skip = query.skip ?? 0;
+
+    const bySession = new Map<string, SessionSummary>();
+
+    for (const { db } of this.#connections.values()) {
+      const rows = db
+        .prepare(
+          `SELECT
+             session_id,
+             MIN(read_at) as first_at,
+             MAX(read_at) as last_at,
+             COUNT(*) as reads,
+             COALESCE(SUM(raw_tokens), 0) as raw_tokens,
+             COALESCE(SUM(saved_tokens), 0) as saved_tokens
+           FROM read_events
+           ${where}
+           GROUP BY session_id
+           ORDER BY last_at DESC`,
+        )
+        .all(...params) as Array<{
+        session_id: string;
+        first_at: number;
+        last_at: number;
+        reads: number;
+        raw_tokens: number;
+        saved_tokens: number;
+      }>;
+
+      for (const row of rows) {
+        const existing = bySession.get(row.session_id);
+        if (existing) {
+          bySession.set(row.session_id, {
+            sessionId: row.session_id,
+            firstAt: Math.min(existing.firstAt, row.first_at),
+            lastAt: Math.max(existing.lastAt, row.last_at),
+            reads: existing.reads + row.reads,
+            rawTokens: existing.rawTokens + row.raw_tokens,
+            savedTokens: existing.savedTokens + row.saved_tokens,
+            savedPct: 0,
+          });
+        } else {
+          bySession.set(row.session_id, {
+            sessionId: row.session_id,
+            firstAt: row.first_at,
+            lastAt: row.last_at,
+            reads: row.reads,
+            rawTokens: row.raw_tokens,
+            savedTokens: row.saved_tokens,
+            savedPct: 0,
+          });
+        }
+      }
+    }
+
+    return [...bySession.values()]
+      .map((row) => ({
+        ...row,
+        savedPct: row.rawTokens > 0 ? (row.savedTokens / row.rawTokens) * 100 : 0,
+      }))
+      .sort((a, b) => b.lastAt - a.lastAt)
+      .slice(skip, skip + limit);
+  }
+
+  clear(options: ClearOptions = {}): ClearResult {
+    const filePath = options.path;
+    const olderThanMs = options.olderThanMs;
+
     if (!filePath && this.#connections.size === 0) {
       this.#connectionFor(process.cwd());
     }
@@ -866,9 +1086,50 @@ export class IrCacheStore {
       ? [this.#connectionFor(resolve(filePath))]
       : [...this.#connections.values()];
 
+    let readEvents = 0;
+    let usageEvents = 0;
+    let sessionReads = 0;
+    let irVersions = 0;
+
     for (const { db, dbPath } of targets) {
-      db.exec("DELETE FROM ir_versions; DELETE FROM session_reads; DELETE FROM read_events;");
-      this.#connections.delete(dbPath);
+      if (olderThanMs === undefined) {
+        db.exec(
+          "DELETE FROM ir_versions; DELETE FROM session_reads; DELETE FROM read_events; DELETE FROM usage_events;",
+        );
+        this.#connections.delete(dbPath);
+        continue;
+      }
+
+      const cutoff = Date.now() - olderThanMs;
+      readEvents += (
+        db.prepare("DELETE FROM read_events WHERE read_at < ?").run(cutoff) as { changes: number }
+      ).changes;
+      usageEvents += (
+        db.prepare("DELETE FROM usage_events WHERE used_at < ?").run(cutoff) as { changes: number }
+      ).changes;
+      sessionReads += (
+        db.prepare("DELETE FROM session_reads WHERE read_at < ?").run(cutoff) as { changes: number }
+      ).changes;
+      irVersions += (
+        db
+          .prepare(
+            `DELETE FROM ir_versions
+             WHERE created_at < ?
+               AND (file_path, layer, source_hash) NOT IN (
+                 SELECT file_path, layer, source_hash FROM session_reads
+               )`,
+          )
+          .run(cutoff) as { changes: number }
+      ).changes;
     }
+
+    return {
+      readEvents,
+      usageEvents,
+      sessionReads,
+      irVersions,
+      olderThanMs,
+      fullClear: olderThanMs === undefined,
+    };
   }
 }

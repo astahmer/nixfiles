@@ -1,4 +1,5 @@
-import { parseSince, type StatsQuery, type StatsRequest } from "./stats-query.ts";
+import type { ClearOptions } from "./history-query.ts";
+import { parseDuration, parseSince, type StatsQuery, type StatsRequest } from "./stats-query.ts";
 
 export type StatsCliInput = {
   readonly scope: "repo" | "session";
@@ -9,6 +10,24 @@ export type StatsCliInput = {
   readonly discoverGlobs?: number;
   readonly json: boolean;
   readonly verbose: boolean;
+};
+
+export type ListCliInput = {
+  readonly limit: number;
+  readonly skip: number;
+  readonly since?: string;
+  readonly session?: string;
+  readonly grep?: string;
+  readonly source?: "cli" | "mcp";
+  readonly json: boolean;
+};
+
+export type SessionsCliInput = {
+  readonly limit: number;
+  readonly skip: number;
+  readonly since?: string;
+  readonly grep?: string;
+  readonly json: boolean;
 };
 
 export const statsQueryFromInput = (input: StatsCliInput): StatsQuery => {
@@ -41,13 +60,19 @@ export const statsRequestFromInput = (input: StatsCliInput): StatsRequest => ({
   },
 });
 
-export type FastCommand = "gain" | "stats" | "clear";
+export type FastCommand = "gain" | "stats" | "clear" | "ls" | "sessions";
 
 export const parseFastCommand = (
   argv: ReadonlyArray<string>,
 ): { readonly command: FastCommand; readonly rest: ReadonlyArray<string> } | null => {
   const command = argv[2];
-  if (command === "gain" || command === "stats" || command === "clear") {
+  if (
+    command === "gain" ||
+    command === "stats" ||
+    command === "clear" ||
+    command === "ls" ||
+    command === "sessions"
+  ) {
     return { command, rest: argv.slice(3) };
   }
   return null;
@@ -57,6 +82,22 @@ const nextFlagValue = (args: ReadonlyArray<string>, index: number, flag: string)
   const value = args[index + 1];
   if (value === undefined || value.startsWith("--")) {
     throw new Error(`${flag} requires a value`);
+  }
+  return value;
+};
+
+const parseLimit = (args: ReadonlyArray<string>, index: number, flag: string): number => {
+  const value = Number(nextFlagValue(args, index, flag));
+  if (!Number.isFinite(value) || value < 1) {
+    throw new Error(`${flag} requires a positive integer`);
+  }
+  return value;
+};
+
+const parseSkip = (args: ReadonlyArray<string>, index: number): number => {
+  const value = Number(nextFlagValue(args, index, "--skip"));
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error("--skip requires a non-negative integer");
   }
   return value;
 };
@@ -74,6 +115,9 @@ export const parseStatsFlags = (args: ReadonlyArray<string>): StatsCliInput => {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
     switch (arg) {
+      case "-h":
+      case "--help":
+        break;
       case "--json":
         json = true;
         break;
@@ -117,18 +161,141 @@ export const parseStatsFlags = (args: ReadonlyArray<string>): StatsCliInput => {
   return { scope, since, glob, groupGlob, byDir, discoverGlobs, json, verbose };
 };
 
-export const parseClearFlags = (args: ReadonlyArray<string>): string | undefined => {
+export const parseClearFlags = (args: ReadonlyArray<string>): ClearOptions => {
   let path: string | undefined;
+  let olderThanMs: number | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]!;
-    if (arg === "--path") {
-      path = nextFlagValue(args, index, arg);
-      index += 1;
-      continue;
+    switch (arg) {
+      case "-h":
+      case "--help":
+        break;
+      case "--path":
+        path = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--older-than":
+        olderThanMs = parseDuration(nextFlagValue(args, index, arg), "--older-than");
+        index += 1;
+        break;
+      default:
+        throw new Error(`unknown option: ${arg}`);
     }
-    throw new Error(`unknown option: ${arg}`);
   }
 
-  return path;
+  return { path, olderThanMs };
 };
+
+export const parseLsFlags = (args: ReadonlyArray<string>): ListCliInput => {
+  let limit = 10;
+  let skip = 0;
+  let since: string | undefined;
+  let session: string | undefined;
+  let grep: string | undefined;
+  let source: "cli" | "mcp" | undefined;
+  let json = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    switch (arg) {
+      case "-h":
+      case "--help":
+        break;
+      case "-n":
+      case "--limit":
+        limit = parseLimit(args, index, arg);
+        index += 1;
+        break;
+      case "--skip":
+        skip = parseSkip(args, index);
+        index += 1;
+        break;
+      case "--since":
+        since = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--session":
+        session = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--grep":
+        grep = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--source": {
+        const value = nextFlagValue(args, index, arg);
+        if (value !== "cli" && value !== "mcp") {
+          throw new Error(`invalid --source value "${value}"`);
+        }
+        source = value;
+        index += 1;
+        break;
+      }
+      case "--json":
+        json = true;
+        break;
+      default:
+        throw new Error(`unknown option: ${arg}`);
+    }
+  }
+
+  return { limit, skip, since, session, grep, source, json };
+};
+
+export const parseSessionsFlags = (args: ReadonlyArray<string>): SessionsCliInput => {
+  let limit = 20;
+  let skip = 0;
+  let since: string | undefined;
+  let grep: string | undefined;
+  let json = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    switch (arg) {
+      case "-h":
+      case "--help":
+        break;
+      case "-n":
+      case "--limit":
+        limit = parseLimit(args, index, arg);
+        index += 1;
+        break;
+      case "--skip":
+        skip = parseSkip(args, index);
+        index += 1;
+        break;
+      case "--since":
+        since = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--grep":
+        grep = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--json":
+        json = true;
+        break;
+      default:
+        throw new Error(`unknown option: ${arg}`);
+    }
+  }
+
+  return { limit, skip, since, grep, json };
+};
+
+export const listQueryFromInput = (input: ListCliInput) => ({
+  limit: input.limit,
+  skip: input.skip,
+  sinceMs: input.since ? parseSince(input.since) : undefined,
+  sessionId: input.session,
+  grep: input.grep,
+  source: input.source,
+});
+
+export const sessionsQueryFromInput = (input: SessionsCliInput) => ({
+  limit: input.limit,
+  skip: input.skip,
+  sinceMs: input.since ? parseSince(input.since) : undefined,
+  grep: input.grep,
+});

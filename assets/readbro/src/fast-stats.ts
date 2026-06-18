@@ -1,10 +1,21 @@
 import { resolve } from "node:path";
 import { IrCacheStore } from "./cache.ts";
-import { formatGain, formatStats } from "./format.ts";
+import { printFastHelp, wantsHelp } from "./fast-help.ts";
 import {
+  formatClearResult,
+  formatGain,
+  formatSessionsList,
+  formatStats,
+  formatUsageList,
+} from "./format.ts";
+import {
+  listQueryFromInput,
   parseClearFlags,
   parseFastCommand,
+  parseLsFlags,
+  parseSessionsFlags,
   parseStatsFlags,
+  sessionsQueryFromInput,
   statsRequestFromInput,
 } from "./stats-cli.ts";
 
@@ -14,16 +25,32 @@ export const runFastCommand = (argv: ReadonlyArray<string>): boolean => {
     return false;
   }
 
+  if (wantsHelp(parsed.rest)) {
+    printFastHelp(parsed.command);
+    return true;
+  }
+
   const cache = new IrCacheStore();
+  cache.logUsage(parsed.command, parsed.rest.join(" ") || undefined);
 
   if (parsed.command === "clear") {
-    const path = parseClearFlags(parsed.rest);
-    cache.clear(path);
-    console.log(
-      path
-        ? `Cache cleared for ${resolve(path)} working copy.`
-        : "Cache cleared for all open repo databases.",
-    );
+    const options = parseClearFlags(parsed.rest);
+    const result = cache.clear(options);
+    console.log(formatClearResult(result, options.path ? resolve(options.path) : undefined));
+    return true;
+  }
+
+  if (parsed.command === "ls") {
+    const input = parseLsFlags(parsed.rest);
+    const events = cache.listUsage(listQueryFromInput(input));
+    console.log(formatUsageList(events, { json: input.json }));
+    return true;
+  }
+
+  if (parsed.command === "sessions") {
+    const input = parseSessionsFlags(parsed.rest);
+    const sessions = cache.listSessions(sessionsQueryFromInput(input));
+    console.log(formatSessionsList(sessions, { json: input.json }));
     return true;
   }
 

@@ -4,8 +4,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { Readbro } from "./readbro.ts";
-import { statsRequestFromInput } from "./stats-cli.ts";
+import { statsRequestFromInput, listQueryFromInput, sessionsQueryFromInput } from "./stats-cli.ts";
 import type { StatsRequest } from "./stats-query.ts";
+import { parseSince } from "./stats-query.ts";
 
 const layer = Options.choice("layer", ["L0", "L1", "L2", "L3"]).pipe(
   Options.withDescription("IR layer (default L1)"),
@@ -65,6 +66,36 @@ const json = Options.boolean("json").pipe(
 const verbose = Options.boolean("verbose").pipe(
   Options.withDescription("Show breakdown tables (layer, repr, outcome, glob, recent)"),
   Options.withDefault(false),
+);
+
+const limit = Options.integer("limit").pipe(
+  Options.withDescription("Max entries to show"),
+  Options.optional,
+);
+
+const skip = Options.integer("skip").pipe(
+  Options.withDescription("Skip first N entries (pagination)"),
+  Options.optional,
+);
+
+const grep = Options.text("grep").pipe(
+  Options.withDescription("Filter by text (case-insensitive)"),
+  Options.optional,
+);
+
+const source = Options.choice("source", ["cli", "mcp"]).pipe(
+  Options.withDescription("Filter usage by source"),
+  Options.optional,
+);
+
+const session = Options.text("session").pipe(
+  Options.withDescription("Filter by session id prefix"),
+  Options.optional,
+);
+
+const olderThan = Options.text("older-than").pipe(
+  Options.withDescription("Delete entries older than duration (e.g. 7d, 24h, 3M)"),
+  Options.optional,
 );
 
 const statsRequestFromCli = (input: {
@@ -197,13 +228,80 @@ const clear = Command.make(
   "clear",
   {
     path: Options.text("path").pipe(Options.optional),
+    olderThan,
   },
-  ({ path }) =>
+  ({ path, olderThan: older }) =>
     Effect.gen(function* () {
       const rb = yield* Readbro;
-      yield* Console.log(yield* rb.clear(Option.getOrUndefined(path)));
+      yield* Console.log(
+        yield* rb.clear({
+          path: Option.getOrUndefined(path),
+          olderThanMs: Option.match(older, {
+            onNone: () => undefined,
+            onSome: (value) => parseSince(value),
+          }),
+        }),
+      );
     }),
-).pipe(Command.withDescription("Clear repo cache"));
+).pipe(Command.withDescription("Clear or prune repo cache"));
+
+const ls = Command.make(
+  "ls",
+  {
+    limit,
+    skip,
+    since,
+    session,
+    grep,
+    source,
+    json,
+  },
+  (input) =>
+    Effect.gen(function* () {
+      const rb = yield* Readbro;
+      yield* Console.log(
+        yield* rb.ls(
+          listQueryFromInput({
+            limit: Option.getOrElse(input.limit, () => 10),
+            skip: Option.getOrElse(input.skip, () => 0),
+            since: Option.getOrUndefined(input.since),
+            session: Option.getOrUndefined(input.session),
+            grep: Option.getOrUndefined(input.grep),
+            source: Option.getOrUndefined(input.source),
+            json: input.json,
+          }),
+          { json: input.json },
+        ),
+      );
+    }),
+).pipe(Command.withDescription("Recent command and tool usage"));
+
+const sessions = Command.make(
+  "sessions",
+  {
+    limit,
+    skip,
+    since,
+    grep,
+    json,
+  },
+  (input) =>
+    Effect.gen(function* () {
+      const rb = yield* Readbro;
+      yield* Console.log(
+        yield* rb.sessions(
+          sessionsQueryFromInput({
+            limit: Option.getOrElse(input.limit, () => 20),
+            skip: Option.getOrElse(input.skip, () => 0),
+            since: Option.getOrUndefined(input.since),
+            grep: Option.getOrUndefined(input.grep),
+            json: input.json,
+          }),
+          { json: input.json },
+        ),
+      );
+    }),
+).pipe(Command.withDescription("Recent session ids with token savings"));
 
 const mcp = Command.make("mcp", {}, () =>
   Effect.gen(function* () {
@@ -213,7 +311,7 @@ const mcp = Command.make("mcp", {}, () =>
 ).pipe(Command.withDescription("Run MCP server on stdio"));
 
 export const root = Command.make("readbro").pipe(
-  Command.withSubcommands([read, reads, context, blast, stats, gain, clear, mcp]),
+  Command.withSubcommands([read, reads, context, blast, stats, gain, clear, ls, sessions, mcp]),
 );
 
 export const run = Command.run(root, {
