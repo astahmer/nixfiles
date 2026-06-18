@@ -104,9 +104,12 @@ export const McpLayer = Layer.effectDiscard(
     yield* registerTool(
       "read_file",
       [
+        "PLAN FIRST: list files you will touch, then read_file({ paths: [...], layer: \"L1\" }) in ONE call.",
+        "Parallel read_file tool calls ≠ batch — only a path array in one call saves round-trips and tokens.",
         "Read one or more files via composto IR + repo cache. ALWAYS use instead of built-in Read.",
         "PRECISE LOOKUP: if you know a symbol name, pass target (delegates to search_symbol) — do NOT grep or read whole file at L1 first.",
-        "path: string OR array — batch multiple files in ONE call (never parallel read_file). paths is an alias. target requires a single path.",
+        "path/paths: string OR array — batch multiple files in ONE call (never parallel read_file). target requires a single path.",
+        "After edits: prefer around_line or ranges for exact lines — not force on whole files.",
         "Directories are rejected — pass file paths. Use search_symbol for symbol lookup across a tree.",
         "Exploratory reads (no symbol): DEFAULT layer L1. L0=structure survey. Do NOT use L3 for exploration.",
         "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); full: true or max_lines: -1 for full raw.",

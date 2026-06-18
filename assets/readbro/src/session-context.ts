@@ -74,7 +74,7 @@ export const formatRepeatPathNotice = (input: {
   }
 
   lines.push(
-    "→ batch other files: read_file({ path: [\"a.ts\", \"b.ts\"] }); stop paginating — use layer: \"L3\", full: true",
+    '→ batch other files: read_file({ paths: ["a.ts", "b.ts"] }); for exact lines use around_line or ranges',
   );
 
   return lines.join("\n");

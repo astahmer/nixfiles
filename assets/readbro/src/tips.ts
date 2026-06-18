@@ -6,8 +6,12 @@ export type ReadbroTip = {
 /** Workflow hints — one random unseen tip appended to each MCP tool response. */
 export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
   {
+    id: "plan-pass",
+    text: "Multi-file task? Plan paths first, then one L1 batch — serial read_file costs a round-trip each even when cached.",
+  },
+  {
     id: "batch-paths",
-    text: "Known file paths? Batch in one call: read_file({ path: [\"a.ts\", \"b.ts\"], layer: \"L1\" }) — never parallel read_file.",
+    text: "Known file paths? Batch in one call: read_file({ paths: [\"a.ts\", \"b.ts\"], layer: \"L1\" }) — parallel read_file calls ≠ batch.",
   },
   {
     id: "search-symbol",
@@ -23,7 +27,7 @@ export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
   },
   {
     id: "cache-reread",
-    text: "Unchanged re-read saves tokens but still costs a round-trip — batch paths upfront; use force only after edits.",
+    text: "Unchanged re-read saves payload tokens but still costs a round-trip — plan and batch paths upfront.",
   },
   {
     id: "blast-radius",
@@ -43,7 +47,7 @@ export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
   },
   {
     id: "l3-full",
-    text: "Need exact source? read_file({ path: \"spec.ts\", layer: \"L3\", full: true }) — not offset pagination.",
+    text: "Need a few exact lines? read_file({ path: \"spec.ts\", around_line: 42, layer: \"L3\" }) or ranges — not full-file pagination.",
   },
   {
     id: "multi-symbol",
@@ -55,7 +59,7 @@ export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
   },
   {
     id: "debug-test-failure",
-    text: "Test failure? search_symbol({ target: \"FailingClass\" }) + read_file({ path: [\"spec.ts\", \"impl.ts\"], layer: \"L1\" }).",
+    text: "Test failure? search_symbol({ target: \"FailingClass\" }) + read_file({ paths: [\"spec.ts\", \"impl.ts\"], layer: \"L1\" }).",
   },
   {
     id: "around-line",
@@ -254,9 +258,8 @@ export class McpTipCoach {
 
     this.#lastBatchWarnAt = now;
     return (
-      "[readbro hint] Serial read_file calls detected — batch known paths in one call: " +
-      'read_file({ path: ["a.ts", "b.ts"], layer: "L1" }). ' +
-      "Use search_symbol when you know a symbol name; grep/find for regex or filenames."
+      "[readbro hint] Serial read_file calls detected — parallel tool calls ≠ batch. " +
+      'One call: read_file({ paths: ["a.ts", "b.ts"], layer: "L1" }). Saves round-trips + tokens.'
     );
   }
 
@@ -285,8 +288,8 @@ export class McpTipCoach {
     const layers = [...entry.layers].join(", ");
     const strength =
       entry.count >= 3
-        ? "Stop re-reading this file — use full: true once or batch other paths."
-        : "You already read this path — batch other files or use force only after edits.";
+        ? "Stop re-reading this file — batch other paths or drill with target / around_line / ranges."
+        : "You already read this path — batch other files; use around_line or ranges for exact lines.";
 
     return (
       `[readbro hint] read #${entry.count} of ${path} this session (layers: ${layers}). ${strength}`
@@ -298,7 +301,7 @@ export class McpTipCoach {
       return null;
     }
     const paths = this.#recentBatchCandidates.slice(-4).map((item) => JSON.stringify(item));
-    return `suggest: read_file({ path: [${paths.join(", ")}], layer: "L1" })`;
+    return `suggest: read_file({ paths: [${paths.join(", ")}], layer: "L1" })`;
   }
 
   sessionFooter(tool: string, payload: unknown): string | null {
@@ -311,14 +314,16 @@ export class McpTipCoach {
       readFilePathCount(payload).paths[0] !== undefined &&
       this.pathReadCount(readFilePathCount(payload).paths[0]!) >= 2;
     const shouldShow =
-      this.#readFileCalls >= 4 || extraRoundTrips >= 2 || repeatActive || this.#batchCalls === 0;
+      repeatActive ||
+      extraRoundTrips >= 1 ||
+      (this.#readFileCalls >= 2 && this.#batchCalls === 0 && this.#uniquePaths.size >= 2);
 
     if (!shouldShow) {
       return null;
     }
 
     const now = Date.now();
-    if (this.#lastFooterAt > 0 && now - this.#lastFooterAt < 8_000) {
+    if (this.#lastFooterAt > 0 && now - this.#lastFooterAt < 5_000) {
       return null;
     }
     this.#lastFooterAt = now;
@@ -326,6 +331,7 @@ export class McpTipCoach {
     const lines = [
       `[readbro session] ${this.#readFileCalls} read_file · ${this.#uniquePaths.size} unique paths · ` +
         `${this.#batchCalls} batches · est. +${extraRoundTrips} round-trips`,
+      "parallel read_file calls ≠ batch — use paths: [...] in ONE call",
     ];
     const suggest = this.batchSuggestLine();
     if (suggest) {

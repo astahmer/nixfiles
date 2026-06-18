@@ -121,7 +121,8 @@ Cache lives at **`.readbro/cache.db`** in the working-copy root (`READBRO_DIR` o
 Every MCP tool response (except JSON payloads) ends with lightweight coaching — rules alone don't stick, so readbro nudges in-band while the agent still has the file context fresh.
 
 - **`[readbro tip]`** — one random workflow hint per call (batch reads, `search_symbol`, LOD, md-ir, debug-test-failure, …). Unseen tips first; when all 14 have been shown, the pool reshuffles and continues (long sessions often compact context, so reminders help).
-- **`[readbro hint]`** — when serial single-path `read_file` calls are detected (e.g. two within 5s) **or** when the same path is read again in the session. Suggests batching, `full: true`, or `force` only after edits. Skipped for path arrays and `target` shorthand.
+- **`[readbro hint]`** — when serial single-path `read_file` calls are detected (e.g. two within 5s) **or** when the same path is read again in the session. Suggests batching with `paths: [...]` or `around_line` / `ranges` for exact lines. Skipped for path arrays and `target` shorthand.
+- **`[readbro session]`** — periodic footer on `read_file`: read count, batches, est. extra round-trips; reminds that parallel calls ≠ batch.
 - **`[readbro session]`** — periodic footer with read_file count, unique paths, batches, and estimated extra round-trips.
 
 On **unchanged IR** cache hits (2nd+ read of same file), the notice now includes read number, layers/windows already fetched, and a suggested next action.

@@ -12,6 +12,36 @@ readbro is the **only** MCP server you should use for reading files and finding 
 
 readbro compresses source files into composto IR (intermediate representation), caches what has been read in the repo, and on re-reads returns either a short "unchanged" notice or a compact diff instead of the full file again.
 
+## Plan pass → batch → drill → edit
+
+Before serial `read_file` calls, **plan which files you'll touch** and batch them. Each serial call costs a round-trip even on cache hit; one `paths` array saves round-trips and keeps related context together.
+
+1. **Plan** — list likely files (task scope, stack traces, `blast_radius`, filename grep)
+2. **Batch survey** — `read_file({ paths: ["a.ts", "b.ts"], layer: "L1" })` in **one** call
+3. **Drill** — `search_symbol`, `target`, `around_line`, or `ranges` when L1 is not enough
+4. **Edit** — re-read only changed spots with `around_line` / `ranges`; avoid whole-file `force`
+
+**Parallel `read_file` tool calls ≠ batch.** Only `paths: [...]` in a single call counts.
+
+```
+# Good — one round-trip
+read_file({ paths: ["src/tips.ts", "src/mcp.ts", "src/readbro.ts"], layer: "L1" })
+
+# Bad — three round-trips
+read_file({ path: "src/tips.ts" })
+read_file({ path: "src/mcp.ts" })
+read_file({ path: "src/readbro.ts" })
+```
+
+**Workflows:**
+
+- **Named thing?** → `search_symbol({ target: "..." })` first
+- **Known paths?** → one `read_file` batch at L1 — never parallel `read_file`
+- **Test failure?** → `search_symbol({ target: "FailingClass" })` + `read_file({ paths: ["spec.ts", "impl.ts"], layer: "L1" })`
+- **Regex / union counts** → grep or shell trace scripts
+
+**Anti-patterns:** `search_symbol` then many serial `read_file` calls for paths you already know; offset pagination on the same file — use `around_line` or `ranges` instead.
+
 ## Pick the tool first
 
 Before reaching for read_file L1 or grep, ask what you know:
@@ -20,7 +50,7 @@ Before reaching for read_file L1 or grep, ask what you know:
 |-----------|-----|---------|
 | **A symbol / class / function / use-case name** | `search_symbol` | `search_symbol({ target: "IrLayer" })` |
 | **File path + symbol** | `read_file` + `target` | `read_file({ path: "spec.ts", target: "rootInjectorCb" })` |
-| **Several file paths, no symbol** | `read_file` path array | `read_file({ path: ["a.ts", "b.ts"], layer: "L1" })` |
+| **Several file paths, no symbol** | `read_file` path array | `read_file({ paths: ["a.ts", "b.ts"], layer: "L1" })` |
 | **A file path, exploring blindly** | `read_file` L0 or L1 | `read_file({ path: "src/foo.ts" })` |
 | **Regex, substring, or filename pattern** | grep / Glob / `find` | `grep "TODO:"`, `Glob **/*.spec.ts`, `find . -name '*.test.ts'` |
 
@@ -61,11 +91,11 @@ Always prefer this over built-in Read when you know where to look (but maybe not
 
 **Parameters:**
 
-- `path` — string or **array** of paths (batch in one call); `paths` is an alias
+- `path` / `paths` — string or **array** of paths (batch in one call); `paths` is the preferred name for arrays
 - `layer` — `L0` \| `L1` \| `L2` \| `L3` (default `L1` for exploratory reads)
 - `target` / `budget` — **shorthand for search_symbol** (single path only; `target` string or array)
-- `force` — bypass cache and return full payload (default `false`)
-- `full` — shorthand for full raw read (implies `L3`, no line cap)
+- `force` — rare; bypass cache for full payload. After edits prefer `around_line` / `ranges` over whole-file re-reads
+- `full` — full raw read (implies `L3`, no line cap); use only for small files
 - `around_line` / `context` — center on stack-trace line (implies `L3`, default ±40 lines)
 - `ranges` — `[[start,end], ...]` or symbol names (resolved via L0)
 - `max_lines` — cap output lines (`L3`/raw auto-capped to 200; `-1` or `full: true` = no cap)
@@ -80,7 +110,7 @@ read_file({ path: "spec.ts", target: "rootInjectorCb" })
 **Batch read (never parallel read_file calls):**
 
 ```
-read_file({ path: ["src/a.ts", "src/b.ts"], layer: "L1" })
+read_file({ paths: ["src/a.ts", "src/b.ts"], layer: "L1" })
 ```
 
 **Exploratory (no symbol yet):**
@@ -171,15 +201,15 @@ Short notice; on 2nd+ read includes read number, layers/windows already fetched,
 
 Returns a unified diff of the IR vs what this session last saw.
 
-`force: true` skips the cache and always returns the full current payload.
+`force: true` bypasses cache (rare). Prefer `around_line` / `ranges` to fetch exact lines after edits.
 
 ### MCP tips
 
 Every MCP tool response may end with:
 
 - `[readbro tip] …` — one random workflow hint (unseen tips first; pool reshuffles when exhausted)
-- `[readbro hint] …` — serial reads OR repeat path in session (batch / `full: true` nudge)
-- `[readbro session] …` — periodic footer: read count, unique paths, batches, est. extra round-trips
+- `[readbro hint] …` — serial reads OR repeat path in session (batch / `around_line` nudge)
+- `[readbro session] …` — periodic footer: read count, unique paths, batches, est. extra round-trips; reminds that parallel calls ≠ batch
 
 List all tips: `readbro tips` (or `readbro tips --json`).
 
@@ -202,27 +232,17 @@ session_clear()    → reset repo cache
 
 Markdown L0 = heading outline. Markdown L1 = section summaries + links + fenced-code stubs (no full prose).
 
-## Audit workflows
-
-1. **Named thing?** → `search_symbol({ target: "..." })` first
-2. **Known paths batch?** → `read_file({ path: [...], layer: "L1" })` **one call** — never parallel `read_file`
-3. **Test failure?** → `search_symbol({ target: "FailingClass" })` + `read_file({ path: ["spec.ts", "impl.ts"], layer: "L1" })`
-4. **Regex / union counts** → grep or shell trace scripts
-
-**Anti-pattern:** `search_symbol` then many serial `read_file` calls for paths you already know — batch them.
-**Anti-pattern:** offset pagination on same file — use `full: true` once instead.
-
 ## Quick reference
 
 | Task | Tool |
 |------|------|
 | Know symbol name | `search_symbol` (**default**) |
 | File + symbol | `read_file` + `target` |
-| Several known files | `read_file` path array |
+| Several known files | `read_file` with `paths: [...]` |
 | Explore unknown file | `read_file` L0 → L1 |
 | Understand logic | `read_file` L1 |
 | Regex / text / filenames | grep / Glob |
 | Before editing | `blast_radius` |
-| Bypass cache | `read_file` with `force: true` |
-| Full raw file | `read_file` with `full: true` |
+| Exact lines after edit | `around_line` / `ranges` |
+| Small file, full raw | `read_file` with `full: true` |
 | Session batching audit | `readbro audit` CLI |

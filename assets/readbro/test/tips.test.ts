@@ -55,8 +55,23 @@ test("batch warning after two rapid single-path read_file calls", () => {
   assert.equal(coach.batchWarning("read_file", { path: "b.ts" }), null);
 
   coach.recordToolCall("read_file", { path: "b.ts" });
-  const warn = coach.batchWarning("read_file", { path: "c.ts" });
-  assert.match(warn ?? "", /Serial read_file/);
+  const warn = coach.batchWarning("read_file", { path: "b.ts" });
+  assert.match(warn ?? "", /parallel tool calls ≠ batch/);
+  assert.match(warn ?? "", /paths:/);
+});
+
+test("session footer after two serial reads of different paths", () => {
+  const coach = new McpTipCoach({ tips: TINY_TIPS, repeatWarnCooldownMs: 60_000, batchWarnCooldownMs: 60_000 });
+  coach.recordToolCall("read_file", { path: "a.ts" });
+  coach.recordToolCall("read_file", { path: "b.ts" });
+  const footer = coach.sessionFooter("read_file", { path: "b.ts" });
+  assert.ok(footer);
+  assert.match(footer!, /parallel read_file calls ≠ batch/);
+  assert.match(footer!, /suggest: read_file/);
+});
+
+test("READBRO_TIPS includes plan-pass", () => {
+  assert.ok(READBRO_TIPS.some((tip) => tip.id === "plan-pass"));
 });
 
 test("no batch warning for path array or target shorthand", () => {
