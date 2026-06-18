@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { statSync } from "node:fs";
 import { IrCacheStore } from "./cache.ts";
 import type { CompostoIntent } from "./composto.ts";
-import { runCompostoCli } from "./composto.ts";
+import { runCompostoCli, runCompostoCliAll, runCompostoCliAsync } from "./composto.ts";
 import type { ReadbroError } from "./errors.ts";
 import { ReadbroUnknownError, toReadbroError } from "./errors.ts";
 import {
@@ -75,8 +75,8 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
       normalizeTargets(options.target);
 
     const searchSymbol = (options: SearchSymbolOptions) =>
-      Effect.try({
-        try: () => {
+      Effect.tryPromise({
+        try: async () => {
           const targets = resolveSearchTargets(options);
           const detail = [options.path ?? ".", ...targets].filter(Boolean).join(" ");
           logUsage("symbol", "search_symbol", detail);
@@ -84,10 +84,18 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
           const abs = resolve(options.path ?? ".");
           const root = findRepoRoot(abs);
           let isFile = false;
+          let isDirectory = false;
           try {
-            isFile = statSync(abs).isFile();
+            const st = statSync(abs);
+            isFile = st.isFile();
+            isDirectory = st.isDirectory();
           } catch {
             // path may not exist yet; composto will surface the error
+          }
+          if (isDirectory && targets.length === 0) {
+            throw new Error(
+              "search_symbol: path is a directory — pass target (symbol name), or use read_file with a path array to batch-read files",
+            );
           }
           if (isFile && targets.length === 0) {
             throw new Error(
@@ -103,21 +111,21 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
           }
 
           if (targets.length === 1) {
-            return runCompostoCli(
+            return runCompostoCliAsync(
               ["context", contextPath, `--budget=${budget}`, `--target=${targets[0]}`],
               root,
             );
           }
 
-          const perTargetBudget = Math.max(500, Math.floor(budget / targets.length));
-          const parts = targets.map((target) => {
-            const output = runCompostoCli(
-              ["context", contextPath, `--budget=${perTargetBudget}`, `--target=${target}`],
-              root,
-            );
-            return `=== ${target} ===\n${output}`;
-          });
-          return parts.join("\n\n");
+          const outputs = await runCompostoCliAll(
+            targets.map((target) => ({
+              args: ["context", contextPath, `--budget=${budget}`, `--target=${target}`],
+              startPath: root,
+            })),
+          );
+          return targets
+            .map((target, index) => `=== ${target} ===\n${outputs[index] ?? ""}`)
+            .join("\n\n");
         },
         catch: toReadbroError,
       });
@@ -146,8 +154,24 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
 
       const paths = typeof path === "string" ? [path] : [...path];
       return Effect.sync(() => {
+        for (const filePath of paths) {
+          const abs = resolve(filePath);
+          try {
+            if (statSync(abs).isDirectory()) {
+              throw new Error(
+                `read_file: ${filePath} is a directory — pass file paths, not folders. Batch files in one call: read_file({ path: ["a.ts", "b.ts"] }). Use search_symbol for symbol lookup across a tree.`,
+              );
+            }
+          } catch (error) {
+            if (error instanceof Error && error.message.startsWith("read_file:")) {
+              throw error;
+            }
+            // missing path — generatePayload / composto will report it
+          }
+        }
+
         const detail = paths.join(" ");
-        logUsage(paths.length === 1 ? "read" : "reads", "read_file", detail);
+        logUsage(paths.length === 1 ? "read" : "read", "read_file", detail);
 
         if (paths.length === 1) {
           const { maxLines, offset, force, layer } = options;

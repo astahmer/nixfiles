@@ -23,7 +23,13 @@ function resolveSourceRepo() {
 function prepareWorkdir(sourceRepo) {
   const workDir = mkdtempSync(join(tmpdir(), "readbro-bench-"));
   mkdirSync(join(workDir, ".git"));
-  const allFiles = [...new Set([...fixtures.files, ...(fixtures.largeFiles ?? [])])];
+  const allFiles = [
+    ...new Set([
+      ...fixtures.files,
+      ...(fixtures.largeFiles ?? []),
+      ...(fixtures.markdownFiles ?? []),
+    ]),
+  ];
   for (const rel of allFiles) {
     const src = join(sourceRepo, rel);
     const dest = join(workDir, rel);
@@ -95,22 +101,24 @@ function main() {
 
   console.log("# readbro benchmark");
   console.log("");
-  console.log(`Fixtures: ${fixtures.files.length} proof + ${(fixtures.largeFiles ?? []).length} large files`);
+  console.log(`Fixtures: ${fixtures.files.length} proof + ${(fixtures.largeFiles ?? []).length} large + ${(fixtures.markdownFiles ?? []).length} markdown`);
   console.log(`Source: ${sourceRepo}`);
   console.log(`Token estimate: ceil(chars × 0.75) — same as cachebro README`);
   console.log(`Scenarios: ${SCENARIOS.length}`);
   console.log(`Run date: ${new Date().toISOString().slice(0, 10)}`);
 
-  try {
-    for (const [index, scenario] of SCENARIOS.entries()) {
-      const results = runScenario(workDir, scenario, `s${index}`);
-      printTable(scenario, results);
-      allRows.push(...results);
+  (async () => {
+    try {
+      for (const [index, scenario] of SCENARIOS.entries()) {
+        const results = await runScenario(workDir, scenario, `s${index}`);
+        printTable(scenario, results);
+        allRows.push(...results);
+      }
+      printSummary(allRows);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
     }
-    printSummary(allRows);
-  } finally {
-    rmSync(workDir, { recursive: true, force: true });
-  }
+  })();
 }
 
 main();

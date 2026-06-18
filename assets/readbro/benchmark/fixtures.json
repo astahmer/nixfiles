@@ -1,6 +1,6 @@
 {
   "sourceRepo": ".references/composto",
-  "description": "composto benchmark-proof + large src files",
+  "description": "composto benchmark-proof + large src files + README",
   "files": [
     "src/trends/hotspot.ts",
     "src/ir/layers.ts",
@@ -13,5 +13,10 @@
     "src/cli/init.ts",
     "src/cli/commands.ts",
     "src/ir/ast-walker.ts"
-  ]
+  ],
+  "markdownFiles": ["README.md"],
+  "symbolTargets": {
+    "single": "packContext",
+    "multi": ["packContext", "generateLayer", "astWalkIR"]
+  }
 }

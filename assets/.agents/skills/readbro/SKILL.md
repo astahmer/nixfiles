@@ -46,10 +46,10 @@ Use when you know **what** you're looking for by symbol name — preferred **ins
 ```
 search_symbol({ target: "InvolveNajarInPurchaseProjectUseCase" })
 search_symbol({ path: "assets/readbro", target: "IrLayer" })
-search_symbol({ path: "spec/", target: ["UseCaseA", "UseCaseB"], budget: 8000 })
+search_symbol({ path: "spec/", target: ["UseCaseA", "UseCaseB"], budget: 4000 })
 ```
 
-- `target` — one symbol name, or array for multiple (budget split)
+- `target` — one symbol name, or array for multiple (full budget each; parallel composto calls)
 - `path` — scope to directory (default `.`) or file
 - `budget` — token budget (default `4000`)
 
@@ -139,14 +139,15 @@ When you **do** have a symbol name, skip LOD — use `search_symbol` or `read_fi
 
 | Command | Action |
 |---------|--------|
-| `readbro read <path>` | Read one file (`--layer`, `--force`) |
-| `readbro reads <paths...>` | Batch read (same as `read_file` with path array) |
+| `readbro read <paths...>` | Read one or more files (`--layer`, `--force`, `--target`) |
 | `readbro symbol` | Symbol search (`--path`, `--budget`, `--target`) |
 | `readbro context` | Deprecated alias for `symbol` |
 | `readbro blast <file>` | Blast radius (`--intent`) |
 | `readbro stats` | Repo health snapshot (summary; `--verbose` for breakdown) |
 | `readbro gain` | Where savings come from — top files (`--verbose` for globs/recent) |
 | `readbro clear` | Clear repo cache (`--path` optional) |
+| `readbro ls` | Command/tool usage history (CLI + MCP) |
+| `readbro sessions` | MCP agent sessions only (`--all` for CLI too) |
 | `readbro mcp` | MCP server explicitly |
 
 ## Repo caching
@@ -189,8 +190,10 @@ Markdown L0 = heading outline. Markdown L1 = section summaries + links + fenced-
 ## Audit workflows
 
 1. **Named thing?** → `search_symbol({ target: "..." })` first
-2. **Known paths batch?** → `read_file({ path: [...], layer: "L1" })` one call
+2. **Known paths batch?** → `read_file({ path: [...], layer: "L1" })` **one call** — never parallel `read_file`
 3. **Regex / union counts** → grep or shell trace scripts
+
+**Anti-pattern:** `search_symbol` then many serial `read_file` calls for paths you already know — batch them.
 
 ## Quick reference
 

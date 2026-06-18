@@ -133,7 +133,7 @@ const statsOptions = {
 const read = Command.make(
   "read",
   {
-    path: Args.text({ name: "path" }),
+    paths: Args.text({ name: "path" }).pipe(Args.repeated),
     layer,
     force,
     maxLines,
@@ -141,11 +141,15 @@ const read = Command.make(
     target: Options.text("target").pipe(Options.optional),
     budget: Options.integer("budget").pipe(Options.optional),
   },
-  ({ path, layer: lyr, force: f, maxLines: ml, offset: off, target, budget }) =>
+  ({ paths, layer: lyr, force: f, maxLines: ml, offset: off, target, budget }) =>
     Effect.gen(function* () {
+      if (paths.length === 0) {
+        return yield* Effect.dieMessage("readbro read: pass at least one file path");
+      }
       const rb = yield* Readbro;
+      const pathArg = paths.length === 1 ? paths[0]! : paths;
       yield* Console.log(
-        yield* rb.readFile(path, {
+        yield* rb.readFile(pathArg, {
           layer: Option.getOrUndefined(lyr),
           force: f,
           maxLines: Option.getOrUndefined(ml),
@@ -155,28 +159,9 @@ const read = Command.make(
         }),
       );
     }),
-).pipe(Command.withDescription("Read one file with IR cache (or --target for symbol search)"));
-
-const reads = Command.make(
-  "reads",
-  {
-    paths: Args.text({ name: "paths" }).pipe(Args.repeated),
-    layer,
-    maxLines,
-    offset,
-  },
-  ({ paths, layer: lyr, maxLines: ml, offset: off }) =>
-    Effect.gen(function* () {
-      const rb = yield* Readbro;
-      yield* Console.log(
-        yield* rb.readFile(paths, {
-          layer: Option.getOrUndefined(lyr),
-          maxLines: Option.getOrUndefined(ml),
-          offset: Option.getOrUndefined(off),
-        }),
-      );
-    }),
-).pipe(Command.withDescription("Batch read files"));
+).pipe(
+  Command.withDescription("Read one or more files with IR cache (or --target for symbol search)"),
+);
 
 const symbol = Command.make(
   "symbol",
@@ -303,11 +288,19 @@ const sessions = Command.make(
     skip,
     since,
     grep,
+    source: Options.choice("source", ["cli", "mcp", "all"]).pipe(Options.optional),
+    all: Options.boolean("all").pipe(
+      Options.withDescription("Include CLI one-shot sessions (default: MCP agent sessions only)"),
+      Options.withDefault(false),
+    ),
     json,
   },
   (input) =>
     Effect.gen(function* () {
       const rb = yield* Readbro;
+      const source = input.all
+        ? ("all" as const)
+        : Option.getOrUndefined(input.source);
       yield* Console.log(
         yield* rb.sessions(
           sessionsQueryFromInput({
@@ -315,13 +308,14 @@ const sessions = Command.make(
             skip: Option.getOrElse(input.skip, () => 0),
             since: Option.getOrUndefined(input.since),
             grep: Option.getOrUndefined(input.grep),
+            source,
             json: input.json,
           }),
           { json: input.json },
         ),
       );
     }),
-).pipe(Command.withDescription("Recent session ids with token savings"));
+).pipe(Command.withDescription("MCP agent sessions with token savings (use readbro ls for CLI history)"));
 
 const doctor = Command.make(
   "doctor",
@@ -347,7 +341,7 @@ const mcp = Command.make("mcp", {}, () =>
 ).pipe(Command.withDescription("Run MCP server on stdio"));
 
 export const root = Command.make("readbro").pipe(
-  Command.withSubcommands([read, reads, symbol, context, blast, stats, gain, clear, ls, sessions, doctor, mcp]),
+  Command.withSubcommands([read, symbol, context, blast, stats, gain, clear, ls, sessions, doctor, mcp]),
 );
 
 export const run = Command.run(root, {

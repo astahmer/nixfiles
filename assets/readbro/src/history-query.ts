@@ -18,6 +18,8 @@ export type SessionsQuery = {
   readonly skip?: number;
   readonly sinceMs?: number;
   readonly grep?: string;
+  /** Default `mcp` — CLI one-shot sessions stay in cache but are hidden here. Use `all` to include them. */
+  readonly source?: "cli" | "mcp" | "all";
 };
 
 export type ClearOptions = {

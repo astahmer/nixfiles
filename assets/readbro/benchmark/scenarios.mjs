@@ -179,6 +179,89 @@ export const SCENARIOS = [
       { type: "read", file: "src/ir/ast-walker.ts", layer: "L1" },
     ],
   },
+  {
+    id: "batch-read",
+    label: "Batch read 4 files ×2",
+    detail: "One MCP call with path array — vs 4 serial reads",
+    batchReads: true,
+    steps: () => [
+      {
+        type: "read_batch",
+        files: PROOF_FILES,
+      },
+      {
+        type: "read_batch",
+        files: PROOF_FILES,
+      },
+    ],
+  },
+  {
+    id: "explore-then-batch",
+    label: "L0 survey → batch L1 deepen",
+    detail: "Agent explores structure, then batches detail reads",
+    batchReads: true,
+    perStepLayers: true,
+    steps: () => [
+      { type: "read", file: "src/ir/layers.ts", layer: "L0" },
+      { type: "read", file: "src/trends/hotspot.ts", layer: "L0" },
+      { type: "read", file: "src/watcher/detector.ts", layer: "L0" },
+      { type: "read", file: "src/ir/ast-walker.ts", layer: "L0" },
+      {
+        type: "read_batch",
+        files: PROOF_FILES,
+        layer: "L1",
+      },
+      {
+        type: "read_batch",
+        files: PROOF_FILES,
+        layer: "L1",
+      },
+    ],
+  },
+  {
+    id: "md-survey",
+    label: "Markdown README — L0 → L1 → re-read",
+    detail: "readbro md-ir compressor on README.md",
+    markdownOnly: true,
+    perStepLayers: true,
+    steps: () => [
+      { type: "read", file: "README.md", layer: "L0" },
+      { type: "read", file: "README.md", layer: "L1" },
+      { type: "read", file: "README.md", layer: "L1" },
+    ],
+  },
+  {
+    id: "md-edit-reread",
+    label: "Markdown — read → edit → read",
+    detail: "md-ir diff after doc tweak",
+    markdownOnly: true,
+    steps: () => [
+      { type: "read", file: "README.md", layer: "L1" },
+      { type: "read", file: "README.md", layer: "L1" },
+      { type: "edit", file: "README.md", append: "\n<!-- benchmark-edit -->\n" },
+      { type: "read", file: "README.md", layer: "L1" },
+    ],
+  },
+  {
+    id: "symbol-single",
+    label: "search_symbol — single target",
+    detail: "composto context vs reading proof files raw",
+    symbolOnly: true,
+    steps: () => [{ type: "symbol", target: "packContext", budget: 4000 }],
+  },
+  {
+    id: "symbol-multi",
+    label: "search_symbol — 3 targets (parallel)",
+    detail: "Multi-symbol lookup — full budget per target",
+    symbolOnly: true,
+    steps: () => [
+      {
+        type: "symbol_multi",
+        targets: ["packContext", "generateLayer", "astWalkIR"],
+        budget: 4000,
+      },
+    ],
+  },
 ];
 
 export const LAYERS = ["L0", "L1", "L3"];

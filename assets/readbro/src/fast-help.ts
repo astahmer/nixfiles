@@ -59,16 +59,21 @@ Options:
   --json                 Machine-readable JSON
   -h, --help             Show this help`;
 
-const sessionsHelp = `readbro sessions — recent session ids with savings
+const sessionsHelp = `readbro sessions — MCP agent sessions with token savings
 
 Usage:
   readbro sessions [options]
+
+Shows MCP agent sessions by default. CLI one-shot reads still hit the cache but
+are hidden here — use readbro ls for command history.
 
 Options:
   -n, --limit <n>        Max sessions (default: 20)
   --skip <n>             Skip first N sessions (pagination)
   --since <duration>     Only sessions active since (e.g. 7d, 24h, 3M)
   --grep <text>          Filter session id (case-insensitive)
+  --all                  Include CLI one-shot sessions
+  --source cli|mcp|all   Filter by usage source (default: mcp)
   --json                 Machine-readable JSON
   -h, --help             Show this help`;
 

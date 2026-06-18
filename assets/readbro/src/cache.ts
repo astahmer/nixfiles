@@ -952,6 +952,13 @@ export class IrCacheStore {
       conditions.push("LOWER(session_id) LIKE ?");
       params.push(`%${query.grep.toLowerCase()}%`);
     }
+    const source = query.source ?? "mcp";
+    if (source !== "all") {
+      conditions.push(
+        "session_id IN (SELECT DISTINCT session_id FROM usage_events WHERE source = ?)",
+      );
+      params.push(source);
+    }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const limit = query.limit ?? 20;

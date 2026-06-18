@@ -67,14 +67,24 @@ test("listUsage and listSessions read recorded activity", () => {
 
   const reader = new IrCacheStore({ dbPath, sessionId: "sess-two", usageSource: "mcp" });
   reader.logUsage("read_file", "sample.ts", "mcp");
+  reader.readFile(file, { layer: "L1" });
 
   const usage = reader.listUsage({ anchorPath: repo, limit: 10 });
   assert.ok(usage.length >= 2);
   assert.match(formatUsageList(usage), /read/);
 
-  const sessions = reader.listSessions({ anchorPath: repo, limit: 10 });
-  assert.ok(sessions.some((row) => row.sessionId === "sess-one"));
-  assert.match(formatSessionsList(sessions), /sess-one/);
+  const allSessions = reader.listSessions({ anchorPath: repo, limit: 10, source: "all" });
+  assert.ok(allSessions.some((row) => row.sessionId === "sess-one"));
+  assert.ok(allSessions.some((row) => row.sessionId === "sess-two"));
+
+  const mcpSessions = reader.listSessions({ anchorPath: repo, limit: 10 });
+  assert.ok(mcpSessions.some((row) => row.sessionId === "sess-two"));
+  assert.equal(
+    mcpSessions.some((row) => row.sessionId === "sess-one"),
+    false,
+    "CLI sessions hidden by default",
+  );
+  assert.match(formatSessionsList(mcpSessions), /sess-two/);
 
   const pruned = reader.clear({ olderThanMs: 86_400_000 });
   assert.equal(pruned.fullClear, false);

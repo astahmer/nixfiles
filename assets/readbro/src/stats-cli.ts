@@ -27,6 +27,7 @@ export type SessionsCliInput = {
   readonly skip: number;
   readonly since?: string;
   readonly grep?: string;
+  readonly source?: "cli" | "mcp" | "all";
   readonly json: boolean;
 };
 
@@ -249,6 +250,7 @@ export const parseSessionsFlags = (args: ReadonlyArray<string>): SessionsCliInpu
   let skip = 0;
   let since: string | undefined;
   let grep: string | undefined;
+  let source: SessionsCliInput["source"];
   let json = false;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -274,6 +276,19 @@ export const parseSessionsFlags = (args: ReadonlyArray<string>): SessionsCliInpu
         grep = nextFlagValue(args, index, arg);
         index += 1;
         break;
+      case "--all":
+        source = "all";
+        break;
+      case "--source":
+        {
+          const value = nextFlagValue(args, index, arg);
+          if (value !== "cli" && value !== "mcp" && value !== "all") {
+            throw new Error(`invalid --source value "${value}"`);
+          }
+          source = value;
+          index += 1;
+        }
+        break;
       case "--json":
         json = true;
         break;
@@ -282,7 +297,7 @@ export const parseSessionsFlags = (args: ReadonlyArray<string>): SessionsCliInpu
     }
   }
 
-  return { limit, skip, since, grep, json };
+  return { limit, skip, since, grep, source, json };
 };
 
 export const listQueryFromInput = (input: ListCliInput) => ({
@@ -299,6 +314,7 @@ export const sessionsQueryFromInput = (input: SessionsCliInput) => ({
   skip: input.skip,
   sinceMs: input.since ? parseSince(input.since) : undefined,
   grep: input.grep,
+  source: input.source,
 });
 
 export type DoctorCliInput = {
