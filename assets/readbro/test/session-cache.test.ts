@@ -85,9 +85,9 @@ test("layer reads are independent per session — L1 then L3 both full on first 
   assert.match(r3.content, /hello/);
 });
 
-test("same session L0 then L1 may return zoom diff", () => {
-  const repo = makeRepo("zoom");
-  const file = join(repo, "zoom.ts");
+test("same session L0 then L1 returns full L1 payload (no cross-layer diff)", () => {
+  const repo = makeRepo("drill");
+  const file = join(repo, "drill.ts");
   writeFileSync(
     file,
     `export class Widget {
@@ -97,17 +97,16 @@ test("same session L0 then L1 may return zoom diff", () => {
 }
 `,
   );
-  const db = join(tmp, "zoom.db");
-  const cache = new IrCacheStore({ dbPath: db, sessionId: "zoom-sess" });
+  const db = join(tmp, "drill.db");
+  const cache = new IrCacheStore({ dbPath: db, sessionId: "drill-sess" });
 
   const r0 = cache.readFile(file, { layer: "L0" });
   assert.equal(r0.outcome, "full");
 
   const r1 = cache.readFile(file, { layer: "L1" });
-  assert.ok(["zoom", "full"].includes(r1.outcome));
-  if (r1.outcome === "zoom") {
-    assert.ok(r1.content.length > 0);
-  }
+  assert.equal(r1.outcome, "full");
+  assert.notEqual(r1.content, r0.content);
+  assert.doesNotMatch(r1.content, /^--- a\//);
 });
 
 test("force always returns full and bypasses cache", () => {

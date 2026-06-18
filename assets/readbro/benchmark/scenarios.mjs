@@ -163,6 +163,22 @@ export const SCENARIOS = [
       { type: "read", file: "src/cli/commands.ts" },
     ],
   },
+  {
+    id: "layer-drill",
+    label: "L0 → L1 drill ×4 files",
+    detail: "Survey then deepen — per-step layers, no cross-layer diff savings",
+    perStepLayers: true,
+    steps: () => [
+      { type: "read", file: "src/ir/layers.ts", layer: "L0" },
+      { type: "read", file: "src/ir/layers.ts", layer: "L1" },
+      { type: "read", file: "src/trends/hotspot.ts", layer: "L0" },
+      { type: "read", file: "src/trends/hotspot.ts", layer: "L1" },
+      { type: "read", file: "src/watcher/detector.ts", layer: "L0" },
+      { type: "read", file: "src/watcher/detector.ts", layer: "L1" },
+      { type: "read", file: "src/ir/ast-walker.ts", layer: "L0" },
+      { type: "read", file: "src/ir/ast-walker.ts", layer: "L1" },
+    ],
+  },
 ];
 
 export const LAYERS = ["L0", "L1", "L3"];

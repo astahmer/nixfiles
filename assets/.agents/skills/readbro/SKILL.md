@@ -98,7 +98,7 @@ blast_radius({ file: "src/auth/middleware.ts", intent: "bugfix" })
 
 Intent values: `refactor`, `bugfix`, `feature`, `test`, `docs`, `unknown`.
 
-## LOD zoom (exploratory reads only)
+## LOD layers (exploratory reads only)
 
 When you **don't** have a symbol name yet, start broad, drill only when needed:
 

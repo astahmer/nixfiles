@@ -109,8 +109,8 @@ Cache lives at **`.readbro/cache.db`** in the working-copy root (`READBRO_DIR` o
 
 - **First read** in a session → full IR for that layer.
 - **Unchanged re-read** → short notice (`~N tokens saved`).
-- **File changed** → unified IR diff vs last session read.
-- **Layer zoom** (L0→L1 in same session) → zoom diff, not full payload again.
+- **File changed** → unified IR diff vs last session read at the **same layer**.
+- **Layer drill** (L0→L1 in same session) → full payload for each layer (cross-layer diff removed — different IR shapes).
 - **New session** on warm repo → full IR again (that session hasn't seen the file yet).
 
 `session_status` / `session_gain` / `session_clear` manage and inspect the cache.
@@ -125,7 +125,7 @@ The name **L2** is used in two unrelated ways, which is the main source of confu
 
 **composto L2 = git change context.** In [composto’s docs](https://github.com/mertcanaltin/composto) (also under `.references/composto` in this flake), L2 means “what changed in this file?” as git-oriented delta IR: `CHANGED:` hunks with surrounding IR, optional `SCOPE:`, `BLAME:`, and health tags. The intended use case is PR review — changed files at L2, everything else at L1. Implementation lives in `src/ir/delta.ts` (`getFileDelta` runs `git diff HEAD`) and `src/ir/layers.ts` (`generateL2`).
 
-**readbro “delta” = session cache diff.** On re-read, readbro compares the current IR payload to what **this MCP session** last saw at the same layer. Unchanged file → short `unchanged IR` notice. File edited since last read → unified diff of IR lines (`src/differ.ts`). Layer drill (L0→L1) → zoom diff. That is conversation memory, not git history.
+**readbro “delta” = session cache diff.** On re-read, readbro compares the current IR payload to what **this MCP session** last saw at the same layer. Unchanged file → short `unchanged IR` notice. File edited since last read → unified diff of IR lines (`src/differ.ts`). Layer drill (L0→L1) → full payload per layer. That is conversation memory, not git history.
 
 ### composto L2 today
 
@@ -148,10 +148,25 @@ Yes — different layer, complementary roles.
 | First read | ~89% IR compression | Same (calls composto) |
 | Re-read same file | Full IR again | Few tokens (`unchanged IR` notice) |
 | After you edit | Full IR again | Compact IR diff vs last session read |
-| L0→L1 drill | Full payload for each layer | Zoom diff between layers |
+| L0→L1 drill | Full payload for each layer | Full payload for each layer |
 | Agent integration | CLI / composto MCP | readbro MCP + stats + blast_radius wrapper |
 
 composto compresses once. readbro avoids paying twice in long agent loops. The benchmark under `benchmark/` compares `readbro (L1)` against `composto (L1 only)` — the extra savings are from session caching.
+
+### Latest benchmark (2026-06-18, composto fixtures, 11 scenarios)
+
+| Strategy | Avg savings vs raw |
+|----------|-------------------|
+| readbro (L0) | 98.5% |
+| readbro (L1) | 89.8% |
+| composto (L1 only) | 79.7% |
+| readbro (per-step layers) | 88.5% |
+| composto (per-step layers) | 88.5% |
+| cachebro (raw cache) | 64.0% |
+
+**readbro (L1) vs composto (L1 only): +10.1pp avg.** Layer drill (L0→L1 per file) bills identically for readbro and composto — no cross-layer diff inflation.
+
+Run: `pnpm run benchmark` (requires `.references/composto`).
 
 ### Practical guidance
 

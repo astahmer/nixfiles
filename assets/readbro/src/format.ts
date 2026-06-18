@@ -72,8 +72,6 @@ const outcomeLabel = (outcome: ReadOutcome): string => {
       return "unchanged";
     case "diff":
       return "diff";
-    case "zoom":
-      return "zoom";
     case "full":
       return "full";
   }

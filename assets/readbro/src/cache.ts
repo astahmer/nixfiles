@@ -13,8 +13,6 @@ import type { ClearOptions, SessionsQuery, UsageQuery } from "./history-query.ts
 const SCHEMA_VERSION = 4;
 export const CACHE_SCHEMA_VERSION = SCHEMA_VERSION;
 
-const LAYER_RANK: Record<IrLayer, number> = { L0: 0, L1: 1, L2: 2, L3: 3 };
-
 const CREATE_SCHEMA = `
 CREATE TABLE ir_versions (
   file_path   TEXT NOT NULL,
@@ -84,7 +82,7 @@ export type ReadFileOptions = {
   readonly force?: boolean;
 };
 
-export type ReadOutcome = "full" | "cache_hit" | "diff" | "zoom";
+export type ReadOutcome = "full" | "cache_hit" | "diff";
 
 export type ReadFileResult = {
   readonly cached: boolean;
@@ -466,35 +464,6 @@ export class IrCacheStore {
         }
       }
     } else {
-      const priorZoom = this.#priorZoomLayer(db, absPath, layer, sourceHash);
-      if (priorZoom) {
-        const zoomRow = db
-          .prepare(
-            "SELECT payload FROM ir_versions WHERE file_path = ? AND layer = ? AND source_hash = ?",
-          )
-          .get(absPath, priorZoom, sourceHash) as { payload: string } | undefined;
-
-        if (zoomRow) {
-          const diffResult = computeDiff(zoomRow.payload, payload, filePath);
-          this.#setLastRead(db, absPath, layer, sourceHash, now);
-          if (diffResult.hasChanges) {
-            const header = `[readbro: zoom ${priorZoom}→${layer}, ${diffResult.linesChanged} IR lines, ${representation}]`;
-            const billedTokens = estimateTokens(`${header}\n${diffResult.diff}`);
-            return finish({
-              cached: true,
-              content: diffResult.diff,
-              diff: diffResult.diff,
-              sourceHash,
-              layer,
-              representation,
-              linesChanged: diffResult.linesChanged,
-              billedTokens,
-              outcome: "zoom",
-            });
-          }
-        }
-      }
-
       this.#setLastRead(db, absPath, layer, sourceHash, now);
     }
 
@@ -522,32 +491,6 @@ export class IrCacheStore {
       `INSERT OR IGNORE INTO ir_versions (file_path, layer, source_hash, payload, repr, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
     ).run(filePath, layer, sourceHash, payload, representation, now);
-  }
-
-  #priorZoomLayer(
-    db: SqlDatabase,
-    filePath: string,
-    layer: IrLayer,
-    sourceHash: string,
-  ): IrLayer | undefined {
-    const currentRank = LAYER_RANK[layer];
-    const rows = db
-      .prepare(
-        `SELECT layer FROM session_reads
-         WHERE session_id = ? AND file_path = ? AND source_hash = ?`,
-      )
-      .all(this.#sessionId, filePath, sourceHash) as Array<{ layer: IrLayer }>;
-
-    let best: IrLayer | undefined;
-    let bestRank = -1;
-    for (const row of rows) {
-      const rank = LAYER_RANK[row.layer];
-      if (rank < currentRank && rank > bestRank) {
-        best = row.layer;
-        bestRank = rank;
-      }
-    }
-    return best;
   }
 
   #setLastRead(

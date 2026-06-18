@@ -99,6 +99,7 @@ function main() {
   console.log(`Source: ${sourceRepo}`);
   console.log(`Token estimate: ceil(chars × 0.75) — same as cachebro README`);
   console.log(`Scenarios: ${SCENARIOS.length}`);
+  console.log(`Run date: ${new Date().toISOString().slice(0, 10)}`);
 
   try {
     for (const [index, scenario] of SCENARIOS.entries()) {

@@ -3,8 +3,8 @@
 import { readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { computeDiff } from "../src/differ.mjs";
-import { contentHash, estimateTokens } from "../src/ir.mjs";
+import { computeDiff } from "../src/differ.ts";
+import { contentHash, estimateTokens } from "../src/ir.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS file_versions (

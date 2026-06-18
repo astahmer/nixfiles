@@ -25,7 +25,7 @@ Always on. **Every reply starts with `OUGABOUGA`** then terse caveman talk — *
 
 Full guide: see skill **readbro**.
 
-## LOD zoom (`layer` on read_file)
+## LOD layers (`layer` on read_file)
 
 1. **L0** — file map (symbols, structure)
 2. **L1** — behaviour IR (**default**); re-read after edits for session-cache IR diffs
@@ -33,7 +33,7 @@ Full guide: see skill **readbro**.
 
 No **L2**: composto's git-delta layer falls back to L1 (`delta` not wired in `composto ir`). readbro does not expose it.
 
-**Drill L0 → L1 → L3 when needed.** Same session zoom (e.g. L0 then L1) sends an IR **diff** from the prior layer, not the full payload again. Re-read same layer unchanged → short cache notice (per session).
+**Drill L0 → L1 → L3 when needed.** Each layer is a full payload (different IR shapes — no cross-layer diff as they're structurally different). Re-read same layer unchanged → short cache notice (per session).
 
 <!-- rtk-instructions v2 -->
 # RTK — Token-Optimized CLI
