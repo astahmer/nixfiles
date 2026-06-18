@@ -2,16 +2,15 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { generateMdIr, MD_EXT } from "./md-ir.ts";
 import { findRepoRoot } from "./repo-root.ts";
 
 export type IrLayer = "L0" | "L1" | "L2" | "L3";
 
-export type Representation = "raw" | "raw-fallback" | "ir";
+export type Representation = "raw" | "raw-fallback" | "ir" | "md-ir";
 
-/** Extensions composto cannot IR-compress — L1 returns raw with an advisory. */
+/** Extensions with no readbro compressor — L1 returns raw with an advisory. */
 export const NON_CODE_EXT = new Set([
-  ".md",
-  ".markdown",
   ".txt",
   ".json",
   ".yaml",
@@ -63,6 +62,11 @@ export const generatePayload = (absPath: string, layer: IrLayer): IrPayload => {
 
   if (layer === "L3") {
     return finish(source, "raw");
+  }
+
+  if (MD_EXT.has(ext)) {
+    const mdLayer = layer === "L2" ? "L1" : layer;
+    return finish(generateMdIr(source, mdLayer, absPath), "md-ir");
   }
 
   if (!CODE_EXT.has(ext)) {

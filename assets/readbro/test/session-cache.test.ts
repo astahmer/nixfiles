@@ -79,6 +79,9 @@ test("layer reads are independent per session — L1 then L3 both full on first 
 
   const r1 = cache.readFile(file, { layer: "L1" });
   assert.equal(r1.outcome, "full");
+  assert.equal(r1.representation, "md-ir");
+  assert.match(r1.content, /hello/);
+  assert.match(r1.content, /\[L1\]/);
 
   const r3 = cache.readFile(file, { layer: "L3" });
   assert.equal(r3.outcome, "full");

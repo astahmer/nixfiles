@@ -22,7 +22,9 @@ Before reaching for read_file L1 or grep, ask what you know:
 | **File path + symbol** | `read_file` + `target` | `read_file({ path: "spec.ts", target: "rootInjectorCb" })` |
 | **Several file paths, no symbol** | `read_file` path array | `read_file({ path: ["a.ts", "b.ts"], layer: "L1" })` |
 | **A file path, exploring blindly** | `read_file` L0 or L1 | `read_file({ path: "src/foo.ts" })` |
-| **Regex, substring, or filename pattern** | grep / Glob | `grep "TODO:"`, `Glob **/*.spec.ts` |
+| **Regex, substring, or filename pattern** | grep / Glob / `find` | `grep "TODO:"`, `Glob **/*.spec.ts`, `find . -name '*.test.ts'` |
+
+**`find` is for filesystem discovery** (list paths by name/type/size) — not a substitute for `search_symbol`. Use `search_symbol` only when you know a **symbol name** in code.
 
 **Default for audits and precise questions:** `search_symbol` (or `read_file` with `target`) — not grep, not a whole-file L1 read.
 
@@ -173,18 +175,16 @@ session_gain()     → top files + savings drill-down
 session_clear()    → reset repo cache
 ```
 
-## Language support (composto)
+## Language support (composto + readbro)
 
-IR quality depends on tree-sitter grammars:
+| Format | L1 compressor |
+|--------|----------------|
+| TypeScript / TSX / JS | composto tree-sitter IR |
+| Python, Go, Rust | composto (basic) |
+| Markdown / MDX | readbro `md-ir` — headings, links, code blocks |
+| JSON, YAML, Nix, etc. | **no IR** — raw with advisory; use `max_lines` |
 
-| Language | Support |
-|----------|---------|
-| TypeScript / TSX | Deeply tuned |
-| JavaScript / JSX | Deeply tuned |
-| Python, Go, Rust | Basic |
-| Other extensions | Regex fingerprinter (less accurate; still works on text) |
-
-Nix, Markdown, YAML, etc. have **no real IR** — `read_file` L1 returns raw with an advisory. Use `max_lines` to cap plan docs.
+Markdown L0 = heading outline. Markdown L1 = section summaries + links + fenced-code stubs (no full prose).
 
 ## Audit workflows
 

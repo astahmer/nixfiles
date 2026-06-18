@@ -14,7 +14,9 @@ Single MCP for file reads. **Never use built-in Read, Grep, SemanticSearch, or G
 | **Symbol / class / function name** | `search_symbol({ target })` — **default for precise lookup** |
 | **File + symbol** | `read_file({ path, target })` — shorthand for search |
 | **File path(s), exploring** | `read_file` L1 (or L0 to survey) |
-| **Regex / substring / filename** | grep / Glob only |
+| **Regex / substring / filename** | grep / Glob / `find` (paths by name) |
+
+`find` lists filesystem paths — not a `search_symbol` substitute. `search_symbol` is for **named code symbols** only.
 
 **Do not** open a whole file at L1 or grep when a `target` would answer the question directly.
 
