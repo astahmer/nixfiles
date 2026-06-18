@@ -62,7 +62,7 @@ No args → MCP stdio server. Same binary serves CLI subcommands.
 | Param | Default | Notes |
 |-------|---------|-------|
 | `path` | — | Required. String or array of paths (batch in one call). |
-| `layer` | `L1` | `L0` structure · `L1` behaviour · `L2` delta · `L3` raw. |
+| `layer` | `L1` | `L0` structure · `L1` behaviour · `L3` raw. |
 | `force` | `false` | Bypass cache; always return full payload. |
 | `max_lines` | — | Cap output lines. L3 auto-caps at 200 unless `-1`. |
 | `offset` | — | 0-based line offset (L3 windows). |
@@ -86,10 +86,11 @@ Use **instead of grep/rg** when tracing named symbols. grep remains appropriate 
 |-------|---------|------|
 | **L0** | Structure — exports, classes, functions | Survey unfamiliar files |
 | **L1** | Behaviour IR | **Default** — how code works |
-| **L2** | Delta intent | After edits; usually re-read at L1 instead |
 | **L3** | Raw source | Rare — tiny files or `max_lines` window |
 
-Typical flow: L0 → L1, stop. Drill to L3 only when you need exact text.
+Typical flow: L0 → L1, stop. Drill to L3 only when you need exact text. After edits, re-read at L1 — the session cache returns an IR diff automatically (no separate delta layer).
+
+**Why no L2?** [composto](https://github.com/mertcanaltin/composto) defines L2 as git-delta IR, but `composto ir` never passes `delta` into `generateLayer`, so L2 falls back to L1. readbro does not expose L2 in layer options to avoid that confusion.
 
 ### Session cache
 
@@ -102,6 +103,53 @@ Cache lives at **`.readbro/cache.db`** in the working-copy root (`READBRO_DIR` o
 - **New session** on warm repo → full IR again (that session hasn't seen the file yet).
 
 `session_status` / `session_gain` / `session_clear` manage and inspect the cache.
+
+## readbro vs composto
+
+readbro is a thin wrapper around composto for IR generation. It shells out to `composto ir <path> <layer>` (see `src/ir.ts`). The value is not a different compression algorithm — it is **session-scoped caching** on top of composto.
+
+### Two different “delta” ideas
+
+The name **L2** is used in two unrelated ways, which is the main source of confusion.
+
+**composto L2 = git change context.** In [composto’s docs](https://github.com/mertcanaltin/composto) (also under `.references/composto` in this flake), L2 means “what changed in this file?” as git-oriented delta IR: `CHANGED:` hunks with surrounding IR, optional `SCOPE:`, `BLAME:`, and health tags. The intended use case is PR review — changed files at L2, everything else at L1. Implementation lives in `src/ir/delta.ts` (`getFileDelta` runs `git diff HEAD`) and `src/ir/layers.ts` (`generateL2`).
+
+**readbro “delta” = session cache diff.** On re-read, readbro compares the current IR payload to what **this MCP session** last saw at the same layer. Unchanged file → short `unchanged IR` notice. File edited since last read → unified diff of IR lines (`src/differ.ts`). Layer drill (L0→L1) → zoom diff. That is conversation memory, not git history.
+
+### composto L2 today
+
+`generateL2` exists, but neither `composto ir` nor the `composto_ir` MCP tool passes `delta` into `generateLayer` — both call it with only `code`, `filePath`, and `health`. When `delta` is missing, composto falls back to L1:
+
+```ts
+case "L2":
+  if (!options.delta) return generateL1(options.code, options.filePath, options.health);
+  return generateL2(options.delta, options.health);
+```
+
+So `read_file` with `layer: "L2"` is effectively composto L1 in practice. readbro’s post-edit savings come from the session cache at **L1** (or whatever layer you chose), not from composto L2.
+
+### Is readbro worth it over composto alone?
+
+Yes — different layer, complementary roles.
+
+| | composto (L1) | readbro |
+|--|---------------|---------|
+| First read | ~89% IR compression | Same (calls composto) |
+| Re-read same file | Full IR again | Few tokens (`unchanged IR` notice) |
+| After you edit | Full IR again | Compact IR diff vs last session read |
+| L0→L1 drill | Full payload for each layer | Zoom diff between layers |
+| Agent integration | CLI / composto MCP | readbro MCP + stats + blast_radius wrapper |
+
+composto compresses once. readbro avoids paying twice in long agent loops. The benchmark under `benchmark/` compares `readbro (L1)` against `composto (L1 only)` — the extra savings are from session caching.
+
+### Practical guidance
+
+- **Default to L1** for understanding code.
+- **Do not reach for L2 expecting magic** — re-read at L1; the session cache returns a diff automatically after edits.
+- **composto L2** (when wired end-to-end) is for git/PR “what changed vs HEAD” — orthogonal to readbro caching.
+- **L3** is raw source. Use only for small files or explicit `max_lines` windows.
+
+Upstream reference clone: `.references/composto` ([mertcanaltin/composto](https://github.com/mertcanaltin/composto)).
 
 ## CLI
 

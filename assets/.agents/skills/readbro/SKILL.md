@@ -2,7 +2,7 @@
 name: readbro
 description: >
   IR-aware file reads via the readbro MCP server. Use read_file instead of the built-in
-  Read tool. Supports LOD layers L0–L3, session caching with diffs, search_symbol for
+  Read tool. Supports LOD layers L0, L1, L3, session caching with diffs, search_symbol for
   named symbols, and blast_radius before edits. Never grep/rg for symbol names.
 ---
 
@@ -43,7 +43,7 @@ Always prefer this over built-in Read.
 **Parameters:**
 
 - `path` — file path (string) **or** array of paths for batch read (required)
-- `layer` — `L0` | `L1` | `L2` | `L3` (default `L1`)
+- `layer` — `L0` | `L1` | `L3` (default `L1`; no L2 — see below)
 - `force` — bypass cache and return full payload (default `false`)
 - `max_lines` — cap output lines (`L3`/raw auto-capped to 200; `-1` = full file, no cap)
 - `offset` — start at 0-based line (optional)
@@ -121,8 +121,9 @@ Start broad, drill only when needed:
 |-------|--------------|-------------|
 | **L0** | File map — symbols, structure | Surveying unfamiliar code |
 | **L1** | Compressed IR — behaviour | Default for understanding logic |
-| **L2** | Delta intent (may fall back) | After edits; prefer re-read at L1 |
 | **L3** | Exact raw source | **Rare** — small files or `max_lines`; never for survey |
+
+**Why no L2?** composto's git-delta layer (`generateL2`) falls back to L1 because `composto ir` never passes `delta`. Post-edit savings come from readbro's session cache at L1 — re-read the same layer after an edit.
 
 Typical flow:
 

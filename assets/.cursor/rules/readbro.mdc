@@ -20,6 +20,6 @@ Single MCP for file reads. **Never use built-in Read, Grep, SemanticSearch, or G
 
 grep/Glob only for: filename discovery, regex/text patterns, or things readbro cannot do.
 
-**L3 = full raw** — avoid for exploration; auto-capped to 200 lines. `max_lines: -1` = full file (only when you truly need full raw).
+**L3 = full raw** — avoid for exploration; auto-capped to 200 lines. `max_lines: -1` = full file (only when you truly need full raw). Layers are L0/L1/L3 only (no L2 — composto git-delta falls back to L1).
 
 Full guide: `~/.agents/skills/readbro/SKILL.md`
