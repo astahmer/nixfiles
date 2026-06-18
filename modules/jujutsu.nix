@@ -74,6 +74,17 @@
               "--stat"
               "-r"
             ];
+            # Current commit (@ vs parents) — one line, no paths; e.g. 483 files changed, +7723 -2685
+            shortstat = [
+              "log"
+              "-r"
+              "@"
+              "--no-graph"
+              "--no-pager"
+              "-T"
+              ''self.diff().files().len() ++ " files changed, +" ++ self.diff().stat().total_added() ++ " -" ++ self.diff().stat().total_removed()''
+            ];
+            # Between two revsets (e.g. main → @): jj diff --git --from main --to @ --no-pager | diffstat -s
             #
             branch = [
               "bookmark"
