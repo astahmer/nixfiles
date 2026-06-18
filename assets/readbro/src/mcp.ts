@@ -29,6 +29,7 @@ const IntentSchema = Schema.Literal(
 );
 
 const PathSchema = Schema.Union(Schema.String, Schema.Array(Schema.String));
+const TargetSchema = Schema.Union(Schema.String, Schema.Array(Schema.String));
 
 const ReadFileSchema = Schema.Struct({
   path: PathSchema,
@@ -36,13 +37,14 @@ const ReadFileSchema = Schema.Struct({
   force: Schema.optional(Schema.Boolean),
   max_lines: Schema.optional(Schema.Number),
   offset: Schema.optional(Schema.Number),
+  target: Schema.optional(TargetSchema),
+  budget: Schema.optional(Schema.Number),
 });
 
 const SearchSymbolSchema = Schema.Struct({
   path: Schema.optional(Schema.String),
   budget: Schema.optional(Schema.Number),
-  target: Schema.optional(Schema.String),
-  targets: Schema.optional(Schema.Array(Schema.String)),
+  target: Schema.optional(TargetSchema),
 });
 
 const StatsFilterSchema = Schema.Struct({
@@ -94,12 +96,10 @@ export const McpLayer = Layer.effectDiscard(
       "read_file",
       [
         "Read one or more files via composto IR + repo cache. ALWAYS use instead of built-in Read.",
-        "path accepts a string OR array of strings — batch multiple files in ONE call (never parallel read_file).",
-        "DEFAULT layer L1 (behaviour IR). Do NOT use L3 for exploration — L3 returns full raw source.",
-        "Layers: L0=structure, L1=behaviour (default), L2=delta, L3=raw (avoid; auto-capped).",
-        "Re-read unchanged file at same layer in this session → short cache notice.",
-        "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); pass max_lines: -1 for full raw.",
-        "For named symbols/classes/functions use search_symbol — NOT grep/rg/SemanticSearch.",
+        "PRECISE LOOKUP: if you know a symbol name, pass target (delegates to search_symbol) — do NOT grep or read whole file at L1 first.",
+        "path: string OR array — batch multiple files in ONE call (never parallel read_file). target requires a single path.",
+        "Exploratory reads (no symbol): DEFAULT layer L1. L0=structure survey. Do NOT use L3 for exploration.",
+        "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); max_lines: -1 for full raw.",
       ].join(" "),
       ReadFileSchema,
       (payload) => {
@@ -109,12 +109,16 @@ export const McpLayer = Layer.effectDiscard(
           force?: boolean;
           max_lines?: number;
           offset?: number;
+          target?: string | Array<string>;
+          budget?: number;
         };
         return rb.readFile(p.path, {
           layer: p.layer,
           force: p.force,
           maxLines: p.max_lines,
           offset: p.offset,
+          target: p.target,
+          budget: p.budget,
         });
       },
     );
@@ -122,19 +126,18 @@ export const McpLayer = Layer.effectDiscard(
     yield* registerTool(
       "search_symbol",
       [
-        "Find named symbols (class, function, type, use-case) via composto context within a token budget.",
-        "Use INSTEAD of grep/rg/SemanticSearch when you know a symbol name — e.g. target: 'InvolveNajarInPurchaseProjectUseCase'.",
-        "path: directory (default .) or file to scope; with a file path pass target/targets.",
-        "targets: array for multiple symbols in one call (budget split across them).",
-        "For regex/text/substring search across files, grep is still appropriate — this tool is for named symbols only.",
+        "DEFAULT for precise code lookup when you know a symbol/class/function/use-case name.",
+        "Use INSTEAD of grep/rg/SemanticSearch for named symbols — e.g. target: 'IrLayer', 'rootInjectorCb'.",
+        "Shorthand: read_file({ path, target }) when you also know the file. Repo-wide: search_symbol({ target }) or path: '.'.",
+        "target: string OR array of symbol names (budget split across multiple). path scopes to directory or file.",
+        "grep only for regex/text substrings or filename patterns — not named symbols.",
       ].join(" "),
       SearchSymbolSchema,
       (payload) => {
         const p = payload as {
           path?: string;
           budget?: number;
-          target?: string;
-          targets?: Array<string>;
+          target?: string | Array<string>;
         };
         return rb.searchSymbol(p);
       },

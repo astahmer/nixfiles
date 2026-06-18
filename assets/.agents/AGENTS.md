@@ -12,10 +12,12 @@ Always on. **Every reply starts with `OUGABOUGA`** then terse caveman talk — *
 
 **Only MCP for reads.** Never use built-in Read, Grep, SemanticSearch, or Glob for source/symbols readbro can serve.
 
+**Precise lookup (symbol name known)?** → `search_symbol` or `read_file` + `target` **first** — not grep, not whole-file L1.
+
 | Tool | Use |
 |------|------|
-| `read_file` | All file reads — IR + repo cache; `path` string or **array** (batch in one call) |
-| `search_symbol` | Named symbol search — `budget: 4000`, `target` or `targets`; **not grep/rg** |
+| `search_symbol` | **Default for named symbols** — `target` string or array; not grep/rg |
+| `read_file` | File reads; `path` string or **array**; optional `target` → symbol search |
 | `blast_radius` | Before editing non-trivial source (call explicitly) |
 | `session_status` | Repo health snapshot — totals, efficiency (`verbose`/`json` for more) |
 | `session_gain` | Where savings come from — top files, glob drill-down |

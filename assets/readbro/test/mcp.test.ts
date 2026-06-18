@@ -142,3 +142,21 @@ test("MCP read_file accepts path array for batch reads", async () => {
   client.close();
   rmSync(tmp, { recursive: true, force: true });
 });
+
+test("MCP read_file rejects target with path array", async () => {
+  const child = spawnReadbroMcp();
+  const client = new McpClient(child);
+  await client.initialize();
+
+  const response = await client.request("tools/call", {
+    name: "read_file",
+    arguments: { path: ["a.ts", "b.ts"], target: "Foo" },
+  });
+
+  const result = asCallToolResult(response);
+  const text = result.content?.[0]?.text ?? "";
+  assert.equal(result.isError, true);
+  assert.match(text, /target cannot be combined with a path array/);
+
+  client.close();
+});

@@ -50,8 +50,8 @@ No args → MCP stdio server. Same binary serves CLI subcommands.
 
 | Tool | Purpose |
 |------|---------|
-| `read_file` | Read one or more files (default **L1**). `path` is string or array. |
-| `search_symbol` | Named symbol search via composto context — use instead of grep for symbols. |
+| `search_symbol` | **Default for precise lookup** — named symbols; use instead of grep. |
+| `read_file` | Read file(s); `path` string or array; optional `target` delegates to symbol search. |
 | `blast_radius` | Git-history risk before editing a file. |
 | `session_status` | Repo health — totals, efficiency, files tracked. |
 | `session_gain` | Where savings come from — top files, glob drill-down. |
@@ -66,19 +66,30 @@ No args → MCP stdio server. Same binary serves CLI subcommands.
 | `force` | `false` | Bypass cache; always return full payload. |
 | `max_lines` | — | Cap output lines. L3 auto-caps at 200 unless `-1`. |
 | `offset` | — | 0-based line offset (L3 windows). |
+| `target` | — | Symbol name (string) or array — delegates to `search_symbol` (single path only). |
+| `budget` | `4000` | Token budget when `target` set. |
 
-**Prefer L1 for understanding code.** Use L3 only for small files or explicit line windows — a large spec at L3 can cost hundreds of thousands of tokens.
+**Precise symbol lookup:** use `target` or `search_symbol` — don't grep or read whole file at L1 first. **Exploratory reads** (no symbol): default L1.
 
 ### `search_symbol` parameters
 
 | Param | Default | Notes |
 |-------|---------|-------|
 | `path` | `.` | Directory or file to scope search. |
-| `target` | — | Single symbol/class/function name. |
-| `targets` | — | Multiple symbols (budget split across them). |
+| `target` | — | Symbol name (string or array). **Prefer for audits.** |
 | `budget` | `4000` | Token budget for composto context. |
 
-Use **instead of grep/rg** when tracing named symbols. grep remains appropriate for regex/text and filename discovery.
+Shorthand: `read_file({ path, target })` when you know the file. grep only for regex/text and filename patterns.
+
+### Language support (composto)
+
+| Language | IR quality |
+|----------|------------|
+| TypeScript / TSX, JavaScript / JSX | Deeply tuned |
+| Python, Go, Rust | Basic |
+| Other extensions | Regex fingerprinter (less accurate) |
+
+Unsupported extensions (Nix, Markdown, YAML, …) return raw at L1 with an advisory.
 
 ### IR layers (LOD)
 

@@ -7,19 +7,24 @@ alwaysApply: true
 
 Single MCP for file reads. **Never use built-in Read, Grep, SemanticSearch, or Glob for code you can reach via readbro.**
 
+## Pick the tool first
+
+| You know… | Use |
+|-----------|-----|
+| **Symbol / class / function name** | `search_symbol({ target })` — **default for precise lookup** |
+| **File + symbol** | `read_file({ path, target })` — shorthand for search |
+| **File path(s), exploring** | `read_file` L1 (or L0 to survey) |
+| **Regex / substring / filename** | grep / Glob only |
+
+**Do not** open a whole file at L1 or grep when a `target` would answer the question directly.
+
 | Tool | When |
 |------|------|
-| `read_file` | All file reads — **layer L1 default** (not L3). `path` is string **or array** — batch in ONE call |
-| `search_symbol` | Named symbol/class/function/use-case — **NOT grep/rg**. `target` or `targets`, optional `path`, `budget: 4000` |
+| `search_symbol` | **First choice** for named symbols — not grep |
+| `read_file` | File reads; `path` string or **array**; optional `target` delegates to search |
 | `blast_radius` | Before editing non-trivial source |
-| `session_status` | Repo health snapshot (totals, efficiency) |
-| `session_gain` | Where savings come from (top files, globs) |
+| `session_status` | Repo health snapshot |
+| `session_gain` | Where savings come from |
 | `session_clear` | Clear repo cache |
-
-**Do not** grep/rg/SemanticSearch/Glob to find named symbols or read source — use `search_symbol` / `read_file`.
-
-grep/Glob only for: filename discovery, regex/text patterns, or things readbro cannot do.
-
-**L3 = full raw** — avoid for exploration; auto-capped to 200 lines. `max_lines: -1` = full file (only when you truly need full raw). Layers are L0/L1/L3 only (no L2 — composto git-delta falls back to L1).
 
 Full guide: `~/.agents/skills/readbro/SKILL.md`

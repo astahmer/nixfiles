@@ -7,7 +7,7 @@ import { IrCacheStore } from "./cache.ts";
 import type { CompostoIntent } from "./composto.ts";
 import { runCompostoCli } from "./composto.ts";
 import type { ReadbroError } from "./errors.ts";
-import { toReadbroError } from "./errors.ts";
+import { ReadbroUnknownError, toReadbroError } from "./errors.ts";
 import {
   formatClearResult,
   formatGain,
@@ -18,15 +18,15 @@ import {
 } from "./format.ts";
 import { doctorExitCode, formatDoctor, runDoctor } from "./doctor.ts";
 import type { ClearOptions, HistoryFormat, SessionsQuery, UsageQuery } from "./history-query.ts";
-import type { ReadbroReadOptions } from "./read-options.ts";
+import type { ReadbroReadOptions, SymbolTarget } from "./read-options.ts";
+import { normalizeTargets } from "./read-options.ts";
 import { findRepoRoot } from "./repo-root.ts";
 import type { StatsRequest } from "./stats-query.ts";
 
 export type SearchSymbolOptions = {
   readonly path?: string;
   readonly budget?: number;
-  readonly target?: string;
-  readonly targets?: ReadonlyArray<string>;
+  readonly target?: SymbolTarget;
 };
 
 export class Readbro extends Context.Tag("@readbro/Readbro")<
@@ -71,40 +71,8 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
       });
     };
 
-    const readFile = (path: string | ReadonlyArray<string>, options: ReadbroReadOptions = {}) => {
-      const paths = typeof path === "string" ? [path] : [...path];
-      return Effect.sync(() => {
-        const detail = paths.join(" ");
-        logUsage(paths.length === 1 ? "read" : "reads", "read_file", detail);
-
-        if (paths.length === 1) {
-          const { maxLines, offset, force, layer } = options;
-          const result = cache.readFile(paths[0]!, { layer, force });
-          return formatReadResult(result, cache.getStats({ scope: "repo" }), {
-            maxLines,
-            offset,
-          });
-        }
-
-        const parts = paths.map((filePath) => `=== ${filePath} ===\n${readOneFile(filePath, options)}`);
-        const stats = cache.getStats({ scope: "repo" });
-        let footer = "";
-        if (stats.savedTokens > 0) {
-          footer = `\n\n[~${stats.savedTokens.toLocaleString()} tokens saved in repo cache]`;
-        }
-        return parts.join("\n\n") + footer;
-      });
-    };
-
-    const resolveSearchTargets = (options: SearchSymbolOptions): Array<string> => {
-      if (options.targets && options.targets.length > 0) {
-        return [...options.targets];
-      }
-      if (options.target) {
-        return [options.target];
-      }
-      return [];
-    };
+    const resolveSearchTargets = (options: SearchSymbolOptions): Array<string> =>
+      normalizeTargets(options.target);
 
     const searchSymbol = (options: SearchSymbolOptions) =>
       Effect.try({
@@ -123,7 +91,7 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
           }
           if (isFile && targets.length === 0) {
             throw new Error(
-              "search_symbol: path is a file — pass target or targets (symbol/class name). composto context scans from repo root, not a single file path alone.",
+              "search_symbol: path is a file — pass target (symbol/class name). composto context scans from repo root, not a single file path alone.",
             );
           }
 
@@ -153,6 +121,52 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         },
         catch: toReadbroError,
       });
+
+    const hasSearchTarget = (options: ReadbroReadOptions) =>
+      normalizeTargets(options.target).length > 0;
+
+    const readFile = (path: string | ReadonlyArray<string>, options: ReadbroReadOptions = {}) => {
+      if (hasSearchTarget(options)) {
+        const paths = typeof path === "string" ? [path] : [...path];
+        if (paths.length > 1) {
+          return Effect.fail(
+            new ReadbroUnknownError({
+              cause: new Error(
+                "read_file: target cannot be combined with a path array — use search_symbol or a single path",
+              ),
+            }),
+          );
+        }
+        return searchSymbol({
+          path: paths[0],
+          target: options.target,
+          budget: options.budget,
+        });
+      }
+
+      const paths = typeof path === "string" ? [path] : [...path];
+      return Effect.sync(() => {
+        const detail = paths.join(" ");
+        logUsage(paths.length === 1 ? "read" : "reads", "read_file", detail);
+
+        if (paths.length === 1) {
+          const { maxLines, offset, force, layer } = options;
+          const result = cache.readFile(paths[0]!, { layer, force });
+          return formatReadResult(result, cache.getStats({ scope: "repo" }), {
+            maxLines,
+            offset,
+          });
+        }
+
+        const parts = paths.map((filePath) => `=== ${filePath} ===\n${readOneFile(filePath, options)}`);
+        const stats = cache.getStats({ scope: "repo" });
+        let footer = "";
+        if (stats.savedTokens > 0) {
+          footer = `\n\n[~${stats.savedTokens.toLocaleString()} tokens saved in repo cache]`;
+        }
+        return parts.join("\n\n") + footer;
+      });
+    };
 
     const blastRadius = (file: string, intent?: CompostoIntent) =>
       Effect.try({

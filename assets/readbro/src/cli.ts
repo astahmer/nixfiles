@@ -138,8 +138,10 @@ const read = Command.make(
     force,
     maxLines,
     offset,
+    target: Options.text("target").pipe(Options.optional),
+    budget: Options.integer("budget").pipe(Options.optional),
   },
-  ({ path, layer: lyr, force: f, maxLines: ml, offset: off }) =>
+  ({ path, layer: lyr, force: f, maxLines: ml, offset: off, target, budget }) =>
     Effect.gen(function* () {
       const rb = yield* Readbro;
       yield* Console.log(
@@ -148,10 +150,12 @@ const read = Command.make(
           force: f,
           maxLines: Option.getOrUndefined(ml),
           offset: Option.getOrUndefined(off),
+          target: Option.getOrUndefined(target),
+          budget: Option.getOrUndefined(budget),
         }),
       );
     }),
-).pipe(Command.withDescription("Read one file with IR cache"));
+).pipe(Command.withDescription("Read one file with IR cache (or --target for symbol search)"));
 
 const reads = Command.make(
   "reads",

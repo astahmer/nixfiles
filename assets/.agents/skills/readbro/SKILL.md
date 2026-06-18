@@ -2,8 +2,8 @@
 name: readbro
 description: >
   IR-aware file reads via the readbro MCP server. Use read_file instead of the built-in
-  Read tool. Supports LOD layers L0, L1, L3, session caching with diffs, search_symbol for
-  named symbols, and blast_radius before edits. Never grep/rg for symbol names.
+  Read tool. search_symbol is the default for precise named-symbol lookup (Never grep/rg for symbol names). Supports LOD
+  layers L0–L3, session caching with diffs, and blast_radius before edits.
 ---
 
 # readbro
@@ -12,96 +12,81 @@ readbro is the **only** MCP server you should use for reading files and finding 
 
 readbro compresses source files into composto IR (intermediate representation), caches what has been read in the repo, and on re-reads returns either a short "unchanged" notice or a compact diff instead of the full file again.
 
+## Pick the tool first
+
+Before reaching for read_file L1 or grep, ask what you know:
+
+| You know… | Use | Example |
+|-----------|-----|---------|
+| **A symbol / class / function / use-case name** | `search_symbol` | `search_symbol({ target: "IrLayer" })` |
+| **File path + symbol** | `read_file` + `target` | `read_file({ path: "spec.ts", target: "rootInjectorCb" })` |
+| **Several file paths, no symbol** | `read_file` path array | `read_file({ path: ["a.ts", "b.ts"], layer: "L1" })` |
+| **A file path, exploring blindly** | `read_file` L0 or L1 | `read_file({ path: "src/foo.ts" })` |
+| **Regex, substring, or filename pattern** | grep / Glob | `grep "TODO:"`, `Glob **/*.spec.ts` |
+
+**Default for audits and precise questions:** `search_symbol` (or `read_file` with `target`) — not grep, not a whole-file L1 read.
+
 ## Tools
 
 | Tool | Purpose |
 |------|---------|
-| `read_file` | Read one or more files (default layer L1) — `path` is string or array |
-| `search_symbol` | Find named symbols (class, function, use-case) with IR context |
-| `blast_radius` | Assess edit risk from git history before changing a file |
-| `session_status` | Repo health snapshot — totals, efficiency, files tracked |
-| `session_gain` | Where savings come from — top files, glob/path drill-down |
-| `session_clear` | Reset the session cache |
+| `search_symbol` | **Default for precise lookup** — named symbols with IR context |
+| `read_file` | Read file(s); optional `target` delegates to symbol search |
+| `blast_radius` | Assess edit risk from git history |
+| `session_status` | Repo health snapshot |
+| `session_gain` | Where savings come from |
+| `session_clear` | Reset session cache |
 
-## When NOT to use grep / Glob / SemanticSearch
+### `search_symbol` — precise lookup (prefer this)
 
-| You want | Use instead |
-|----------|-------------|
-| Read a known file | `read_file` |
-| Read several known files | `read_file({ path: ["a.ts", "b.ts"] })` — **one call** |
-| Find `FooUseCase`, `handleAuth`, `rootInjectorCb` | `search_symbol({ target: "FooUseCase" })` |
-| Trace symbol across repo | `search_symbol({ path: ".", target: "..." })` |
-| Scope symbol to one file | `search_symbol({ path: "spec.ts", target: "..." })` |
-| Several named symbols | `search_symbol({ targets: ["A", "B", "C"] })` |
+Use when you know **what** you're looking for by symbol name — preferred **instead of grep/rg/SemanticSearch**:
+
+```
+search_symbol({ target: "InvolveNajarInPurchaseProjectUseCase" })
+search_symbol({ path: "assets/readbro", target: "IrLayer" })
+search_symbol({ path: "spec/", target: ["UseCaseA", "UseCaseB"], budget: 8000 })
+```
+
+- `target` — one symbol name, or array for multiple (budget split)
+- `path` — scope to directory (default `.`) or file
+- `budget` — token budget (default `4000`)
 
 **Still use grep/Glob for:** filename patterns (`**/*.spec.ts`), regex/substring text search, config keys, comments, non-symbol strings.
 
-### `read_file` — primary read path
+### `read_file` — file reads
 
-Always prefer this over built-in Read.
+Always prefer this over built-in Read when you know where to look (but maybe not what to look for).
 
 **Parameters:**
 
-- `path` — file path (string) **or** array of paths for batch read (required)
-- `layer` — `L0` | `L1` | `L3` (default `L1`; no L2 — see below)
+- `path` — string or **array** of paths (batch in one call)
+- `layer` — `L0` \| `L1` \| `L2` \| `L3` (default `L1` for exploratory reads)
+- `target` / `budget` — **shorthand for search_symbol** (single path only; `target` string or array)
 - `force` — bypass cache and return full payload (default `false`)
 - `max_lines` — cap output lines (`L3`/raw auto-capped to 200; `-1` = full file, no cap)
 - `offset` — start at 0-based line (optional)
 
-**Example — survey a module:**
+**Symbol in known file:**
 
 ```
-read_file({ path: "src/auth/middleware.ts", layer: "L0" })
+read_file({ path: "spec.ts", target: "rootInjectorCb" })
 ```
 
-**Example — batch read (never parallel read_file calls):**
+**Batch read (never parallel read_file calls):**
 
 ```
-read_file({ path: ["src/a.ts", "src/b.ts", "src/c.ts"], layer: "L1" })
+read_file({ path: ["src/a.ts", "src/b.ts"], layer: "L1" })
 ```
 
-**Example — understand behaviour (default):**
+**Exploratory (no symbol yet):**
 
 ```
-read_file({ path: "src/auth/middleware.ts" })
+read_file({ path: "src/auth/middleware.ts", layer: "L0" })  // survey
+read_file({ path: "src/auth/middleware.ts" })                 // L1 behaviour
 ```
 
-**Example — need exact source (rare):**
-
-```
-read_file({ path: "src/auth/middleware.ts", layer: "L3" })
-```
 
 Layer L3 returns raw file content. **Avoid for exploration** — a 2500-line spec file can cost ~150K tokens. L3/raw auto-truncates to 200 lines unless `max_lines: -1`. Prefer L1; use `search_symbol` for cross-file symbol traces.
-
-### `search_symbol` — named symbol search
-
-Use **instead of grep/rg/SemanticSearch** when you know a symbol name.
-
-`composto context` scans from a **directory** (repo root), not a single file path alone. To focus on one symbol in a known file, pass the file path **and** `target`:
-
-```
-search_symbol({ path: "src/auth/middleware.ts", budget: 4000, target: "handleAuth" })
-```
-
-Or search the whole repo:
-
-```
-search_symbol({ path: ".", budget: 4000, target: "ReplayAccountingImportUseCase" })
-```
-
-Multiple symbols in one call:
-
-```
-search_symbol({ path: "spec/", targets: ["UseCaseA", "UseCaseB"], budget: 8000 })
-```
-
-- `path` — directory (default `.`) or file + required `target`/`targets`
-- `budget` — max tokens (default `4000`)
-- `target` — single symbol, class, or function name
-- `targets` — array of symbol names (budget split across them)
-
-If the symbol is missing in a file, readbro appends **nearby symbol names** from that file and suggests repo-wide `search_symbol(path: ".", target: ...)`.
 
 ### `blast_radius` — before editing
 
@@ -113,9 +98,9 @@ blast_radius({ file: "src/auth/middleware.ts", intent: "bugfix" })
 
 Intent values: `refactor`, `bugfix`, `feature`, `test`, `docs`, `unknown`.
 
-## LOD zoom workflow
+## LOD zoom (exploratory reads only)
 
-Start broad, drill only when needed:
+When you **don't** have a symbol name yet, start broad, drill only when needed:
 
 | Layer | What you get | When to use |
 |-------|--------------|-------------|
@@ -132,8 +117,19 @@ Typical flow:
 2. read_file(path, L1)     → "how does it work?" (stop here most of the time)
 3. read_file(path, L3)     → only tiny files or explicit line window
 ```
+When you **do** have a symbol name, skip LOD — use `search_symbol` or `read_file` + `target`.
 
-For unknown symbol location, start with `search_symbol` — not grep.
+## When NOT to use grep
+
+| Don't grep for… | Do instead |
+|-----------------|------------|
+| `FooUseCase`, `handleAuth`, `IrLayer` | `search_symbol({ target: "..." })` |
+| "where is class X defined" | `search_symbol` |
+| "what uses symbol Y in this file" | `read_file({ path, target: "Y" })` |
+
+**Still grep for:** regex patterns, string literals, comments, config keys, filename discovery.
+
+
 
 ## CLI
 
@@ -177,25 +173,34 @@ session_gain()     → top files + savings drill-down
 session_clear()    → reset repo cache
 ```
 
-## Non-code files
+## Language support (composto)
 
-Markdown, YAML, Nix, and other non-code extensions have **no composto IR**. L1 returns raw with an advisory — use `max_lines` to cap plan docs, or `read_file` with a path array to batch them.
+IR quality depends on tree-sitter grammars:
+
+| Language | Support |
+|----------|---------|
+| TypeScript / TSX | Deeply tuned |
+| JavaScript / JSX | Deeply tuned |
+| Python, Go, Rust | Basic |
+| Other extensions | Regex fingerprinter (less accurate; still works on text) |
+
+Nix, Markdown, YAML, etc. have **no real IR** — `read_file` L1 returns raw with an advisory. Use `max_lines` to cap plan docs.
 
 ## Audit workflows
 
-1. `read_file({ path: [...specs], layer: "L1" })` — one call for the spec batch
-2. `search_symbol({ path: ".", target: "SomeUseCase" })` — cross-file traces
-3. Shell trace scripts only for union counts readbro does not compute yet
+1. **Named thing?** → `search_symbol({ target: "..." })` first
+2. **Known paths batch?** → `read_file({ path: [...], layer: "L1" })` one call
+3. **Regex / union counts** → grep or shell trace scripts
 
 ## Quick reference
 
 | Task | Tool |
 |------|------|
-| Survey repo | `read_file` L0 or L1 |
-| Understand logic | `read_file` L1 (**default**) |
-| Several files | `read_file` with path **array** |
-| Find named symbol | `search_symbol` — **not grep** |
-| Bug across files | `search_symbol` |
+| Know symbol name | `search_symbol` (**default**) |
+| File + symbol | `read_file` + `target` |
+| Several known files | `read_file` path array |
+| Explore unknown file | `read_file` L0 → L1 |
+| Understand logic | `read_file` L1 |
+| Regex / text / filenames | grep / Glob |
 | Before editing | `blast_radius` |
 | Bypass cache | `read_file` with `force: true` |
-| Regex / text / filenames | grep / Glob (readbro does not replace these) |
