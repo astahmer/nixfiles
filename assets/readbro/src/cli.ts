@@ -303,6 +303,22 @@ const sessions = Command.make(
     }),
 ).pipe(Command.withDescription("Recent session ids with token savings"));
 
+const doctor = Command.make(
+  "doctor",
+  {
+    path: Options.text("path").pipe(
+      Options.withDescription("Anchor working copy (default: cwd)"),
+      Options.optional,
+    ),
+    json,
+  },
+  ({ path, json: emitJson }) =>
+    Effect.gen(function* () {
+      const rb = yield* Readbro;
+      yield* Console.log(yield* rb.doctor({ path: Option.getOrUndefined(path), json: emitJson }));
+    }),
+).pipe(Command.withDescription("Preflight environment checks"));
+
 const mcp = Command.make("mcp", {}, () =>
   Effect.gen(function* () {
     const { McpLayer } = yield* Effect.promise(() => import("./mcp.ts"));
@@ -311,7 +327,7 @@ const mcp = Command.make("mcp", {}, () =>
 ).pipe(Command.withDescription("Run MCP server on stdio"));
 
 export const root = Command.make("readbro").pipe(
-  Command.withSubcommands([read, reads, context, blast, stats, gain, clear, ls, sessions, mcp]),
+  Command.withSubcommands([read, reads, context, blast, stats, gain, clear, ls, sessions, doctor, mcp]),
 );
 
 export const run = Command.run(root, {

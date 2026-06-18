@@ -16,6 +16,7 @@ import {
   formatStats,
   formatUsageList,
 } from "./format.ts";
+import { doctorExitCode, formatDoctor, runDoctor } from "./doctor.ts";
 import type { ClearOptions, HistoryFormat, SessionsQuery, UsageQuery } from "./history-query.ts";
 import type { ReadbroReadOptions } from "./read-options.ts";
 import { findRepoRoot } from "./repo-root.ts";
@@ -46,6 +47,7 @@ export class Readbro extends Context.Tag("@readbro/Readbro")<
       query?: SessionsQuery,
       format?: HistoryFormat,
     ) => Effect.Effect<string>;
+    readonly doctor: (options?: { readonly path?: string; readonly json?: boolean }) => Effect.Effect<string>;
   }
 >() {}
 
@@ -172,6 +174,16 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         return formatSessionsList(cache.listSessions(query), format);
       });
 
+    const doctor = (options: { readonly path?: string; readonly json?: boolean } = {}) =>
+      Effect.sync(() => {
+        logUsage("doctor");
+        const report = runDoctor({ anchorPath: options.path });
+        if (!report.ok) {
+          process.exitCode = doctorExitCode(report);
+        }
+        return formatDoctor(report, options.json);
+      });
+
     return {
       readFile,
       readFiles,
@@ -182,6 +194,7 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
       clear,
       ls,
       sessions,
+      doctor,
     } satisfies Context.Tag.Service<Readbro>;
   });
 

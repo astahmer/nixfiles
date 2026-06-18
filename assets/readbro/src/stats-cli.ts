@@ -60,7 +60,7 @@ export const statsRequestFromInput = (input: StatsCliInput): StatsRequest => ({
   },
 });
 
-export type FastCommand = "gain" | "stats" | "clear" | "ls" | "sessions";
+export type FastCommand = "gain" | "stats" | "clear" | "ls" | "sessions" | "doctor";
 
 export const parseFastCommand = (
   argv: ReadonlyArray<string>,
@@ -71,7 +71,8 @@ export const parseFastCommand = (
     command === "stats" ||
     command === "clear" ||
     command === "ls" ||
-    command === "sessions"
+    command === "sessions" ||
+    command === "doctor"
   ) {
     return { command, rest: argv.slice(3) };
   }
@@ -299,3 +300,33 @@ export const sessionsQueryFromInput = (input: SessionsCliInput) => ({
   sinceMs: input.since ? parseSince(input.since) : undefined,
   grep: input.grep,
 });
+
+export type DoctorCliInput = {
+  readonly path?: string;
+  readonly json: boolean;
+};
+
+export const parseDoctorFlags = (args: ReadonlyArray<string>): DoctorCliInput => {
+  let path: string | undefined;
+  let json = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    switch (arg) {
+      case "-h":
+      case "--help":
+        break;
+      case "--path":
+        path = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--json":
+        json = true;
+        break;
+      default:
+        throw new Error(`unknown option: ${arg}`);
+    }
+  }
+
+  return { path, json };
+};

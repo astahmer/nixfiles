@@ -97,7 +97,7 @@ Cache lives at **`.readbro/cache.db`** in the working-copy root (`READBRO_DIR` o
 
 ## CLI
 
-Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`) skips Effect startup (~30 ms warm). MCP and other commands load the full stack lazily.
+Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`, `doctor`) skips Effect startup (~30 ms warm). MCP and other commands load the full stack lazily. Fast-path commands support `-h` / `--help` without loading Effect.
 
 | Command | Action |
 |---------|--------|
@@ -107,11 +107,108 @@ Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`) skips Effect startup (~30
 | `readbro reads <paths…>` | Batch read |
 | `readbro context` | Pack context (`--path`, `--budget`, `--target`) |
 | `readbro blast <file>` | Blast radius (`--intent`) |
-| `readbro stats` | Repo health snapshot (`--verbose`, filters) |
-| `readbro gain` | Top savings (`--verbose` for globs) |
-| `readbro ls` | Recent command/tool usage (`-n`, `--grep`, `--session`) |
-| `readbro sessions` | Recent session ids with savings (`--limit`, `--skip`) |
-| `readbro clear` | Clear cache (`--path`, `--older-than 7d`) |
+| `readbro stats` | Repo health snapshot |
+| `readbro gain` | Token savings with top files |
+| `readbro ls` | Recent command/tool usage |
+| `readbro sessions` | Recent session ids with savings |
+| `readbro doctor` | Preflight checks (composto, cache, schema) |
+| `readbro clear` | Clear or prune cache |
+
+### `stats` / `gain`
+
+Shared filters and output options:
+
+| Flag | Notes |
+|------|-------|
+| `--scope repo\|session` | Lifetime repo stats vs current session (default: `repo`) |
+| `--since <dur>` | Window filter — `7d`, `24h`, `30m`, `3M` (month = 30d) |
+| `--glob <pattern>` | Only files matching glob |
+| `--group-glob <pattern>` | Group/rank by glob (repeatable) |
+| `--by-dir <depth>` | Group by path prefix depth |
+| `--discover-globs <n>` | Auto-rank top N busiest prefixes |
+| `--json` | Full stats payload as JSON (for CI, dashboards, piping) |
+| `--verbose` | Breakdown tables; `gain` also shows recent reads |
+
+```bash
+readbro stats --since 7d --verbose
+readbro gain --json > /tmp/readbro-gain.json   # export — no separate command needed
+readbro stats -h                               # fast-path help
+```
+
+### `ls`
+
+Recent CLI invocations and MCP tool calls (from `usage_events`).
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `-n`, `--limit` | 10 | Max entries |
+| `--skip` | 0 | Pagination offset |
+| `--since <dur>` | — | Only usage in window |
+| `--session <id>` | — | Session id prefix |
+| `--grep <text>` | — | Match name or detail |
+| `--source cli\|mcp` | — | Filter by source |
+| `--json` | — | Machine-readable list |
+
+```bash
+readbro ls -n 25 --grep read_file --source mcp
+```
+
+### `sessions`
+
+Sessions ranked by last activity, with read counts and token savings.
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `-n`, `--limit` | 20 | Max sessions |
+| `--skip` | 0 | Pagination (`--skip 20` ≈ page 2) |
+| `--since <dur>` | — | Only sessions active in window |
+| `--grep <text>` | — | Filter session id |
+| `--json` | — | Machine-readable list |
+
+```bash
+readbro sessions --since 7d --grep abc
+```
+
+### `clear`
+
+| Flag | Notes |
+|------|-------|
+| `--path <path>` | Limit to one working copy |
+| `--older-than <dur>` | **Prune** entries older than duration; omit for full wipe |
+
+```bash
+readbro clear --older-than 30d
+readbro clear --path . --older-than 7d
+readbro clear                    # full clear (all open repo DBs)
+```
+
+Duration suffixes: `m` minutes, `h` hours, `d` days, `M` months (30d each).
+
+### `doctor`
+
+Preflight before agents run — surfaces misconfig that causes raw fallbacks.
+
+| Flag | Notes |
+|------|-------|
+| `--path <path>` | Anchor working copy (default: cwd) |
+| `--json` | Machine-readable report |
+| `-h`, `--help` | Fast-path help |
+
+Checks:
+
+- `composto` on PATH (+ version when available)
+- `composto ir` L1 smoke probe on a temp file
+- `.readbro/` (or `READBRO_DIR`) writable
+- cache DB schema version
+- session id (`READBRO_SESSION_ID` or auto)
+- git/jj repo root
+
+Exit code `1` when any check **fails** (`✗`). Warnings (`!`) do not fail the run.
+
+```bash
+readbro doctor
+readbro doctor --json
+```
 
 ## Development
 
@@ -137,7 +234,7 @@ Workspace-local MCP override (repo root `.cursor/mcp.json`):
 
 ```
 main.ts
-  ├─ fast path → fast-stats.ts (gain / stats / clear / ls / sessions)
+  ├─ fast path → fast-stats.ts (gain / stats / clear / ls / sessions / doctor)
   └─ MCP / CLI → main-effect.ts → Effect + @effect/cli + @effect/ai
        └─ readbro.ts → cache.ts (SQLite) + ir.ts (composto) + format.ts
 ```
@@ -156,7 +253,7 @@ main.ts
 
 1. **Single executable** — `bun build --compile --minify --bytecode` (`readbro-package.nix`). Nix still fetches deps with pnpm; Bun only compiles.
 2. **SQLite adapter** — `node:sqlite` for Node tests; `bun:sqlite` in the binary (`node:sqlite` fails under `bun compile`).
-3. **Fast path** — `gain`, `stats`, `clear`, `ls`, and `sessions` bypass Effect; `main.ts` routes to `fast-stats.ts` or lazy-loads `main-effect.ts` for MCP.
+3. **Fast path** — `gain`, `stats`, `clear`, `ls`, `sessions`, and `doctor` bypass Effect; `main.ts` routes to `fast-stats.ts` or lazy-loads `main-effect.ts` for MCP.
 
 **Result (nix-built binary, warm):**
 
@@ -165,4 +262,15 @@ main.ts
 | `readbro gain` | ~1.3 s | ~30 ms |
 | `readbro stats` | ~1.3 s | ~30 ms |
 
-Cold start ~700 ms (binary exec), then ~30 ms. MCP smoke-tested on compiled binary; tests 37/37.
+Cold start ~700 ms (binary exec), then ~30 ms. MCP smoke-tested on compiled binary; tests 47/47.
+
+---
+
+## Ideas (maybe later)
+
+| Idea | What it would do |
+|------|------------------|
+| `readbro watch gain` | Live-refreshing savings ticker for the current session (like `watch readbro gain --scope session`). |
+| `--follow` on `ls` | Stream new usage events as they arrive (tail -f for MCP debugging). |
+
+JSON export for CI/dashboards is already `--json` on `stats`, `gain`, `ls`, and `sessions` — no separate export command planned.

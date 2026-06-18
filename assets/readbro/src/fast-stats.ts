@@ -11,6 +11,7 @@ import {
 import {
   listQueryFromInput,
   parseClearFlags,
+  parseDoctorFlags,
   parseFastCommand,
   parseLsFlags,
   parseSessionsFlags,
@@ -18,6 +19,7 @@ import {
   sessionsQueryFromInput,
   statsRequestFromInput,
 } from "./stats-cli.ts";
+import { doctorExitCode, formatDoctor, runDoctor } from "./doctor.ts";
 
 export const runFastCommand = (argv: ReadonlyArray<string>): boolean => {
   const parsed = parseFastCommand(argv);
@@ -32,6 +34,16 @@ export const runFastCommand = (argv: ReadonlyArray<string>): boolean => {
 
   const cache = new IrCacheStore();
   cache.logUsage(parsed.command, parsed.rest.join(" ") || undefined);
+
+  if (parsed.command === "doctor") {
+    const input = parseDoctorFlags(parsed.rest);
+    const report = runDoctor({ anchorPath: input.path });
+    console.log(formatDoctor(report, input.json));
+    if (!report.ok) {
+      process.exitCode = doctorExitCode(report);
+    }
+    return true;
+  }
 
   if (parsed.command === "clear") {
     const options = parseClearFlags(parsed.rest);

@@ -11,6 +11,7 @@ import { usesPathGrouping } from "./stats-query.ts";
 import type { ClearOptions, SessionsQuery, UsageQuery } from "./history-query.ts";
 
 const SCHEMA_VERSION = 4;
+export const CACHE_SCHEMA_VERSION = SCHEMA_VERSION;
 
 const LAYER_RANK: Record<IrLayer, number> = { L0: 0, L1: 1, L2: 2, L3: 3 };
 

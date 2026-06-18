@@ -72,12 +72,25 @@ Options:
   --json                 Machine-readable JSON
   -h, --help             Show this help`;
 
+const doctorHelp = `readbro doctor — preflight environment checks
+
+Usage:
+  readbro doctor [options]
+
+Options:
+  --path <path>          Anchor working copy (default: cwd)
+  --json                 Machine-readable JSON
+  -h, --help             Show this help
+
+Checks composto on PATH, L1 IR smoke probe, cache writable, schema version, session id, repo root.`;
+
 const HELP: Record<FastCommand, string> = {
   stats: statsHelp,
   gain: gainHelp,
   clear: clearHelp,
   ls: lsHelp,
   sessions: sessionsHelp,
+  doctor: doctorHelp,
 };
 
 export const printFastHelp = (command: FastCommand): void => {
