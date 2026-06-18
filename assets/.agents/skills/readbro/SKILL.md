@@ -148,6 +148,7 @@ When you **do** have a symbol name, skip LOD — use `search_symbol` or `read_fi
 | `readbro clear` | Clear repo cache (`--path` optional) |
 | `readbro ls` | Command/tool usage history (CLI + MCP) |
 | `readbro sessions` | MCP agent sessions only (`--all` for CLI too) |
+| `readbro tips` | List all workflow tips (MCP shows one per tool call) |
 | `readbro mcp` | MCP server explicitly |
 
 ## Repo caching
@@ -167,6 +168,15 @@ Short notice: `[readbro: unchanged IR (L1, ir), ~842 tokens saved]`
 Returns a unified diff of the IR vs what this session last saw.
 
 `force: true` skips the cache and always returns the full current payload.
+
+### MCP tips
+
+Every MCP tool response may end with:
+
+- `[readbro tip] …` — one random workflow hint (unseen tips first; pool reshuffles when exhausted)
+- `[readbro hint] …` — only when serial single-path `read_file` calls are detected (batch nudge)
+
+List all tips: `readbro tips` (or `readbro tips --json`).
 
 ### Cache management
 

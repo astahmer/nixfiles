@@ -20,6 +20,7 @@ import {
   statsRequestFromInput,
 } from "./stats-cli.ts";
 import { doctorExitCode, formatDoctor, runDoctor } from "./doctor.ts";
+import { formatTipsJson, formatTipsList } from "./tips.ts";
 
 export const runFastCommand = (argv: ReadonlyArray<string>): boolean => {
   const parsed = parseFastCommand(argv);
@@ -34,6 +35,12 @@ export const runFastCommand = (argv: ReadonlyArray<string>): boolean => {
 
   const cache = new IrCacheStore();
   cache.logUsage(parsed.command, parsed.rest.join(" ") || undefined);
+
+  if (parsed.command === "tips") {
+    const json = parsed.rest.includes("--json");
+    console.log(json ? formatTipsJson() : formatTipsList());
+    return true;
+  }
 
   if (parsed.command === "doctor") {
     const input = parseDoctorFlags(parsed.rest);

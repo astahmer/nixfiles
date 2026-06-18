@@ -8,6 +8,7 @@ import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import type { ReadbroError } from "./errors.ts";
 import { Readbro, ReadbroLiveMcp } from "./readbro.ts";
+import { appendMcpFooter } from "./tips.ts";
 import { statsRequestFromMcp } from "./stats-query.ts";
 
 const textResult = (text: string, isError = false) =>
@@ -82,7 +83,7 @@ const registerTool = (
       tool,
       handle: (payload) =>
         run(payload).pipe(
-          Effect.map((text) => textResult(text)),
+          Effect.map((text) => textResult(appendMcpFooter(name, payload, text))),
           Effect.catchAll((error) => Effect.succeed(errorResult(error))),
         ),
     });

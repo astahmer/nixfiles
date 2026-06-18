@@ -115,6 +115,15 @@ Cache lives at **`.readbro/cache.db`** in the working-copy root (`READBRO_DIR` o
 
 `session_status` / `session_gain` / `session_clear` manage and inspect the cache.
 
+### MCP tips and hints
+
+Every MCP tool response (except JSON payloads) ends with lightweight coaching — rules alone don't stick, so readbro nudges in-band while the agent still has the file context fresh.
+
+- **`[readbro tip]`** — one random workflow hint per call (batch reads, `search_symbol`, LOD, md-ir, …). Unseen tips first; when all 12 have been shown, the pool reshuffles and continues (long sessions often compact context, so reminders help).
+- **`[readbro hint]`** — only when serial single-path `read_file` calls are detected (e.g. two within 5s). Suggests batching: `read_file({ path: ["a.ts", "b.ts"] })`. Skipped for path arrays, `target` shorthand, and after `search_symbol`.
+
+List all tips: `readbro tips` (or `readbro tips --json`).
+
 ## readbro vs composto
 
 readbro is a thin wrapper around composto for IR generation. It shells out to `composto ir <path> <layer>` (see `src/ir.ts`). The value is not a different compression algorithm — it is **session-scoped caching** on top of composto.
@@ -179,21 +188,21 @@ Upstream reference clone: `.references/composto` ([mertcanaltin/composto](https:
 
 ## CLI
 
-Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`, `doctor`) skips Effect startup (~30 ms warm). MCP and other commands load the full stack lazily. Fast-path commands support `-h` / `--help` without loading Effect.
+Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`, `doctor`, `tips`) skips Effect startup (~30 ms warm). MCP and other commands load the full stack lazily. Fast-path commands support `-h` / `--help` without loading Effect.
 
 | Command | Action |
 |---------|--------|
 | `readbro` | MCP server (stdio) |
 | `readbro mcp` | MCP server explicitly |
-| `readbro read <path>` | Read one file (`--layer`, `--force`) |
-| `readbro reads <paths…>` | Batch read (same as `read_file` with path array) |
+| `readbro read <paths…>` | Read one or more files (`--layer`, `--force`, `--target`) |
 | `readbro symbol` | Symbol search (`--path`, `--budget`, `--target`) |
 | `readbro context` | Deprecated alias for `symbol` |
 | `readbro blast <file>` | Blast radius (`--intent`) |
 | `readbro stats` | Repo health snapshot |
 | `readbro gain` | Token savings with top files |
 | `readbro ls` | Recent command/tool usage |
-| `readbro sessions` | Recent session ids with savings |
+| `readbro sessions` | MCP agent sessions (`--all` to include CLI) |
+| `readbro tips` | List workflow hints (also shown one per MCP call) |
 | `readbro doctor` | Preflight checks (composto, cache, schema) |
 | `readbro clear` | Clear or prune cache |
 

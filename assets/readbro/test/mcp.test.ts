@@ -64,6 +64,7 @@ test("MCP tools/call session_status returns cache stats", async () => {
   assert.equal(result.isError, false);
   assert.match(text, /readbro Token Savings/);
   assert.match(text, /Session Scope/);
+  assert.match(text, /\[readbro tip\]/);
   assert.doesNotMatch(text, /By Layer/);
 
   client.close();

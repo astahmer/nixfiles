@@ -77,6 +77,17 @@ Options:
   --json                 Machine-readable JSON
   -h, --help             Show this help`;
 
+const tipsHelp = `readbro tips — workflow hints for MCP agents
+
+Usage:
+  readbro tips [options]
+
+Lists all tips (MCP appends one random unseen tip per tool call).
+
+Options:
+  --json                 Machine-readable JSON
+  -h, --help             Show this help`;
+
 const doctorHelp = `readbro doctor — preflight environment checks
 
 Usage:
@@ -96,6 +107,7 @@ const HELP: Record<FastCommand, string> = {
   ls: lsHelp,
   sessions: sessionsHelp,
   doctor: doctorHelp,
+  tips: tipsHelp,
 };
 
 export const printFastHelp = (command: FastCommand): void => {

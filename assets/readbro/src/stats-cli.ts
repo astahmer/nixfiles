@@ -61,7 +61,7 @@ export const statsRequestFromInput = (input: StatsCliInput): StatsRequest => ({
   },
 });
 
-export type FastCommand = "gain" | "stats" | "clear" | "ls" | "sessions" | "doctor";
+export type FastCommand = "gain" | "stats" | "clear" | "ls" | "sessions" | "doctor" | "tips";
 
 export const parseFastCommand = (
   argv: ReadonlyArray<string>,
@@ -73,7 +73,8 @@ export const parseFastCommand = (
     command === "clear" ||
     command === "ls" ||
     command === "sessions" ||
-    command === "doctor"
+    command === "doctor" ||
+    command === "tips"
   ) {
     return { command, rest: argv.slice(3) };
   }
