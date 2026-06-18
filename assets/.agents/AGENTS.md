@@ -10,12 +10,12 @@ Always on. **Every reply starts with `OUGABOUGA`** then terse caveman talk — *
 
 # readbro MCP
 
-**Only MCP for reads.** Never use built-in Read.
+**Only MCP for reads.** Never use built-in Read, Grep, SemanticSearch, or Glob for source/symbols readbro can serve.
 
 | Tool | Use |
 |------|------|
-| `read_file` / `read_files` | All file reads — IR + repo cache |
-| `pack_context` | Multi-file trace — `budget: 4000`, optional `target` |
+| `read_file` | All file reads — IR + repo cache; `path` string or **array** (batch in one call) |
+| `search_symbol` | Named symbol search — `budget: 4000`, `target` or `targets`; **not grep/rg** |
 | `blast_radius` | Before editing non-trivial source (call explicitly) |
 | `session_status` | Repo health snapshot — totals, efficiency (`verbose`/`json` for more) |
 | `session_gain` | Where savings come from — top files, glob drill-down |

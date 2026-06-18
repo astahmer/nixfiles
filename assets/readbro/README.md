@@ -4,7 +4,7 @@ IR-aware read cache for coding agents — MCP server plus CLI. Compresses source
 
 ## Why
 
-Agent file reads are expensive: every `Read` call sends raw source into context. readbro defaults to **L1 behaviour IR** (~10–50× smaller than raw), tracks what each session has already seen, and on repeat reads returns an **unchanged notice** or a **compact IR diff** — session diff semantics inspired by [cachebro](https://github.com/glommer/cachebro). `pack_context` and `blast_radius` round out exploration and edit safety.
+Agent file reads are expensive: every `Read` call sends raw source into context. readbro defaults to **L1 behaviour IR** (~10–50× smaller than raw), tracks what each session has already seen, and on repeat reads returns an **unchanged notice** or a **compact IR diff** — session diff semantics inspired by [cachebro](https://github.com/glommer/cachebro). `search_symbol` and `blast_radius` round out exploration and edit safety.
 
 ## Requirements
 
@@ -50,9 +50,8 @@ No args → MCP stdio server. Same binary serves CLI subcommands.
 
 | Tool | Purpose |
 |------|---------|
-| `read_file` | Read one file (default **L1**). Primary replacement for built-in Read. |
-| `read_files` | Batch read; same layer/options for all paths. |
-| `pack_context` | Multi-file / symbol-aware context within a token budget. |
+| `read_file` | Read one or more files (default **L1**). `path` is string or array. |
+| `search_symbol` | Named symbol search via composto context — use instead of grep for symbols. |
 | `blast_radius` | Git-history risk before editing a file. |
 | `session_status` | Repo health — totals, efficiency, files tracked. |
 | `session_gain` | Where savings come from — top files, glob drill-down. |
@@ -62,15 +61,24 @@ No args → MCP stdio server. Same binary serves CLI subcommands.
 
 | Param | Default | Notes |
 |-------|---------|-------|
-| `path` | — | Required. |
+| `path` | — | Required. String or array of paths (batch in one call). |
 | `layer` | `L1` | `L0` structure · `L1` behaviour · `L2` delta · `L3` raw. |
 | `force` | `false` | Bypass cache; always return full payload. |
 | `max_lines` | — | Cap output lines. L3 auto-caps at 200 unless `-1`. |
 | `offset` | — | 0-based line offset (L3 windows). |
-| `target` | — | Symbol name → delegates to `pack_context` / `composto context`. |
-| `budget` | `4000` | Token budget when `target` is set. |
 
 **Prefer L1 for understanding code.** Use L3 only for small files or explicit line windows — a large spec at L3 can cost hundreds of thousands of tokens.
+
+### `search_symbol` parameters
+
+| Param | Default | Notes |
+|-------|---------|-------|
+| `path` | `.` | Directory or file to scope search. |
+| `target` | — | Single symbol/class/function name. |
+| `targets` | — | Multiple symbols (budget split across them). |
+| `budget` | `4000` | Token budget for composto context. |
+
+Use **instead of grep/rg** when tracing named symbols. grep remains appropriate for regex/text and filename discovery.
 
 ### IR layers (LOD)
 
@@ -104,8 +112,9 @@ Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`, `doctor`) skips Effect st
 | `readbro` | MCP server (stdio) |
 | `readbro mcp` | MCP server explicitly |
 | `readbro read <path>` | Read one file (`--layer`, `--force`) |
-| `readbro reads <paths…>` | Batch read |
-| `readbro context` | Pack context (`--path`, `--budget`, `--target`) |
+| `readbro reads <paths…>` | Batch read (same as `read_file` with path array) |
+| `readbro symbol` | Symbol search (`--path`, `--budget`, `--target`) |
+| `readbro context` | Deprecated alias for `symbol` |
 | `readbro blast <file>` | Blast radius (`--intent`) |
 | `readbro stats` | Repo health snapshot |
 | `readbro gain` | Token savings with top files |

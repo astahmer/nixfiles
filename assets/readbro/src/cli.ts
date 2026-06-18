@@ -165,7 +165,7 @@ const reads = Command.make(
     Effect.gen(function* () {
       const rb = yield* Readbro;
       yield* Console.log(
-        yield* rb.readFiles(paths, {
+        yield* rb.readFile(paths, {
           layer: Option.getOrUndefined(lyr),
           maxLines: Option.getOrUndefined(ml),
           offset: Option.getOrUndefined(off),
@@ -173,6 +173,22 @@ const reads = Command.make(
       );
     }),
 ).pipe(Command.withDescription("Batch read files"));
+
+const symbol = Command.make(
+  "symbol",
+  {
+    path: Options.text("path").pipe(Options.withDefault(".")),
+    budget: Options.integer("budget").pipe(Options.withDefault(4000)),
+    target: Options.text("target").pipe(Options.optional),
+  },
+  ({ path, budget, target }) =>
+    Effect.gen(function* () {
+      const rb = yield* Readbro;
+      yield* Console.log(
+        yield* rb.searchSymbol({ path, budget, target: Option.getOrUndefined(target) }),
+      );
+    }),
+).pipe(Command.withDescription("Search named symbols via composto context"));
 
 const context = Command.make(
   "context",
@@ -185,10 +201,10 @@ const context = Command.make(
     Effect.gen(function* () {
       const rb = yield* Readbro;
       yield* Console.log(
-        yield* rb.packContext({ path, budget, target: Option.getOrUndefined(target) }),
+        yield* rb.searchSymbol({ path, budget, target: Option.getOrUndefined(target) }),
       );
     }),
-).pipe(Command.withDescription("Pack multi-file context"));
+).pipe(Command.withDescription("Deprecated alias for symbol"));
 
 const blast = Command.make(
   "blast",
@@ -327,10 +343,10 @@ const mcp = Command.make("mcp", {}, () =>
 ).pipe(Command.withDescription("Run MCP server on stdio"));
 
 export const root = Command.make("readbro").pipe(
-  Command.withSubcommands([read, reads, context, blast, stats, gain, clear, ls, sessions, doctor, mcp]),
+  Command.withSubcommands([read, reads, symbol, context, blast, stats, gain, clear, ls, sessions, doctor, mcp]),
 );
 
 export const run = Command.run(root, {
   name: "readbro",
-  version: "0.3.0",
+  version: "0.4.0",
 });

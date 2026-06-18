@@ -22,19 +22,21 @@ import type { ReadbroReadOptions } from "./read-options.ts";
 import { findRepoRoot } from "./repo-root.ts";
 import type { StatsRequest } from "./stats-query.ts";
 
+export type SearchSymbolOptions = {
+  readonly path?: string;
+  readonly budget?: number;
+  readonly target?: string;
+  readonly targets?: ReadonlyArray<string>;
+};
+
 export class Readbro extends Context.Tag("@readbro/Readbro")<
   Readbro,
   {
-    readonly readFile: (path: string, options?: ReadbroReadOptions) => Effect.Effect<string, ReadbroError>;
-    readonly readFiles: (
-      paths: Array<string>,
+    readonly readFile: (
+      path: string | ReadonlyArray<string>,
       options?: ReadbroReadOptions,
-    ) => Effect.Effect<string>;
-    readonly packContext: (options: {
-      readonly path?: string;
-      readonly budget?: number;
-      readonly target?: string;
-    }) => Effect.Effect<string, ReadbroError>;
+    ) => Effect.Effect<string, ReadbroError>;
+    readonly searchSymbol: (options: SearchSymbolOptions) => Effect.Effect<string, ReadbroError>;
     readonly blastRadius: (
       file: string,
       intent?: CompostoIntent,
@@ -59,37 +61,32 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
       cache.logUsage(usageSource === "mcp" ? (mcpName ?? cliName) : cliName, detail);
     };
 
-    const readFile = (path: string, options: ReadbroReadOptions = {}) => {
-      if (options.target) {
-        return packContext({
-          path,
-          target: options.target,
-          budget: options.budget,
-        });
-      }
-      return Effect.sync(() => {
-        logUsage("read", "read_file", path);
-        const { maxLines, offset, force, layer } = options;
-        const result = cache.readFile(path, { layer, force });
-        return formatReadResult(result, cache.getStats({ scope: "repo" }), {
-          maxLines,
-          offset,
-        });
+    const readOneFile = (path: string, options: ReadbroReadOptions) => {
+      const { maxLines, offset, force, layer } = options;
+      const result = cache.readFile(path, { layer, force });
+      return formatReadResult(result, cache.getStats({ scope: "repo" }), {
+        maxLines,
+        offset,
+        showFooter: false,
       });
     };
 
-    const readFiles = (paths: Array<string>, options: ReadbroReadOptions = {}) =>
-      Effect.sync(() => {
-        logUsage("reads", "read_files", paths.join(" "));
-        const { maxLines, offset, force, layer } = options;
-        const parts = paths.map((path) => {
-          const result = cache.readFile(path, { layer, force });
-          return `=== ${path} ===\n${formatReadResult(result, { savedTokens: 0 }, {
-            showFooter: false,
+    const readFile = (path: string | ReadonlyArray<string>, options: ReadbroReadOptions = {}) => {
+      const paths = typeof path === "string" ? [path] : [...path];
+      return Effect.sync(() => {
+        const detail = paths.join(" ");
+        logUsage(paths.length === 1 ? "read" : "reads", "read_file", detail);
+
+        if (paths.length === 1) {
+          const { maxLines, offset, force, layer } = options;
+          const result = cache.readFile(paths[0]!, { layer, force });
+          return formatReadResult(result, cache.getStats({ scope: "repo" }), {
             maxLines,
             offset,
-          })}`;
-        });
+          });
+        }
+
+        const parts = paths.map((filePath) => `=== ${filePath} ===\n${readOneFile(filePath, options)}`);
         const stats = cache.getStats({ scope: "repo" });
         let footer = "";
         if (stats.savedTokens > 0) {
@@ -97,19 +94,25 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         }
         return parts.join("\n\n") + footer;
       });
+    };
 
-    const packContext = (options: {
-      readonly path?: string;
-      readonly budget?: number;
-      readonly target?: string;
-    }) =>
+    const resolveSearchTargets = (options: SearchSymbolOptions): Array<string> => {
+      if (options.targets && options.targets.length > 0) {
+        return [...options.targets];
+      }
+      if (options.target) {
+        return [options.target];
+      }
+      return [];
+    };
+
+    const searchSymbol = (options: SearchSymbolOptions) =>
       Effect.try({
         try: () => {
-          logUsage(
-            "context",
-            "pack_context",
-            [options.path ?? ".", options.target].filter(Boolean).join(" "),
-          );
+          const targets = resolveSearchTargets(options);
+          const detail = [options.path ?? ".", ...targets].filter(Boolean).join(" ");
+          logUsage("symbol", "search_symbol", detail);
+
           const abs = resolve(options.path ?? ".");
           const root = findRepoRoot(abs);
           let isFile = false;
@@ -118,15 +121,35 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
           } catch {
             // path may not exist yet; composto will surface the error
           }
-          if (isFile && !options.target) {
+          if (isFile && targets.length === 0) {
             throw new Error(
-              "pack_context: path is a file — pass target (symbol/class name). composto context scans from repo root, not a single file path.",
+              "search_symbol: path is a file — pass target or targets (symbol/class name). composto context scans from repo root, not a single file path alone.",
             );
           }
+
           const contextPath = isFile ? root : abs;
-          const args = ["context", contextPath, `--budget=${options.budget ?? 4000}`];
-          if (options.target) args.push(`--target=${options.target}`);
-          return runCompostoCli(args, root);
+          const budget = options.budget ?? 4000;
+
+          if (targets.length === 0) {
+            return runCompostoCli(["context", contextPath, `--budget=${budget}`], root);
+          }
+
+          if (targets.length === 1) {
+            return runCompostoCli(
+              ["context", contextPath, `--budget=${budget}`, `--target=${targets[0]}`],
+              root,
+            );
+          }
+
+          const perTargetBudget = Math.max(500, Math.floor(budget / targets.length));
+          const parts = targets.map((target) => {
+            const output = runCompostoCli(
+              ["context", contextPath, `--budget=${perTargetBudget}`, `--target=${target}`],
+              root,
+            );
+            return `=== ${target} ===\n${output}`;
+          });
+          return parts.join("\n\n");
         },
         catch: toReadbroError,
       });
@@ -186,8 +209,7 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
 
     return {
       readFile,
-      readFiles,
-      packContext,
+      searchSymbol,
       blastRadius,
       stats,
       gain,

@@ -1,5 +1,6 @@
-import { McpSchema, McpServer } from "@effect/ai";
 import { NodeSink, NodeStream } from "@effect/platform-node";
+import * as McpSchema from "@effect/ai/McpSchema";
+import * as McpServer from "@effect/ai/McpServer";
 import * as Effect from "effect/Effect";
 import * as JSONSchema from "effect/JSONSchema";
 import * as Layer from "effect/Layer";
@@ -27,14 +28,21 @@ const IntentSchema = Schema.Literal(
   "unknown",
 );
 
+const PathSchema = Schema.Union(Schema.String, Schema.Array(Schema.String));
+
 const ReadFileSchema = Schema.Struct({
-  path: Schema.String,
+  path: PathSchema,
   layer: Schema.optional(LayerSchema),
   force: Schema.optional(Schema.Boolean),
   max_lines: Schema.optional(Schema.Number),
   offset: Schema.optional(Schema.Number),
-  target: Schema.optional(Schema.String),
+});
+
+const SearchSymbolSchema = Schema.Struct({
+  path: Schema.optional(Schema.String),
   budget: Schema.optional(Schema.Number),
+  target: Schema.optional(Schema.String),
+  targets: Schema.optional(Schema.Array(Schema.String)),
 });
 
 const StatsFilterSchema = Schema.Struct({
@@ -85,70 +93,50 @@ export const McpLayer = Layer.effectDiscard(
     yield* registerTool(
       "read_file",
       [
-        "Read one file via composto IR + repo cache. ALWAYS use instead of built-in Read.",
+        "Read one or more files via composto IR + repo cache. ALWAYS use instead of built-in Read.",
+        "path accepts a string OR array of strings — batch multiple files in ONE call (never parallel read_file).",
         "DEFAULT layer L1 (behaviour IR). Do NOT use L3 for exploration — L3 returns full raw source.",
         "Layers: L0=structure, L1=behaviour (default), L2=delta, L3=raw (avoid; auto-capped).",
         "Re-read unchanged file at same layer in this session → short cache notice.",
         "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); pass max_lines: -1 for full raw.",
-        "Optional target: symbol search via composto context (repo root scan; use with class/function name).",
+        "For named symbols/classes/functions use search_symbol — NOT grep/rg/SemanticSearch.",
       ].join(" "),
       ReadFileSchema,
       (payload) => {
         const p = payload as {
-          path: string;
+          path: string | Array<string>;
           layer?: Schema.Schema.Type<typeof LayerSchema>;
           force?: boolean;
           max_lines?: number;
           offset?: number;
-          target?: string;
-          budget?: number;
         };
         return rb.readFile(p.path, {
           layer: p.layer,
           force: p.force,
           maxLines: p.max_lines,
           offset: p.offset,
-          target: p.target,
-          budget: p.budget,
         });
       },
     );
 
     yield* registerTool(
-      "read_files",
-      "Batch read with IR caching. Same layer/max_lines/offset for all paths. Prefer over parallel read_file when opening 3+ files or plan docs.",
-      Schema.Struct({
-        paths: Schema.Array(Schema.String),
-        layer: Schema.optional(LayerSchema),
-        max_lines: Schema.optional(Schema.Number),
-        offset: Schema.optional(Schema.Number),
-      }),
+      "search_symbol",
+      [
+        "Find named symbols (class, function, type, use-case) via composto context within a token budget.",
+        "Use INSTEAD of grep/rg/SemanticSearch when you know a symbol name — e.g. target: 'InvolveNajarInPurchaseProjectUseCase'.",
+        "path: directory (default .) or file to scope; with a file path pass target/targets.",
+        "targets: array for multiple symbols in one call (budget split across them).",
+        "For regex/text/substring search across files, grep is still appropriate — this tool is for named symbols only.",
+      ].join(" "),
+      SearchSymbolSchema,
       (payload) => {
         const p = payload as {
-          paths: Array<string>;
-          layer?: Schema.Schema.Type<typeof LayerSchema>;
-          max_lines?: number;
-          offset?: number;
+          path?: string;
+          budget?: number;
+          target?: string;
+          targets?: Array<string>;
         };
-        return rb.readFiles(p.paths, {
-          layer: p.layer,
-          maxLines: p.max_lines,
-          offset: p.offset,
-        });
-      },
-    );
-
-    yield* registerTool(
-      "pack_context",
-      "Symbol-aware context pack within token budget. path: directory (default .) or file + target (symbol name). Use for cross-file traces. composto scans from repo root.",
-      Schema.Struct({
-        path: Schema.optional(Schema.String),
-        budget: Schema.optional(Schema.Number),
-        target: Schema.optional(Schema.String),
-      }),
-      (payload) => {
-        const p = payload as { path?: string; budget?: number; target?: string };
-        return rb.packContext(p);
+        return rb.searchSymbol(p);
       },
     );
 
@@ -220,7 +208,7 @@ export const McpLayer = Layer.effectDiscard(
   Layer.provide(
     McpServer.layerStdio({
       name: "readbro",
-      version: "0.3.0",
+      version: "0.4.0",
       stdin: NodeStream.stdin,
       stdout: NodeSink.stdout,
     }),

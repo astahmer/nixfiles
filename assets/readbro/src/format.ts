@@ -324,7 +324,7 @@ const readAdvisories = (result: ReadFileResult, filePath?: string): string[] => 
       : "";
     if (NON_CODE_EXT.has(ext)) {
       lines.push(
-        `[readbro: no composto IR for ${ext} — L1 returns raw. Use max_lines to cap, or read_files to batch plan docs]`,
+        `[readbro: no composto IR for ${ext} — L1 returns raw. Use max_lines to cap, or read_file with path array to batch plan docs]`,
       );
     } else {
       lines.push(

@@ -1,21 +1,25 @@
 ---
-description: readbro MCP — IR reads, context pack, blast radius
+description: readbro MCP — IR reads, symbol search, blast radius
 alwaysApply: true
 ---
 
 # readbro
 
-Single MCP for file reads. **Never use built-in Read.**
+Single MCP for file reads. **Never use built-in Read, Grep, SemanticSearch, or Glob for code you can reach via readbro.**
 
 | Tool | When |
 |------|------|
-| `read_file` / `read_files` | All file reads — **layer L1 default** (not L3) |
-| `pack_context` | Symbol search / multi-file trace — `path: "."`, `target`, `budget: 4000` |
+| `read_file` | All file reads — **layer L1 default** (not L3). `path` is string **or array** — batch in ONE call |
+| `search_symbol` | Named symbol/class/function/use-case — **NOT grep/rg**. `target` or `targets`, optional `path`, `budget: 4000` |
 | `blast_radius` | Before editing non-trivial source |
 | `session_status` | Repo health snapshot (totals, efficiency) |
 | `session_gain` | Where savings come from (top files, globs) |
 | `session_clear` | Clear repo cache |
 
-**L3 = full raw** — avoid for exploration; auto-capped to 200 lines. `max_lines: -1` = full file (only when you truly need full raw.). **`target`** on read_file = symbol search via composto context.
+**Do not** grep/rg/SemanticSearch/Glob to find named symbols or read source — use `search_symbol` / `read_file`.
+
+grep/Glob only for: filename discovery, regex/text patterns, or things readbro cannot do.
+
+**L3 = full raw** — avoid for exploration; auto-capped to 200 lines. `max_lines: -1` = full file (only when you truly need full raw).
 
 Full guide: `~/.agents/skills/readbro/SKILL.md`
