@@ -10,6 +10,7 @@ import {
 } from "./format.ts";
 import {
   listQueryFromInput,
+  parseAuditFlags,
   parseClearFlags,
   parseDoctorFlags,
   parseFastCommand,
@@ -20,6 +21,7 @@ import {
   statsRequestFromInput,
 } from "./stats-cli.ts";
 import { doctorExitCode, formatDoctor, runDoctor } from "./doctor.ts";
+import { formatSessionAudit, runSessionAudit } from "./audit.ts";
 import { formatTipsJson, formatTipsList } from "./tips.ts";
 
 export const runFastCommand = (argv: ReadonlyArray<string>): boolean => {
@@ -49,6 +51,16 @@ export const runFastCommand = (argv: ReadonlyArray<string>): boolean => {
     if (!report.ok) {
       process.exitCode = doctorExitCode(report);
     }
+    return true;
+  }
+
+  if (parsed.command === "audit") {
+    const input = parseAuditFlags(parsed.rest);
+    const report = runSessionAudit(cache, {
+      anchorPath: input.path,
+      sessionId: input.session,
+    });
+    console.log(formatSessionAudit(report, input.json));
     return true;
   }
 

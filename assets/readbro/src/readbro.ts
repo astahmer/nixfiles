@@ -19,9 +19,11 @@ import {
 import { doctorExitCode, formatDoctor, runDoctor } from "./doctor.ts";
 import type { ClearOptions, HistoryFormat, SessionsQuery, UsageQuery } from "./history-query.ts";
 import type { ReadbroReadOptions, SymbolTarget } from "./read-options.ts";
-import { normalizeTargets } from "./read-options.ts";
+import { normalizeTargets, resolveReadOptions } from "./read-options.ts";
 import { findRepoRoot } from "./repo-root.ts";
 import type { StatsRequest } from "./stats-query.ts";
+import { formatSessionAudit, runSessionAudit } from "./audit.ts";
+import { guardSymbolOutput } from "./symbol-guard.ts";
 
 export type SearchSymbolOptions = {
   readonly path?: string;
@@ -50,6 +52,11 @@ export class Readbro extends Context.Tag("@readbro/Readbro")<
       format?: HistoryFormat,
     ) => Effect.Effect<string>;
     readonly doctor: (options?: { readonly path?: string; readonly json?: boolean }) => Effect.Effect<string>;
+    readonly audit: (options?: {
+      readonly path?: string;
+      readonly sessionId?: string;
+      readonly json?: boolean;
+    }) => Effect.Effect<string>;
   }
 >() {}
 
@@ -62,11 +69,16 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
     };
 
     const readOneFile = (path: string, options: ReadbroReadOptions) => {
-      const { maxLines, offset, force, layer } = options;
-      const result = cache.readFile(path, { layer, force });
+      const resolved = resolveReadOptions(options);
+      const { maxLines, offset, force, layer } = resolved;
+      const priorStats = cache.getSessionPathStats(path);
+      const result = cache.readFile(path, { layer, force, offset, maxLines });
       return formatReadResult(result, cache.getStats({ scope: "repo" }), {
         maxLines,
         offset,
+        filePath: path,
+        sessionReadNumber: priorStats.readCount + 1,
+        sessionPathStats: priorStats,
         showFooter: false,
       });
     };
@@ -107,14 +119,16 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
           const budget = options.budget ?? 4000;
 
           if (targets.length === 0) {
-            return runCompostoCli(["context", contextPath, `--budget=${budget}`], root);
+            const output = runCompostoCli(["context", contextPath, `--budget=${budget}`], root);
+            return guardSymbolOutput(output, budget, targets);
           }
 
           if (targets.length === 1) {
-            return runCompostoCliAsync(
+            const output = await runCompostoCliAsync(
               ["context", contextPath, `--budget=${budget}`, `--target=${targets[0]}`],
               root,
             );
+            return guardSymbolOutput(output, budget, targets);
           }
 
           const outputs = await runCompostoCliAll(
@@ -123,9 +137,10 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
               startPath: root,
             })),
           );
-          return targets
+          const joined = targets
             .map((target, index) => `=== ${target} ===\n${outputs[index] ?? ""}`)
             .join("\n\n");
+          return guardSymbolOutput(joined, budget, targets);
         },
         catch: toReadbroError,
       });
@@ -134,7 +149,8 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
       normalizeTargets(options.target).length > 0;
 
     const readFile = (path: string | ReadonlyArray<string>, options: ReadbroReadOptions = {}) => {
-      if (hasSearchTarget(options)) {
+      const resolved = resolveReadOptions(options);
+      if (hasSearchTarget(resolved)) {
         const paths = typeof path === "string" ? [path] : [...path];
         if (paths.length > 1) {
           return Effect.fail(
@@ -147,8 +163,8 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         }
         return searchSymbol({
           path: paths[0],
-          target: options.target,
-          budget: options.budget,
+          target: resolved.target,
+          budget: resolved.budget,
         });
       }
 
@@ -174,15 +190,19 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         logUsage(paths.length === 1 ? "read" : "read", "read_file", detail);
 
         if (paths.length === 1) {
-          const { maxLines, offset, force, layer } = options;
-          const result = cache.readFile(paths[0]!, { layer, force });
+          const { maxLines, offset, force, layer } = resolved;
+          const priorStats = cache.getSessionPathStats(paths[0]!);
+          const result = cache.readFile(paths[0]!, { layer, force, offset, maxLines });
           return formatReadResult(result, cache.getStats({ scope: "repo" }), {
             maxLines,
             offset,
+            filePath: paths[0],
+            sessionReadNumber: priorStats.readCount + 1,
+            sessionPathStats: priorStats,
           });
         }
 
-        const parts = paths.map((filePath) => `=== ${filePath} ===\n${readOneFile(filePath, options)}`);
+        const parts = paths.map((filePath) => `=== ${filePath} ===\n${readOneFile(filePath, resolved)}`);
         const stats = cache.getStats({ scope: "repo" });
         let footer = "";
         if (stats.savedTokens > 0) {
@@ -245,6 +265,16 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
         return formatDoctor(report, options.json);
       });
 
+    const audit = (options: { readonly path?: string; readonly sessionId?: string; readonly json?: boolean } = {}) =>
+      Effect.sync(() => {
+        logUsage("audit");
+        const report = runSessionAudit(cache, {
+          anchorPath: options.path,
+          sessionId: options.sessionId,
+        });
+        return formatSessionAudit(report, options.json);
+      });
+
     return {
       readFile,
       searchSymbol,
@@ -255,6 +285,7 @@ const make = (usageSource: "cli" | "mcp" = "cli") =>
       ls,
       sessions,
       doctor,
+      audit,
     } satisfies Context.Tag.Service<Readbro>;
   });
 

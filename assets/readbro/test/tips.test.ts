@@ -38,8 +38,19 @@ test("nextTip cycles through all tips without repeat until reshuffle", () => {
   assert.equal(coach.cycle(), 2, "reshuffles after pool exhausted");
 });
 
+test("repeat path hint on second read of same file", () => {
+  const coach = new McpTipCoach({ tips: TINY_TIPS, repeatWarnCooldownMs: 0, batchWarnCooldownMs: 60_000 });
+  coach.recordToolCall("read_file", { path: "spec.ts", layer: "L1" });
+  assert.equal(coach.repeatPathHint("read_file", { path: "spec.ts" }), null);
+
+  coach.recordToolCall("read_file", { path: "spec.ts", layer: "L3" });
+  const warn = coach.repeatPathHint("read_file", { path: "spec.ts", layer: "L3" });
+  assert.match(warn ?? "", /read #2 of spec.ts/);
+  assert.equal(coach.pathReadCount("spec.ts"), 2);
+});
+
 test("batch warning after two rapid single-path read_file calls", () => {
-  const coach = new McpTipCoach({ tips: TINY_TIPS, rapidWindowMs: 10_000 });
+  const coach = new McpTipCoach({ tips: TINY_TIPS, rapidWindowMs: 10_000, repeatWarnCooldownMs: 60_000 });
   coach.recordToolCall("read_file", { path: "a.ts" });
   assert.equal(coach.batchWarning("read_file", { path: "b.ts" }), null);
 

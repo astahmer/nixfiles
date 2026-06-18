@@ -23,6 +23,11 @@ const maxLines = Options.integer("max-lines").pipe(
   Options.optional,
 );
 
+const full = Options.boolean("full").pipe(
+  Options.withDescription("Read full raw file (implies L3, no line cap)"),
+  Options.withDefault(false),
+);
+
 const offset = Options.integer("offset").pipe(
   Options.withDescription("Start output at this 0-based line"),
   Options.optional,
@@ -136,12 +141,13 @@ const read = Command.make(
     paths: Args.text({ name: "path" }).pipe(Args.repeated),
     layer,
     force,
+    full,
     maxLines,
     offset,
     target: Options.text("target").pipe(Options.optional),
     budget: Options.integer("budget").pipe(Options.optional),
   },
-  ({ paths, layer: lyr, force: f, maxLines: ml, offset: off, target, budget }) =>
+  ({ paths, layer: lyr, force: f, full: readFull, maxLines: ml, offset: off, target, budget }) =>
     Effect.gen(function* () {
       if (paths.length === 0) {
         return yield* Effect.dieMessage("readbro read: pass at least one file path");
@@ -152,6 +158,7 @@ const read = Command.make(
         yield* rb.readFile(pathArg, {
           layer: Option.getOrUndefined(lyr),
           force: f,
+          full: readFull,
           maxLines: Option.getOrUndefined(ml),
           offset: Option.getOrUndefined(off),
           target: Option.getOrUndefined(target),
@@ -333,6 +340,32 @@ const doctor = Command.make(
     }),
 ).pipe(Command.withDescription("Preflight environment checks"));
 
+const audit = Command.make(
+  "audit",
+  {
+    path: Options.text("path").pipe(
+      Options.withDescription("Anchor working copy (default: cwd)"),
+      Options.optional,
+    ),
+    session: Options.text("session").pipe(
+      Options.withDescription("Session id prefix (default: current session)"),
+      Options.optional,
+    ),
+    json,
+  },
+  ({ path, session, json: emitJson }) =>
+    Effect.gen(function* () {
+      const rb = yield* Readbro;
+      yield* Console.log(
+        yield* rb.audit({
+          path: Option.getOrUndefined(path),
+          sessionId: Option.getOrUndefined(session),
+          json: emitJson,
+        }),
+      );
+    }),
+).pipe(Command.withDescription("Session read-pattern forensics (repeat paths, batch opportunities)"));
+
 const mcp = Command.make("mcp", {}, () =>
   Effect.gen(function* () {
     const { McpLayer } = yield* Effect.promise(() => import("./mcp.ts"));
@@ -341,7 +374,7 @@ const mcp = Command.make("mcp", {}, () =>
 ).pipe(Command.withDescription("Run MCP server on stdio"));
 
 export const root = Command.make("readbro").pipe(
-  Command.withSubcommands([read, symbol, context, blast, stats, gain, clear, ls, sessions, doctor, mcp]),
+  Command.withSubcommands([read, symbol, context, blast, stats, gain, clear, ls, sessions, doctor, audit, mcp]),
 );
 
 export const run = Command.run(root, {

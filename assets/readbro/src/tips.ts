@@ -23,7 +23,7 @@ export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
   },
   {
     id: "cache-reread",
-    text: "Re-reading an unchanged file in the same session returns a short cache notice instead of full IR again.",
+    text: "Unchanged re-read saves tokens but still costs a round-trip — batch paths upfront; use force only after edits.",
   },
   {
     id: "blast-radius",
@@ -42,8 +42,8 @@ export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
     text: "Symbol in a known file? read_file({ path: \"spec.ts\", target: \"MyUseCase\" }) — shorthand for search_symbol.",
   },
   {
-    id: "l3-cap",
-    text: "L3/raw is auto-capped (~200 lines). Prefer L1; use max_lines only when you need a line window.",
+    id: "l3-full",
+    text: "Need exact source? read_file({ path: \"spec.ts\", layer: \"L3\", full: true }) — not offset pagination.",
   },
   {
     id: "multi-symbol",
@@ -53,18 +53,28 @@ export const READBRO_TIPS: ReadonlyArray<ReadbroTip> = [
     id: "directories",
     text: "read_file rejects directories. Scope a tree with search_symbol, or pass explicit file paths.",
   },
+  {
+    id: "debug-test-failure",
+    text: "Test failure? search_symbol({ target: \"FailingClass\" }) + read_file({ path: [\"spec.ts\", \"impl.ts\"], layer: \"L1\" }).",
+  },
+  {
+    id: "session-audit",
+    text: "Batching mistakes? Run readbro audit in the repo to see repeat paths and coalesce candidates.",
+  },
 ] as const;
 
 export type ToolCallRecord = {
   readonly tool: string;
   readonly at: number;
   readonly singlePathReads: number;
+  readonly path?: string;
 };
 
 export type McpTipCoachOptions = {
   readonly tips?: ReadonlyArray<ReadbroTip>;
   readonly rapidWindowMs?: number;
   readonly batchWarnCooldownMs?: number;
+  readonly repeatWarnCooldownMs?: number;
   readonly random?: () => number;
 };
 
@@ -95,31 +105,48 @@ export const formatTipsJson = (tips: ReadonlyArray<ReadbroTip> = READBRO_TIPS): 
     2,
   );
 
-const readFilePathCount = (payload: unknown): { readonly count: number; readonly hasTarget: boolean } => {
+const readFilePathCount = (payload: unknown): {
+  readonly count: number;
+  readonly hasTarget: boolean;
+  readonly paths: ReadonlyArray<string>;
+} => {
   if (payload === null || typeof payload !== "object") {
-    return { count: 1, hasTarget: false };
+    return { count: 1, hasTarget: false, paths: [] };
   }
   const p = payload as { path?: string | ReadonlyArray<string>; target?: unknown };
   const hasTarget = p.target !== undefined && p.target !== null && p.target !== "";
-  const count = typeof p.path === "string" ? 1 : Array.isArray(p.path) ? p.path.length : 1;
-  return { count: Math.max(1, count), hasTarget };
+  if (typeof p.path === "string") {
+    return { count: 1, hasTarget, paths: [p.path] };
+  }
+  if (Array.isArray(p.path)) {
+    return { count: Math.max(1, p.path.length), hasTarget, paths: p.path };
+  }
+  return { count: 1, hasTarget, paths: [] };
 };
 
 export class McpTipCoach {
   readonly #tips: ReadonlyArray<ReadbroTip>;
   readonly #rapidWindowMs: number;
   readonly #batchWarnCooldownMs: number;
+  readonly #repeatWarnCooldownMs: number;
   readonly #random: () => number;
 
   #queue: Array<ReadbroTip> = [];
   #cycle = 0;
   #recentCalls: Array<ToolCallRecord> = [];
   #lastBatchWarnAt = 0;
+  #lastRepeatWarnAt = 0;
+  #pathReads = new Map<string, { count: number; layers: Set<string> }>();
+  #readFileCalls = 0;
+  #batchCalls = 0;
+  #uniquePaths = new Set<string>();
+  #toolCalls = 0;
 
   constructor(options: McpTipCoachOptions = {}) {
     this.#tips = options.tips ?? READBRO_TIPS;
     this.#rapidWindowMs = options.rapidWindowMs ?? 5_000;
     this.#batchWarnCooldownMs = options.batchWarnCooldownMs ?? 15_000;
+    this.#repeatWarnCooldownMs = options.repeatWarnCooldownMs ?? 15_000;
     this.#random = options.random ?? defaultRandom;
     this.#refillQueue();
   }
@@ -139,17 +166,35 @@ export class McpTipCoach {
 
   recordToolCall(tool: string, payload: unknown): void {
     const now = Date.now();
+    this.#toolCalls += 1;
     let singlePathReads = 0;
+    let path: string | undefined;
+
     if (tool === "read_file") {
-      const { count, hasTarget } = readFilePathCount(payload);
-      if (!hasTarget && count === 1) {
+      const { count, hasTarget, paths } = readFilePathCount(payload);
+      this.#readFileCalls += 1;
+      if (count > 1) {
+        this.#batchCalls += 1;
+      }
+      for (const item of paths) {
+        this.#uniquePaths.add(item);
+      }
+      if (!hasTarget && count === 1 && paths[0]) {
         singlePathReads = 1;
+        path = paths[0];
+        const layer =
+          typeof payload === "object" && payload !== null && "layer" in payload
+            ? String((payload as { layer?: string }).layer ?? "L1")
+            : "L1";
+        const entry = this.#pathReads.get(path) ?? { count: 0, layers: new Set<string>() };
+        entry.layers.add(layer);
+        this.#pathReads.set(path, { count: entry.count + 1, layers: entry.layers });
       }
     }
 
-    this.#recentCalls.push({ tool, at: now, singlePathReads });
-    if (this.#recentCalls.length > 12) {
-      this.#recentCalls = this.#recentCalls.slice(-12);
+    this.#recentCalls.push({ tool, at: now, singlePathReads, path });
+    if (this.#recentCalls.length > 16) {
+      this.#recentCalls = this.#recentCalls.slice(-16);
     }
 
     if (tool === "search_symbol") {
@@ -157,6 +202,7 @@ export class McpTipCoach {
       this.#lastBatchWarnAt = 0;
     } else if (tool === "read_file" && readFilePathCount(payload).count > 1) {
       this.#lastBatchWarnAt = 0;
+      this.#lastRepeatWarnAt = 0;
     }
   }
 
@@ -196,12 +242,69 @@ export class McpTipCoach {
     );
   }
 
+  repeatPathHint(tool: string, payload: unknown): string | null {
+    if (tool !== "read_file") {
+      return null;
+    }
+
+    const { count, hasTarget, paths } = readFilePathCount(payload);
+    if (hasTarget || count !== 1 || !paths[0]) {
+      return null;
+    }
+
+    const path = paths[0];
+    const entry = this.#pathReads.get(path);
+    if (!entry || entry.count < 2) {
+      return null;
+    }
+
+    const now = Date.now();
+    if (this.#lastRepeatWarnAt > 0 && now - this.#lastRepeatWarnAt < this.#repeatWarnCooldownMs) {
+      return null;
+    }
+
+    this.#lastRepeatWarnAt = now;
+    const layers = [...entry.layers].join(", ");
+    const strength =
+      entry.count >= 3
+        ? "Stop re-reading this file — use full: true once or batch other paths."
+        : "You already read this path — batch other files or use force only after edits.";
+
+    return (
+      `[readbro hint] read #${entry.count} of ${path} this session (layers: ${layers}). ${strength}`
+    );
+  }
+
+  sessionFooter(): string | null {
+    if (this.#readFileCalls < 3) {
+      return null;
+    }
+
+    const extraRoundTrips = Math.max(0, this.#readFileCalls - this.#batchCalls - this.#uniquePaths.size);
+    if (extraRoundTrips < 2 && this.#batchCalls > 0) {
+      return null;
+    }
+
+    return (
+      `[readbro session] ${this.#readFileCalls} read_file · ${this.#uniquePaths.size} unique paths · ` +
+      `${this.#batchCalls} batches · est. +${extraRoundTrips} round-trips`
+    );
+  }
+
   footerFor(tool: string, payload: unknown): string | null {
     const parts: Array<string> = [];
-    const hint = this.batchWarning(tool, payload);
+    const hint = this.batchWarning(tool, payload) ?? this.repeatPathHint(tool, payload);
     if (hint) {
       parts.push(hint);
     }
+
+    if (this.#toolCalls % 4 === 0) {
+      const session = this.sessionFooter();
+      if (session) {
+        parts.push(session);
+      }
+    }
+
     const tip = this.nextTip();
     if (tip) {
       parts.push(tip);
@@ -212,6 +315,11 @@ export class McpTipCoach {
   /** Test hook — tips shown this cycle (approximate). */
   cycle(): number {
     return this.#cycle;
+  }
+
+  /** Test hook — path read count in this MCP session. */
+  pathReadCount(path: string): number {
+    return this.#pathReads.get(path)?.count ?? 0;
   }
 }
 

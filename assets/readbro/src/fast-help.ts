@@ -100,6 +100,20 @@ Options:
 
 Checks composto on PATH, L1 IR smoke probe, cache writable, schema version, session id, repo root.`;
 
+const auditHelp = `readbro audit — session read-pattern forensics
+
+Usage:
+  readbro audit [options]
+
+Surfaces repeat paths, batch/coalesce opportunities, and symbol searches for the
+current MCP session (or a specific session id prefix).
+
+Options:
+  --path <path>          Anchor working copy (default: cwd)
+  --session <id>         Session id prefix (default: current READBRO_SESSION_ID)
+  --json                 Machine-readable JSON
+  -h, --help             Show this help`;
+
 const HELP: Record<FastCommand, string> = {
   stats: statsHelp,
   gain: gainHelp,
@@ -108,6 +122,7 @@ const HELP: Record<FastCommand, string> = {
   sessions: sessionsHelp,
   doctor: doctorHelp,
   tips: tipsHelp,
+  audit: auditHelp,
 };
 
 export const printFastHelp = (command: FastCommand): void => {

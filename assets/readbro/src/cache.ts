@@ -9,8 +9,9 @@ import { aggregateEvents, type ReadEventRow } from "./stats-aggregate.ts";
 import type { StatsQuery, StatsScope } from "./stats-query.ts";
 import { usesPathGrouping } from "./stats-query.ts";
 import type { ClearOptions, SessionsQuery, UsageQuery } from "./history-query.ts";
+import type { SessionPathFetch, SessionPathStats } from "./session-context.ts";
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION: number = 5;
 export const CACHE_SCHEMA_VERSION = SCHEMA_VERSION;
 
 const CREATE_SCHEMA = `
@@ -44,7 +45,9 @@ CREATE TABLE read_events (
   billed_tokens INTEGER NOT NULL,
   saved_tokens  INTEGER NOT NULL,
   outcome       TEXT NOT NULL,
-  duration_ms   INTEGER NOT NULL DEFAULT 0
+  duration_ms   INTEGER NOT NULL DEFAULT 0,
+  read_offset   INTEGER,
+  read_max_lines INTEGER
 );
 
 CREATE TABLE usage_events (
@@ -80,9 +83,19 @@ const defaultSessionId = (): string => process.env.READBRO_SESSION_ID ?? randomU
 export type ReadFileOptions = {
   readonly layer?: IrLayer;
   readonly force?: boolean;
+  readonly offset?: number;
+  readonly maxLines?: number;
 };
 
 export type ReadOutcome = "full" | "cache_hit" | "diff";
+
+export type SessionReadEvent = {
+  readonly filePath: string;
+  readonly layer: IrLayer;
+  readonly readAt: number;
+  readonly readOffset: number | null;
+  readonly readMaxLines: number | null;
+};
 
 export type ReadFileResult = {
   readonly cached: boolean;
@@ -267,6 +280,14 @@ export class IrCacheStore {
         db.prepare("UPDATE schema_meta SET version = ?").run(SCHEMA_VERSION);
         return;
       }
+      if (versionRow?.version === 4 && SCHEMA_VERSION === 5) {
+        db.exec(`
+          ALTER TABLE read_events ADD COLUMN read_offset INTEGER;
+          ALTER TABLE read_events ADD COLUMN read_max_lines INTEGER;
+        `);
+        db.prepare("UPDATE schema_meta SET version = ?").run(SCHEMA_VERSION);
+        return;
+      }
     } else {
       const hasTables = db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' LIMIT 1")
@@ -332,13 +353,16 @@ export class IrCacheStore {
     outcome: ReadOutcome,
     durationMs: number,
     readAt: number,
+    readOffset?: number,
+    readMaxLines?: number,
   ): void {
     const savedTokens = rawTokens - billedTokens;
     db.prepare(
       `INSERT INTO read_events (
          read_at, session_id, file_path, layer, repr,
-         raw_tokens, billed_tokens, saved_tokens, outcome, duration_ms
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         raw_tokens, billed_tokens, saved_tokens, outcome, duration_ms,
+         read_offset, read_max_lines
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       readAt,
       this.#sessionId,
@@ -350,13 +374,88 @@ export class IrCacheStore {
       savedTokens,
       outcome,
       durationMs,
+      readOffset ?? null,
+      readMaxLines ?? null,
     );
+  }
+
+  getSessionPathStats(filePath: string): SessionPathStats {
+    const absPath = resolve(filePath);
+    const { db } = this.#connectionFor(absPath);
+    const rows = db
+      .prepare(
+        `SELECT layer, read_offset, read_max_lines, COUNT(*) as reads
+         FROM read_events
+         WHERE session_id = ? AND file_path = ?
+         GROUP BY layer, read_offset, read_max_lines
+         ORDER BY layer, read_offset`,
+      )
+      .all(this.#sessionId, absPath) as Array<{
+      layer: IrLayer;
+      read_offset: number | null;
+      read_max_lines: number | null;
+      reads: number;
+    }>;
+
+    const total = db
+      .prepare(
+        "SELECT COUNT(*) as reads FROM read_events WHERE session_id = ? AND file_path = ?",
+      )
+      .get(this.#sessionId, absPath) as { reads: number };
+
+    const fetches: Array<SessionPathFetch> = rows.map((row) => ({
+      layer: row.layer,
+      readOffset: row.read_offset,
+      readMaxLines: row.read_max_lines,
+      reads: row.reads,
+    }));
+
+    return {
+      readCount: total.reads,
+      fetches,
+    };
+  }
+
+  listSessionReadEvents(sessionId: string, anchorPath?: string): ReadonlyArray<SessionReadEvent> {
+    const anchor = resolve(anchorPath ?? process.cwd());
+    this.#connectionFor(anchor);
+
+    const rows: SessionReadEvent[] = [];
+    for (const { db } of this.#connections.values()) {
+      const result = db
+        .prepare(
+          `SELECT file_path, layer, read_at, read_offset, read_max_lines
+           FROM read_events
+           WHERE session_id LIKE ?
+           ORDER BY read_at ASC`,
+        )
+        .all(`${sessionId}%`) as Array<{
+        file_path: string;
+        layer: IrLayer;
+        read_at: number;
+        read_offset: number | null;
+        read_max_lines: number | null;
+      }>;
+      rows.push(
+        ...result.map((row) => ({
+          filePath: row.file_path,
+          layer: row.layer,
+          readAt: row.read_at,
+          readOffset: row.read_offset,
+          readMaxLines: row.read_max_lines,
+        })),
+      );
+    }
+
+    return rows.sort((a, b) => a.readAt - b.readAt);
   }
 
   readFile(filePath: string, options: ReadFileOptions = {}): ReadFileResult {
     const absPath = resolve(filePath);
     const layer = options.layer ?? "L1";
     const force = options.force ?? false;
+    const readOffset = options.offset;
+    const readMaxLines = options.maxLines;
     const now = Date.now();
     const { db } = this.#connectionFor(absPath);
 
@@ -384,6 +483,8 @@ export class IrCacheStore {
         result.outcome,
         durationMs,
         now,
+        readOffset,
+        readMaxLines,
       );
       return {
         ...result,

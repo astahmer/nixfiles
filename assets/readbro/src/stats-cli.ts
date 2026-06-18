@@ -61,7 +61,7 @@ export const statsRequestFromInput = (input: StatsCliInput): StatsRequest => ({
   },
 });
 
-export type FastCommand = "gain" | "stats" | "clear" | "ls" | "sessions" | "doctor" | "tips";
+export type FastCommand = "gain" | "stats" | "clear" | "ls" | "sessions" | "doctor" | "tips" | "audit";
 
 export const parseFastCommand = (
   argv: ReadonlyArray<string>,
@@ -74,7 +74,8 @@ export const parseFastCommand = (
     command === "ls" ||
     command === "sessions" ||
     command === "doctor" ||
-    command === "tips"
+    command === "tips" ||
+    command === "audit"
   ) {
     return { command, rest: argv.slice(3) };
   }
@@ -346,4 +347,40 @@ export const parseDoctorFlags = (args: ReadonlyArray<string>): DoctorCliInput =>
   }
 
   return { path, json };
+};
+
+export type AuditCliInput = {
+  readonly path?: string;
+  readonly session?: string;
+  readonly json: boolean;
+};
+
+export const parseAuditFlags = (args: ReadonlyArray<string>): AuditCliInput => {
+  let path: string | undefined;
+  let session: string | undefined;
+  let json = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]!;
+    switch (arg) {
+      case "-h":
+      case "--help":
+        break;
+      case "--path":
+        path = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--session":
+        session = nextFlagValue(args, index, arg);
+        index += 1;
+        break;
+      case "--json":
+        json = true;
+        break;
+      default:
+        throw new Error(`unknown option: ${arg}`);
+    }
+  }
+
+  return { path, session, json };
 };

@@ -61,11 +61,12 @@ Always prefer this over built-in Read when you know where to look (but maybe not
 
 **Parameters:**
 
-- `path` — string or **array** of paths (batch in one call)
+- `path` — string or **array** of paths (batch in one call); `paths` is an alias
 - `layer` — `L0` \| `L1` \| `L2` \| `L3` (default `L1` for exploratory reads)
 - `target` / `budget` — **shorthand for search_symbol** (single path only; `target` string or array)
 - `force` — bypass cache and return full payload (default `false`)
-- `max_lines` — cap output lines (`L3`/raw auto-capped to 200; `-1` = full file, no cap)
+- `full` — shorthand for full raw read (implies `L3`, no line cap)
+- `max_lines` — cap output lines (`L3`/raw auto-capped to 200; `-1` or `full: true` = no cap)
 - `offset` — start at 0-based line (optional)
 
 **Symbol in known file:**
@@ -149,6 +150,7 @@ When you **do** have a symbol name, skip LOD — use `search_symbol` or `read_fi
 | `readbro ls` | Command/tool usage history (CLI + MCP) |
 | `readbro sessions` | MCP agent sessions only (`--all` for CLI too) |
 | `readbro tips` | List all workflow tips (MCP shows one per tool call) |
+| `readbro audit` | Session read-pattern forensics (repeat paths, batch opportunities) |
 | `readbro mcp` | MCP server explicitly |
 
 ## Repo caching
@@ -161,7 +163,7 @@ Always returns the **full** IR/raw payload for that layer.
 
 ### Unchanged re-read (same session, same layer)
 
-Short notice: `[readbro: unchanged IR (L1, ir), ~842 tokens saved]`
+Short notice; on 2nd+ read includes read number, layers/windows already fetched, and suggested next action.
 
 ### After a file change
 
@@ -174,7 +176,8 @@ Returns a unified diff of the IR vs what this session last saw.
 Every MCP tool response may end with:
 
 - `[readbro tip] …` — one random workflow hint (unseen tips first; pool reshuffles when exhausted)
-- `[readbro hint] …` — only when serial single-path `read_file` calls are detected (batch nudge)
+- `[readbro hint] …` — serial reads OR repeat path in session (batch / `full: true` nudge)
+- `[readbro session] …` — periodic footer: read count, unique paths, batches, est. extra round-trips
 
 List all tips: `readbro tips` (or `readbro tips --json`).
 
@@ -201,9 +204,11 @@ Markdown L0 = heading outline. Markdown L1 = section summaries + links + fenced-
 
 1. **Named thing?** → `search_symbol({ target: "..." })` first
 2. **Known paths batch?** → `read_file({ path: [...], layer: "L1" })` **one call** — never parallel `read_file`
-3. **Regex / union counts** → grep or shell trace scripts
+3. **Test failure?** → `search_symbol({ target: "FailingClass" })` + `read_file({ path: ["spec.ts", "impl.ts"], layer: "L1" })`
+4. **Regex / union counts** → grep or shell trace scripts
 
 **Anti-pattern:** `search_symbol` then many serial `read_file` calls for paths you already know — batch them.
+**Anti-pattern:** offset pagination on same file — use `full: true` once instead.
 
 ## Quick reference
 
@@ -217,3 +222,5 @@ Markdown L0 = heading outline. Markdown L1 = section summaries + links + fenced-
 | Regex / text / filenames | grep / Glob |
 | Before editing | `blast_radius` |
 | Bypass cache | `read_file` with `force: true` |
+| Full raw file | `read_file` with `full: true` |
+| Session batching audit | `readbro audit` CLI |

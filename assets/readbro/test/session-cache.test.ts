@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { IrCacheStore } from "../src/cache.ts";
+import { formatReadResult } from "../src/format.ts";
 
 const tmp = mkdtempSync(join(tmpdir(), "readbro-session-"));
 
@@ -13,6 +14,47 @@ const makeRepo = (name: string) => {
   mkdirSync(join(repo, ".git"));
   return repo;
 };
+
+test("same session repeat read includes session stats in formatReadResult", () => {
+  const repo = join(tmp, "repeat-notice");
+  mkdirSync(repo, { recursive: true });
+  mkdirSync(join(repo, ".git"));
+  const file = join(repo, "repeat.ts");
+  writeFileSync(file, "export const repeat = true;\n");
+  const db = join(tmp, "repeat-notice.db");
+  const cache = new IrCacheStore({ dbPath: db, sessionId: "repeat-sess" });
+
+  const r1 = cache.readFile(file, { layer: "L1" });
+  assert.equal(r1.outcome, "full");
+
+  const prior = cache.getSessionPathStats(file);
+  const r2 = cache.readFile(file, { layer: "L1" });
+  const formatted = formatReadResult(r2, { savedTokens: 0 }, {
+    filePath: file,
+    sessionReadNumber: prior.readCount + 1,
+    sessionPathStats: prior,
+  });
+  assert.match(formatted, /unchanged IR/);
+  assert.match(formatted, /read #2/);
+  assert.match(formatted, /already fetched/);
+});
+
+test("getSessionPathStats tracks layers and windows", () => {
+  const repo = join(tmp, "path-stats");
+  mkdirSync(repo, { recursive: true });
+  mkdirSync(join(repo, ".git"));
+  const file = join(repo, "window.ts");
+  writeFileSync(file, `${"export const line = 1;\n".repeat(20)}`);
+  const db = join(tmp, "path-stats.db");
+  const cache = new IrCacheStore({ dbPath: db, sessionId: "window-sess" });
+
+  cache.readFile(file, { layer: "L1" });
+  cache.readFile(file, { layer: "L3", offset: 5, maxLines: 10 });
+
+  const stats = cache.getSessionPathStats(file);
+  assert.equal(stats.readCount, 2);
+  assert.equal(stats.fetches.length, 2);
+});
 
 test("new session gets full read when another session warmed ir_versions", () => {
   const repo = makeRepo("cross-session");

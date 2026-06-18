@@ -14,4 +14,16 @@ export type ReadbroReadOptions = {
   readonly offset?: number;
   readonly target?: SymbolTarget;
   readonly budget?: number;
+  readonly full?: boolean;
+};
+
+export const resolveReadOptions = (options: ReadbroReadOptions = {}): ReadbroReadOptions => {
+  if (options.full === true) {
+    return {
+      ...options,
+      layer: options.layer ?? "L3",
+      maxLines: -1,
+    };
+  }
+  return options;
 };

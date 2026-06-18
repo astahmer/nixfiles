@@ -7,6 +7,8 @@ import * as Layer from "effect/Layer";
 import * as Logger from "effect/Logger";
 import * as Schema from "effect/Schema";
 import type { ReadbroError } from "./errors.ts";
+import { ReadbroUnknownError } from "./errors.ts";
+import { coalescedReadFile } from "./coalesce.ts";
 import { Readbro, ReadbroLiveMcp } from "./readbro.ts";
 import { appendMcpFooter } from "./tips.ts";
 import { statsRequestFromMcp } from "./stats-query.ts";
@@ -33,9 +35,11 @@ const PathSchema = Schema.Union(Schema.String, Schema.Array(Schema.String));
 const TargetSchema = Schema.Union(Schema.String, Schema.Array(Schema.String));
 
 const ReadFileSchema = Schema.Struct({
-  path: PathSchema,
+  path: Schema.optional(PathSchema),
+  paths: Schema.optional(PathSchema),
   layer: Schema.optional(LayerSchema),
   force: Schema.optional(Schema.Boolean),
+  full: Schema.optional(Schema.Boolean),
   max_lines: Schema.optional(Schema.Number),
   offset: Schema.optional(Schema.Number),
   target: Schema.optional(TargetSchema),
@@ -98,25 +102,36 @@ export const McpLayer = Layer.effectDiscard(
       [
         "Read one or more files via composto IR + repo cache. ALWAYS use instead of built-in Read.",
         "PRECISE LOOKUP: if you know a symbol name, pass target (delegates to search_symbol) — do NOT grep or read whole file at L1 first.",
-        "path: string OR array — batch multiple files in ONE call (never parallel read_file). target requires a single path.",
+        "path: string OR array — batch multiple files in ONE call (never parallel read_file). paths is an alias. target requires a single path.",
         "Directories are rejected — pass file paths. Use search_symbol for symbol lookup across a tree.",
         "Exploratory reads (no symbol): DEFAULT layer L1. L0=structure survey. Do NOT use L3 for exploration.",
-        "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); max_lines: -1 for full raw.",
+        "L3/raw auto-truncates to READBRO_L3_MAX_LINES (default 200); full: true or max_lines: -1 for full raw.",
       ].join(" "),
       ReadFileSchema,
       (payload) => {
         const p = payload as {
-          path: string | Array<string>;
+          path?: string | Array<string>;
+          paths?: string | Array<string>;
           layer?: Schema.Schema.Type<typeof LayerSchema>;
           force?: boolean;
+          full?: boolean;
           max_lines?: number;
           offset?: number;
           target?: string | Array<string>;
           budget?: number;
         };
-        return rb.readFile(p.path, {
+        const path = p.path ?? p.paths;
+        if (path === undefined) {
+          return Effect.fail(
+            new ReadbroUnknownError({
+              cause: new Error("read_file: path (or paths) is required"),
+            }),
+          );
+        }
+        return coalescedReadFile(rb, path, {
           layer: p.layer,
           force: p.force,
+          full: p.full,
           maxLines: p.max_lines,
           offset: p.offset,
           target: p.target,

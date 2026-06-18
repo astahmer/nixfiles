@@ -2,6 +2,8 @@ import type { CacheStats, ClearResult, GlobStats, ReadFileResult, ReadOutcome, S
 import type { HistoryFormat } from "./history-query.ts";
 import { NON_CODE_EXT } from "./ir.ts";
 import type { ReadbroReadOptions } from "./read-options.ts";
+import { formatRepeatPathNotice } from "./session-context.ts";
+import type { SessionPathStats } from "./session-context.ts";
 import type { StatsFormat } from "./stats-query.ts";
 import { formatSinceLabel } from "./stats-query.ts";
 import { applyLineWindow, effectiveMaxLines, lineWindowNotice } from "./truncate.ts";
@@ -336,7 +338,12 @@ const readAdvisories = (result: ReadFileResult, filePath?: string): string[] => 
 export const formatReadResult = (
   result: ReadFileResult,
   stats: Pick<CacheStats, "savedTokens">,
-  options: ReadbroReadOptions & { readonly showFooter?: boolean; readonly filePath?: string } = {},
+  options: ReadbroReadOptions & {
+    readonly showFooter?: boolean;
+    readonly filePath?: string;
+    readonly sessionReadNumber?: number;
+    readonly sessionPathStats?: SessionPathStats;
+  } = {},
 ): string => {
   const showFooter = options.showFooter ?? true;
   const advisories = readAdvisories(result, options.filePath);
@@ -344,6 +351,16 @@ export const formatReadResult = (
 
   if (result.cached && result.linesChanged === 0) {
     parts.push(result.content);
+    const repeatNotice = formatRepeatPathNotice({
+      displayPath: options.filePath ?? "file",
+      readNumber: options.sessionReadNumber ?? 0,
+      stats: options.sessionPathStats ?? { readCount: 0, fetches: [] },
+      layer: result.layer,
+      window: { offset: options.offset, maxLines: options.maxLines },
+    });
+    if (repeatNotice) {
+      parts.push(repeatNotice);
+    }
   } else {
     const maxLines = effectiveMaxLines({
       layer: result.layer,

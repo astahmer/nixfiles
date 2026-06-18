@@ -61,10 +61,11 @@ No args → MCP stdio server. Same binary serves CLI subcommands.
 
 | Param | Default | Notes |
 |-------|---------|-------|
-| `path` | — | Required. String or array of paths (batch in one call). |
+| `path` | — | String or array of paths (batch in one call). `paths` is an alias. |
 | `layer` | `L1` | `L0` structure · `L1` behaviour · `L3` raw. |
 | `force` | `false` | Bypass cache; always return full payload. |
-| `max_lines` | — | Cap output lines. L3 auto-caps at 200 unless `-1`. |
+| `full` | `false` | Shorthand for full raw read (`layer: L3`, no line cap). |
+| `max_lines` | — | Cap output lines. L3 auto-caps at 200 unless `-1` or `full: true`. |
 | `offset` | — | 0-based line offset (L3 windows). |
 | `target` | — | Symbol name (string) or array — delegates to `search_symbol` (single path only). |
 | `budget` | `4000` | Token budget when `target` set. |
@@ -119,8 +120,11 @@ Cache lives at **`.readbro/cache.db`** in the working-copy root (`READBRO_DIR` o
 
 Every MCP tool response (except JSON payloads) ends with lightweight coaching — rules alone don't stick, so readbro nudges in-band while the agent still has the file context fresh.
 
-- **`[readbro tip]`** — one random workflow hint per call (batch reads, `search_symbol`, LOD, md-ir, …). Unseen tips first; when all 12 have been shown, the pool reshuffles and continues (long sessions often compact context, so reminders help).
-- **`[readbro hint]`** — only when serial single-path `read_file` calls are detected (e.g. two within 5s). Suggests batching: `read_file({ path: ["a.ts", "b.ts"] })`. Skipped for path arrays, `target` shorthand, and after `search_symbol`.
+- **`[readbro tip]`** — one random workflow hint per call (batch reads, `search_symbol`, LOD, md-ir, debug-test-failure, …). Unseen tips first; when all 14 have been shown, the pool reshuffles and continues (long sessions often compact context, so reminders help).
+- **`[readbro hint]`** — when serial single-path `read_file` calls are detected (e.g. two within 5s) **or** when the same path is read again in the session. Suggests batching, `full: true`, or `force` only after edits. Skipped for path arrays and `target` shorthand.
+- **`[readbro session]`** — periodic footer with read_file count, unique paths, batches, and estimated extra round-trips.
+
+On **unchanged IR** cache hits (2nd+ read of same file), the notice now includes read number, layers/windows already fetched, and a suggested next action.
 
 List all tips: `readbro tips` (or `readbro tips --json`).
 
@@ -204,6 +208,7 @@ Fast path (`gain`, `stats`, `clear`, `ls`, `sessions`, `doctor`, `tips`) skips E
 | `readbro sessions` | MCP agent sessions (`--all` to include CLI) |
 | `readbro tips` | List workflow hints (also shown one per MCP call) |
 | `readbro doctor` | Preflight checks (composto, cache, schema) |
+| `readbro audit` | Session read-pattern forensics (repeat paths, batch opportunities) |
 | `readbro clear` | Clear or prune cache |
 
 ### `stats` / `gain`
@@ -302,6 +307,29 @@ readbro doctor
 readbro doctor --json
 ```
 
+### `audit`
+
+Session forensics for agent authors — repeat paths, coalesce candidates, symbol searches.
+
+| Flag | Notes |
+|------|-------|
+| `--path <path>` | Anchor working copy (default: cwd) |
+| `--session <id>` | Session id prefix (default: current session) |
+| `--json` | Machine-readable report |
+
+```bash
+readbro audit
+readbro audit --session 111d2123 --json
+```
+
+### MCP coalescing
+
+Parallel `read_file` calls in the same turn (same layer, no `target`/`offset`) are buffered ~50ms and merged into one batch read. Each caller gets their file section from the combined response.
+
+### `search_symbol` guard
+
+Outputs exceeding ~115% of budget are truncated with file hints and a nudge to narrow `path` or `target`.
+
 ## Development
 
 ```bash
@@ -326,7 +354,7 @@ Workspace-local MCP override (repo root `.cursor/mcp.json`):
 
 ```
 main.ts
-  ├─ fast path → fast-stats.ts (gain / stats / clear / ls / sessions / doctor)
+  ├─ fast path → fast-stats.ts (gain / stats / clear / ls / sessions / doctor / audit / tips)
   └─ MCP / CLI → main-effect.ts → Effect + @effect/cli + @effect/ai
        └─ readbro.ts → cache.ts (SQLite) + ir.ts (composto) + format.ts
 ```
