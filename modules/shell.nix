@@ -460,6 +460,8 @@
 
       home.shellAliases = {
         nixapply = "nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook";
+        nixswitch = "nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook";
+        nixupdate = "nix flake update && nixapply";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         nixcheck = "nix-instantiate --parse $(git ls-files '*.nix') >/dev/null";
         zshconfig = "code ~/.config/zsh/.zshrc";
