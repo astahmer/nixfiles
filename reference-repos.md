@@ -7,4 +7,7 @@ Local clones under `.references/` (gitignored). Refresh with the add-reference-r
 | composto | https://github.com/mertcanaltin/composto | `.references/composto` | IR LOD (L0–L3), blast radius hooks, CLI — upstream for layer semantics |
 | cachebro | https://github.com/glommer/cachebro | `.references/cachebro` | Raw read cache (reference only — benchmark baseline) |
 | effect | https://github.com/Effect-TS/effect | `.references/effect` | Effect, Platform, CLI, `@effect/ai` MCP patterns |
+| neolectron/nixfiles | https://github.com/neolectron/nixfiles | `.references/manu-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
+| Vincent-HD/.nixfiles | https://github.com/Vincent-HD/.nixfiles | `.references/vincent-nixfiles` | nix-darwin + home-manager macOS config |
+| Christopher2K/NixConfig | https://github.com/Christopher2K/NixConfig | `.references/chris2-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
 | readbro | (local) `assets/readbro` | n/a (versioned) | IR read cache MCP + CLI — Effect, pnpm, Node native TS |
