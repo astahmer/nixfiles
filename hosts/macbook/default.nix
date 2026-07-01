@@ -16,6 +16,7 @@ in
 
         modules = [
           inputs.nix-index-database.homeModules.default
+          inputs.nix-homebrew.homeManagerModules.darwin
           hm.base
           hm.brew
           hm.terminal

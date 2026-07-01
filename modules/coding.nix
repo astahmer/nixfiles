@@ -83,6 +83,7 @@ in
         pkgs.ripgrep
         pkgs."yt-dlp"
         pkgs.uv
+        pkgs.opencode
         pkgs.htop
         pkgs.btop
         pkgs.devenv
