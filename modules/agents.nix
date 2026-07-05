@@ -50,8 +50,8 @@
       home.file.".claude/settings.json".source = ../assets/.claude/settings.json;
 
       home.file.".executor/executor.jsonc".source = ../assets/executor/executor.jsonc;
-      home.file.".executor/setup.sh" = {
-        source = ../assets/executor/setup.sh;
+      home.file.".executor/setup.ts" = {
+        source = ../assets/executor/setup.ts;
         executable = true;
       };
 
