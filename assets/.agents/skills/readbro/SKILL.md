@@ -8,7 +8,7 @@ description: >
 
 # readbro
 
-readbro is the **only** MCP server you should use for reading files and finding named symbols in code. Do not use the IDE's built-in Read tool, Grep, SemanticSearch, or Glob to read source or trace named symbols — they return full raw text and waste context tokens.
+(IF ENABLED) readbro is the **only** MCP server you should use for reading files and finding named symbols in code. Do not use the IDE's built-in Read tool, Grep, SemanticSearch, or Glob to read source or trace named symbols — they return full raw text and waste context tokens.
 
 readbro compresses source files into composto IR (intermediate representation), caches what has been read in the repo, and on re-reads returns either a short "unchanged" notice or a compact diff instead of the full file again.
 
