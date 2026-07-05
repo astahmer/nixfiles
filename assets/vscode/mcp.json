@@ -1,39 +1,12 @@
 {
 	"servers": {
-		"readbro": {
+		"executor": {
 			"type": "stdio",
-			"command": "readbro",
-			"args": [],
-			"env": {}
-		},
-		"io.github.ChromeDevTools/chrome-devtools-mcp": {
-			"command": "npx",
-			"args": [
-				"-y",
-				"chrome-devtools-mcp"
-			],
-			"env": {},
-			"type": "stdio"
-		},
-		"io.github.upstash/context7": {
-			"type": "stdio",
-			"command": "npx",
-			"args": [
-				"@upstash/context7-mcp@1.0.31"
-			],
+			"command": "executor",
+			"args": ["mcp"],
 			"env": {
-				"CONTEXT7_API_KEY": "${input:CONTEXT7_API_KEY}"
-			},
-			"gallery": "https://api.mcp.github.com",
-			"version": "1.0.31"
+				"EXECUTOR_SCOPE_DIR": "~/.executor"
+			}
 		}
-	},
-	"inputs": [
-		{
-			"id": "CONTEXT7_API_KEY",
-			"type": "promptString",
-			"description": "API key for authentication",
-			"password": true
-		}
-	]
+	}
 }

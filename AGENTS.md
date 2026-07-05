@@ -28,6 +28,8 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `hosts/workstation/default.nix` contains the NixOS host.
 - `assets/.agents/` — global agent tree. `readbro-package.nix` — readbro MCP (built via pnpm + `fetchPnpmDeps`). Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them with a store-pinned `readbro` binary. Optional workspace test config: `.cursor/mcp.json` (repo-local `node assets/readbro/src/main.ts`). Run tests with `./assets/readbro/run-tests` (bypasses pnpm when its store is read-only).
 - Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook` to apply.
+- `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.sh` seeds these integrations idempotently on activation.
+- `readbro` is currently disabled. Its source remains in `assets/readbro/` but is no longer deployed as an MCP server.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## Reference Repos
@@ -50,4 +52,5 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 ## Notes for Agents
 
 - `assets/.agents` is the source of the global skills tree; update it when adding or changing global skills.
+- Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
 - When adding new reusable repository conventions, document them here so future agents can find them quickly.

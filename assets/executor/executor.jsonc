@@ -1,0 +1,63 @@
+{
+  "$schema": "https://executor.sh/schemas/executor.jsonc",
+  "name": "nixfiles-agent-catalog",
+  // Plugins are already loaded by the local executor runtime; this file is
+  // mainly a config sink and lightweight documentation of integrations.
+  "plugins": [],
+  "sources": [
+    {
+      "kind": "mcp",
+      "transport": "remote",
+      "name": "GitHub Copilot",
+      "slug": "github",
+      "endpoint": "https://api.githubcopilot.com/mcp/",
+      "remoteTransport": "auto",
+      "auth": {
+        "kind": "header",
+        "headerName": "Authorization",
+        "prefix": "Bearer ",
+        "secret": "secret-public-ref:github-token"
+      }
+    },
+    {
+      "kind": "mcp",
+      "transport": "remote",
+      "name": "Context7",
+      "slug": "context7",
+      "endpoint": "https://mcp.context7.com/mcp",
+      "remoteTransport": "auto"
+    },
+    {
+      "kind": "mcp",
+      "transport": "stdio",
+      "name": "Chrome DevTools",
+      "slug": "chrome-devtools",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp"]
+    },
+    {
+      "kind": "mcp",
+      "transport": "stdio",
+      "name": "nixos",
+      "slug": "nixos",
+      "command": "uvx",
+      "args": ["mcp-nixos"]
+    }
+    // readbro is disabled for now while we evaluate executor as the single
+    // integration layer. Re-enable by uncommenting this block if needed.
+    // {
+    //   "kind": "mcp",
+    //   "transport": "stdio",
+    //   "name": "readbro",
+    //   "slug": "readbro",
+    //   "command": "readbro"
+    // }
+  ],
+  "secrets": {
+    "github-token": {
+      "name": "GitHub Copilot token",
+      "provider": "file",
+      "purpose": "Authorization header for the GitHub Copilot MCP server"
+    }
+  }
+}

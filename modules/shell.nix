@@ -304,6 +304,11 @@
           $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
           $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
         fi
+
+        if ! command -v executor >/dev/null 2>&1; then
+          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
+          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g executor || true
+        fi
       '';
 
       home.activation.writeGithubToken = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -324,6 +329,12 @@
         if [ -n "$token" ]; then
           mkdir -p "${config.home.homeDirectory}/.config/opencode"
           printf '%s' "$token" > "${config.home.homeDirectory}/.config/opencode/github-token"
+        fi
+      '';
+
+      home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" "aiCliInstall" "writeGithubToken" ] ''
+        if [ -x "${config.home.homeDirectory}/.executor/setup.sh" ]; then
+          $DRY_RUN_CMD "${config.home.homeDirectory}/.executor/setup.sh" || true
         fi
       '';
 

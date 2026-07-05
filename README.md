@@ -35,6 +35,8 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 - `hosts/bazzite/default.nix` wires the standalone Home Manager profile for Linux/Bazzite.
 - `hosts/workstation/default.nix` wires the NixOS host.
 - `assets/.agents/` contains global Copilot skills and is linked into `~/.agents` by Home Manager.
+- `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.sh` seeds them idempotently on activation.
+- `assets/readbro/` contains the source for readbro (IR read cache MCP (it is currently disabled)
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## macOS setup
@@ -69,7 +71,7 @@ Resolution order is:
 3. Fall back to `GH_TOKEN` if that is set instead.
 4. If neither env var is present, ask the `gh` CLI for the current authenticated token with `gh auth token`.
 
-The MCP config files under `assets/.config/opencode/opencode.json` and `assets/.cursor/mcp.json` point at that file via `Bearer {file:...}`, which avoids the brittle `env:GITHUB_TOKEN` lookup that can fail during activation when the variable is unset.
+The Executor seeder (`assets/executor/setup.sh`) wires this token into `~/.local/share/executor/auth.json` during activation, where Executor's file provider picks it up for the GitHub Copilot MCP integration. The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` now point at the local Executor instance (`executor mcp`) instead of individual MCP servers.
 
 If you want a fresh token written during a switch, make sure `gh` is logged in or export `GITHUB_TOKEN`/`GH_TOKEN` before running Home Manager.
 
@@ -111,6 +113,7 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/git.nix` for git defaults
 - `modules/bitwarden.nix` for Bitwarden desktop plus SSH agent socket wiring
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
+- `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
 ## Updating `jj-ryu`
 

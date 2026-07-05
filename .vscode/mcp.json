@@ -1,11 +1,12 @@
 {
     "servers": {
-        "nixos": {
+        "executor": {
             "type": "stdio",
-            "command": "uvx",
-            "args": [
-                "mcp-nixos"
-            ]
+            "command": "executor",
+            "args": ["mcp"],
+            "env": {
+                "EXECUTOR_SCOPE_DIR": "~/.executor"
+            }
         }
     }
 }

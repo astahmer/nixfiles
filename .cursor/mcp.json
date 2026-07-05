@@ -1,13 +1,11 @@
 {
   "mcpServers": {
-    "readbro": {
-      "command": "node",
-      "args": [
-        "--no-warnings=ExperimentalWarning",
-        "--experimental-transform-types",
-        "--experimental-strip-types",
-        "assets/readbro/src/main.ts"
-      ]
+    "executor": {
+      "command": "executor",
+      "args": ["mcp"],
+      "env": {
+        "EXECUTOR_SCOPE_DIR": "~/.executor"
+      }
     }
   }
 }

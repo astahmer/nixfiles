@@ -8,46 +8,38 @@
       ...
     }:
     let
-      readbro = import ../readbro-package.nix { inherit pkgs; };
-      readbroBin = "${readbro}/bin/readbro";
+      executorDir = "${config.home.homeDirectory}/.executor";
+      executorScopeDir = executorDir;
       githubTokenFile = "${config.home.homeDirectory}/.config/opencode/github-token";
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);
       cursorMcp = cursorMcpBase // {
-        mcpServers = cursorMcpBase.mcpServers // {
-          readbro = {
-            command = readbroBin;
+        mcpServers = lib.mapAttrs (_: server: server // {
+          env = (server.env or { }) // {
+            EXECUTOR_SCOPE_DIR = executorScopeDir;
           };
-        };
+        }) cursorMcpBase.mcpServers;
       };
 
       vscodeMcpBase = builtins.fromJSON (builtins.readFile ../assets/vscode/mcp.json);
       vscodeMcp = vscodeMcpBase // {
-        servers = vscodeMcpBase.servers // {
-          readbro = (vscodeMcpBase.servers.readbro or { }) // {
-            command = readbroBin;
+        servers = lib.mapAttrs (_: server: server // {
+          env = (server.env or { }) // {
+            EXECUTOR_SCOPE_DIR = executorScopeDir;
           };
-        };
+        }) vscodeMcpBase.servers;
       };
 
       opencodeBase = builtins.fromJSON (builtins.readFile ../assets/.config/opencode/opencode.json);
       opencodeConfig = opencodeBase // {
-        mcp = opencodeBase.mcp // {
-          readbro = (opencodeBase.mcp.readbro or { }) // {
-            command = [ readbroBin ];
+        mcp = lib.mapAttrs (_: server: server // {
+          env = (server.env or { }) // {
+            EXECUTOR_SCOPE_DIR = executorScopeDir;
           };
-        };
+        }) opencodeBase.mcp;
       };
-
-      withGithubTokenFile = text:
-        builtins.replaceStrings
-          [ "Bearer {env:GITHUB_TOKEN}" ]
-          [ "Bearer {file:${githubTokenFile}}" ]
-          text;
     in
     {
-      home.packages = [ readbro ];
-
       home.file.".agents".source = ../assets/.agents;
       home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
       home.file.".cursor/hooks/caveman-thinking.sh" = {
@@ -57,11 +49,16 @@
       home.file.".cursor/rules".source = ../assets/.cursor/rules;
       home.file.".claude/settings.json".source = ../assets/.claude/settings.json;
 
-      home.file.".cursor/mcp.json".text = withGithubTokenFile (builtins.toJSON cursorMcp);
+      home.file.".executor/executor.jsonc".source = ../assets/executor/executor.jsonc;
+      home.file.".executor/setup.sh" = {
+        source = ../assets/executor/setup.sh;
+        executable = true;
+      };
+
+      home.file.".cursor/mcp.json".text = builtins.toJSON cursorMcp;
       home.file.".vscode/mcp.json".text = builtins.toJSON vscodeMcp;
       home.file."Library/Application Support/Code/User/mcp.json".text = builtins.toJSON vscodeMcp;
-      home.file.".config/opencode/opencode.json".text =
-        withGithubTokenFile (builtins.toJSON opencodeConfig);
+      home.file.".config/opencode/opencode.json".text = builtins.toJSON opencodeConfig;
 
       home.file.".copilot/instructions/copilot.instructions.md".source =
         ../assets/.agents/instructions/copilot.instructions.md;
@@ -69,5 +66,8 @@
 
       home.file.".copilot/skills".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/skills";
+
+      # readbro is disabled while we use executor as the single integration layer.
+      # The package source remains in assets/readbro for now.
     };
 }
