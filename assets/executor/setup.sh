@@ -66,7 +66,21 @@ seed_github_token() {
 }
 
 call() {
-  executor call "$@"
+  local output
+  local exit_code=0
+  output=$(executor call "$@" 2>&1) || exit_code=$?
+
+  printf '%s\n' "${output}"
+
+  local execution_id
+  execution_id=$(printf '%s\n' "${output}" | grep -oE 'executionId: (exec_[A-Za-z0-9-]+)' | head -n1 | cut -d' ' -f2)
+
+  if [ -n "${execution_id}" ]; then
+    echo "Auto-resuming execution ${execution_id}" >&2
+    executor resume --execution-id "${execution_id}" --base-url http://localhost:4789 --action accept --content '{}' 2>&1 || true
+  fi
+
+  return ${exit_code}
 }
 
 integration_exists() {
@@ -77,7 +91,7 @@ integration_exists() {
   fi
   node -e '
     const data = JSON.parse(fs.readFileSync(0, "utf8"));
-    const list = data?.result?.integrations ?? data?.integrations ?? [];
+    const list = data?.data?.integrations ?? data?.result?.integrations ?? data?.integrations ?? [];
     process.exit(list.some((i) => i.slug === process.argv[1]) ? 0 : 1);
   ' "${slug}" <<< "${out}"
 }
@@ -90,7 +104,7 @@ connection_exists() {
   fi
   node -e '
     const data = JSON.parse(fs.readFileSync(0, "utf8"));
-    const list = data?.result?.connections ?? data?.connections ?? [];
+    const list = data?.data?.connections ?? data?.result?.connections ?? data?.connections ?? [];
     process.exit(list.some((c) => c.integration === process.argv[1]) ? 0 : 1);
   ' "${integration}" <<< "${out}"
 }
@@ -107,10 +121,12 @@ add_github() {
       "remoteTransport": "auto",
       "authenticationTemplate": [
         {
-          "kind": "apikey",
-          "placements": [
-            { "carrier": "header", "name": "Authorization", "prefix": "Bearer " }
-          ]
+          "type": "apiKey",
+          "headers": {
+            "Authorization": [
+              { "type": "variable", "name": "token" }
+            ]
+          }
         }
       ]
     }'
@@ -124,7 +140,7 @@ add_github() {
       "owner": "org",
       "name": "default",
       "integration": "github",
-      "template": "header",
+      "template": "default",
       "inputs": {
         "token": { "from": { "provider": "file", "id": "github-token" } }
       }

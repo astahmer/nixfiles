@@ -333,6 +333,8 @@
       '';
 
       home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" "aiCliInstall" "writeGithubToken" ] ''
+        export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
+
         if [ -x "${config.home.homeDirectory}/.executor/setup.sh" ]; then
           $DRY_RUN_CMD "${config.home.homeDirectory}/.executor/setup.sh" || true
         fi
