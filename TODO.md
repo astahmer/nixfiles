@@ -29,3 +29,8 @@ with https://github.com/alchemy-run/alchemy ?
 
 
 fff skill
+
+- [x] https://github.com/nubjs/nub instead of pnpm; then add pnpm=nub alias (should be compatible)
+- add to opencode config: https://github.com/ndom91/open-plan-annotator
+- fork https://github.com/Mark1708/opencode-usage-monitor and show opencode go usage in a similar way
+- try https://github.com/hamidi-dev/opentab

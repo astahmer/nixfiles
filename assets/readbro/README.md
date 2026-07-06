@@ -343,7 +343,7 @@ pnpm run benchmark       # composto fixtures
 bun run build && ./readbro gain
 ```
 
-Nix build and check: `readbro-package.nix` at repo root — `pnpm fetchPnpmDeps` + `bun build --compile --minify --bytecode`, tests in `checkPhase`.
+Nix build and check: `packages/readbro.nix` — `pnpm fetchPnpmDeps` + `bun build --compile --minify --bytecode`, tests in `checkPhase`.
 
 Workspace-local MCP override (repo root `.cursor/mcp.json`):
 
@@ -372,7 +372,7 @@ main.ts
 
 **Changes:**
 
-1. **Single executable** — `bun build --compile --minify --bytecode` (`readbro-package.nix`). Nix still fetches deps with pnpm; Bun only compiles.
+1. **Single executable** — `bun build --compile --minify --bytecode` (`packages/readbro.nix`). Nix still fetches deps with pnpm; Bun only compiles.
 2. **SQLite adapter** — `node:sqlite` for Node tests; `bun:sqlite` in the binary (`node:sqlite` fails under `bun compile`).
 3. **Fast path** — `gain`, `stats`, `clear`, `ls`, `sessions`, and `doctor` bypass Effect; `main.ts` routes to `fast-stats.ts` or lazy-loads `main-effect.ts` for MCP.
 

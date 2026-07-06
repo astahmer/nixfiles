@@ -104,13 +104,34 @@
         "type": "github"
       }
     },
+    "nub": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783404728,
+        "narHash": "sha256-KSUbzR6/9jNqwHeOwxJ8aVQzqz8J2E+bQ7f1+sdvSb8=",
+        "owner": "nubjs",
+        "repo": "nub",
+        "rev": "5fef690fe6a7785b5bbce863e2fdbf4d566c2ef6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nubjs",
+        "repo": "nub",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",
         "import-tree": "import-tree",
         "nix-index-database": "nix-index-database",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nub": "nub"
       }
     }
   },

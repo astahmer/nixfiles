@@ -18,6 +18,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    nub = {
+      url = "github:nubjs/nub";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
 
   };
 

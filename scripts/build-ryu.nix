@@ -6,4 +6,4 @@ let
     url = "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz";
   }) { inherit system; };
 in
-import ../ryu-package.nix { inherit pkgs; }
+import ../packages/ryu.nix { inherit pkgs; }

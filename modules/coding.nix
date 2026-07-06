@@ -6,9 +6,9 @@ in
   config.flake.modules.homeManager.coding =
     { pkgs, lib, ... }:
     let
-      ghui = import ../ghui-package.nix { inherit pkgs; };
-      hunk = import ../hunk-package.nix { inherit pkgs; };
-      lightjj = import ../lightjj-package.nix { inherit pkgs; };
+      ghui = import ../packages/ghui.nix { inherit pkgs; };
+      hunk = import ../packages/hunk.nix { inherit pkgs; };
+      lightjj = import ../packages/lightjj.nix { inherit pkgs; };
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let

@@ -5,9 +5,12 @@
       config,
       lib,
       pkgs,
+      inputs,
       ...
     }:
     let
+      nubPkg = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
       pnpmHome = "${config.home.homeDirectory}/.local/share/pnpm";
       pnpmBin = "${pnpmHome}/bin";
 
@@ -264,6 +267,7 @@
     {
       home.packages = [
         pkgs.nodejs_24
+        nubPkg
         pkgs.rtk
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.llvmPackages.libcxxClang ];
@@ -486,12 +490,15 @@
         gitconfig = "code ~/.gitconfig";
         gitignore = "code ~/.gitignore";
         sauce = "source ~/.config/zsh/.zshrc";
-        ppnm = "pnpm";
-        pn = "pnpm";
+        ppnm = "nub";
+        pn = "nub";
+        pnpm = "nub";
+        npm = "nub";
+        npx = "nubx";
         # https://github.com/oxidecomputer/skepsis
         sk = "${lib.getExe pkgs.nodejs_24} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
         jjpush = "jj push";
-        pnpmi = "pnpm i";
+        pnpmi = "nub i";
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
         nts = "node --no-warnings=ExperimentalWarning --experimental-strip-types --experimental-transform-types --env-file-if-exists=.env";

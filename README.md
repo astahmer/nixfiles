@@ -117,18 +117,35 @@ Add your own hardware-specific config before treating it as a real machine profi
 
 ## Updating `jj-ryu`
 
-`ryu-package.nix` is the single source of truth for the package definition.
+`packages/ryu.nix` is the single source of truth for the package definition.
 `scripts/build-ryu.nix` is only a helper for rebuilding that package in isolation while you refresh hashes.
 
 To bump upstream:
 
-1. Update the `rev` or `sha256` in `ryu-package.nix`.
+1. Update the `rev` or `sha256` in `packages/ryu.nix`.
 2. Run `nix build -f scripts/build-ryu.nix --no-link` to verify the package and refresh `cargoHash` if needed.
 3. Re-run `nix run nixpkgs#home-manager -- build --flake .#macbook` or `nix flake check`.
 
 ## Conventions
 
 - Never use `with` expressions. Prefer explicit attribute references such as `pkgs.spotify`, `pkgs.doppler`, `pkgs.git`, or `pkgs."name-with-hyphen"`. Avoid `with pkgs;` or any `with` usage inside modules, functions, or package lists.
+
+## Node tooling
+
+The shell profile installs [nub](https://github.com/nubjs/nub) and aliases the common Node.js package-manager commands to it:
+
+| Alias | Resolves to |
+|-------|-------------|
+| `pnpm` | `nub` |
+| `pn`   | `nub` |
+| `ppnm` | `nub` |
+| `npm`  | `nub` |
+| `npx`  | `nubx` |
+| `pnpmi` | `nub i` |
+
+This keeps day-to-day commands (`pnpm install`, `pnpm run`, `npx`, etc.) fast while nub runs in pnpm-compatible mode. `nodejs_24` is still installed and remains on `PATH` for scripts and tools that need the real Node binary, and the Nix package builds (`readbro-package.nix`, `hunk-package.nix`) still use stock `pnpm`/`node`/`bun` for reproducibility.
+
+If a project breaks under the nub aliases, run the real tool directly (`command pnpm …`, `/nix/store/.../bin/node …`, etc.).
 
 ## Common workflow
 

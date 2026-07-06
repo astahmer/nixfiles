@@ -3,12 +3,12 @@
   config.flake.modules.homeManager.ryu =
     { pkgs, ... }:
     {
-      home.packages = [ (import ../ryu-package.nix { inherit pkgs; }) ];
+      home.packages = [ (import ../packages/ryu.nix { inherit pkgs; }) ];
     };
 
   config.flake.modules.nixos.ryu =
     { pkgs, ... }:
     {
-      environment.systemPackages = [ (import ../ryu-package.nix { inherit pkgs; }) ];
+      environment.systemPackages = [ (import ../packages/ryu.nix { inherit pkgs; }) ];
     };
 }
