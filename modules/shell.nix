@@ -34,6 +34,20 @@
         }
       '';
 
+      pnpmShellFunction = ''
+        pnpm() {
+          local cmd="$1"
+          case "$cmd" in
+            run|exec|dlx|x|watch|install|i|ci|add|a|remove|rm|update|up|import|dedupe|prune|rebuild|rb|link|ln|unlink|patch|patch-commit|patch-remove|approve-builds|ignored-builds|list|ls|why|outdated|audit|licenses|view|search|bin|root|query|check|sbom|publish|pack|version|dist-tag|login|logout|whoami|owner|token|node|help)
+              nub "$@"
+              ;;
+            *)
+              nub run "$@"
+              ;;
+          esac
+        }
+      '';
+
       jjsearchFunction = ''
                 jjsearch() {
                   local mode="fixed"
@@ -441,6 +455,7 @@
         export PATH="${pnpmBin}:$PATH"
               ${jjsearchFunction}
               ${shellAliasesFunction}
+              ${pnpmShellFunction}
               eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
@@ -475,6 +490,7 @@
           export PATH="${pnpmBin}:$PATH"
           ${jjsearchFunction}
           ${shellAliasesFunction}
+          ${pnpmShellFunction}
         '')
 
         (lib.mkAfter ''
@@ -498,11 +514,12 @@
         npmrc = "code ~/.npmrc";
         gitconfig = "code ~/.gitconfig";
         gitignore = "code ~/.gitignore";
+        sauce = "source ~/.config/zsh/.zshrc";
         #
-        ppnm = "nub";
-        pn = "nub";
-        pnp = "nub";
-        pnpm = "nub";
+        ppnm = "pnpm";
+        pn = "pnpm";
+        pnp = "pnpm";
+        pdev = "nub run dev";
         pnpmi = "nub i";
         npm = "nub";
         npx = "nubx";
