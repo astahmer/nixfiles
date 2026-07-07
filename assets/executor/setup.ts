@@ -38,8 +38,41 @@ function writeText(filePath: string, content: string): void {
   writeFileSync(filePath, content, { mode: 0o600 });
 }
 
+function getActiveExecutorBaseUrl(): string | undefined {
+  try {
+    const daemonFile = path.join(EXECUTOR_DIR, "daemon-localhost-4789.json");
+    if (!existsSync(daemonFile)) return undefined;
+    const daemon = JSON.parse(readFileSync(daemonFile, "utf8")) as {
+      port?: number;
+      pid?: number;
+    };
+    if (!daemon.port || !daemon.pid) return undefined;
+    // Best-effort liveness check; if the PID is gone, fall back to auto-start.
+    try {
+      process.kill(daemon.pid, 0);
+    } catch {
+      return undefined;
+    }
+    return `http://localhost:${daemon.port}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function withBaseUrl(args: string[], baseUrl: string | undefined): string[] {
+  if (!baseUrl) return args;
+  // Executor expects the global --base-url flag after the subcommand:
+  //   executor call --base-url <url> ...
+  //   executor resume --base-url <url> ...
+  if (args[0] === "call" || args[0] === "resume") {
+    return [args[0], "--base-url", baseUrl, ...args.slice(1)];
+  }
+  return args;
+}
+
 function runExecutor(args: string[]): string {
-  return execFileSync("executor", args, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  const baseUrl = getActiveExecutorBaseUrl();
+  return execFileSync("executor", withBaseUrl(args, baseUrl), { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
 }
 
 function extractJson(output: string): unknown {
@@ -53,20 +86,22 @@ function resumeIfPaused(output: string): void {
   if (!match) return;
 
   const executionId = match[1];
+  const baseUrl = getActiveExecutorBaseUrl();
   console.error(`Auto-resuming execution ${executionId}`);
   execFileSync(
     "executor",
-    [
-      "resume",
-      "--execution-id",
-      executionId,
-      "--base-url",
-      "http://localhost:4789",
-      "--action",
-      "accept",
-      "--content",
-      "{}",
-    ],
+    withBaseUrl(
+      [
+        "resume",
+        "--execution-id",
+        executionId,
+        "--action",
+        "accept",
+        "--content",
+        "{}",
+      ],
+      baseUrl,
+    ),
     { stdio: "inherit" },
   );
 }
@@ -216,16 +251,14 @@ function addChromeDevtools(): void {
 }
 
 function addPlannotator(): void {
-  if (integrationExists("plannotator")) {
-    console.log("Plannotator integration already exists; skipping add.");
-    return;
-  }
-
+  // Always re-register so the command stays in sync with the nixfiles source
+  // of truth. If the integration already exists, addServer pauses for approval;
+  // resumeIfPaused accepts the empty schema automatically.
   callExecutor("executor.mcp.addServer", {
     transport: "stdio",
     name: "Plannotator",
     slug: "plannotator",
-    command: "plannotator",
+    command: "plannotator-mcp",
   });
 }
 

@@ -10,6 +10,7 @@ in
       hunk = import ../packages/hunk.nix { inherit pkgs; };
       lightjj = import ../packages/lightjj.nix { inherit pkgs; };
       plannotator = import ../packages/plannotator.nix { inherit pkgs; };
+      plannotator-mcp = import ../packages/plannotator-mcp.nix { inherit pkgs; };
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let
@@ -59,6 +60,7 @@ in
         pkgs.gh
         pkgs."github-copilot-cli"
         plannotator
+        plannotator-mcp
         pkgs.comma
         pkgs.delta
         hunk

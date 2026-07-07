@@ -11,4 +11,5 @@ Local clones under `.references/` (gitignored). Refresh with the add-reference-r
 | Vincent-HD/.nixfiles | https://github.com/Vincent-HD/.nixfiles | `.references/vincent-nixfiles` | nix-darwin + home-manager macOS config |
 | Christopher2K/NixConfig | https://github.com/Christopher2K/NixConfig | `.references/chris2-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
 | executor | https://github.com/UsefulSoftwareCo/executor | `.references/executor` | Agent integration layer — MCP/OpenAPI/GraphQL catalog with policies |
+| plannotator | https://github.com/backnotprop/plannotator | `.references/plannotator` | Interactive plan/code review UI with hook/bridge CLI protocol |
 | readbro | (local) `assets/readbro` | n/a (versioned) | IR read cache MCP + CLI — Effect, pnpm, Node native TS (currently disabled in favor of executor) |
