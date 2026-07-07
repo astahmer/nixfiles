@@ -4,7 +4,7 @@ let
     lib
     stdenv
     bun
-    nodejs_24
+    nodejs_26
     pnpm_11
     fetchPnpmDeps
     pnpmConfigHook
@@ -35,7 +35,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     bun
-    nodejs_24
+    nodejs_26
     pnpmConfigHook
     pnpm_11
   ];

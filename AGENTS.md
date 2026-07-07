@@ -54,4 +54,4 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `assets/.agents` is the source of the global skills tree; update it when adding or changing global skills.
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
 - When adding new reusable repository conventions, document them here so future agents can find them quickly.
-- In the interactive shell, `pnpm`, `npm`, `pn`, `ppnm`, and `npx` are aliased to `nub`/`nubx`. `nodejs_24` and the real `pnpm` tooling remain installed for Nix builds and fallback use.
+- In the interactive shell, `pnpm`, `npm`, `pn`, `ppnm`, and `npx` are aliased to `nub`/`nubx`. `nodejs_26` and the real `pnpm` tooling remain installed for Nix builds and fallback use.

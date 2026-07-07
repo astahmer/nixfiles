@@ -266,7 +266,7 @@
     in
     {
       home.packages = [
-        pkgs.nodejs_24
+        pkgs.nodejs_26
         nubPkg
         pkgs.rtk
       ]
@@ -293,7 +293,7 @@
         fi
 
         if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
-          $DRY_RUN_CMD sh -c 'cd "$1" && "$2" pnpm i' sh "$skepsis_dir" "${pkgs.nodejs_24}/bin/corepack"
+          $DRY_RUN_CMD sh -c 'cd "$1" && "$2" pnpm i' sh "$skepsis_dir" "${pkgs.nodejs_26}/bin/corepack"
         fi
       '';
 
@@ -305,13 +305,13 @@
         mkdir -p "${pnpmHome}"
 
         if ! command -v composto >/dev/null 2>&1; then
-          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
+          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
+          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
         fi
 
         if ! command -v executor >/dev/null 2>&1; then
-          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-          $DRY_RUN_CMD "${pkgs.nodejs_24}/bin/corepack" pnpm add -g executor || true
+          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
+          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" pnpm add -g executor || true
         fi
       '';
 
@@ -337,7 +337,7 @@
       '';
 
       home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" "aiCliInstall" "writeGithubToken" ] ''
-        export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
+        export PATH="${pkgs.nodejs_26}/bin:${pnpmBin}:$PATH"
 
         if [ -x "${config.home.homeDirectory}/.executor/setup.ts" ]; then
           $DRY_RUN_CMD "${config.home.homeDirectory}/.executor/setup.ts" || true
@@ -427,8 +427,8 @@
               PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
 
               export COREPACK_ENABLE_AUTO_PIN=0
-              "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-              "${pkgs.nodejs_24}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
+              "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
+              "${pkgs.nodejs_26}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
               eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
         export PATH="${pnpmBin}:$PATH"
@@ -461,8 +461,8 @@
           }
 
           export COREPACK_ENABLE_AUTO_PIN=0
-          "${pkgs.nodejs_24}/bin/corepack" enable >/dev/null 2>&1 || true
-          "${pkgs.nodejs_24}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
+          "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
+          "${pkgs.nodejs_26}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
           eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
           export PATH="${pnpmBin}:$PATH"
@@ -496,7 +496,7 @@
         npm = "nub";
         npx = "nubx";
         # https://github.com/oxidecomputer/skepsis
-        sk = "${lib.getExe pkgs.nodejs_24} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
+        sk = "${lib.getExe pkgs.nodejs_26} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
         jjpush = "jj push";
         pnpmi = "nub i";
         ts = ", tsgo --noEmit";

@@ -143,7 +143,7 @@ The shell profile installs [nub](https://github.com/nubjs/nub) and aliases the c
 | `npx`  | `nubx` |
 | `pnpmi` | `nub i` |
 
-This keeps day-to-day commands (`pnpm install`, `pnpm run`, `npx`, etc.) fast while nub runs in pnpm-compatible mode. `nodejs_24` is still installed and remains on `PATH` for scripts and tools that need the real Node binary, and the Nix package builds (`readbro-package.nix`, `hunk-package.nix`) still use stock `pnpm`/`node`/`bun` for reproducibility.
+This keeps day-to-day commands (`pnpm install`, `pnpm run`, `npx`, etc.) fast while nub runs in pnpm-compatible mode. `nodejs_26` is still installed and remains on `PATH` for scripts and tools that need the real Node binary, and the Nix package builds (`readbro-package.nix`, `hunk-package.nix`) still use stock `pnpm`/`node`/`bun` for reproducibility.
 
 If a project breaks under the nub aliases, run the real tool directly (`command pnpm …`, `/nix/store/.../bin/node …`, etc.).
 
