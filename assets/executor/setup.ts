@@ -250,10 +250,34 @@ function addChromeDevtools(): void {
   });
 }
 
+function getMcpServerCommand(slug: string): string | undefined {
+  try {
+    const output = runExecutor(["call", "executor.mcp.getServer", JSON.stringify({ slug })]);
+    const data = extractJson(output) as {
+      data?: {
+        integration?: {
+          config?: {
+            command?: string;
+            args?: string[];
+          };
+        };
+      };
+    };
+    const config = data.data?.integration?.config;
+    if (!config) return undefined;
+    return [config.command, ...(config.args ?? [])].filter(Boolean).join(" ");
+  } catch {
+    return undefined;
+  }
+}
+
 function addPlannotator(): void {
-  // Always re-register so the command stays in sync with the nixfiles source
-  // of truth. If the integration already exists, addServer pauses for approval;
-  // resumeIfPaused accepts the empty schema automatically.
+  const existingCommand = getMcpServerCommand("plannotator");
+  if (existingCommand === "plannotator-mcp") {
+    console.log("Plannotator integration already uses plannotator-mcp; skipping add.");
+    return;
+  }
+
   callExecutor("executor.mcp.addServer", {
     transport: "stdio",
     name: "Plannotator",

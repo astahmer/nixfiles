@@ -8,8 +8,16 @@
  * Executor.
  */
 import { spawnSync } from "node:child_process";
-import { accessSync, constants } from "node:fs";
-import { resolve } from "node:path";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
+import { homedir } from "node:os";
+import { resolve, join, sep } from "node:path";
 
 const PROTOCOL_VERSION = "2024-11-05";
 
@@ -29,11 +37,10 @@ interface JsonRpcResponse {
 
 const tools = [
   {
-    name: "submit_plan",
+    name: "review_plan",
     description:
-      "Open the Plannotator plan-review UI for an agent-generated plan. " +
-      "Blocks until the user approves or denies, then returns the decision " +
-      "and any feedback.",
+      "Open the Plannotator browser UI to review an agent-generated plan. " +
+      "Blocks until you approve or deny, then returns the decision and any feedback.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -44,7 +51,7 @@ const tools = [
         timeoutSeconds: {
           type: "number" as const,
           description:
-            "Optional timeout. If the user does not respond in time, the tool " +
+            "Optional timeout. If you do not respond in time, the tool " +
             "returns a denial so the agent can retry.",
         },
         workingDirectory: {
@@ -58,10 +65,10 @@ const tools = [
     },
   },
   {
-    name: "submit_review",
+    name: "review_code",
     description:
-      "Open the Plannotator code-review UI for the current VCS changes or a " +
-      "pull request. Blocks until the user submits feedback or dismisses.",
+      "Open the Plannotator browser UI to review the current VCS changes or a " +
+      "pull request. Blocks until you submit feedback or dismiss.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -79,10 +86,10 @@ const tools = [
     },
   },
   {
-    name: "annotate",
+    name: "annotate_document",
     description:
-      "Open the Plannotator annotation UI for a markdown file, HTML file, URL, " +
-      "or folder. Blocks until the user submits annotations or dismisses.",
+      "Open the Plannotator browser UI to annotate a markdown file, HTML file, URL, " +
+      "or folder. Blocks until you submit annotations or dismiss.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -106,9 +113,9 @@ const tools = [
     },
   },
   {
-    name: "archive",
+    name: "open_archive",
     description:
-      "Open the Plannotator archive UI to browse saved plan decisions.",
+      "Open the Plannotator archive UI in the browser to browse saved plan decisions.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -120,7 +127,39 @@ const tools = [
     },
   },
   {
-    name: "sessions",
+    name: "list_saved_decisions",
+    description:
+      "List plan decisions saved by Plannotator in ~/.plannotator/plans/. " +
+      "These are the approved/denied snapshots produced by review_plan.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        limit: {
+          type: "number" as const,
+          description: "Maximum number of decisions to return (default: 50).",
+        },
+      },
+    },
+  },
+  {
+    name: "read_saved_decision",
+    description:
+      "Read the full markdown content of a saved Plannotator decision file " +
+      "from ~/.plannotator/plans/. Use list_saved_decisions to find filenames.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        filename: {
+          type: "string" as const,
+          description:
+            "Filename of the saved decision, e.g. 'my-plan-2026-07-07-approved.md'.",
+        },
+      },
+      required: ["filename"],
+    },
+  },
+  {
+    name: "list_sessions",
     description:
       "List active Plannotator sessions. Returns a plain-text table, not structured JSON.",
     inputSchema: {
@@ -234,6 +273,100 @@ function parseJsonSafe(text: string): unknown {
   }
 }
 
+function getPlannotatorDataDir(): string {
+  const envDir = process.env.PLANNOTATOR_DATA_DIR;
+  if (envDir) {
+    return resolveUserPath(envDir);
+  }
+  return join(homedir(), ".plannotator");
+}
+
+function resolveUserPath(input: string): string {
+  if (input.startsWith("~/")) {
+    return join(homedir(), input.slice(2));
+  }
+  return resolve(input);
+}
+
+interface SavedDecision {
+  filename: string;
+  title: string;
+  date: string;
+  status: "approved" | "denied" | "unknown";
+  timestamp: string;
+  size: number;
+}
+
+function parseDecisionFilename(filename: string): SavedDecision | null {
+  if (!filename.endsWith(".md")) return null;
+  if (filename.endsWith(".annotations.md") || filename.endsWith(".diff.md")) {
+    return null;
+  }
+
+  const base = filename.replace(/\.md$/, "");
+  let status: SavedDecision["status"] = "unknown";
+  let slug = base;
+
+  if (base.endsWith("-approved")) {
+    status = "approved";
+    slug = base.slice(0, -"-approved".length);
+  } else if (base.endsWith("-denied")) {
+    status = "denied";
+    slug = base.slice(0, -"-denied".length);
+  } else {
+    return null;
+  }
+
+  const dateMatch = slug.match(/(\d{4}-\d{2}-\d{2})/);
+  const date = dateMatch ? dateMatch[1] : "";
+  const title = slug
+    .replace(/\d{4}-\d{2}-\d{2}/, "")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, " ")
+    .trim() || "Untitled Plan";
+
+  return { filename, title, date, status, timestamp: "", size: 0 };
+}
+
+function listSavedDecisions(limit = 50): SavedDecision[] {
+  const planDir = join(getPlannotatorDataDir(), "plans");
+  if (!existsSync(planDir)) return [];
+
+  try {
+    const entries = readdirSync(planDir);
+    const decisions: SavedDecision[] = [];
+    for (const entry of entries) {
+      const parsed = parseDecisionFilename(entry);
+      if (!parsed) continue;
+      try {
+        const stat = statSync(join(planDir, entry));
+        parsed.size = stat.size;
+        parsed.timestamp = stat.mtime.toISOString();
+      } catch { /* keep defaults */ }
+      decisions.push(parsed);
+    }
+    return decisions
+      .sort(
+        (a, b) =>
+          b.date.localeCompare(a.date) || b.timestamp.localeCompare(a.timestamp),
+      )
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+function readSavedDecision(filename: string): string | null {
+  const planDir = join(getPlannotatorDataDir(), "plans");
+  const filePath = resolve(planDir, filename);
+  if (!filePath.startsWith(planDir + sep)) return null;
+  try {
+    return readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
 function formatDecision(
   decision: Record<string, unknown>,
   stderr: string,
@@ -256,7 +389,7 @@ function formatDecision(
   return text;
 }
 
-function handleSubmitPlan(
+function handleReviewPlan(
   id: number | string | undefined,
   args: Record<string, unknown>,
 ): JsonRpcResponse {
@@ -304,7 +437,7 @@ function handleSubmitPlan(
   return makeResult(id, formatDecision(parsed, stderr));
 }
 
-function handleSubmitReview(
+function handleReviewCode(
   id: number | string | undefined,
   args: Record<string, unknown>,
 ): JsonRpcResponse {
@@ -344,7 +477,7 @@ function handleSubmitReview(
   return makeResult(id, formatDecision(parsed, stderr));
 }
 
-function handleAnnotate(
+function handleAnnotateDocument(
   id: number | string | undefined,
   args: Record<string, unknown>,
 ): JsonRpcResponse {
@@ -387,7 +520,7 @@ function handleAnnotate(
   );
 }
 
-function handleArchive(
+function handleOpenArchive(
   id: number | string | undefined,
   args: Record<string, unknown>,
 ): JsonRpcResponse {
@@ -413,7 +546,7 @@ function handleArchive(
   );
 }
 
-function handleSessions(
+function handleListSessions(
   id: number | string | undefined,
   args: Record<string, unknown>,
 ): JsonRpcResponse {
@@ -446,6 +579,50 @@ function handleSessions(
   );
 }
 
+function handleListSavedDecisions(
+  id: number | string | undefined,
+  args: Record<string, unknown>,
+): JsonRpcResponse {
+  const limit =
+    typeof args.limit === "number" && args.limit > 0 ? args.limit : 50;
+  const decisions = listSavedDecisions(limit);
+
+  if (decisions.length === 0) {
+    return makeResult(id, "No saved plan decisions found in ~/.plannotator/plans/.");
+  }
+
+  const lines = decisions.map((d, i) => {
+    const date = d.date || d.timestamp.split("T")[0] || "unknown";
+    return `${i + 1}. [${d.status}] ${d.title} (${date}) — ${d.filename} (${d.size} bytes)`;
+  });
+
+  return makeResult(
+    id,
+    `Saved plan decisions:\n\n${lines.join("\n")}\n\nUse read_saved_decision with the filename to read the full markdown.`,
+  );
+}
+
+function handleReadSavedDecision(
+  id: number | string | undefined,
+  args: Record<string, unknown>,
+): JsonRpcResponse {
+  const filename = typeof args.filename === "string" ? args.filename : "";
+  if (!filename.trim()) {
+    return makeError(id, -32602, "Missing required parameter: filename");
+  }
+
+  const content = readSavedDecision(filename);
+  if (content === null) {
+    return makeResult(
+      id,
+      `Could not read '${filename}'. Make sure it exists in ~/.plannotator/plans/ and is a decision file (ends with -approved.md or -denied.md).`,
+      true,
+    );
+  }
+
+  return makeResult(id, content);
+}
+
 function handleToolCall(
   id: number | string | undefined,
   params: Record<string, unknown>,
@@ -457,16 +634,20 @@ function handleToolCall(
       : {};
 
   switch (name) {
-    case "submit_plan":
-      return handleSubmitPlan(id, args);
-    case "submit_review":
-      return handleSubmitReview(id, args);
-    case "annotate":
-      return handleAnnotate(id, args);
-    case "archive":
-      return handleArchive(id, args);
-    case "sessions":
-      return handleSessions(id, args);
+    case "review_plan":
+      return handleReviewPlan(id, args);
+    case "review_code":
+      return handleReviewCode(id, args);
+    case "annotate_document":
+      return handleAnnotateDocument(id, args);
+    case "open_archive":
+      return handleOpenArchive(id, args);
+    case "list_saved_decisions":
+      return handleListSavedDecisions(id, args);
+    case "read_saved_decision":
+      return handleReadSavedDecision(id, args);
+    case "list_sessions":
+      return handleListSessions(id, args);
     default:
       return makeError(id, -32601, `Unknown tool: ${name}`);
   }

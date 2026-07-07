@@ -49,7 +49,7 @@
       "name": "Plannotator",
       "slug": "plannotator",
       "command": "plannotator-mcp",
-      "description": "Review plans, code diffs, and HTML artifacts from any agent. Exposes submit_plan, submit_review, annotate, archive, and sessions tools."
+      "description": "Review plans, code diffs, and HTML artifacts from any agent. Exposes review_plan, review_code, annotate_document, open_archive, list_saved_decisions, read_saved_decision, and list_sessions tools."
     }
     // readbro is disabled for now while we evaluate executor as the single
     // integration layer. Re-enable by uncommenting this block if needed.
