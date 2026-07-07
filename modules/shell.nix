@@ -5,11 +5,10 @@
       config,
       lib,
       pkgs,
-      inputs,
       ...
     }:
     let
-      nubPkg = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      nubPkg = import ../packages/nub.nix { inherit pkgs; };
 
       pnpmHome = "${config.home.homeDirectory}/.local/share/pnpm";
       pnpmBin = "${pnpmHome}/bin";
