@@ -42,6 +42,14 @@
       "slug": "nixos",
       "command": "uvx",
       "args": ["mcp-nixos"]
+    },
+    {
+      "kind": "mcp",
+      "transport": "stdio",
+      "name": "Plannotator",
+      "slug": "plannotator",
+      "command": "plannotator",
+      "description": "Review plans, code diffs, and HTML artifacts from any agent. Exposes submit_plan, submit_review, and related tools."
     }
     // readbro is disabled for now while we evaluate executor as the single
     // integration layer. Re-enable by uncommenting this block if needed.

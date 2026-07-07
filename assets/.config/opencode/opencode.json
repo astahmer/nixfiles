@@ -1,11 +1,14 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@plannotator/opencode@latest"],
+  "plugin": [],
   "mcp": {
     "executor": {
       "enabled": true,
       "type": "local",
-      "command": ["executor", "mcp"],
+      "command": [
+        "executor",
+        "mcp"
+      ],
       "env": {
         "EXECUTOR_SCOPE_DIR": "~/.executor"
       }

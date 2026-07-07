@@ -215,6 +215,20 @@ function addChromeDevtools(): void {
   });
 }
 
+function addPlannotator(): void {
+  if (integrationExists("plannotator")) {
+    console.log("Plannotator integration already exists; skipping add.");
+    return;
+  }
+
+  callExecutor("executor.mcp.addServer", {
+    transport: "stdio",
+    name: "Plannotator",
+    slug: "plannotator",
+    command: "plannotator",
+  });
+}
+
 function addNixos(): void {
   if (integrationExists("nixos")) {
     console.log("nixos integration already exists; skipping add.");
@@ -235,6 +249,7 @@ function main(): void {
   addGithub();
   addContext7();
   addChromeDevtools();
+  addPlannotator();
   addNixos();
   console.log("Executor integrations seeded.");
 }
