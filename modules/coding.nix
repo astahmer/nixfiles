@@ -9,6 +9,7 @@ in
       ghui = import ../packages/ghui.nix { inherit pkgs; };
       hunk = import ../packages/hunk.nix { inherit pkgs; };
       lightjj = import ../packages/lightjj.nix { inherit pkgs; };
+      plannotator = import ../packages/plannotator.nix { inherit pkgs; };
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let
@@ -58,6 +59,7 @@ in
         pkgs.docker
         pkgs.gh
         pkgs."github-copilot-cli"
+        plannotator
         pkgs.comma
         pkgs.delta
         hunk
