@@ -7,6 +7,7 @@
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
       cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
       kapModule = import ../macos/kap.nix { inherit pkgs lib; };
+      cleanshotModule = import ../macos/cleanshot.nix { inherit pkgs lib; };
       cleanMyKeyboardId = "6468120888";
       mas = lib.getExe pkgs.mas;
       # huesyncModule = import ../macos/huesync.nix { inherit pkgs lib; };
@@ -17,6 +18,7 @@
         cameracontrollerModule
         cmdcmdModule
         kapModule
+        cleanshotModule
         # huesyncModule
       ];
 
@@ -47,6 +49,8 @@
         pkgs.caffeine
         pkgs.monitorcontrol
         pkgs.discord
+        pkgs."alt-tab-macos"
+        pkgs.orbstack
       ];
     };
 }

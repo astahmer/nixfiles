@@ -335,13 +335,15 @@
         fi
       '';
 
-      home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" "aiCliInstall" "writeGithubToken" ] ''
-        export PATH="${pkgs.nodejs_26}/bin:${pnpmBin}:$PATH"
+      home.activation.executorSeed =
+        lib.hm.dag.entryAfter [ "writeBoundary" "aiCliInstall" "writeGithubToken" ]
+          ''
+            export PATH="${pkgs.nodejs_26}/bin:${pnpmBin}:$PATH"
 
-        if [ -x "${config.home.homeDirectory}/.executor/setup.ts" ]; then
-          $DRY_RUN_CMD "${config.home.homeDirectory}/.executor/setup.ts" || true
-        fi
-      '';
+            if [ -x "${config.home.homeDirectory}/.executor/setup.ts" ]; then
+              $DRY_RUN_CMD "${config.home.homeDirectory}/.executor/setup.ts" || true
+            fi
+          '';
 
       home.file.".zshenv".text = ''
         [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
@@ -480,27 +482,30 @@
         nixupdate = "nix flake update && nixapply";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         nixcheck = "nix-instantiate --parse $(git ls-files '*.nix') >/dev/null";
+        #
         zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";
         jjaliases = "jj config list aliases --user | sed -E 's/^aliases\\.//'";
+        jjpush = "jj push";
         gitaliases = "git config --global --get-regexp '^alias\\.' | sed -E 's/^alias\\.//'";
         opencodeconfig = "code ~/.config/opencode/opencode.json";
         npmrc = "code ~/.npmrc";
         gitconfig = "code ~/.gitconfig";
         gitignore = "code ~/.gitignore";
-        sauce = "source ~/.config/zsh/.zshrc";
+        #
         ppnm = "nub";
         pn = "nub";
+        pnp = "nub";
         pnpm = "nub";
+        pnpmi = "nub i";
         npm = "nub";
         npx = "nubx";
         # https://github.com/oxidecomputer/skepsis
         sk = "${lib.getExe pkgs.nodejs_26} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
-        jjpush = "jj push";
-        pnpmi = "nub i";
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
-        nts = "node --no-warnings=ExperimentalWarning --experimental-strip-types --experimental-transform-types --env-file-if-exists=.env";
+        nts = "nub";
+        plan = "plannotator";
       };
     };
 }

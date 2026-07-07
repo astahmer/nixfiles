@@ -13,7 +13,7 @@ Keep Nix itself installed. Home Manager still depends on it.
 These apps are now managed by Home Manager and should no longer be kept by Homebrew:
 
 ```bash
-brew uninstall --cask background-music caffeine discord monitorcontrol raycast shottr slack spotify whatsapp-for-mac karabiner-elements orbstack
+brew uninstall --cask alt-tab background-music caffeine cleanshot discord monitorcontrol raycast shottr slack spotify whatsapp-for-mac karabiner-elements orbstack
 brew cleanup
 ```
 

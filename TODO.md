@@ -34,3 +34,16 @@ fff skill
 - add to opencode config: https://github.com/ndom91/open-plan-annotator
 - fork https://github.com/Mark1708/opencode-usage-monitor and show opencode go usage in a similar way
 - try https://github.com/hamidi-dev/opentab
+
+
+
+- replace corepack+fnm with nub ->
+
+nub index.ts             # TypeScript-first Node.js runtime
+nub run dev              # 24× faster pnpm run
+nubx prisma generate     # 19× faster npx
+nub install              # 2.5× faster pnpm install
+nub watch src/server.ts  # native watch mode
+nub pm shim              # built-in Corepack-style shims
+nub node install 26      # Node version manager
+nub upgrade              # self update

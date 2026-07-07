@@ -56,7 +56,6 @@ in
       home.packages = [
         pkgs."google-chrome"
         pkgs.bat
-        pkgs.docker
         pkgs.gh
         pkgs."github-copilot-cli"
         plannotator
@@ -93,6 +92,9 @@ in
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
         pkgs.bun
         ghui
+      ]
+      ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        pkgs.docker
       ];
     };
 
