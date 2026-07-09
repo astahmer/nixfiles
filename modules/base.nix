@@ -19,6 +19,7 @@ in
         EDITOR = "nvim";
         VISUAL = "nvim";
         PNPM_HOME = "${config.home.homeDirectory}/.local/share/pnpm";
+        PNPM_STORE_DIR = "${config.home.homeDirectory}/.local/share/pnpm/store";
       };
 
       programs.home-manager.enable = true;

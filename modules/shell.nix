@@ -280,6 +280,7 @@
     {
       home.packages = [
         pkgs.nodejs_26
+        pkgs.corepack
         nubPkg
         pkgs.rtk
       ]
@@ -306,25 +307,29 @@
         fi
 
         if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
-          $DRY_RUN_CMD sh -c 'cd "$1" && "$2" pnpm i' sh "$skepsis_dir" "${pkgs.nodejs_26}/bin/corepack"
+          $DRY_RUN_CMD sh -c 'export PNPM_STORE_DIR="$3/store" && cd "$1" && "$2" pnpm i' sh "$skepsis_dir" "${pkgs.corepack}/bin/corepack" "${pnpmHome}"
         fi
       '';
 
       home.activation.aiCliInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        ${nixPathSetup}
         export PNPM_HOME="${pnpmHome}"
-        export PATH="${pnpmBin}:$PATH"
+        export PNPM_STORE_DIR="${pnpmHome}/store"
+        export PATH="${pnpmBin}:${pkgs.nodejs_26}/bin:$PATH"
         export COREPACK_ENABLE_AUTO_PIN=0
 
         mkdir -p "${pnpmHome}"
+        mkdir -p "${pnpmHome}/store"
 
         if ! command -v composto >/dev/null 2>&1; then
-          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
-          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
+          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
+          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
         fi
 
-        if ! command -v executor >/dev/null 2>&1; then
-          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
-          $DRY_RUN_CMD "${pkgs.nodejs_26}/bin/corepack" pnpm add -g executor || true
+        if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
+          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
+          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" pnpm remove -g executor >/dev/null 2>&1 || true
+          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" pnpm add -g executor || true
         fi
       '';
 
@@ -364,6 +369,11 @@
               $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
             fi
           '';
+
+      home.file.".config/pnpm/config.yaml".text = ''
+        packageImportMethod: clone-or-copy
+        storeDir: ${pnpmHome}/store
+      '';
 
       home.file.".zshenv".text = ''
         [[ -f "$HOME/.config/zsh/.zshenv" ]] && source "$HOME/.config/zsh/.zshenv"
@@ -442,14 +452,15 @@
       programs.bash.initExtra = lib.mkAfter ''
               ${nixPathSetup}
               export PNPM_HOME="${pnpmHome}"
+              export PNPM_STORE_DIR="${pnpmHome}/store"
               export PATH="${pnpmBin}:$PATH"
 
               shopt -s histappend
               PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
 
               export COREPACK_ENABLE_AUTO_PIN=0
-              "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
-              "${pkgs.nodejs_26}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
+              "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
+              "${pkgs.corepack}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
               eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
         export PATH="${pnpmBin}:$PATH"
@@ -463,6 +474,7 @@
         (lib.mkBefore ''
           ${nixPathSetup}
           export PNPM_HOME="${pnpmHome}"
+          export PNPM_STORE_DIR="${pnpmHome}/store"
           export PATH="${pnpmBin}:$PATH"
 
           setopt APPEND_HISTORY
@@ -483,8 +495,8 @@
           }
 
           export COREPACK_ENABLE_AUTO_PIN=0
-          "${pkgs.nodejs_26}/bin/corepack" enable >/dev/null 2>&1 || true
-          "${pkgs.nodejs_26}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
+          "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
+          "${pkgs.corepack}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
 
           eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
           export PATH="${pnpmBin}:$PATH"
