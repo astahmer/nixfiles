@@ -81,7 +81,6 @@ in
         pkgs.tmux
         pkgs.tree
         zed
-        pkgs.fnm
         pkgs.curl
         pkgs.ripgrep
         pkgs."yt-dlp"

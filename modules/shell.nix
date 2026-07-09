@@ -280,7 +280,6 @@
     {
       home.packages = [
         pkgs.nodejs_26
-        pkgs.corepack
         nubPkg
         pkgs.rtk
       ]
@@ -307,7 +306,7 @@
         fi
 
         if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
-          $DRY_RUN_CMD sh -c 'export PNPM_STORE_DIR="$3/store" && cd "$1" && "$2" pnpm i' sh "$skepsis_dir" "${pkgs.corepack}/bin/corepack" "${pnpmHome}"
+          $DRY_RUN_CMD sh -c 'export PNPM_STORE_DIR="$2/store" && cd "$1" && ${lib.getExe nubPkg} i' sh "$skepsis_dir" "${pnpmHome}"
         fi
       '';
 
@@ -316,20 +315,17 @@
         export PNPM_HOME="${pnpmHome}"
         export PNPM_STORE_DIR="${pnpmHome}/store"
         export PATH="${pnpmBin}:${pkgs.nodejs_26}/bin:$PATH"
-        export COREPACK_ENABLE_AUTO_PIN=0
 
         mkdir -p "${pnpmHome}"
         mkdir -p "${pnpmHome}/store"
 
         if ! command -v composto >/dev/null 2>&1; then
-          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
-          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" pnpm add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
+          $DRY_RUN_CMD ${lib.getExe nubPkg} add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
         fi
 
         if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
-          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
-          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" pnpm remove -g executor >/dev/null 2>&1 || true
-          $DRY_RUN_CMD "${pkgs.corepack}/bin/corepack" pnpm add -g executor || true
+          $DRY_RUN_CMD ${lib.getExe nubPkg} remove -g executor >/dev/null 2>&1 || true
+          $DRY_RUN_CMD ${lib.getExe nubPkg} add -g executor || true
         fi
       '';
 
@@ -450,24 +446,20 @@
       };
 
       programs.bash.initExtra = lib.mkAfter ''
-              ${nixPathSetup}
-              export PNPM_HOME="${pnpmHome}"
-              export PNPM_STORE_DIR="${pnpmHome}/store"
-              export PATH="${pnpmBin}:$PATH"
-
-              shopt -s histappend
-              PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
-
-              export COREPACK_ENABLE_AUTO_PIN=0
-              "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
-              "${pkgs.corepack}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
-
-              eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell bash)"
+        ${nixPathSetup}
+        export PNPM_HOME="${pnpmHome}"
+        export PNPM_STORE_DIR="${pnpmHome}/store"
         export PATH="${pnpmBin}:$PATH"
-              ${jjsearchFunction}
-              ${shellAliasesFunction}
-              ${pnpmShellFunction}
-              eval "$(${lib.getExe jjPackage} util completion bash)"
+
+        shopt -s histappend
+        PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
+
+        ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
+        export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
+        ${jjsearchFunction}
+        ${shellAliasesFunction}
+        ${pnpmShellFunction}
+        eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
       programs.zsh.initContent = lib.mkMerge [
@@ -494,12 +486,8 @@
             lsof -ti:$port | xargs kill -9 2>/dev/null && echo "Killed process on port $port" || echo "No process found on port $port"
           }
 
-          export COREPACK_ENABLE_AUTO_PIN=0
-          "${pkgs.corepack}/bin/corepack" enable >/dev/null 2>&1 || true
-          "${pkgs.corepack}/bin/corepack" prepare pnpm@11.6.0 --activate >/dev/null 2>&1 || true
-
-          eval "$(${lib.getExe pkgs.fnm} env --use-on-cd --shell zsh)"
-          export PATH="${pnpmBin}:$PATH"
+          ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
+          export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
           ${jjsearchFunction}
           ${shellAliasesFunction}
           ${pnpmShellFunction}

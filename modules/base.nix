@@ -12,6 +12,7 @@ in
       home.sessionPath = [
         "${config.home.profileDirectory}/bin"
         "/nix/var/nix/profiles/default/bin"
+        "${config.home.homeDirectory}/.nub/shims"
         "${config.home.homeDirectory}/.local/share/pnpm"
       ];
 
