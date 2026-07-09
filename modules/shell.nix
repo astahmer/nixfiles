@@ -276,6 +276,17 @@
                   fi
                 }
       '';
+
+      jjEvolveFunction = ''
+        jje() {
+          local base="$1"
+          if [[ -z "$base" ]]; then
+            echo "Usage: jje <base>" >&2
+            return 1
+          fi
+          jj duplicate "$base"::@ && jj squash -f "$base"::@ -u
+        }
+      '';
     in
     {
       home.packages = [
@@ -457,6 +468,7 @@
         ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
         export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
         ${jjsearchFunction}
+        ${jjEvolveFunction}
         ${shellAliasesFunction}
         ${pnpmShellFunction}
         eval "$(${lib.getExe jjPackage} util completion bash)"
@@ -489,6 +501,7 @@
           ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
           export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
           ${jjsearchFunction}
+          ${jjEvolveFunction}
           ${shellAliasesFunction}
           ${pnpmShellFunction}
         '')
