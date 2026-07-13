@@ -338,6 +338,10 @@
           $DRY_RUN_CMD ${lib.getExe nubPkg} remove -g executor >/dev/null 2>&1 || true
           $DRY_RUN_CMD ${lib.getExe nubPkg} add -g executor || true
         fi
+
+        if ! command -v pi >/dev/null 2>&1; then
+          $DRY_RUN_CMD ${lib.getExe nubPkg} add -g @earendil-works/pi-coding-agent || true
+        fi
       '';
 
       home.activation.writeGithubToken = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
