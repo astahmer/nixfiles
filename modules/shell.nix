@@ -290,6 +290,7 @@
     in
     {
       home.packages = [
+        pkgs.fd
         pkgs.nodejs_26
         nubPkg
         pkgs.rtk
