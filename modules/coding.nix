@@ -74,6 +74,7 @@ in
         pkgs.jq
         pkgs.httpie
         pkgs.ncdu
+        pkgs.pik
         pkgs.neovim
         pkgs.nixd
         pkgs.nixfmt

@@ -8,6 +8,7 @@
       cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
       kapModule = import ../macos/kap.nix { inherit pkgs lib; };
       cleanshotModule = import ../macos/cleanshot.nix { inherit pkgs lib; };
+      caffeineId = "411246225";
       cleanMyKeyboardId = "6468120888";
       mas = lib.getExe pkgs.mas;
       # huesyncModule = import ../macos/huesync.nix { inherit pkgs lib; };
@@ -21,6 +22,16 @@
         cleanshotModule
         # huesyncModule
       ];
+
+      home.activation.caffeine = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        installedApps="$("${mas}" list)"
+        case "$installedApps" in
+          *"${caffeineId}"*) ;;
+          *)
+            $DRY_RUN_CMD "${mas}" install ${caffeineId}
+            ;;
+        esac
+      '';
 
       home.activation.cleanMyKeyboard = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         installedApps="$("${mas}" list)"
@@ -46,7 +57,6 @@
         pkgs."whatsapp-for-mac"
         pkgs.shottr
         pkgs.raycast
-        pkgs.caffeine
         pkgs.monitorcontrol
         pkgs.discord
         pkgs."alt-tab-macos"
