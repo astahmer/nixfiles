@@ -30,13 +30,15 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook` to apply.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.sh` seeds these integrations idempotently on activation.
 - `readbro` is superseded by `ast-outline`. Its source remains in `assets/readbro/` for reference but is no longer deployed — neither as an MCP server nor as an agent skill. The readbro skill (`assets/.agents/skills/readbro/`) is excluded from Home Manager deployment via a source filter.
-- `.references/` contains cloned reference repositories used for comparison and pattern mining.
+- `~/.references/` contains globally-shared cloned reference repositories used for comparison and pattern mining. Per-project `.references/` is used only as an escape hatch.
 
 ## Reference Repos
 
-- When cloning a reference repo into `.references/<name>`, keep its `AGENTS.md` at the repo root.
-- Read that `AGENTS.md` before inspecting the repo's implementation details.
-- Keep reference repos isolated from the main repo and do not edit them unless the user asks.
+- Reference repos are cloned to `~/.references/<name>` by default (shared globally). Use the `reference-repository` skill to add or read them.
+- To keep a clone local to a project (escape hatch), explicitly ask to "add locally" — it goes into `<project>/.references/<name>`.
+- Each project tracks its references in `reference-repos.md` at the project root.
+- Read the clone's `AGENTS.md` before inspecting implementation details.
+- Keep reference repos read-only unless the user asks to update them.
 
 ## Nix Conventions
 

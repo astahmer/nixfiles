@@ -137,7 +137,7 @@ Always on. **Every reply starts with `OUGABOUGA`** then terse caveman talk — *
 
 ## Effect
 
-- Read the Effect reference repository under `.references/effect` for API examples.
+- Read the Effect reference repository under `~/.references/effect` for API examples.
 - Use `Effect.fn` and `Effect.withSpan` for effectful functions.
 - Prefer Effect / @effect/platform APIs; fallback to `Effect.promise` when necessary.
 - Use qualified errors with `Schema.TaggedError`.
