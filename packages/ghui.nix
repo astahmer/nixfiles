@@ -10,7 +10,7 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-dyfpCNjMa6PW4vYNUtoaMaBpi92+tll2ke0y8n+40Vo=";
   };
 
-  outputHash = "sha256-nPAa6uOFqi9iLbC8J1XAX2y9arsj4sshLDb0uTaIO+s=";
+  outputHash = "sha256-4g8Al3YlqP7p+FslP84YnC5LoxjpyLZjlc/gX+htgVc=";
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   dontFixup = true;

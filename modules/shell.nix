@@ -287,6 +287,18 @@
           jj duplicate "$base"::@ && jj squash -f "$base"::@ -u
         }
       '';
+
+      initagentFunction = ''
+        initagent() {
+          local src_dir="''${HOME}/dev/alex/nixfiles/assets/.agents"
+          if [[ ! -d "$src_dir" ]]; then
+            echo "initagent: source directory not found at $src_dir" >&2
+            return 1
+          fi
+          cp "$src_dir/AGENTS.md" "$src_dir/effect.md" "$src_dir/typescript.md" .
+          echo "Copied AGENTS.md, effect.md, typescript.md to $(pwd)"
+        }
+      '';
     in
     {
       home.packages = [
@@ -478,6 +490,7 @@
         export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
         ${jjsearchFunction}
         ${jjEvolveFunction}
+        ${initagentFunction}
         ${shellAliasesFunction}
         ${pnpmShellFunction}
         eval "$(${lib.getExe jjPackage} util completion bash)"
@@ -511,6 +524,7 @@
           export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
           ${jjsearchFunction}
           ${jjEvolveFunction}
+          ${initagentFunction}
           ${shellAliasesFunction}
           ${pnpmShellFunction}
         '')
