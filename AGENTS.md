@@ -26,10 +26,10 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `modules/` contains reusable modules. Some files export both Home Manager and NixOS modules when needed.
 - `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
 - `hosts/workstation/default.nix` contains the NixOS host.
-- `assets/.agents/` — global agent tree. `packages/readbro.nix` — readbro MCP (built via pnpm + `fetchPnpmDeps`). Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them with a store-pinned `readbro` binary. Optional workspace test config: `.cursor/mcp.json` (repo-local `node assets/readbro/src/main.ts`). Run tests with `./assets/readbro/run-tests` (bypasses pnpm when its store is read-only).
+- `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). ast-outline is installed globally via `uv tool install` (managed by the `aiCliInstall` activation in `modules/shell.nix`). Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
 - Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook` to apply.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.sh` seeds these integrations idempotently on activation.
-- `readbro` is currently disabled. Its source remains in `assets/readbro/` but is no longer deployed as an MCP server.
+- `readbro` is superseded by `ast-outline`. Its source remains in `assets/readbro/` for reference but is no longer deployed — neither as an MCP server nor as an agent skill. The readbro skill (`assets/.agents/skills/readbro/`) is excluded from Home Manager deployment via a source filter.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## Reference Repos
@@ -52,6 +52,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 ## Notes for Agents
 
 - `assets/.agents` is the source of the global skills tree; update it when adding or changing global skills.
+- `ast-outline` (installed via `uv tool install`, managed in `modules/shell.nix` activation) is the primary code-exploration tool, replacing readbro. The canonical agent snippet lives in `assets/.agents/AGENTS.md` inside `<!-- ast-outline:start -->` markers; a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
 - `jje <base>` is a shell function (defined in `modules/shell.nix`) that duplicates a commit range (`<base>::@`) then squashes the original — preserves evolution history while producing a single clean commit. Shell reload after applying.
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
 - When adding new reusable repository conventions, document them here so future agents can find them quickly.

@@ -1,0 +1,31 @@
+---
+description: ast-outline CLI — code exploration, outlines, digests, symbol extraction, AST grep
+alwaysApply: true
+---
+
+# Code exploration — prefer `ast-outline` over full reads
+
+For supported languages, use `ast-outline` to read structure before opening full contents.
+
+## Broad-to-narrow menu
+
+| Step | Command | What you get |
+|------|---------|-------------|
+| 1. Unfamiliar directory | `ast-outline digest <paths…>` | One-page map — types, public methods, size labels |
+| 2. File-level shape | `ast-outline <paths…>` | Signatures with line ranges, no bodies |
+| 3. One symbol | `ast-outline show <file> <Symbol>` | Just that symbol's body |
+| 4. Symbol usages | `ast-outline grep <pattern> <paths…>` | Matches grouped by scope, kind-tagged |
+
+## Key flags
+
+- `--exclude <glob>` — skip test trees, generated files
+- `--imports` — show import/use/using statements verbatim
+- `--format names|compact|default|wide` — tune density
+- `--kind def\|call\|ref\|import` — narrow grep classification
+- `--signature` (with `show`) — header only, no body
+
+## Fallback
+
+Use native Read / Grep / Glob when `ast-outline` is unavailable or for unsupported file formats.
+
+Full guide: `~/.agents/skills/ast-outline/SKILL.md`

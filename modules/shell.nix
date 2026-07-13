@@ -331,9 +331,9 @@
         mkdir -p "${pnpmHome}"
         mkdir -p "${pnpmHome}/store"
 
-        if ! command -v composto >/dev/null 2>&1; then
-          $DRY_RUN_CMD ${lib.getExe nubPkg} add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
-        fi
+        # if ! command -v composto >/dev/null 2>&1; then
+        #   $DRY_RUN_CMD ${lib.getExe nubPkg} add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
+        # fi
 
         if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
           $DRY_RUN_CMD ${lib.getExe nubPkg} remove -g executor >/dev/null 2>&1 || true
@@ -342,6 +342,10 @@
 
         if ! command -v pi >/dev/null 2>&1; then
           $DRY_RUN_CMD ${lib.getExe nubPkg} add -g @earendil-works/pi-coding-agent || true
+        fi
+
+        if ! command -v ast-outline >/dev/null 2>&1; then
+          $DRY_RUN_CMD uv tool install ast-outline || true
         fi
       '';
 

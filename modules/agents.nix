@@ -12,6 +12,19 @@
       executorScopeDir = executorDir;
       githubTokenFile = "${config.home.homeDirectory}/.config/opencode/github-token";
 
+      # Exclude deprecated readbro skill from the deployed .agents directory.
+      # The source tree itself is kept under assets/ for reference.
+      agentsFilter = path: type:
+        let
+          relPath = lib.removePrefix (toString ../assets/.agents) (toString path);
+        in
+        !(lib.hasPrefix "/skills/readbro" relPath);
+
+      agentsSrc = lib.cleanSourceWith {
+        src = lib.cleanSource ../assets/.agents;
+        filter = agentsFilter;
+      };
+
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);
       cursorMcp = cursorMcpBase // {
         mcpServers = lib.mapAttrs (_: server: server // {
@@ -40,7 +53,7 @@
       };
     in
     {
-      home.file.".agents".source = ../assets/.agents;
+      home.file.".agents".source = agentsSrc;
       home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
       home.file.".cursor/hooks/caveman-thinking.sh" = {
         source = ../assets/.cursor/hooks/caveman-thinking.sh;
