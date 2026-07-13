@@ -14,6 +14,7 @@ in
         "/nix/var/nix/profiles/default/bin"
         "${config.home.homeDirectory}/.nub/shims"
         "${config.home.homeDirectory}/.local/share/pnpm"
+        "${config.home.homeDirectory}/.local/bin"
       ];
 
       home.sessionVariables = {

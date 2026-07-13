@@ -7,7 +7,7 @@ pkgs.rustPlatform.buildRustPackage (finalAttrs: {
     owner = "dmmulroy";
     repo = "jj-ryu";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-j5UNQ99HRDDG5vF2whl9j+JMf/QLI9hBjL3iBGW9ixY=";
+    hash = "sha256-gE4lvqyC2LRAWNDUGePklORWjyEofs/dHLHVBAub424=";
   };
 
   cargoHash = "sha256-OD1DpV4s6tgOnDEAfJWScdSKqtYArbqIJVClOtUCYa4=";
