@@ -1,14 +1,5 @@
 { pkgs }:
 let
-  version = "0.10.0";
-
-  source = pkgs.fetchFromGitHub {
-    owner = "modem-dev";
-    repo = "hunk";
-    tag = "v${version}";
-    hash = "sha256-S2EuZW5vzyk3FGhUQbyanE3hdlnb9F6GQMtu2k8pjrM=";
-  };
-
   hostPackage =
     if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
       {
@@ -32,16 +23,17 @@ let
       }
     else
       throw "Unsupported platform for hunk";
-
-  hostTarball = pkgs.fetchurl {
-    url = "https://registry.npmjs.org/${hostPackage.packageName}/-/${hostPackage.packageName}-${version}.tgz";
-    hash = hostPackage.hash;
-  };
 in
-pkgs.stdenvNoCC.mkDerivation {
+pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "hunk";
-  inherit version;
-  src = source;
+  version = "0.10.0";
+
+  src = pkgs.fetchFromGitHub {
+    owner = "modem-dev";
+    repo = "hunk";
+    tag = "v${finalAttrs.version}";
+    hash = "sha256-S2EuZW5vzyk3FGhUQbyanE3hdlnb9F6GQMtu2k8pjrM=";
+  };
 
   nativeBuildInputs = [ pkgs.makeWrapper ];
 
@@ -55,9 +47,12 @@ pkgs.stdenvNoCC.mkDerivation {
     install -Dm644 README.md "$out/share/doc/hunk/README.md"
     install -Dm644 LICENSE "$out/share/doc/hunk/LICENSE"
 
-    tmpdir=$(mktemp -d)
-    tar -xzf ${hostTarball} -C "$tmpdir"
-    install -Dm755 "$tmpdir/package/bin/hunk" "$out/lib/hunk/hunk-bin"
+    hostTarball=$(mktemp -d)
+    tar -xzf ${pkgs.fetchurl {
+      url = "https://registry.npmjs.org/${hostPackage.packageName}/-/${hostPackage.packageName}-${finalAttrs.version}.tgz";
+      hash = hostPackage.hash;
+    }} -C "$hostTarball"
+    install -Dm755 "$hostTarball/package/bin/hunk" "$out/lib/hunk/hunk-bin"
 
     makeWrapper ${pkgs.nodejs}/bin/node "$out/bin/hunk" \
       --add-flags "$out/lib/hunk/bin/hunk.cjs" \
@@ -78,4 +73,4 @@ pkgs.stdenvNoCC.mkDerivation {
       "x86_64-linux"
     ];
   };
-}
+})

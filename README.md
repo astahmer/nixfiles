@@ -115,16 +115,63 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
-## Updating `jj-ryu`
+## Updating versions
 
-`packages/ryu.nix` is the single source of truth for the package definition.
-`scripts/build-ryu.nix` is only a helper for rebuilding that package in isolation while you refresh hashes.
+### Flake inputs (nixpkgs + dependencies)
 
-To bump upstream:
+The entire dependency tree is pinned by `flake.lock`. To bump everything to the
+latest commit on each input's configured branch:
 
-1. Update the `rev` or `sha256` in `packages/ryu.nix`.
-2. Run `nix build -f scripts/build-ryu.nix --no-link` to verify the package and refresh `cargoHash` if needed.
-3. Re-run `nix run nixpkgs#home-manager -- build --flake .#macbook` or `nix flake check`.
+```bash
+nix flake update
+```
+
+For a single input (e.g. just nixpkgs):
+
+```bash
+nix flake lock --update-input nixpkgs
+```
+
+After updating, run `nix flake check` to verify nothing broke, then apply.
+
+### Custom packages (`packages/`)
+
+Packages defined in `packages/` use the `finalAttrs` pattern and are exposed as
+flake outputs, making them compatible with
+[`nix-update`](https://github.com/Mic92/nix-update).
+
+```bash
+# Update a single package to the latest stable release
+nix run nixpkgs#nix-update -- --flake hunk
+
+# Update ghui to the latest stable release
+nix run nixpkgs#nix-update -- --flake ghui
+
+# Update to the latest unstable (pre-release) version
+nix run nixpkgs#nix-update -- --flake --version unstable lightjj
+
+# Update everything at once (or run per-package)
+nix run nixpkgs#nix-update -- --flake nub
+nix run nixpkgs#nix-update -- --flake plannotator
+nix run nixpkgs#nix-update -- --flake ryu
+```
+
+`nix-update` automatically detects the new version from the upstream GitHub
+releases, updates the `version` field, and refreshes the source hash. For Rust
+packages (ryu) it also refreshes `cargoHash`. For packages with per-platform
+fetch URLs (nub, lightjj, plannotator), the per-platform hashes still need
+manual updates — the main version and source hash are handled automatically.
+
+After updating, verify with:
+
+```bash
+nix flake check
+```
+
+### Packages from nixpkgs
+
+Most dependencies come from nixpkgs itself. After a `nix flake update`, simply
+apply the profile — the updated nixpkgs revision provides the latest versions.
 
 ## Conventions
 

@@ -1,6 +1,6 @@
 { pkgs }:
 let
-  inherit (pkgs) lib stdenv fetchurl;
+  inherit (pkgs) lib stdenv;
 
   systems = {
     "aarch64-darwin" = {
@@ -14,14 +14,13 @@ let
   };
 
   asset = systems.${stdenv.hostPlatform.system} or (throw "nub: unsupported system ${stdenv.hostPlatform.system}");
-  version = "0.2.10";
 in
-stdenv.mkDerivation {
+stdenv.mkDerivation (finalAttrs: {
   pname = "nub";
-  inherit version;
+  version = "0.2.10";
 
-  src = fetchurl {
-    url = "https://github.com/nubjs/nub/releases/download/v${version}/${asset.file}";
+  src = pkgs.fetchurl {
+    url = "https://github.com/nubjs/nub/releases/download/v${finalAttrs.version}/${asset.file}";
     sha256 = asset.sha256;
   };
 
@@ -50,4 +49,4 @@ stdenv.mkDerivation {
     mainProgram = "nub";
     platforms = builtins.attrNames systems;
   };
-}
+})
