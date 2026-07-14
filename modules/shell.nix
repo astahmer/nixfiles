@@ -303,7 +303,7 @@
     {
       home.packages = [
         pkgs.fd
-        pkgs.nodejs_26
+        pkgs.nodejs_24
         nubPkg
         pkgs.rtk
       ]
@@ -338,7 +338,7 @@
         ${nixPathSetup}
         export PNPM_HOME="${pnpmHome}"
         export PNPM_STORE_DIR="${pnpmHome}/store"
-        export PATH="${pnpmBin}:${pkgs.nodejs_26}/bin:$PATH"
+        export PATH="${pnpmBin}:${pkgs.nodejs_24}/bin:$PATH"
 
         mkdir -p "${pnpmHome}"
         mkdir -p "${pnpmHome}/store"
@@ -385,7 +385,7 @@
       home.activation.executorSeed =
         lib.hm.dag.entryAfter [ "writeBoundary" "aiCliInstall" "writeGithubToken" ]
           ''
-            export PATH="${pkgs.nodejs_26}/bin:${pnpmBin}:$PATH"
+            export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
 
             if [ -x "${config.home.homeDirectory}/.executor/setup.ts" ]; then
               $DRY_RUN_CMD "${config.home.homeDirectory}/.executor/setup.ts" || true
@@ -472,9 +472,14 @@
 
       programs.direnv = {
         enable = true;
+        nix-direnv.enable = true;
         enableBashIntegration = true;
         enableZshIntegration = true;
-        nix-direnv.enable = true;
+        silent = true;
+        config.global = {
+          hide_env_diff = true;
+          warn_timeout = "0s";
+        };
       };
 
       programs.bash.initExtra = lib.mkAfter ''
@@ -560,7 +565,7 @@
         npm = "nub";
         npx = "nubx";
         # https://github.com/oxidecomputer/skepsis
-        sk = "${lib.getExe pkgs.nodejs_26} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
+        sk = "${lib.getExe pkgs.nodejs_24} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
         nts = "nub";
