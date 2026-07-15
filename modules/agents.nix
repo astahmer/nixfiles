@@ -77,6 +77,11 @@
         ../assets/.agents/instructions/copilot.instructions.md;
       home.file.".copilot/hooks/rtk-rewrite.json".source = ../assets/.agents/hooks/rtk-rewrite.json;
 
+      home.file.".local/bin/papercuts" = {
+        source = ../assets/papercuts/papercuts.ts;
+        executable = true;
+      };
+
       home.file.".copilot/skills".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/skills";
 

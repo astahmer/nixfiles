@@ -170,6 +170,25 @@ pnpm fmt
 Code should be self-documenting. If a comment is needed to explain WHAT the code does, refactor instead.
 
 
+<!-- papercuts:start -->
+# Papercuts — file friction when you hit it
+
+When you hit friction — a dead-end tool call, a broken link, a misleading doc,
+a footgun config, a missing helper, anything that slows you down — file it
+before moving on:
+
+    papercuts add "<what you hit and what would have prevented it>" --tag <area>
+
+Severity: `minor` (default) for annoyances, `major` for time sinks, `blocker`
+for hard walls. Don't stop working; filing takes one line.
+
+Check open papercuts at the start of each session and fix quick wins:
+
+    papercuts list --format md
+
+See the **papercuts** skill for full command reference.
+<!-- papercuts:end -->
+
 <!-- rtk-instructions v2 -->
 # RTK — Token-Optimized CLI
 
