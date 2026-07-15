@@ -564,6 +564,7 @@
         ppnm = "pnpm";
         pn = "pnpm";
         pnp = "pnpm";
+        realpnpm = "${pnpmHome}/bin/pnpm";
         pkit = "pik";
         pkil = "pik";
         pdev = "nub run dev";
