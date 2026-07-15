@@ -560,6 +560,8 @@
         ppnm = "pnpm";
         pn = "pnpm";
         pnp = "pnpm";
+        pkit = "pik";
+        pkil = "pik";
         pdev = "nub run dev";
         pnpmi = "nub i";
         npm = "nub";
