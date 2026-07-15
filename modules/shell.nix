@@ -303,6 +303,7 @@
     {
       home.packages = [
         pkgs.fd
+        pkgs.nh
         pkgs.nodejs_24
         nubPkg
         pkgs.rtk
@@ -313,7 +314,10 @@
       programs.zsh.enable = true;
       programs.zsh.dotDir = "${config.xdg.configHome}/zsh";
 
-      home.sessionVariables.HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
+      home.sessionVariables = {
+        HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
+        NH_FLAKE = "${config.home.homeDirectory}/dev/alex/nixfiles";
+      };
 
       home.activation.ensureZshHistoryFile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         mkdir -p "${config.xdg.configHome}/zsh"
