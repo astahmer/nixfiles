@@ -33,13 +33,19 @@ function appendRecord(record: any): void {
   fs.appendFileSync(PAPERCUTS_FILE, JSON.stringify(record) + "\n", "utf-8");
 }
 
+function terminalCutIds(records: any[]): Set<string> {
+  return new Set(
+    records
+      .filter((record: any) => record.kind === "resolve" || record.kind === "unresolvable")
+      .map((record: any) => record.cut_id)
+  );
+}
+
 function resolveId(prefix: string): string | null {
   const records = readRecords();
-  const resolved = new Set(
-    records.filter((r: any) => r.kind === "resolve").map((r: any) => r.cut_id)
-  );
+  const terminal = terminalCutIds(records);
   const open = records.filter(
-    (r: any) => r.kind === "cut" && !resolved.has(r.id)
+    (r: any) => r.kind === "cut" && !terminal.has(r.id)
   );
   const match = open.filter((r: any) => r.id.startsWith(prefix));
   if (match.length === 0) return null;
@@ -67,8 +73,13 @@ function cmdList(format: string, openOnly: boolean): void {
   const resolved = new Set(
     records.filter((r: any) => r.kind === "resolve").map((r: any) => r.cut_id)
   );
+  const unresolvable = new Map(
+    records
+      .filter((r: any) => r.kind === "unresolvable")
+      .map((r: any) => [r.cut_id, r.reason])
+  );
   let cuts = records.filter((r: any) => r.kind === "cut");
-  if (openOnly) cuts = cuts.filter((r: any) => !resolved.has(r.id));
+  if (openOnly) cuts = cuts.filter((r: any) => !resolved.has(r.id) && !unresolvable.has(r.id));
   cuts.sort((a: any, b: any) => {
     const order = { blocker: 0, major: 1, minor: 2 };
     const sa = order[a.severity as keyof typeof order] ?? 2;
@@ -79,8 +90,11 @@ function cmdList(format: string, openOnly: boolean): void {
   if (format === "md") {
     for (const c of cuts) {
       const tags = c.tags?.length ? ` [${c.tags.join(", ")}]` : "";
-      const status = resolved.has(c.id) ? "[x]" : "[ ]";
-      process.stdout.write(`${status} \`${c.id}\` **${c.severity}**${tags} — ${c.ts}\n  ${c.text}\n\n`);
+      const reason = unresolvable.get(c.id);
+      const status = resolved.has(c.id) ? "[x]" : reason ? "[!]" : "[ ]";
+      const outcome = reason ? " **unresolvable**" : "";
+      const detail = reason ? `\n  Reason: ${reason}` : "";
+      process.stdout.write(`${status} \`${c.id}\` **${c.severity}**${outcome}${tags} — ${c.ts}\n  ${c.text}${detail}\n\n`);
     }
   } else {
     const out = { ok: true, data: { cuts, total: cuts.length } };
@@ -97,6 +111,18 @@ function cmdResolve(prefix: string): void {
   }
   appendRecord({ kind: "resolve", id: shortId(), ts: iso(), cut_id: id });
   const out = { ok: true, data: { cut_id: id } };
+  process.stdout.write(JSON.stringify(out) + "\n");
+}
+
+function cmdUnresolvable(prefix: string, reason: string): void {
+  const id = resolveId(prefix);
+  if (!id) {
+    const err = { ok: false, error: { code: "not_found", message: `No open papercut matches prefix "${prefix}"` } };
+    process.stderr.write(JSON.stringify(err) + "\n");
+    process.exit(66);
+  }
+  appendRecord({ kind: "unresolvable", id: shortId(), ts: iso(), cut_id: id, reason });
+  const out = { ok: true, data: { cut_id: id, reason } };
   process.stdout.write(JSON.stringify(out) + "\n");
 }
 
@@ -117,11 +143,12 @@ function cmdClean(): void {
 
 function cmdSchema(): void {
   const schema = {
-    contract: 1,
+    contract: 2,
     commands: {
       add: { args: ["text"], options: ["--tag", "--severity"], appends: true },
       list: { options: ["--format", "--open"], appends: false },
       resolve: { args: ["id"], appends: true },
+      unresolvable: { args: ["id", "reason"], appends: true },
       clean: { appends: true },
       schema: { appends: false },
     },
@@ -129,6 +156,7 @@ function cmdSchema(): void {
     record_shapes: {
       cut: { kind: "cut", id: "string", ts: "ISO8601", agent: "string", text: "string", tags: "string[]", severity: "minor|major|blocker" },
       resolve: { kind: "resolve", id: "string", ts: "ISO8601", cut_id: "string" },
+      unresolvable: { kind: "unresolvable", id: "string", ts: "ISO8601", cut_id: "string", reason: "string" },
     },
     exit_codes: { ok: 0, usage: 2, bad_input: 65, not_found: 66, internal: 70 },
   };
@@ -172,6 +200,17 @@ switch (cmd) {
     cmdResolve(id);
     break;
   }
+  case "unresolvable": {
+    const id = args[1];
+    const reason = args.slice(2).join(" ");
+    if (!id || !reason) {
+      const err = { ok: false, error: { code: "bad_input", message: "Usage: papercuts unresolvable <id> <reason>" } };
+      process.stderr.write(JSON.stringify(err) + "\n");
+      process.exit(65);
+    }
+    cmdUnresolvable(id, reason);
+    break;
+  }
   case "clean": {
     cmdClean();
     break;
@@ -187,6 +226,7 @@ Usage:
   papercuts add <text> [--tag <tag>] [--severity minor|major|blocker]
   papercuts list [--format json|md] [--all]
   papercuts resolve <id>
+  papercuts unresolvable <id> <reason>
   papercuts clean
   papercuts schema
   papercuts help

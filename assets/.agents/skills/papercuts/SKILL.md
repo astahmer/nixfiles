@@ -19,6 +19,7 @@ Don't stop working; file it and push through. Severity: `minor` (default) for an
 papercuts add "<text>" [--tag <area>] [--severity minor|major|blocker]
 papercuts list [--format json|md] [--all]
 papercuts resolve <id-prefix>
+papercuts unresolvable <id-prefix> "<reason it cannot be fixed here>"
 papercuts clean
 papercuts schema
 ```
@@ -29,5 +30,7 @@ papercuts schema
 2. Keep working — filing takes one line
 3. Periodically: `papercuts list --format md` to review
 4. Fix the easy ones, resolve with `papercuts resolve <id>`
+5. Mark an external or intentionally out-of-scope cut with `papercuts unresolvable <id> "<reason>"`.
+   It disappears from the open list but remains in `--all`; `clean` preserves it for future context.
 
 Each agent session should check open papercuts at the start and try to fix any that are quick wins.
