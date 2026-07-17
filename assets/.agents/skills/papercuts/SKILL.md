@@ -19,6 +19,7 @@ Don't stop working; file it and push through. Severity: `minor` (default) for an
 papercuts add "<text>" [--tag <area>] [--severity minor|major|blocker]
 papercuts list [--format json|md] [--all]
 papercuts resolve <id-prefix>
+papercuts clean
 papercuts schema
 ```
 

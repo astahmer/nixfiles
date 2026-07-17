@@ -100,6 +100,21 @@ function cmdResolve(prefix: string): void {
   process.stdout.write(JSON.stringify(out) + "\n");
 }
 
+function cmdClean(): void {
+  const records = readRecords();
+  const resolved = new Set(
+    records.filter((r: any) => r.kind === "resolve").map((r: any) => r.cut_id)
+  );
+  const keep = records.filter(
+    (r: any) => !(r.kind === "cut" && resolved.has(r.id)) && !(r.kind === "resolve" && resolved.has(r.cut_id))
+  );
+  const removed = records.length - keep.length;
+  const fs = require("fs");
+  fs.writeFileSync(PAPERCUTS_FILE, keep.map((r: any) => JSON.stringify(r)).join("\n") + "\n", "utf-8");
+  const out = { ok: true, data: { removed, remaining: keep.length } };
+  process.stdout.write(JSON.stringify(out) + "\n");
+}
+
 function cmdSchema(): void {
   const schema = {
     contract: 1,
@@ -107,6 +122,7 @@ function cmdSchema(): void {
       add: { args: ["text"], options: ["--tag", "--severity"], appends: true },
       list: { options: ["--format", "--open"], appends: false },
       resolve: { args: ["id"], appends: true },
+      clean: { appends: true },
       schema: { appends: false },
     },
     env: { PAPERCUTS_FILE: { default: ".papercuts.jsonl" }, PAPERCUTS_AGENT: {}, PAPERCUTS_NOW: {} },
@@ -156,6 +172,10 @@ switch (cmd) {
     cmdResolve(id);
     break;
   }
+  case "clean": {
+    cmdClean();
+    break;
+  }
   case "schema": {
     cmdSchema();
     break;
@@ -167,6 +187,7 @@ Usage:
   papercuts add <text> [--tag <tag>] [--severity minor|major|blocker]
   papercuts list [--format json|md] [--all]
   papercuts resolve <id>
+  papercuts clean
   papercuts schema
   papercuts help
 
