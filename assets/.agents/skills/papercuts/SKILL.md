@@ -24,6 +24,19 @@ papercuts clean
 papercuts schema
 ```
 
+## Scope
+
+Use the repository's `.papercuts.jsonl` only for friction rooted in that repository's code,
+configuration, documentation, or workflow. Keep shell, agent, connector, editor, and other shared
+tooling issues in the global file at `~/.papercuts.jsonl`:
+
+```bash
+PAPERCUTS_FILE="$HOME/.papercuts.jsonl" papercuts add "<global issue>" --tag tooling
+```
+
+When moving an existing cut to the global file, move its `cut` record and every matching terminal
+record (`resolve` or `unresolvable`) together. Do not copy project-specific cuts into the global file.
+
 ## Workflow
 
 1. Hit friction → `papercuts add "..." --tag docs|tooling|config|api|other`
