@@ -82,6 +82,11 @@
         executable = true;
       };
 
+      home.file.".local/bin/antislop" = {
+        source = ../assets/antislop/antislop.ts;
+        executable = true;
+      };
+
       home.file.".copilot/skills".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/skills";
 

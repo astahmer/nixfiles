@@ -170,6 +170,31 @@ pnpm fmt
 Code should be self-documenting. If a comment is needed to explain WHAT the code does, refactor instead.
 
 
+<!-- antislop:start -->
+# Antislop — file anti-pattern rules when you clean up slop
+
+When you fix or refactor crappy/sloppy code, file a rule so the agent knows to avoid
+that pattern in the future:
+
+    antislop add "<what to avoid and what to do instead>" --tag <area>
+
+If the pattern is deterministically checkable, include `--pattern` and `--pattern-lang`:
+
+    antislop add "Prefer Effect.fn over async/await" \
+      --pattern "async function" \
+      --pattern-lang ast-grep \
+      --prescription "Use Effect.fn instead" \
+      --severity major
+
+Severity: `minor` (default) for style nits, `major` for correctness risks, `blocker` for known bugs.
+
+Check open rules at the start of each session:
+
+    antislop list --format md
+
+See the **antislop** skill for full command reference.
+<!-- antislop:end -->
+
 <!-- papercuts:start -->
 # Papercuts — file friction when you hit it
 
