@@ -146,7 +146,7 @@ function cmdSchema(): void {
     contract: 2,
     commands: {
       add: { args: ["text"], options: ["--global", "--tag", "--severity"], appends: true },
-      list: { options: ["--global", "--format", "--open"], appends: false },
+      list: { options: ["--global", "--format", "--all"], appends: false },
       resolve: { args: ["id"], options: ["--global"], appends: true },
       unresolvable: { args: ["id", "reason"], options: ["--global"], appends: true },
       clean: { options: ["--global"], appends: true },
@@ -165,11 +165,27 @@ function cmdSchema(): void {
 
 const rawArgs = process.argv.slice(2);
 const isGlobal = rawArgs.includes("--global");
-const args = rawArgs.filter((a: string) => a !== "--global");
+const isHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+const args = rawArgs.filter((a: string) => a !== "--global" && a !== "--help" && a !== "-h");
 const cmd = args[0] || "help";
 
 if (isGlobal && !process.env.PAPERCUTS_FILE) {
   PAPERCUTS_FILE = require("path").join(require("os").homedir(), ".papercuts.jsonl");
+}
+
+if (isHelp && cmd !== "help" && cmd !== "schema") {
+  const helps: Record<string, string> = {
+    add: "Usage: papercuts add [--global] <text> [--tag <tag>] [--severity minor|major|blocker]",
+    list: "Usage: papercuts list [--global] [--format json|md] [--all]",
+    resolve: "Usage: papercuts resolve [--global] <id>",
+    unresolvable: "Usage: papercuts unresolvable [--global] <id> <reason>",
+    clean: "Usage: papercuts clean [--global]",
+  };
+  const usage = helps[cmd];
+  if (usage) {
+    process.stdout.write(usage + "\n");
+    process.exit(0);
+  }
 }
 
 switch (cmd) {
@@ -182,8 +198,13 @@ switch (cmd) {
       process.stderr.write(JSON.stringify(err) + "\n");
       process.exit(65);
     }
-    const tagIdx = args.indexOf("--tag");
-    const tags = tagIdx >= 0 && args[tagIdx + 1] ? [args[tagIdx + 1]] : [];
+    const tags: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "--tag" && args[i + 1]) {
+        tags.push(args[i + 1]);
+        i++;
+      }
+    }
     const sevIdx = args.indexOf("--severity");
     const severity = sevIdx >= 0 && args[sevIdx + 1] ? args[sevIdx + 1] : "minor";
     cmdAdd(text, tags, severity);

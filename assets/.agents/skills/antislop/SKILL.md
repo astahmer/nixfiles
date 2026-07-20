@@ -33,7 +33,8 @@ Severity: `minor` (default) for style nits, `major` for correctness risks, `bloc
   antislop resolve [--global] <id-prefix>
   antislop supersede [--global] <id-prefix> "<reason it is no longer relevant>"
   antislop apply [--global] <id-prefix> [--out <dir>]
-  antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit]
+  antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit] [--text <description>]
+  antislop clean [--global]
   antislop schema
 ```
 
@@ -56,6 +57,7 @@ antislop add --global "<global rule>" --tag typescript
 5. When a rule is consistently followed, resolve it with `antislop resolve <id>`
 6. If a rule is no longer relevant, mark it with `antislop supersede <id> "<reason>"`
 7. To generate a rule file from a pattern: `antislop apply <id> --out .antislop/`
+8. Periodically prune resolved rules: `antislop clean`
 
 ## For agents
 

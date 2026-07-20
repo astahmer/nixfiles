@@ -132,6 +132,21 @@ function cmdSupersede(prefix: string, reason: string): void {
   process.stdout.write(JSON.stringify(out) + "\n");
 }
 
+function cmdClean(): void {
+  const records = readRecords();
+  const resolved = new Set(
+    records.filter((r: any) => r.kind === "resolve").map((r: any) => r.rule_id)
+  );
+  const keep = records.filter(
+    (r: any) => !(r.kind === "rule" && resolved.has(r.id)) && !(r.kind === "resolve" && resolved.has(r.rule_id))
+  );
+  const removed = records.length - keep.length;
+  const fs = require("fs");
+  fs.writeFileSync(ANTISLOP_FILE, keep.map((r: any) => JSON.stringify(r)).join("\n") + "\n", "utf-8");
+  const out = { ok: true, data: { removed, remaining: keep.length } };
+  process.stdout.write(JSON.stringify(out) + "\n");
+}
+
 function cmdApply(prefix: string, outDir: string | null): void {
   const records = readRecords();
   const terminal = terminalRuleIds(records);
@@ -194,13 +209,13 @@ rule:
   process.stdout.write(JSON.stringify(out) + "\n");
 }
 
-function cmdGenRule(pattern: string, lang: string): void {
+function cmdGenRule(pattern: string, lang: string, text: string | null): void {
   const record: any = {
     kind: "rule",
     id: shortId(),
     ts: iso(),
     agent: AGENT,
-    text: "auto-generated from pattern",
+    text: text || "auto-generated from pattern",
     pattern,
     pattern_lang: lang,
     tags: ["auto"],
@@ -220,7 +235,8 @@ function cmdSchema(): void {
       resolve: { args: ["id"], options: ["--global"], appends: true },
       supersede: { args: ["id", "reason"], options: ["--global"], appends: true },
       apply: { args: ["id"], options: ["--global", "--out"], appends: false },
-      "gen-rule": { args: ["pattern"], options: ["--global", "--lang"], appends: true },
+      "gen-rule": { args: ["pattern"], options: ["--global", "--lang", "--text"], appends: true },
+      clean: { options: ["--global"], appends: true },
       schema: { appends: false },
     },
     env: { ANTISLOP_FILE: { default: ".antislop.jsonl" }, ANTISLOP_AGENT: {}, ANTISLOP_NOW: {} },
@@ -236,7 +252,8 @@ function cmdSchema(): void {
 
 const rawArgs = process.argv.slice(2);
 const isGlobal = rawArgs.includes("--global");
-const args = rawArgs.filter((a: string) => a !== "--global");
+const isHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
+const args = rawArgs.filter((a: string) => a !== "--global" && a !== "--help" && a !== "-h");
 const cmd = args[0] || "help";
 
 if (isGlobal && !process.env.ANTISLOP_FILE) {
@@ -244,6 +261,23 @@ if (isGlobal && !process.env.ANTISLOP_FILE) {
   const homedir = require("os").homedir();
   ANTISLOP_DIR = path.join(homedir, ".antislop");
   ANTISLOP_FILE = path.join(homedir, ".antislop.jsonl");
+}
+
+if (isHelp && cmd !== "help" && cmd !== "schema") {
+  const helps: Record<string, string> = {
+    add: "Usage: antislop add [--global] <text> [--tag <tag>] [--severity minor|major|blocker]",
+    list: "Usage: antislop list [--global] [--format json|md] [--all]",
+    resolve: "Usage: antislop resolve [--global] <id>",
+    supersede: "Usage: antislop supersede [--global] <id> <reason>",
+    apply: "Usage: antislop apply [--global] <id> [--out <dir>]",
+    "gen-rule": "Usage: antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit] [--text <description>]",
+    clean: "Usage: antislop clean [--global]",
+  };
+  const usage = helps[cmd];
+  if (usage) {
+    process.stdout.write(usage + "\n");
+    process.exit(0);
+  }
 }
 
 switch (cmd) {
@@ -256,8 +290,13 @@ switch (cmd) {
       process.stderr.write(JSON.stringify(err) + "\n");
       process.exit(65);
     }
-    const tagIdx = args.indexOf("--tag");
-    const tags = tagIdx >= 0 && args[tagIdx + 1] ? [args[tagIdx + 1]] : [];
+    const tags: string[] = [];
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "--tag" && args[i + 1]) {
+        tags.push(args[i + 1]);
+        i++;
+      }
+    }
     const sevIdx = args.indexOf("--severity");
     const severity = sevIdx >= 0 && args[sevIdx + 1] ? args[sevIdx + 1] : "minor";
     const patternIdx = args.indexOf("--pattern");
@@ -318,7 +357,13 @@ switch (cmd) {
     }
     const langIdx = args.indexOf("--lang");
     const lang = langIdx >= 0 && args[langIdx + 1] ? args[langIdx + 1] : "ast-grep";
-    cmdGenRule(pattern, lang);
+    const textIdx = args.indexOf("--text");
+    const text = textIdx >= 0 && args[textIdx + 1] ? args[textIdx + 1] : null;
+    cmdGenRule(pattern, lang, text);
+    break;
+  }
+  case "clean": {
+    cmdClean();
     break;
   }
   case "schema": {
@@ -336,7 +381,8 @@ Usage:
   antislop resolve [--global] <id>
   antislop supersede [--global] <id> <reason>
   antislop apply [--global] <id> [--out <dir>]
-  antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit]
+  antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit] [--text <description>]
+  antislop clean [--global]
   antislop schema
   antislop help
 
