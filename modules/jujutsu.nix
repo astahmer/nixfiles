@@ -40,7 +40,6 @@
           };
 
           "revset-aliases" = {
-            work = "heads(::@ ~ description(exact:''))::";
             "closest_bookmark(to)" = "heads(::to & bookmarks())";
             "closest_pushable(to)" = "heads(::to & ~description(exact:\"\") & (~empty() | merges()))";
             latest = "latest(@::)";
