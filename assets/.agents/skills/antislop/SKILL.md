@@ -27,13 +27,13 @@ Severity: `minor` (default) for style nits, `major` for correctness risks, `bloc
 ## Commands
 
 ```bash
-antislop add "<text>" [--tag <area>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]
-antislop list [--format json|md] [--all]
-antislop resolve <id-prefix>
-antislop supersede <id-prefix> "<reason it is no longer relevant>"
-antislop apply <id-prefix> [--out <dir>]
-antislop gen-rule <pattern> [--lang ast-grep|oxlint|grit]
-antislop schema
+  antislop add [--global] <text> [--tag <area>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]
+  antislop list [--global] [--format json|md] [--all]
+  antislop resolve [--global] <id-prefix>
+  antislop supersede [--global] <id-prefix> "<reason it is no longer relevant>"
+  antislop apply [--global] <id-prefix> [--out <dir>]
+  antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit]
+  antislop schema
 ```
 
 ## Scope
@@ -43,7 +43,7 @@ conventions, and stack. Keep language-level or tooling-level rules in the global
 `~/.antislop.jsonl`:
 
 ```bash
-ANTISLOP_FILE="$HOME/.antislop.jsonl" antislop add "<global rule>" --tag typescript
+antislop add --global "<global rule>" --tag typescript
 ```
 
 ## Workflow

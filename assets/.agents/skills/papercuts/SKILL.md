@@ -16,11 +16,11 @@ Don't stop working; file it and push through. Severity: `minor` (default) for an
 ## Commands
 
 ```bash
-papercuts add "<text>" [--tag <area>] [--severity minor|major|blocker]
-papercuts list [--format json|md] [--all]
-papercuts resolve <id-prefix>
-papercuts unresolvable <id-prefix> "<reason it cannot be fixed here>"
-papercuts clean
+papercuts add [--global] <text> [--tag <area>] [--severity minor|major|blocker]
+papercuts list [--global] [--format json|md] [--all]
+papercuts resolve [--global] <id-prefix>
+papercuts unresolvable [--global] <id-prefix> "<reason it cannot be fixed here>"
+papercuts clean [--global]
 papercuts schema
 ```
 
@@ -31,7 +31,7 @@ configuration, documentation, or workflow. Keep shell, agent, connector, editor,
 tooling issues in the global file at `~/.papercuts.jsonl`:
 
 ```bash
-PAPERCUTS_FILE="$HOME/.papercuts.jsonl" papercuts add "<global issue>" --tag tooling
+papercuts add --global "<global issue>" --tag tooling
 ```
 
 When moving an existing cut to the global file, move its `cut` record and every matching terminal

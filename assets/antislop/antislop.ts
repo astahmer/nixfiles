@@ -1,6 +1,7 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
-const ANTISLOP_FILE = process.env.ANTISLOP_FILE || ".antislop.jsonl";
+let ANTISLOP_FILE = process.env.ANTISLOP_FILE || ".antislop.jsonl";
+let ANTISLOP_DIR = ".antislop";
 const AGENT = process.env.ANTISLOP_AGENT || process.env.OPENCODE_AGENT || process.env.CLAUDE_CODE_AGENT || "unknown";
 const NOW = process.env.ANTISLOP_NOW ? new Date(process.env.ANTISLOP_NOW) : new Date();
 
@@ -155,7 +156,7 @@ function cmdApply(prefix: string, outDir: string | null): void {
     process.exit(65);
   }
   const lang = rule.pattern_lang || "ast-grep";
-  const dir = outDir || ".antislop";
+  const dir = outDir || ANTISLOP_DIR;
   const fs = require("fs");
   const path = require("path");
   fs.mkdirSync(dir, { recursive: true });
@@ -214,12 +215,12 @@ function cmdSchema(): void {
   const schema = {
     contract: 2,
     commands: {
-      add: { args: ["text"], options: ["--tag", "--severity", "--pattern", "--pattern-lang", "--prescription"], appends: true },
-      list: { options: ["--format", "--all"], appends: false },
-      resolve: { args: ["id"], appends: true },
-      supersede: { args: ["id", "reason"], appends: true },
-      apply: { args: ["id"], options: ["--out"], appends: false },
-      "gen-rule": { args: ["pattern"], options: ["--lang"], appends: true },
+      add: { args: ["text"], options: ["--global", "--tag", "--severity", "--pattern", "--pattern-lang", "--prescription"], appends: true },
+      list: { options: ["--global", "--format", "--all"], appends: false },
+      resolve: { args: ["id"], options: ["--global"], appends: true },
+      supersede: { args: ["id", "reason"], options: ["--global"], appends: true },
+      apply: { args: ["id"], options: ["--global", "--out"], appends: false },
+      "gen-rule": { args: ["pattern"], options: ["--global", "--lang"], appends: true },
       schema: { appends: false },
     },
     env: { ANTISLOP_FILE: { default: ".antislop.jsonl" }, ANTISLOP_AGENT: {}, ANTISLOP_NOW: {} },
@@ -233,8 +234,17 @@ function cmdSchema(): void {
   process.stdout.write(JSON.stringify(schema, null, 2) + "\n");
 }
 
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+const isGlobal = rawArgs.includes("--global");
+const args = rawArgs.filter((a: string) => a !== "--global");
 const cmd = args[0] || "help";
+
+if (isGlobal && !process.env.ANTISLOP_FILE) {
+  const path = require("path");
+  const homedir = require("os").homedir();
+  ANTISLOP_DIR = path.join(homedir, ".antislop");
+  ANTISLOP_FILE = path.join(homedir, ".antislop.jsonl");
+}
 
 switch (cmd) {
   case "add":
@@ -319,17 +329,20 @@ switch (cmd) {
     process.stdout.write(`antislop \u2014 anti-pattern rule tracker
 
 Usage:
-  antislop add <text> [--tag <tag>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]
-  antislop list [--format json|md] [--all]
-  antislop resolve <id>
-  antislop supersede <id> <reason>
-  antislop apply <id> [--out <dir>]
-  antislop gen-rule <pattern> [--lang ast-grep|oxlint|grit]
+  antislop add [--global] <text> [--tag <tag>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]
+  antislop list [--global] [--format json|md] [--all]
+  antislop resolve [--global] <id>
+  antislop supersede [--global] <id> <reason>
+  antislop apply [--global] <id> [--out <dir>]
+  antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit]
   antislop schema
   antislop help
 
+Flags:
+  --global        use ~/.antislop.jsonl and ~/.antislop/ instead of .antislop.jsonl and .antislop/
+
 Env:
-  ANTISLOP_FILE   \u2014 path to JSONL file (default: .antislop.jsonl)
+  ANTISLOP_FILE   \u2014 path to JSONL file (default: .antislop.jsonl, or ~/.antislop.jsonl with --global)
   ANTISLOP_AGENT  \u2014 agent name (auto-detected)
   ANTISLOP_NOW    \u2014 ISO timestamp override (for reproducible runs)
 `);

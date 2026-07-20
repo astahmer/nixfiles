@@ -1,6 +1,6 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
-const PAPERCUTS_FILE = process.env.PAPERCUTS_FILE || ".papercuts.jsonl";
+let PAPERCUTS_FILE = process.env.PAPERCUTS_FILE || ".papercuts.jsonl";
 const AGENT = process.env.PAPERCUTS_AGENT || process.env.OPENCODE_AGENT || process.env.CLAUDE_CODE_AGENT || "unknown";
 const NOW = process.env.PAPERCUTS_NOW ? new Date(process.env.PAPERCUTS_NOW) : new Date();
 
@@ -145,11 +145,11 @@ function cmdSchema(): void {
   const schema = {
     contract: 2,
     commands: {
-      add: { args: ["text"], options: ["--tag", "--severity"], appends: true },
-      list: { options: ["--format", "--open"], appends: false },
-      resolve: { args: ["id"], appends: true },
-      unresolvable: { args: ["id", "reason"], appends: true },
-      clean: { appends: true },
+      add: { args: ["text"], options: ["--global", "--tag", "--severity"], appends: true },
+      list: { options: ["--global", "--format", "--open"], appends: false },
+      resolve: { args: ["id"], options: ["--global"], appends: true },
+      unresolvable: { args: ["id", "reason"], options: ["--global"], appends: true },
+      clean: { options: ["--global"], appends: true },
       schema: { appends: false },
     },
     env: { PAPERCUTS_FILE: { default: ".papercuts.jsonl" }, PAPERCUTS_AGENT: {}, PAPERCUTS_NOW: {} },
@@ -163,8 +163,14 @@ function cmdSchema(): void {
   process.stdout.write(JSON.stringify(schema, null, 2) + "\n");
 }
 
-const args = process.argv.slice(2);
+const rawArgs = process.argv.slice(2);
+const isGlobal = rawArgs.includes("--global");
+const args = rawArgs.filter((a: string) => a !== "--global");
 const cmd = args[0] || "help";
+
+if (isGlobal && !process.env.PAPERCUTS_FILE) {
+  PAPERCUTS_FILE = require("path").join(require("os").homedir(), ".papercuts.jsonl");
+}
 
 switch (cmd) {
   case "add":
@@ -223,16 +229,19 @@ switch (cmd) {
     process.stdout.write(`papercuts — agent complaint box
 
 Usage:
-  papercuts add <text> [--tag <tag>] [--severity minor|major|blocker]
-  papercuts list [--format json|md] [--all]
-  papercuts resolve <id>
-  papercuts unresolvable <id> <reason>
-  papercuts clean
+  papercuts add [--global] <text> [--tag <tag>] [--severity minor|major|blocker]
+  papercuts list [--global] [--format json|md] [--all]
+  papercuts resolve [--global] <id>
+  papercuts unresolvable [--global] <id> <reason>
+  papercuts clean [--global]
   papercuts schema
   papercuts help
 
+Flags:
+  --global        use ~/.papercuts.jsonl instead of .papercuts.jsonl
+
 Env:
-  PAPERCUTS_FILE   — path to JSONL file (default: .papercuts.jsonl)
+  PAPERCUTS_FILE   — path to JSONL file (default: .papercuts.jsonl, or ~/.papercuts.jsonl with --global)
   PAPERCUTS_AGENT  — agent name (auto-detected)
   PAPERCUTS_NOW    — ISO timestamp override (for reproducible runs)
 `);
