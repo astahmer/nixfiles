@@ -27,7 +27,8 @@ Severity: `minor` (default) for style nits, `major` for correctness risks, `bloc
 ## Commands
 
 ```bash
-  antislop add [--global] <text> [--tag <area>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]
+  antislop add [--global] <text> [--tag <area>] [--severity minor|major|blocker]
+  antislop add [--global] <text> --pattern <pattern> [--pattern-lang lang] [--prescription <text>] [--tag <area>] [--severity minor|major|blocker]
   antislop list [--global] [--format json|md] [--all]
   antislop resolve [--global] <id-prefix>
   antislop supersede [--global] <id-prefix> "<reason it is no longer relevant>"

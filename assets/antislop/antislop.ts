@@ -252,7 +252,7 @@ switch (cmd) {
     const textIdx = args.findIndex((a: string, i: number) => i > 0 && !a.startsWith("-"));
     const text = textIdx > 0 ? args[textIdx] : args[1];
     if (!text || text.startsWith("-")) {
-      const err = { ok: false, error: { code: "bad_input", message: "Usage: antislop add <text> [--tag <tag>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]" } };
+      const err = { ok: false, error: { code: "bad_input", message: "Usage: antislop add <text> [--tag <tag>] [--severity minor|major|blocker]" } };
       process.stderr.write(JSON.stringify(err) + "\n");
       process.exit(65);
     }
@@ -329,7 +329,9 @@ switch (cmd) {
     process.stdout.write(`antislop \u2014 anti-pattern rule tracker
 
 Usage:
-  antislop add [--global] <text> [--tag <tag>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]
+  antislop add [--global] <text> [--tag <tag>] [--severity minor|major|blocker]
+  antislop add [--global] <text> [--tag <tag>] [--severity minor|major|blocker]
+              [--pattern <pattern>] [--pattern-lang lang] [--prescription <text>]
   antislop list [--global] [--format json|md] [--all]
   antislop resolve [--global] <id>
   antislop supersede [--global] <id> <reason>
