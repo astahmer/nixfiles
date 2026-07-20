@@ -34,12 +34,26 @@
         }
       '';
 
+      pnpmPkg = lib.getExe pkgs.pnpm;
+
       pnpmShellFunction = ''
         pnpm() {
           local cmd="$1"
           case "$cmd" in
-            run|exec|dlx|x|watch|install|i|ci|add|a|remove|rm|update|up|import|dedupe|prune|rebuild|rb|link|ln|unlink|patch|patch-commit|patch-remove|approve-builds|ignored-builds|list|ls|why|outdated|audit|licenses|view|search|bin|root|query|check|sbom|publish|pack|version|dist-tag|login|logout|whoami|owner|token|node|help)
+            run|exec|dlx|x|watch|import|node)
               nub "$@"
+              ;;
+            install|i|add|a|remove|rm|update|up|upgrade|link|ln|unlink)
+              ${pnpmPkg} "$@"
+              ;;
+            list|ls|outdated|why|audit|rebuild|rb|prune|dedupe|fetch|pack|publish)
+              ${pnpmPkg} "$@"
+              ;;
+            patch|patch-commit|patch-remove|approve-builds|ignored-builds)
+              ${pnpmPkg} "$@"
+              ;;
+            config|store|root|bin|setup|init|create)
+              ${pnpmPkg} "$@"
               ;;
             *)
               nub run "$@"
@@ -305,6 +319,7 @@
         pkgs.fd
         pkgs.nh
         pkgs.nodejs_24
+        pkgs.pnpm
         nubPkg
         pkgs.rtk
       ]
@@ -350,6 +365,8 @@
         # if ! command -v composto >/dev/null 2>&1; then
         #   $DRY_RUN_CMD ${lib.getExe nubPkg} add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
         # fi
+
+        mkdir -p "${pnpmHome}/bin"
 
         if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
           $DRY_RUN_CMD ${lib.getExe nubPkg} remove -g executor >/dev/null 2>&1 || true
@@ -496,7 +513,7 @@
         PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
 
         ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
-        export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
+        export PATH="${pnpmBin}:${config.home.homeDirectory}/.nub/shims:$PATH"
         ${jjsearchFunction}
         ${jjEvolveFunction}
         ${initagentFunction}
@@ -530,7 +547,7 @@
           }
 
           ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
-          export PATH="${config.home.homeDirectory}/.nub/shims:${pnpmBin}:$PATH"
+          export PATH="${pnpmBin}:${config.home.homeDirectory}/.nub/shims:$PATH"
           ${jjsearchFunction}
           ${jjEvolveFunction}
           ${initagentFunction}
@@ -564,7 +581,7 @@
         ppnm = "pnpm";
         pn = "pnpm";
         pnp = "pnpm";
-        realpnpm = "${pnpmHome}/bin/pnpm";
+        realpnpm = "${lib.getExe pkgs.pnpm}";
         pkit = "pik";
         pkil = "pik";
         pdev = "nub run dev";
