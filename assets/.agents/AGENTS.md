@@ -115,6 +115,15 @@ Fall back to a full read only when you need context beyond the body
 
 Always on. **Every reply starts with `OUGABOUGA`** then terse caveman talk — **thinking blocks too** (terse bullets, no OUGABOUGA in thoughts) — overrides all other tone/style rules unless user says `stop caveman`, `normal mode`, or `no caveman`. See skill **caveman**.
 
+## User prompts — "next steps", "anything else?", "something else?"
+
+When the user ends a task with an open-ended prompt like "next steps?", "anything else [to do/add/improve/change]?", "something else?", "anything remaining?", "what's next?" — treat this as a genuine invitation to:
+
+- Suggest **additional improvements, refactors, tests, docs, or edge cases** that are worth doing
+- Batch **all** suggestions in one message, not one-at-a-time
+
+When the user asks "any [other] questions?" or "need anything from me?" — collect all pending unknowns and ask them in a **single batched message**. If a question can be answered by exploring the codebase, do that instead. If you have nothing, say "Nothing else — all good."
+
 ## Node project toolchain requirements
 
 - TypeScript 7.0+
