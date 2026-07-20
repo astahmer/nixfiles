@@ -14,6 +14,10 @@ Creates `{project}/plans/{feature-name}.md` from the template at `assets/.agents
 3. **Gather content** — for each section, either ask the user or synthesize from context already discussed. Prioritize asking over guessing.
 4. **Write plan** — create `{project-root}/plans/{feature-name}.md` with all sections filled.
 
+## Batching questions
+
+Collect unknowns from **all** sections before asking the user. Fire them in one message, not section-by-section. The user prefers a single batch over serial Q&A.
+
 ## Sections to fill
 
 | Section | Approach |
