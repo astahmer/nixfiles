@@ -98,8 +98,8 @@ function cmdList(format: string, openOnly: boolean): void {
       const outcome = reason ? " **superseded**" : "";
       const detail = reason ? `\n  Reason: ${reason}` : "";
       const patternLine = r.pattern ? `\n  \`${r.pattern_lang || "ast-grep"}\`: \`${r.pattern}\`` : "";
-      const rxLine = r.prescription ? `\n  → ${r.prescription}` : "";
-      process.stdout.write(`${status} \`${r.id}\` **${r.severity}**${outcome}${tags} — ${r.ts}\n  ${r.text}${patternLine}${rxLine}${detail}\n\n`);
+      const rxLine = r.prescription ? `\n  \u2192 ${r.prescription}` : "";
+      process.stdout.write(`${status} \`${r.id}\` **${r.severity}**${outcome}${tags} \u2014 ${r.ts}\n  ${r.text}${patternLine}${rxLine}${detail}\n\n`);
     }
   } else {
     const out = { ok: true, data: { rules, total: rules.length } };
@@ -237,7 +237,8 @@ const args = process.argv.slice(2);
 const cmd = args[0] || "help";
 
 switch (cmd) {
-  case "add": {
+  case "add":
+  case "log": {
     const textIdx = args.findIndex((a: string, i: number) => i > 0 && !a.startsWith("-"));
     const text = textIdx > 0 ? args[textIdx] : args[1];
     if (!text || text.startsWith("-")) {
@@ -315,7 +316,7 @@ switch (cmd) {
     break;
   }
   default: {
-    process.stdout.write(`antislop — anti-pattern rule tracker
+    process.stdout.write(`antislop \u2014 anti-pattern rule tracker
 
 Usage:
   antislop add <text> [--tag <tag>] [--severity minor|major|blocker] [--pattern <pattern>] [--pattern-lang ast-grep|oxlint|grit] [--prescription <text>]
@@ -328,9 +329,9 @@ Usage:
   antislop help
 
 Env:
-  ANTISLOP_FILE   — path to JSONL file (default: .antislop.jsonl)
-  ANTISLOP_AGENT  — agent name (auto-detected)
-  ANTISLOP_NOW    — ISO timestamp override (for reproducible runs)
+  ANTISLOP_FILE   \u2014 path to JSONL file (default: .antislop.jsonl)
+  ANTISLOP_AGENT  \u2014 agent name (auto-detected)
+  ANTISLOP_NOW    \u2014 ISO timestamp override (for reproducible runs)
 `);
     process.exit(cmd === "help" ? 0 : 2);
   }

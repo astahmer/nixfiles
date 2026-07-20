@@ -51,6 +51,13 @@
           };
         }) opencodeBase.mcp;
       };
+      # Ensure .ts scripts are stored with executable bit so home-manager
+      # symlinks them (preserving the .ts extension for --experimental-strip-types)
+      # instead of copying them as extensionless regular files.
+      mkExecutableFile = name: src: pkgs.runCommandLocal name {
+        inherit src;
+        preferLocalBuild = true;
+      } "cp $src $out; chmod +x $out";
     in
     {
       home.file.".agents".source = agentsSrc;
@@ -78,12 +85,12 @@
       home.file.".copilot/hooks/rtk-rewrite.json".source = ../assets/.agents/hooks/rtk-rewrite.json;
 
       home.file.".local/bin/papercuts" = {
-        source = ../assets/papercuts/papercuts.ts;
+        source = mkExecutableFile "hm_papercuts.ts" ../assets/papercuts/papercuts.ts;
         executable = true;
       };
 
       home.file.".local/bin/antislop" = {
-        source = ../assets/antislop/antislop.ts;
+        source = mkExecutableFile "hm_antislop.ts" ../assets/antislop/antislop.ts;
         executable = true;
       };
 
