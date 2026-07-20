@@ -21,7 +21,6 @@ in
           hm.shell
           hm.git
           hm.jujutsu
-          hm.ryu
           hm.coding
           hm.vscode
           hm.agents

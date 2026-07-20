@@ -22,6 +22,7 @@ in
           hm.git
           hm.jujutsu
           hm.ryu
+          hm.opencodex
           hm.coding
           hm.vscode
           hm.agents

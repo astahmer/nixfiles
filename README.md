@@ -113,6 +113,7 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/git.nix` for git defaults
 - `modules/bitwarden.nix` for Bitwarden desktop plus SSH agent socket wiring
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
+- `modules/opencodex.nix` for `opencodex` (`ocx`) on both macOS and NixOS
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
 ## Updating versions
@@ -154,13 +155,17 @@ nix run nixpkgs#nix-update -- --flake --version unstable lightjj
 nix run nixpkgs#nix-update -- --flake nub
 nix run nixpkgs#nix-update -- --flake plannotator
 nix run nixpkgs#nix-update -- --flake ryu
+nix run nixpkgs#nix-update -- --flake opencodex
 ```
+
 
 `nix-update` automatically detects the new version from the upstream GitHub
 releases, updates the `version` field, and refreshes the source hash. For Rust
 packages (ryu) it also refreshes `cargoHash`. For packages with per-platform
 fetch URLs (nub, lightjj, plannotator), the per-platform hashes still need
 manual updates — the main version and source hash are handled automatically.
+`opencodex` is fetched from the npm registry (prebuilt `gui/dist`); bump
+`version`, refresh the tarball `hash`, then rebuild once to refresh `outputHash`.
 
 After updating, verify with:
 

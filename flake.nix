@@ -51,6 +51,7 @@
             hunk = import ./packages/hunk.nix { pkgs = pkgs'; };
             lightjj = import ./packages/lightjj.nix { pkgs = pkgs'; };
             nub = import ./packages/nub.nix { pkgs = pkgs'; };
+            opencodex = import ./packages/opencodex.nix { pkgs = pkgs'; };
             plannotator = import ./packages/plannotator.nix { pkgs = pkgs'; };
             ryu = import ./packages/ryu.nix { pkgs = pkgs'; };
           };
