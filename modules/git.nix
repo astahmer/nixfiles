@@ -25,6 +25,7 @@
           "dist"
           "**/*.local/**"
           "*.local"
+          "*.local.*"
           "*.db"
           "*.db-shm"
           "*.db-wal"

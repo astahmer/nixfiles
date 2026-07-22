@@ -17,7 +17,7 @@
       ];
 
       nixPathSetup = ''
-        export PATH="${lib.concatStringsSep ":" nixProfileBins}:$PATH"
+        export PATH="${lib.concatStringsSep ":" nixProfileBins}:${config.home.homeDirectory}/.local/bin:$PATH"
       '';
 
       jjPackage =

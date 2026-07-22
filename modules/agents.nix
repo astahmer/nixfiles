@@ -94,6 +94,15 @@
         executable = true;
       };
 
+      home.file.".local/bin/cursor" = {
+        text = ''
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec "$HOME/.local/bin/cursor-agent" "$@"
+        '';
+        executable = true;
+      };
+
       home.file.".copilot/skills".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/skills";
 
