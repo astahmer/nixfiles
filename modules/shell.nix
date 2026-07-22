@@ -8,8 +8,6 @@
       ...
     }:
     let
-      nubPkg = import ../packages/nub.nix { inherit pkgs; };
-
       pnpmHome = "${config.home.homeDirectory}/.local/share/pnpm";
       pnpmBin = "${pnpmHome}/bin";
 
@@ -31,34 +29,6 @@
       shellAliasesFunction = ''
         aliases() {
           alias | sed -E 's/^alias //' | grep -E '^(${shellAliasPattern})='
-        }
-      '';
-
-      pnpmPkg = lib.getExe pkgs.pnpm;
-
-      pnpmShellFunction = ''
-        pnpm() {
-          local cmd="$1"
-          case "$cmd" in
-            run|exec|dlx|x|watch|import|node)
-              nub "$@"
-              ;;
-            install|i|add|a|remove|rm|update|up|upgrade|link|ln|unlink)
-              ${pnpmPkg} "$@"
-              ;;
-            list|ls|outdated|why|audit|rebuild|rb|prune|dedupe|fetch|pack|publish)
-              ${pnpmPkg} "$@"
-              ;;
-            patch|patch-commit|patch-remove|approve-builds|ignored-builds)
-              ${pnpmPkg} "$@"
-              ;;
-            config|store|root|bin|setup|init|create)
-              ${pnpmPkg} "$@"
-              ;;
-            *)
-              nub run "$@"
-              ;;
-          esac
         }
       '';
 
@@ -320,7 +290,6 @@
         pkgs.nh
         pkgs.nodejs_24
         pkgs.pnpm
-        nubPkg
         pkgs.rtk
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.llvmPackages.libcxxClang ];
@@ -349,7 +318,7 @@
         fi
 
         if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
-          $DRY_RUN_CMD sh -c 'export PNPM_STORE_DIR="$2/store" && cd "$1" && ${lib.getExe nubPkg} i' sh "$skepsis_dir" "${pnpmHome}"
+          $DRY_RUN_CMD sh -c 'export PNPM_STORE_DIR="$2/store" && cd "$1" && ${lib.getExe pkgs.pnpm} i' sh "$skepsis_dir" "${pnpmHome}"
         fi
       '';
 
@@ -362,19 +331,15 @@
         mkdir -p "${pnpmHome}"
         mkdir -p "${pnpmHome}/store"
 
-        # if ! command -v composto >/dev/null 2>&1; then
-        #   $DRY_RUN_CMD ${lib.getExe nubPkg} add -g composto-ai@0.7.0 --allow-build=better-sqlite3 || true
-        # fi
-
         mkdir -p "${pnpmHome}/bin"
 
         if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
-          $DRY_RUN_CMD ${lib.getExe nubPkg} remove -g executor >/dev/null 2>&1 || true
-          $DRY_RUN_CMD ${lib.getExe nubPkg} add -g executor || true
+          $DRY_RUN_CMD ${lib.getExe pkgs.pnpm} remove -g executor >/dev/null 2>&1 || true
+          $DRY_RUN_CMD ${lib.getExe pkgs.pnpm} add -g executor || true
         fi
 
         if ! command -v pi >/dev/null 2>&1; then
-          $DRY_RUN_CMD ${lib.getExe nubPkg} add -g @earendil-works/pi-coding-agent || true
+          $DRY_RUN_CMD ${lib.getExe pkgs.pnpm} add -g @earendil-works/pi-coding-agent || true
         fi
 
         if ! command -v ast-outline >/dev/null 2>&1; then
@@ -512,13 +477,10 @@
         shopt -s histappend
         PROMPT_COMMAND="''${PROMPT_COMMAND:+$PROMPT_COMMAND; }history -a; history -n"
 
-        ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
-        export PATH="${pnpmBin}:${config.home.homeDirectory}/.nub/shims:$PATH"
         ${jjsearchFunction}
         ${jjEvolveFunction}
         ${initagentFunction}
         ${shellAliasesFunction}
-        ${pnpmShellFunction}
         eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
 
@@ -546,13 +508,10 @@
             lsof -ti:$port | xargs kill -9 2>/dev/null && echo "Killed process on port $port" || echo "No process found on port $port"
           }
 
-          ${lib.getExe nubPkg} pm shim >/dev/null 2>&1 || true
-          export PATH="${pnpmBin}:${config.home.homeDirectory}/.nub/shims:$PATH"
           ${jjsearchFunction}
           ${jjEvolveFunction}
           ${initagentFunction}
           ${shellAliasesFunction}
-          ${pnpmShellFunction}
         '')
 
         (lib.mkAfter ''
@@ -584,15 +543,12 @@
         realpnpm = "${lib.getExe pkgs.pnpm}";
         pkit = "pik";
         pkil = "pik";
-        pdev = "nub run dev";
-        pnpmi = "nub i";
-        npm = "nub";
-        npx = "nubx";
+        pdev = "pnpm run dev";
+        pnpmi = "pnpm i";
         # https://github.com/oxidecomputer/skepsis
         sk = "${lib.getExe pkgs.nodejs_24} ${config.home.homeDirectory}/dev/deps/skepsis/cli.ts";
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
-        nts = "nub";
         plan = "plannotator";
       };
     };

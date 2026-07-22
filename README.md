@@ -152,7 +152,6 @@ nix run nixpkgs#nix-update -- --flake ghui
 nix run nixpkgs#nix-update -- --flake --version unstable lightjj
 
 # Update everything at once (or run per-package)
-nix run nixpkgs#nix-update -- --flake nub
 nix run nixpkgs#nix-update -- --flake plannotator
 nix run nixpkgs#nix-update -- --flake ryu
 nix run nixpkgs#nix-update -- --flake opencodex
@@ -162,7 +161,7 @@ nix run nixpkgs#nix-update -- --flake opencodex
 `nix-update` automatically detects the new version from the upstream GitHub
 releases, updates the `version` field, and refreshes the source hash. For Rust
 packages (ryu) it also refreshes `cargoHash`. For packages with per-platform
-fetch URLs (nub, lightjj, plannotator), the per-platform hashes still need
+fetch URLs (lightjj, plannotator), the per-platform hashes still need
 manual updates — the main version and source hash are handled automatically.
 `opencodex` is fetched from the npm registry (prebuilt `gui/dist`); bump
 `version`, refresh the tarball `hash`, then rebuild once to refresh `outputHash`.
@@ -184,20 +183,8 @@ apply the profile — the updated nixpkgs revision provides the latest versions.
 
 ## Node tooling
 
-The shell profile installs [nub](https://github.com/nubjs/nub) and aliases the common Node.js package-manager commands to it:
-
-| Alias | Resolves to |
-|-------|-------------|
-| `pnpm` | `nub` |
-| `pn`   | `nub` |
-| `ppnm` | `nub` |
-| `npm`  | `nub` |
-| `npx`  | `nubx` |
-| `pnpmi` | `nub i` |
-
-This keeps day-to-day commands (`pnpm install`, `pnpm run`, `npx`, etc.) fast while nub runs in pnpm-compatible mode. `nodejs_26` is still installed and remains on `PATH` for scripts and tools that need the real Node binary, and the Nix package builds (`readbro-package.nix`, `hunk-package.nix`) still use stock `pnpm`/`node`/`bun` for reproducibility.
-
-If a project breaks under the nub aliases, run the real tool directly (`command pnpm …`, `/nix/store/.../bin/node …`, etc.).
+The shell profile installs Node.js and pnpm. `pn`, `ppnm`, and `pnp` are shell aliases for `pnpm`.
+`nodejs_26` and `pnpm` are available for Nix builds and development use.
 
 ## Common workflow
 

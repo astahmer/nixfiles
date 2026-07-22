@@ -58,4 +58,4 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `jje <base>` is a shell function (defined in `modules/shell.nix`) that duplicates a commit range (`<base>::@`) then squashes the original — preserves evolution history while producing a single clean commit. Shell reload after applying.
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
 - When adding new reusable repository conventions, document them here so future agents can find them quickly.
-- In the interactive shell, `pnpm`, `npm`, `pn`, `ppnm`, and `npx` are aliased to `nub`/`nubx`. `nodejs_26` and the real `pnpm` tooling remain installed for Nix builds and fallback use.
+- In the interactive shell, `pn`, `ppnm`, and `pnp` are aliases for `pnpm`. `nodejs_26` and `pnpm` are installed for Nix builds and development use.
