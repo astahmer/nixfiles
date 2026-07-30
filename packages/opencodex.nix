@@ -9,7 +9,7 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   };
 
   # Pins the bun-installed node_modules tree (no lockfile in the npm tarball).
-  outputHash = "sha256-TOrn+62DuDdtQPCyD4iK8FiPHBkQXnEIU9LFE4LwLVE=";
+  outputHash = "sha256-F/V4BYDgS0Dc+KyOi6j1WLT9OaQPSzODEUu4I7/T1xI=";
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   dontFixup = true;
