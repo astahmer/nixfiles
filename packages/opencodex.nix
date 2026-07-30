@@ -8,8 +8,10 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-l//RQ0/LHpBr7PkQQp5mqEAqBRNyGfZLe3aKPsibEl0=";
   };
 
+  bunLock = ../assets/opencodex/bun.lock;
+
   # Pins the bun-installed node_modules tree (no lockfile in the npm tarball).
-  outputHash = "sha256-F/V4BYDgS0Dc+KyOi6j1WLT9OaQPSzODEUu4I7/T1xI=";
+  outputHash = "sha256-jDokLtoy/28zkUk2nNLATzT/d85XEuDRvZa1/czROq4=";
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   dontFixup = true;
@@ -32,7 +34,9 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     jq 'del(.dependencies.bun) | del(.trustedDependencies)' package.json > package.json.new
     mv package.json.new package.json
 
-    bun install --production
+    # Use a vendored lockfile so the resolved dependency tree is deterministic.
+    cp "${finalAttrs.bunLock}" bun.lock
+    bun install --production --frozen-lockfile --ignore-scripts
 
     runHook postBuild
   '';
