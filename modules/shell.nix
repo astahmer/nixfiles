@@ -450,12 +450,6 @@
         git_status.disabled = true;
       };
 
-      programs.mcfly = {
-        enable = true;
-        enableBashIntegration = true;
-        enableZshIntegration = true;
-      };
-
       programs.direnv = {
         enable = true;
         nix-direnv.enable = true;
@@ -550,6 +544,7 @@
         ts = ", tsgo --noEmit";
         ai = "gh copilot suggest -t shell";
         plan = "plannotator";
+        nts = "node --no-warnings=ExperimentalWarning --experimental-strip-types --experimental-transform-types --env-file-if-exists=.env";
       };
     };
 }

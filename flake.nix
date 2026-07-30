@@ -18,6 +18,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    iris = {
+      url = "github:versenilvis/iris/v0.4.9";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
   };
 
   outputs =

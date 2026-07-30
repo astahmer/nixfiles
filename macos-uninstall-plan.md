@@ -31,7 +31,7 @@ If `where` shows `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, or any o
 remove that duplicate before relying on the Nix profile.
 
 ```bash
-for bin in bat code comma deadnix docker ffmpeg fnm fzf gh htop hyperfine jj jj-starship jjui jq lazydocker mcfly ncdu neovim nixd nixfmt rg tokei tree tmux uv yt-dlp zeditor; do
+for bin in bat code comma deadnix docker ffmpeg fnm fzf gh htop hyperfine jj jj-starship jjui jq lazydocker ncdu neovim nixd nixfmt rg tokei tree tmux uv yt-dlp zeditor; do
 	where "$bin"
 done
 ```

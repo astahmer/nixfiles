@@ -32,6 +32,7 @@ in
             hm.launcher
             hm.nixosShell
             hm.work
+            hm.iris
           ];
         };
       };

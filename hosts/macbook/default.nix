@@ -28,6 +28,7 @@ in
           hm.agents
           hm.tools
           hm.work
+          hm.iris
           (
             { pkgs, ... }:
             {

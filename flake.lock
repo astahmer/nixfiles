@@ -53,6 +53,27 @@
         "type": "github"
       }
     },
+    "iris": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1785389626,
+        "narHash": "sha256-W0w8msnUC0FPidTm2AOQevi2kfqv1W+RwTXPMMjpFkw=",
+        "owner": "versenilvis",
+        "repo": "iris",
+        "rev": "979bd6f5d608b9b5f34efc682a940190fd9a99ce",
+        "type": "github"
+      },
+      "original": {
+        "owner": "versenilvis",
+        "ref": "v0.4.9",
+        "repo": "iris",
+        "type": "github"
+      }
+    },
     "nix-index-database": {
       "inputs": {
         "nixpkgs": [
@@ -109,6 +130,7 @@
         "flake-parts": "flake-parts",
         "home-manager": "home-manager",
         "import-tree": "import-tree",
+        "iris": "iris",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs"
       }
