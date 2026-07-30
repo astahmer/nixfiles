@@ -378,7 +378,7 @@
             fi
 
             # Restart the local Executor daemon if it is running so it picks up
-            # any newly installed or updated MCP server binaries (e.g. plannotator-mcp).
+            # any newly installed or updated MCP server binaries.
             if command -v executor >/dev/null 2>&1; then
               $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
             fi

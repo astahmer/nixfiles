@@ -271,21 +271,6 @@ function getMcpServerCommand(slug: string): string | undefined {
   }
 }
 
-function addPlannotator(): void {
-  const existingCommand = getMcpServerCommand("plannotator");
-  if (existingCommand === "plannotator-mcp") {
-    console.log("Plannotator integration already uses plannotator-mcp; skipping add.");
-    return;
-  }
-
-  callExecutor("executor.mcp.addServer", {
-    transport: "stdio",
-    name: "Plannotator",
-    slug: "plannotator",
-    command: "plannotator-mcp",
-  });
-}
-
 function addNixos(): void {
   if (integrationExists("nixos")) {
     console.log("nixos integration already exists; skipping add.");
@@ -306,7 +291,6 @@ function main(): void {
   addGithub();
   addContext7();
   addChromeDevtools();
-  addPlannotator();
   addNixos();
   console.log("Executor integrations seeded.");
 }
