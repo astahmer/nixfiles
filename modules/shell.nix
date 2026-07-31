@@ -272,15 +272,33 @@
         }
       '';
 
+      # Stable pointer: ~/.config/nixfiles → clone (any machine path). See nixfiles-here.
+      nixfilesFlakePath = "${config.xdg.configHome}/nixfiles";
+
       initagentFunction = ''
         initagent() {
-          local src_dir="''${HOME}/dev/nixfiles/assets/.agents"
+          local src_dir="''${HOME}/.agents"
           if [[ ! -d "$src_dir" ]]; then
-            echo "initagent: source directory not found at $src_dir" >&2
+            echo "initagent: source directory not found at $src_dir (run nixapply first)" >&2
             return 1
           fi
           cp "$src_dir/AGENTS.md" "$src_dir/effect.md" "$src_dir/typescript.md" .
           echo "Copied AGENTS.md, effect.md, typescript.md to $(pwd)"
+        }
+      '';
+
+      nixfilesHereFunction = ''
+        nixfiles-here() {
+          local target="''${XDG_CONFIG_HOME:-$HOME/.config}/nixfiles"
+          local src
+          src="$(pwd)"
+          if [[ ! -f "$src/flake.nix" ]]; then
+            echo "nixfiles-here: no flake.nix in $src" >&2
+            return 1
+          fi
+          mkdir -p "$(dirname "$target")"
+          ln -sfn "$src" "$target"
+          echo "Linked $target -> $src"
         }
       '';
     in
@@ -299,6 +317,7 @@
       programs.zsh.dotDir = "${config.xdg.configHome}/zsh";
 
       # Project toolchains (e.g. welii `mise.toml` → `.mise/bin/dev` on PATH).
+      # Owns mise via home-manager-path — do not also `nix profile add nixpkgs#mise`.
       programs.mise = {
         enable = true;
         enableBashIntegration = true;
@@ -307,8 +326,42 @@
 
       home.sessionVariables = {
         HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
-        NH_FLAKE = "${config.home.homeDirectory}/dev/nixfiles";
+        # Clone anywhere; point ~/.config/nixfiles at it (nixfiles-here).
+        NH_FLAKE = nixfilesFlakePath;
       };
+
+      # Drop leftover `nix profile add nixpkgs#mise` before HM installs packages.
+      # That package collides on bin/mise with programs.mise and aborts activation
+      # after home-manager-path was already removed (broken profile / no starship).
+      home.activation.removeStandaloneMise = lib.hm.dag.entryBefore [ "installPackages" ] ''
+        ${nixPathSetup}
+        to_remove="$(
+          nix profile list --json 2>/dev/null \
+            | ${lib.getExe pkgs.jq} -r '
+                .elements
+                | to_entries[]
+                | select(.key != "home-manager-path")
+                | select(any(.value.storePaths[]?; test("-mise-[0-9]")))
+                | .key
+              ' || true
+        )"
+        if [ -n "$to_remove" ]; then
+          echo "Removing standalone mise from nix profile (conflicts with programs.mise):"
+          while IFS= read -r name; do
+            [ -n "$name" ] || continue
+            echo "  $name"
+            $DRY_RUN_CMD nix profile remove "$name"
+          done <<< "$to_remove"
+        fi
+      '';
+
+      home.activation.warnMissingNixfilesLink = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if [ ! -d "${nixfilesFlakePath}" ]; then
+          echo "warning: NH_FLAKE missing at ${nixfilesFlakePath}" >&2
+          echo "  Clone nixfiles anywhere, cd into it, then run: nixfiles-here" >&2
+          echo "  (or: ln -sfn \"\$(pwd)\" ${nixfilesFlakePath})" >&2
+        fi
+      '';
 
       home.activation.ensureZshHistoryFile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         mkdir -p "${config.xdg.configHome}/zsh"
@@ -481,6 +534,7 @@
         ${jjsearchFunction}
         ${jjEvolveFunction}
         ${initagentFunction}
+        ${nixfilesHereFunction}
         ${shellAliasesFunction}
         eval "$(${lib.getExe jjPackage} util completion bash)"
       '';
@@ -512,6 +566,7 @@
           ${jjsearchFunction}
           ${jjEvolveFunction}
           ${initagentFunction}
+          ${nixfilesHereFunction}
           ${shellAliasesFunction}
         '')
 
@@ -521,9 +576,10 @@
       ];
 
       home.shellAliases = {
-        nixapply = "nh home switch . -c macbook -b hm-backup";
-        nixswitch = "nh home switch . -c macbook -b hm-backup";
-        nixupdate = "nh home switch . -c macbook -b hm-backup -u";
+        # Uses NH_FLAKE (~/.config/nixfiles → clone). No need to cd into the repo.
+        nixapply = "nh home switch -c macbook -b hm-backup";
+        nixswitch = "nh home switch -c macbook -b hm-backup";
+        nixupdate = "nh home switch -c macbook -b hm-backup -u";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         nixcheck = "nix-instantiate --parse $(git ls-files '*.nix') >/dev/null";
         #
