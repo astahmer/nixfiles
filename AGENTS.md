@@ -14,7 +14,7 @@ If you are new to Nix, start by cloning the repo, entering it, and running `nix 
 Then apply the profile that matches the machine:
 
 ```bash
-nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook
+nh home switch . -c macbook -b hm-backup
 # or, on Linux
 sudo nixos-rebuild switch --flake .#workstation
 ```
@@ -27,7 +27,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
 - `hosts/workstation/default.nix` contains the NixOS host.
 - `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). ast-outline is installed globally via `uv tool install` (managed by the `aiCliInstall` activation in `modules/shell.nix`). Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
-- Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook` to apply.
+- Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` (or `nh home switch . -c macbook -b hm-backup`) to apply.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.sh` seeds these integrations idempotently on activation.
 - `readbro` is superseded by `ast-outline`. Its source remains in `assets/readbro/` for reference but is no longer deployed — neither as an MCP server nor as an agent skill. The readbro skill (`assets/.agents/skills/readbro/`) is excluded from Home Manager deployment via a source filter.
 - `~/.references/` contains globally-shared cloned reference repositories used for comparison and pattern mining. Per-project `.references/` is used only as an escape hatch.
@@ -48,7 +48,8 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Apply Commands
 
-- `nix run nixpkgs#home-manager -- switch -b backup --flake .#macbook`
+- `nh home switch . -c macbook -b hm-backup` (alias: `nixapply`)
+- `nh home switch . -c macbook -b hm-backup -u` (alias: `nixupdate`)
 - `sudo nixos-rebuild switch --flake .#workstation`
 
 ## Notes for Agents

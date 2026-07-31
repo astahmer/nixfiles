@@ -17,9 +17,9 @@ If you just installed Nix, keep the first run simple:
 3. Apply the profile for your machine.
 
 ```bash
-nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook
+nh home switch . -c macbook -b hm-backup
 # or, on Linux
-nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#bazzite
+nh home switch . -c bazzite -b hm-backup
 # or, if you're on a NixOS machine
 sudo nixos-rebuild switch --flake .#workstation
 ```
@@ -55,7 +55,7 @@ EOF
 
 ```bash
 # 2) Apply the Home Manager profile
-nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook
+nh home switch . -c macbook -b hm-backup
 ```
 
 The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
@@ -82,7 +82,7 @@ The Linux profile is managed with standalone Home Manager and is meant to cover 
 Run:
 
 ```bash
-nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#bazzite
+nh home switch . -c bazzite -b hm-backup
 ```
 
 The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.

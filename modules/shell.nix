@@ -274,7 +274,7 @@
 
       initagentFunction = ''
         initagent() {
-          local src_dir="''${HOME}/dev/alex/nixfiles/assets/.agents"
+          local src_dir="''${HOME}/dev/nixfiles/assets/.agents"
           if [[ ! -d "$src_dir" ]]; then
             echo "initagent: source directory not found at $src_dir" >&2
             return 1
@@ -300,7 +300,7 @@
 
       home.sessionVariables = {
         HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
-        NH_FLAKE = "${config.home.homeDirectory}/dev/alex/nixfiles";
+        NH_FLAKE = "${config.home.homeDirectory}/dev/nixfiles";
       };
 
       home.activation.ensureZshHistoryFile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -514,9 +514,9 @@
       ];
 
       home.shellAliases = {
-        nixapply = "nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook";
-        nixswitch = "nix run nixpkgs#home-manager -- switch -b hm-backup --flake .#macbook";
-        nixupdate = "nix flake update && nixapply";
+        nixapply = "nh home switch . -c macbook -b hm-backup";
+        nixswitch = "nh home switch . -c macbook -b hm-backup";
+        nixupdate = "nh home switch . -c macbook -b hm-backup -u";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         nixcheck = "nix-instantiate --parse $(git ls-files '*.nix') >/dev/null";
         #
