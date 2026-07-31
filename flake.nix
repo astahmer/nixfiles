@@ -23,6 +23,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    nub.url = "github:nubjs/nub/v0.6.0";
+
   };
 
   outputs =
@@ -55,6 +57,7 @@
             ghui = import ./packages/ghui.nix { pkgs = pkgs'; };
             hunk = import ./packages/hunk.nix { pkgs = pkgs'; };
             lightjj = import ./packages/lightjj.nix { pkgs = pkgs'; };
+            nub = inputs.nub.packages.${system}.default;
             opencodex = import ./packages/opencodex.nix { pkgs = pkgs'; };
             plannotator = import ./packages/plannotator.nix { pkgs = pkgs'; };
             ryu = import ./packages/ryu.nix { pkgs = pkgs'; };

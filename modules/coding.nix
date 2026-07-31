@@ -1,4 +1,4 @@
-{ config, ... }:
+{ inputs, config, ... }:
 let
   username = config.flake.username;
 in
@@ -9,6 +9,7 @@ in
       ghui = import ../packages/ghui.nix { inherit pkgs; };
       hunk = import ../packages/hunk.nix { inherit pkgs; };
       lightjj = import ../packages/lightjj.nix { inherit pkgs; };
+      nub = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
       plannotator = import ../packages/plannotator.nix { inherit pkgs; };
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
@@ -76,6 +77,7 @@ in
         pkgs.neovim
         pkgs.nixd
         pkgs.nixfmt
+        nub
         pkgs.tokei
         pkgs.tmux
         pkgs.tree

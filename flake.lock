@@ -125,6 +125,41 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1781607440,
+        "narHash": "sha256-rxO+uc/KFbSJp+pgyXRuAX6QlG9hJdnt0BXpEQRXY+U=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3e41b24abd260e8f71dbe2f5737d24122f972158",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nub": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1785012795,
+        "narHash": "sha256-fFRLGvTe9ZxtaqrDgJPspKl19C2dXOAZ4jWFQu68QO8=",
+        "owner": "nubjs",
+        "repo": "nub",
+        "rev": "bd6353142f56ff29cb60d18c7dcf82a193ed6025",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nubjs",
+        "ref": "v0.6.0",
+        "repo": "nub",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
@@ -132,7 +167,8 @@
         "import-tree": "import-tree",
         "iris": "iris",
         "nix-index-database": "nix-index-database",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nub": "nub"
       }
     }
   },
