@@ -9,12 +9,19 @@ The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/`
 
 ## Quick Start
 
-If you are new to Nix, start by cloning the repo, entering it, and running `nix flake check`.
-
-Then apply the profile that matches the machine:
+Clone anywhere, then point the stable symlink at the clone and apply:
 
 ```bash
+git clone <url> ~/wherever/nixfiles
+cd ~/wherever/nixfiles
+ln -sfn "$(pwd)" ~/.config/nixfiles   # or: nixfiles-here (after first apply)
 nh home switch . -c macbook -b hm-backup
+```
+
+After that, `nixapply` works from any cwd (`NH_FLAKE` → `~/.config/nixfiles`). Same contract on every machine.
+
+```bash
+nh home switch -c macbook -b hm-backup   # alias: nixapply
 # or, on Linux
 sudo nixos-rebuild switch --flake .#workstation
 ```
@@ -27,7 +34,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
 - `hosts/workstation/default.nix` contains the NixOS host.
 - `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). ast-outline is installed globally via `uv tool install` (managed by the `aiCliInstall` activation in `modules/shell.nix`). Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
-- Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` (or `nh home switch . -c macbook -b hm-backup`) to apply.
+- Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies from the deployed `~/.agents`, not the clone.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.sh` seeds these integrations idempotently on activation.
 - `readbro` is superseded by `ast-outline`. Its source remains in `assets/readbro/` for reference but is no longer deployed — neither as an MCP server nor as an agent skill. The readbro skill (`assets/.agents/skills/readbro/`) is excluded from Home Manager deployment via a source filter.
 - `~/.references/` contains globally-shared cloned reference repositories used for comparison and pattern mining. Per-project `.references/` is used only as an escape hatch.
@@ -48,9 +55,11 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Apply Commands
 
-- `nh home switch . -c macbook -b hm-backup` (alias: `nixapply`)
-- `nh home switch . -c macbook -b hm-backup -u` (alias: `nixupdate`)
-- `sudo nixos-rebuild switch --flake .#workstation`
+Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `nixfiles-here` from the clone root.
+
+- `nh home switch -c macbook -b hm-backup` (alias: `nixapply`)
+- `nh home switch -c macbook -b hm-backup -u` (alias: `nixupdate`)
+- `sudo nixos-rebuild switch --flake "$NH_FLAKE#workstation"` (alias: `nixos-switch` on NixOS)
 
 ## Notes for Agents
 
@@ -60,5 +69,6 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
 - When adding new reusable repository conventions, document them here so future agents can find them quickly.
 - In the interactive shell, `pn`, `ppnm`, and `pnp` are aliases for `pnpm`. `nodejs_24` and `pnpm` are installed for Nix builds and development use. `nub` (v0.6.0 flake input) is on `home.packages` via the coding module.
-- `programs.mise` is enabled in `modules/shell.nix` (zsh + bash activate). Entering a repo with `mise.toml` puts that project's `.mise/bin` on PATH (e.g. welii `dev`).
+- `programs.mise` is enabled in `modules/shell.nix` (zsh + bash activate). Entering a repo with `mise.toml` puts that project's `.mise/bin` on PATH (e.g. welii `dev`). Do **not** also install mise with `nix profile add nixpkgs#mise` — it conflicts on `bin/mise` during activation and can leave a broken profile. `removeStandaloneMise` strips leftovers before `installPackages`.
+- Flake location is path-agnostic: `NH_FLAKE` = `~/.config/nixfiles` (symlink to the clone). Do not hardcode machine-specific clone paths. Use `nixfiles-here` after cloning.
 - Ghostty config is managed by Home Manager (`programs.ghostty` in `modules/terminal.nix`, written to `~/.config/ghostty/config`). Theme is Flexoki Dark. On macOS the official app is used (`package = null`); on Linux the nixpkgs package is installed.

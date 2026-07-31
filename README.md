@@ -10,19 +10,20 @@ The repo follows the same broad pattern as the reference configs: `flake-parts` 
 
 ## Quick Start
 
-If you just installed Nix, keep the first run simple:
-
-1. Clone this repo and change into it.
-2. Run `nix flake check` to make sure the config evaluates.
-3. Apply the profile for your machine.
+Clone this repo anywhere, then create the stable flake symlink and apply:
 
 ```bash
+git clone <url> ~/wherever/nixfiles
+cd ~/wherever/nixfiles
+ln -sfn "$(pwd)" ~/.config/nixfiles
 nh home switch . -c macbook -b hm-backup
 # or, on Linux
 nh home switch . -c bazzite -b hm-backup
 # or, if you're on a NixOS machine
 sudo nixos-rebuild switch --flake .#workstation
 ```
+
+`NH_FLAKE` is always `~/.config/nixfiles` (same on every machine). After the first apply, `nixapply` works from any cwd. Use `nixfiles-here` from the clone root to (re)create the symlink.
 
 If Home Manager stops on an existing `*.backup` file from an older manual run, rerun the switch with `-b hm-backup`. That keeps the old files in `*.hm-backup` instead of trying to reuse the same backup suffix.
 
@@ -54,9 +55,12 @@ EOF
 ```
 
 ```bash
-# 2) Apply the Home Manager profile
+# 2) Point the stable flake symlink at this clone, then apply
+ln -sfn "$(pwd)" ~/.config/nixfiles
 nh home switch . -c macbook -b hm-backup
 ```
+
+After that, `nixapply` works from any directory (`NH_FLAKE=~/.config/nixfiles`).
 
 The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
 
@@ -82,6 +86,7 @@ The Linux profile is managed with standalone Home Manager and is meant to cover 
 Run:
 
 ```bash
+ln -sfn "$(pwd)" ~/.config/nixfiles   # if not already linked
 nh home switch . -c bazzite -b hm-backup
 ```
 
@@ -94,7 +99,8 @@ The NixOS host is named `workstation`.
 Run:
 
 ```bash
-sudo nixos-rebuild switch --flake .#workstation
+sudo nixos-rebuild switch --flake "$NH_FLAKE#workstation"
+# or from the clone: sudo nixos-rebuild switch --flake .#workstation
 ```
 
 Add your own hardware-specific config before treating it as a real machine profile.
