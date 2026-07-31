@@ -23,6 +23,98 @@
       jjPackage =
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
 
+      jjPrompt = pkgs.writeShellApplication {
+        name = "jj-prompt";
+        runtimeInputs = [
+          jjPackage
+          pkgs."jj-starship"
+        ];
+        text = ''
+          set -euo pipefail
+
+          jj_cmd="${lib.getExe jjPackage}"
+          jj_starship="${lib.getExe pkgs."jj-starship"}"
+
+          first_line() {
+            local value="$1"
+            printf '%s' "''${value%%$'\n'*}"
+          }
+
+          query_bookmarks() {
+            local output
+            output="$("$jj_cmd" log -r "$1" --no-graph --no-pager -T 'bookmarks ++ "\n"' 2>/dev/null || true)"
+            first_line "$output"
+          }
+
+          count_revisions() {
+            local output count=0
+            output="$("$jj_cmd" log -r "$1" --no-graph --no-pager -T 'change_id.short() ++ "\n"' 2>/dev/null || true)"
+
+            while [[ -n "$output" ]]; do
+              count=$((count + 1))
+              if [[ "$output" == *$'\n'* ]]; then
+                output="''${output#*$'\n'}"
+              else
+                output=""
+              fi
+            done
+
+            printf '%d' "$count"
+          }
+
+          distance() {
+            local ahead behind
+            ahead="$(count_revisions "$1..$2")"
+            behind="$(count_revisions "$2..$1")"
+
+            if (( ahead > 0 && behind > 0 )); then
+              printf '↕%s/%s' "$ahead" "$behind"
+            elif (( ahead > 0 )); then
+              printf '↑%s' "$ahead"
+            elif (( behind > 0 )); then
+              printf '↓%s' "$behind"
+            else
+              printf '='
+            fi
+          }
+
+          if ! "$jj_cmd" root >/dev/null 2>&1; then
+            exec "$jj_starship" prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name --no-color
+          fi
+
+          trunk_name="$(query_bookmarks 'trunk()')"
+          trunk_name="''${trunk_name:-trunk}"
+
+          bookmark_revset='closest_bookmark(@)'
+          bookmark_name="$(query_bookmarks "$bookmark_revset")"
+          if [[ -z "$bookmark_name" ]]; then
+            bookmark_revset='trunk()'
+            bookmark_name="$trunk_name"
+          fi
+
+          jj_label="$("$jj_starship" prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name --no-color 2>/dev/null || true)"
+          jj_label="$(first_line "$jj_label")"
+
+          diff_output="$("$jj_cmd" diff --from 'trunk()' --to @ --stat --no-pager --color=never 2>/dev/null || true)"
+          shortstat="''${diff_output##*$'\n'}"
+          shortstat="''${shortstat:-stat unavailable}"
+
+          stat_pattern='^([0-9]+)[[:space:]]+files?[[:space:]]+changed,[[:space:]]+([0-9]+)[[:space:]]+insertions?\(\+\),[[:space:]]+([0-9]+)[[:space:]]+deletions?\(-\)$'
+          if [[ "$shortstat" =~ $stat_pattern ]]; then
+            shortstat="''${BASH_REMATCH[1]} files changed, +''${BASH_REMATCH[2]} -''${BASH_REMATCH[3]}"
+          fi
+
+          bookmark_distance="$(distance "$bookmark_revset" '@')"
+          trunk_distance="$(distance 'trunk()' '@')"
+
+          printf '%s · %s · bm %s %s · trunk %s %s\n' \
+            "$jj_label" \
+            "$shortstat" \
+            "$bookmark_name" "$bookmark_distance" \
+            "$trunk_name" "$trunk_distance"
+        '';
+      };
+
       shellAliasNames = builtins.attrNames config.home.shellAliases;
       shellAliasPattern = lib.concatStringsSep "|" (map lib.escapeRegex shellAliasNames);
 
@@ -306,6 +398,7 @@
       home.packages = [
         pkgs.fd
         pkgs.nh
+        jjPrompt
         pkgs.nodejs_24
         pkgs.pnpm
         pkgs.rtk
@@ -490,8 +583,8 @@
 
         custom.jj = {
           format = "$output ";
-          command = "jj-starship prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name";
-          when = "jj-starship detect";
+          command = lib.getExe jjPrompt;
+          when = "${lib.getExe pkgs."jj-starship"} detect";
           ignore_timeout = true;
         };
 
