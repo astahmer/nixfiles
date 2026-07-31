@@ -298,6 +298,13 @@
       programs.zsh.enable = true;
       programs.zsh.dotDir = "${config.xdg.configHome}/zsh";
 
+      # Project toolchains (e.g. welii `mise.toml` → `.mise/bin/dev` on PATH).
+      programs.mise = {
+        enable = true;
+        enableBashIntegration = true;
+        enableZshIntegration = true;
+      };
+
       home.sessionVariables = {
         HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
         NH_FLAKE = "${config.home.homeDirectory}/dev/nixfiles";
