@@ -59,3 +59,4 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
 - When adding new reusable repository conventions, document them here so future agents can find them quickly.
 - In the interactive shell, `pn`, `ppnm`, and `pnp` are aliases for `pnpm`. `nodejs_24` and `pnpm` are installed for Nix builds and development use. `nub` (v0.6.0 flake input) is on `home.packages` via the coding module.
+- Ghostty config is managed by Home Manager (`programs.ghostty` in `modules/terminal.nix`, written to `~/.config/ghostty/config`). Theme is Flexoki Dark. On macOS the official app is used (`package = null`); on Linux the nixpkgs package is installed.
