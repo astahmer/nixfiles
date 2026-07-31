@@ -1,17 +1,17 @@
 { pkgs }:
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "opencodex";
-  version = "2.7.28";
+  version = "2.8.0";
 
   src = pkgs.fetchurl {
     url = "https://registry.npmjs.org/@bitkyc08/opencodex/-/opencodex-${finalAttrs.version}.tgz";
-    hash = "sha256-l//RQ0/LHpBr7PkQQp5mqEAqBRNyGfZLe3aKPsibEl0=";
+    hash = "sha256-unRP+mu1peoVOBl+RoQcuI7LGd1QamkU47iDJ2UiUsk=";
   };
 
   bunLock = ../assets/opencodex/bun.lock;
 
   # Pins the bun-installed node_modules tree (no lockfile in the npm tarball).
-  outputHash = "sha256-jDokLtoy/28zkUk2nNLATzT/d85XEuDRvZa1/czROq4=";
+  outputHash = "sha256-MHlabi+2X9WDJIgDJ3iAwd8VRN2ZUCWsBl4zzr5yR5I=";
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   dontFixup = true;

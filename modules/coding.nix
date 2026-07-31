@@ -14,15 +14,25 @@ in
       zed =
         if pkgs.stdenv.hostPlatform.isDarwin then
           let
-            zedDarwinArch = if pkgs.stdenv.hostPlatform.isAarch64 then "aarch64" else "x86_64";
+            zedRelease =
+              if pkgs.stdenv.hostPlatform.isAarch64 then
+                {
+                  arch = "aarch64";
+                  hash = "sha256-4PYINx7QWxjgiTG6A6Eg411cX5NZye28WPRztPewNlE=";
+                }
+              else
+                {
+                  arch = "x86_64";
+                  hash = "sha256-JAS48KX0Dea/AQRR9VUjmkBp4iRnRP845ihOgni33gc=";
+                };
           in
           pkgs.stdenvNoCC.mkDerivation {
             pname = "zed-editor-bin";
-            version = "0.233.10";
+            version = "1.13.1";
 
             src = pkgs.fetchurl {
-              url = "https://github.com/zed-industries/zed/releases/download/v0.233.10/Zed-${zedDarwinArch}.dmg";
-              sha256 = "sha256-m/2o6+TRfJy5X1oYYbzAalK3MHezTdchSx7yvlOotUY=";
+              url = "https://github.com/zed-industries/zed/releases/download/v1.13.1/Zed-${zedRelease.arch}.dmg";
+              sha256 = zedRelease.hash;
             };
 
             dontUnpack = true;

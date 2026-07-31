@@ -4,35 +4,35 @@ let
     if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
       {
         packageName = "hunkdiff-darwin-arm64";
-        hash = "sha256-wwnjeFPt2WrLfRVIdM9U0hbk5Ntf3v7GvU7z/f1ZDyY=";
+        hash = "sha256-TfHf5z6OCVkUpz4DjkurRcwXpVe13y0Eqxwwxp3h/Tc=";
       }
     else if pkgs.stdenv.hostPlatform.system == "x86_64-darwin" then
       {
         packageName = "hunkdiff-darwin-x64";
-        hash = "sha256-LPGnO8Pz/sFs7xyYa9sFEGBJZ2VovqmuFXhz/J/fKI8=";
+        hash = "sha256-XblazdFlJ5ZtbJSCWKfRnZLcKdpxmepN8rweZ8+U3qc=";
       }
     else if pkgs.stdenv.hostPlatform.system == "aarch64-linux" then
       {
         packageName = "hunkdiff-linux-arm64";
-        hash = "sha256-+1/uVxcmkyqYSTDz9gk+aZOgTKUzcypgichFfMwnGF4=";
+        hash = "sha256-9dYknbOV9BA3unR9WKEAeU8CgI7gjpGCIg7QHhrH8Aw=";
       }
     else if pkgs.stdenv.hostPlatform.system == "x86_64-linux" then
       {
         packageName = "hunkdiff-linux-x64";
-        hash = "sha256-ICkeeCq8X7czMDtVBH3P5lPDhSrgueZMeQb0QwTcfSA=";
+        hash = "sha256-nZycFQ8aEZLkU01qYOln0FLnHH+oI97ZxA4EgNpylE4=";
       }
     else
       throw "Unsupported platform for hunk";
 in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "hunk";
-  version = "0.10.0";
+  version = "0.17.7";
 
   src = pkgs.fetchFromGitHub {
     owner = "modem-dev";
     repo = "hunk";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-S2EuZW5vzyk3FGhUQbyanE3hdlnb9F6GQMtu2k8pjrM=";
+    hash = "sha256-0i1k5ktVfhmN30gOSAFZrrjzGW61vwTOZ3gw5aS+fd8=";
   };
 
   nativeBuildInputs = [ pkgs.makeWrapper ];
@@ -48,10 +48,12 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     install -Dm644 LICENSE "$out/share/doc/hunk/LICENSE"
 
     hostTarball=$(mktemp -d)
-    tar -xzf ${pkgs.fetchurl {
-      url = "https://registry.npmjs.org/${hostPackage.packageName}/-/${hostPackage.packageName}-${finalAttrs.version}.tgz";
-      hash = hostPackage.hash;
-    }} -C "$hostTarball"
+    tar -xzf ${
+      pkgs.fetchurl {
+        url = "https://registry.npmjs.org/${hostPackage.packageName}/-/${hostPackage.packageName}-${finalAttrs.version}.tgz";
+        hash = hostPackage.hash;
+      }
+    } -C "$hostTarball"
     install -Dm755 "$hostTarball/package/bin/hunk" "$out/lib/hunk/hunk-bin"
 
     makeWrapper ${pkgs.nodejs}/bin/node "$out/bin/hunk" \

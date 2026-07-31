@@ -1,23 +1,26 @@
 { pkgs }:
 let
-  sourceFor = system: version: {
-    x86_64-linux = {
-      url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-x86_64";
-      hash = "sha256-VbigTSVOfD/OgGd/ZQxcY4BumXNrJXBvGhNb8p3x4ms=";
-    };
-    aarch64-linux = {
-      url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-arm64";
-      hash = "sha256-CaQ9v/zE3BcpBgNL45MkzbjMVQ1yO32cXn6j8YHr9M8=";
-    };
-    aarch64-darwin = {
-      url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-macos-arm64";
-      hash = "sha256-E7DraVz3FTZMs81vIxuWD78dMO1hX3OxkXOn71ufvYs=";
-    };
-  }.${system} or (throw "Unsupported platform for lightjj: ${system}");
+  sourceFor =
+    system: version:
+    {
+      x86_64-linux = {
+        url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-x86_64";
+        hash = "sha256-lFPcspBKoPQ1K+xptyl20iK75jyoycNuE3YYbK3S8Dk=";
+      };
+      aarch64-linux = {
+        url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-arm64";
+        hash = "sha256-E+ioiclzSOuGMNjMDyd0t/SUK7P3zGlQzFRZzAyZW5A=";
+      };
+      aarch64-darwin = {
+        url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-macos-arm64";
+        hash = "sha256-cgw4eXzObbgrZ7kIymyjw1UL7ip9aaMWQWrus1t6B4E=";
+      };
+    }
+    .${system} or (throw "Unsupported platform for lightjj: ${system}");
 in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "lightjj";
-  version = "1.32.0";
+  version = "1.36.0";
 
   src = pkgs.fetchurl (sourceFor pkgs.stdenv.hostPlatform.system finalAttrs.version);
 
@@ -31,13 +34,15 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
 
     install -Dm755 "$src" "$out/bin/lightjj"
     wrapProgram "$out/bin/lightjj" \
-      --prefix PATH : ${pkgs.lib.makeBinPath [
-        pkgs.jujutsu
-        pkgs.git
-        pkgs.gh
-        pkgs.xdg-utils
-        pkgs.openssh
-      ]}
+      --prefix PATH : ${
+        pkgs.lib.makeBinPath [
+          pkgs.jujutsu
+          pkgs.git
+          pkgs.gh
+          pkgs.xdg-utils
+          pkgs.openssh
+        ]
+      }
 
     runHook postInstall
   '';
