@@ -20,10 +20,14 @@
 
     iris = {
       url = "github:versenilvis/iris/v0.4.21";
+      inputs.flake-parts.follows = "flake-parts";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nub.url = "github:nubjs/nub/v0.6.0";
+    nub = {
+      url = "github:nubjs/nub/v0.6.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
   };
 
