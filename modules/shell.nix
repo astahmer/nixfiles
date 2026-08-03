@@ -85,12 +85,16 @@
           trunk_name="$(query_bookmarks 'trunk()')"
           trunk_name="''${trunk_name:-trunk}"
 
-          bookmark_revset='closest_bookmark(@)'
-          bookmark_name="$(query_bookmarks "$bookmark_revset")"
-          if [[ -z "$bookmark_name" ]]; then
-            bookmark_revset='trunk()'
-            bookmark_name="$trunk_name"
-          fi
+            bookmark_revset='closest_bookmark(@)'
+            bookmark_name="$(query_bookmarks "$bookmark_revset")"
+            if [[ -z "$bookmark_name" ]]; then
+              bookmark_revset='roots(@:: & bookmarks())'
+              bookmark_name="$(query_bookmarks "$bookmark_revset")"
+            fi
+            if [[ -z "$bookmark_name" ]]; then
+              bookmark_revset='trunk()'
+              bookmark_name="$trunk_name"
+            fi
 
           jj_label="$("$jj_starship" prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name --no-color 2>/dev/null || true)"
           jj_label="$(first_line "$jj_label")"
