@@ -824,7 +824,7 @@
         nixswitch = "nh home switch -c macbook -b hm-backup";
         nixupdate = "nh home switch -c macbook -b hm-backup -u";
         nixbootstrap = "nixfiles-bootstrap";
-        nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
+        nixlint = "nixfiles-check";
         nixcheck = "nixfiles-check";
         #
         zshconfig = "code ~/.config/zsh/.zshrc";
