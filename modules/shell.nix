@@ -160,6 +160,59 @@
         '';
       };
 
+      nixfilesBootstrap = pkgs.writeShellApplication {
+        name = "nixfiles-bootstrap";
+        runtimeInputs = [
+          pkgs.coreutils
+          pkgs.git
+          pkgs.nodejs_24
+          pkgs.pnpm
+          pkgs.uv
+        ];
+        text = ''
+          set -euo pipefail
+
+          pnpm_home="''${PNPM_HOME:-$HOME/.local/share/pnpm}"
+          export PNPM_HOME="$pnpm_home"
+          export PNPM_STORE_DIR="''${PNPM_STORE_DIR:-$pnpm_home/store}"
+          export PATH="$PNPM_HOME/bin:$PATH"
+
+          mkdir -p "$PNPM_HOME/bin" "$PNPM_STORE_DIR"
+
+          if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
+            pnpm remove -g executor >/dev/null 2>&1 || true
+            pnpm add -g executor
+          fi
+
+          if ! command -v pi >/dev/null 2>&1; then
+            pnpm add -g @earendil-works/pi-coding-agent
+          fi
+
+          if ! command -v ast-outline >/dev/null 2>&1; then
+            uv tool install ast-outline
+          fi
+
+          deps_dir="$HOME/dev/deps"
+          skepsis_dir="$deps_dir/skepsis"
+          if [ ! -d "$skepsis_dir" ]; then
+            mkdir -p "$deps_dir"
+            git clone https://github.com/oxidecomputer/skepsis.git "$skepsis_dir"
+          fi
+
+          if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
+            pnpm --dir "$skepsis_dir" install
+          fi
+
+          setup_file="$HOME/.executor/setup.ts"
+          if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1; then
+            "$setup_file"
+            executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
+          fi
+
+          echo "nixfiles bootstrap complete"
+        '';
+      };
+
       shellAliasNames = builtins.attrNames config.home.shellAliases;
       shellAliasPattern = lib.concatStringsSep "|" (map lib.escapeRegex shellAliasNames);
 
@@ -443,6 +496,7 @@
       home.packages = [
         pkgs.fd
         pkgs.nh
+        nixfilesBootstrap
         jjPrompt
         pkgs.nodejs_24
         pkgs.pnpm
@@ -508,47 +562,24 @@
         touch "${config.xdg.configHome}/zsh/.zsh_history"
       '';
 
-      home.activation.skepsisCheckout = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        deps_dir="${config.home.homeDirectory}/dev/deps"
-        skepsis_dir="$deps_dir/skepsis"
-
-        if [ ! -d "$skepsis_dir" ]; then
-          $DRY_RUN_CMD mkdir -p "$deps_dir"
-          $DRY_RUN_CMD ${lib.getExe pkgs.git} clone https://github.com/oxidecomputer/skepsis.git "$skepsis_dir"
-        fi
-
-        if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
-          $DRY_RUN_CMD sh -c 'export PNPM_STORE_DIR="$2/store" && cd "$1" && ${lib.getExe pkgs.pnpm} i' sh "$skepsis_dir" "${pnpmHome}"
-        fi
-      '';
-
-      home.activation.aiCliInstall = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      home.activation.warnMissingBootstrapTools = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         ${nixPathSetup}
         export PNPM_HOME="${pnpmHome}"
-        export PNPM_STORE_DIR="${pnpmHome}/store"
-        export PATH="${pnpmBin}:${pkgs.nodejs_24}/bin:$PATH"
-
-        mkdir -p "${pnpmHome}"
-        mkdir -p "${pnpmHome}/store"
-
-        mkdir -p "${pnpmHome}/bin"
-
-        if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
-          $DRY_RUN_CMD ${lib.getExe pkgs.pnpm} remove -g executor >/dev/null 2>&1 || true
-          $DRY_RUN_CMD ${lib.getExe pkgs.pnpm} add -g executor || true
-        fi
-
-        if ! command -v pi >/dev/null 2>&1; then
-          $DRY_RUN_CMD ${lib.getExe pkgs.pnpm} add -g @earendil-works/pi-coding-agent || true
-        fi
-
-        if ! command -v ast-outline >/dev/null 2>&1; then
-          $DRY_RUN_CMD uv tool install ast-outline || true
+        export PATH="${pnpmBin}:$PATH"
+        missing_tools=""
+        for tool in executor pi ast-outline; do
+          if ! command -v "$tool" >/dev/null 2>&1; then
+            missing_tools="''${missing_tools:+$missing_tools }$tool"
+          fi
+        done
+        if [ -n "$missing_tools" ]; then
+          echo "warning: missing optional tools: $missing_tools; run nixfiles-bootstrap" >&2
         fi
       '';
 
       home.activation.writeGithubToken = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        token="$(cat "${config.home.homeDirectory}/.config/opencode/github-token" 2>/dev/null || true)"
+        token_file="${config.home.homeDirectory}/.config/opencode/github-token"
+        token="$(cat "$token_file" 2>/dev/null || true)"
 
         if [ -z "$token" ]; then
           token="''${GITHUB_TOKEN:-}"
@@ -563,45 +594,55 @@
         fi
 
         if [ -n "$token" ]; then
-          mkdir -p "${config.home.homeDirectory}/.config/opencode"
-          printf '%s' "$token" > "${config.home.homeDirectory}/.config/opencode/github-token"
+          token_dir="${config.home.homeDirectory}/.config/opencode"
+          mkdir -p "$token_dir"
+          if [ ! -f "$token_file" ] || ! ${pkgs.coreutils}/bin/cmp -s <(printf '%s' "$token") "$token_file"; then
+            if [ -z "$DRY_RUN_CMD" ]; then
+              tmp_file="$token_file.tmp.$$"
+              (umask 077; printf '%s' "$token" > "$tmp_file")
+              ${pkgs.coreutils}/bin/mv "$tmp_file" "$token_file"
+            else
+              echo "Would update GitHub token file: $token_file"
+            fi
+          fi
+          if [ -f "$token_file" ]; then
+            $DRY_RUN_CMD ${pkgs.coreutils}/bin/chmod 600 "$token_file"
+          fi
         fi
       '';
 
-      home.activation.executorSeed =
-        lib.hm.dag.entryAfter [ "writeBoundary" "aiCliInstall" "writeGithubToken" ]
-          ''
-            export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
+      home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" "writeGithubToken" ] ''
+        export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
 
-            setup_file="${config.home.homeDirectory}/.executor/setup.ts"
-            executor_config="${config.home.homeDirectory}/.executor/executor.jsonc"
-            github_token_file="${config.home.homeDirectory}/.config/opencode/github-token"
-            setup_hash_file="${config.home.homeDirectory}/.executor/.setup-inputs.sha256"
-            setup_hash="$(
-              for input in "$setup_file" "$executor_config" "$github_token_file"; do
-                if [ -f "$input" ]; then
-                  ${pkgs.coreutils}/bin/sha256sum "$input"
-                fi
-              done | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1
-            )"
-            previous_setup_hash="$(${pkgs.coreutils}/bin/cat "$setup_hash_file" 2>/dev/null || true)"
-            setup_changed=0
-
-            if [ -x "$setup_file" ] && [ "$setup_hash" != "$previous_setup_hash" ]; then
-              if $DRY_RUN_CMD "$setup_file"; then
-                setup_changed=1
-                if [ -z "$DRY_RUN_CMD" ]; then
-                  printf '%s\n' "$setup_hash" > "$setup_hash_file"
-                fi
-              else
-                echo "warning: Executor seeding failed; it will be retried on the next activation" >&2
-              fi
+        setup_file="${config.home.homeDirectory}/.executor/setup.ts"
+        executor_config="${config.home.homeDirectory}/.executor/executor.jsonc"
+        github_token_file="${config.home.homeDirectory}/.config/opencode/github-token"
+        setup_hash_file="${config.home.homeDirectory}/.executor/.setup-inputs.sha256"
+        setup_hash="$(
+          for input in "$setup_file" "$executor_config" "$github_token_file"; do
+            if [ -f "$input" ]; then
+              ${pkgs.coreutils}/bin/sha256sum "$input"
             fi
+          done | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1
+        )"
+        previous_setup_hash="$(${pkgs.coreutils}/bin/cat "$setup_hash_file" 2>/dev/null || true)"
+        setup_changed=0
 
-            if [ "$setup_changed" -eq 1 ] && command -v executor >/dev/null 2>&1; then
-              $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
+        if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1 && [ "$setup_hash" != "$previous_setup_hash" ]; then
+          if $DRY_RUN_CMD "$setup_file"; then
+            setup_changed=1
+            if [ -z "$DRY_RUN_CMD" ]; then
+              printf '%s\n' "$setup_hash" > "$setup_hash_file"
             fi
-          '';
+          else
+            echo "warning: Executor seeding failed; it will be retried on the next activation" >&2
+          fi
+        fi
+
+        if [ "$setup_changed" -eq 1 ] && command -v executor >/dev/null 2>&1; then
+          $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
+        fi
+      '';
 
       home.file.".config/pnpm/config.yaml".text = ''
         packageImportMethod: clone-or-copy
@@ -743,6 +784,7 @@
         nixapply = "nh home switch -c macbook -b hm-backup";
         nixswitch = "nh home switch -c macbook -b hm-backup";
         nixupdate = "nh home switch -c macbook -b hm-backup -u";
+        nixbootstrap = "nixfiles-bootstrap";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
         nixcheck = "nix-instantiate --parse $(git ls-files '*.nix') >/dev/null";
         #

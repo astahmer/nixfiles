@@ -25,21 +25,34 @@
       ];
 
       home.activation.cleanMyKeyboard = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        installedApps="$("${mas}" list)"
-        case "$installedApps" in
-          *"${cleanMyKeyboardId}"*) ;;
-          *)
-            $DRY_RUN_CMD "${mas}" install ${cleanMyKeyboardId}
-            ;;
-        esac
+        if installedApps="$("${mas}" list 2>/dev/null)"; then
+          case "$installedApps" in
+            *"${cleanMyKeyboardId}"*) ;;
+            *)
+              $DRY_RUN_CMD "${mas}" install ${cleanMyKeyboardId}
+              ;;
+          esac
+        else
+          echo "warning: could not inspect the Mac App Store; skipping CleanMyKeyboard" >&2
+        fi
       '';
 
       home.activation.disableSpotlightHotkeys = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         hotkeysPlist="$HOME/Library/Preferences/com.apple.symbolichotkeys.plist"
-        $DRY_RUN_CMD /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:64:enabled false" "$hotkeysPlist"
-        $DRY_RUN_CMD /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:65:enabled false" "$hotkeysPlist"
-        $DRY_RUN_CMD killall cfprefsd 2>/dev/null || true
-        $DRY_RUN_CMD killall SystemUIServer 2>/dev/null || true
+        hotkeysChanged=0
+        if [ -f "$hotkeysPlist" ]; then
+          for hotkey in 64 65; do
+            enabled="$(/usr/libexec/PlistBuddy -c "Print :AppleSymbolicHotKeys:$hotkey:enabled" "$hotkeysPlist" 2>/dev/null || true)"
+            if [ "$enabled" != "false" ]; then
+              $DRY_RUN_CMD /usr/libexec/PlistBuddy -c "Set :AppleSymbolicHotKeys:$hotkey:enabled false" "$hotkeysPlist"
+              hotkeysChanged=1
+            fi
+          done
+        fi
+        if [ "$hotkeysChanged" -eq 1 ]; then
+          $DRY_RUN_CMD killall cfprefsd 2>/dev/null || true
+          $DRY_RUN_CMD killall SystemUIServer 2>/dev/null || true
+        fi
       '';
 
       home.packages = [
