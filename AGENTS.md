@@ -1,9 +1,10 @@
 # nixfiles — Agent Guidelines
 
-This repository is a Nix flake for a single user with two entry points:
+This repository is a Nix flake for a single user with three entry points:
 
 - a NixOS host in `hosts/workstation`
 - a standalone macOS Home Manager profile in `hosts/macbook`
+- a standalone Linux/Bazzite Home Manager profile in `hosts/bazzite`
 
 The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/` and `hosts/` are discovered automatically.
 
@@ -23,19 +24,22 @@ After that, `nixapply` works from any cwd (`NH_FLAKE` → `~/.config/nixfiles`).
 ```bash
 nh home switch -c macbook -b hm-backup   # alias: nixapply
 # or, on Linux
+nh home switch -c bazzite -b hm-backup
+# or, on NixOS
 sudo nixos-rebuild switch --flake .#workstation
 ```
 
-To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `hosts/macbook/default.nix` or `hosts/workstation/default.nix`. If the concern spans both scopes, keep both outputs in the same file.
+To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `hosts/macbook/default.nix`, `hosts/bazzite/default.nix`, or `hosts/workstation/default.nix`. If the concern spans both scopes, keep both outputs in the same file.
 
 ## Layout
 
 - `modules/` contains reusable modules. Some files export both Home Manager and NixOS modules when needed.
 - `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
+- `hosts/bazzite/default.nix` contains the standalone Linux/Bazzite Home Manager profile.
 - `hosts/workstation/default.nix` contains the NixOS host.
-- `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). ast-outline is installed globally via `uv tool install` (managed by the `aiCliInstall` activation in `modules/shell.nix`). Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
+- `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). ast-outline is installed globally via `uv tool install` by `nixbootstrap`. Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
 - Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies from the deployed `~/.agents`, not the clone.
-- `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently on activation.
+- `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently after `nixbootstrap` and when activation inputs change.
 - `readbro` is superseded by `ast-outline`. Its source remains in `assets/readbro/` for reference but is no longer deployed — neither as an MCP server nor as an agent skill. The readbro skill (`assets/.agents/skills/readbro/`) is excluded from Home Manager deployment via a source filter.
 - `~/.references/` contains globally-shared cloned reference repositories used for comparison and pattern mining. Per-project `.references/` is used only as an escape hatch.
 
@@ -59,12 +63,14 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 
 - `nh home switch -c macbook -b hm-backup` (alias: `nixapply`)
 - `nh home switch -c macbook -b hm-backup -u` (alias: `nixupdate`)
+- `nixfiles-bootstrap` (alias: `nixbootstrap`) installs optional external tools and seeds Executor/Skepsis.
+- `nixfiles-check` (alias: `nixcheck`) runs formatting, dead-code, whitespace, and flake checks from a checkout root.
 - `sudo nixos-rebuild switch --flake "$NH_FLAKE#workstation"` (alias: `nixos-switch` on NixOS)
 
 ## Notes for Agents
 
 - `assets/.agents` is the source of the global skills tree; update it when adding or changing global skills.
-- `ast-outline` (installed via `uv tool install`, managed in `modules/shell.nix` activation) is the primary code-exploration tool, replacing readbro. The canonical agent snippet lives in `assets/.agents/AGENTS.md` inside `<!-- ast-outline:start -->` markers; a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
+- `ast-outline` (installed via `nixbootstrap`) is the primary code-exploration tool, replacing readbro. The canonical agent snippet lives in `assets/.agents/AGENTS.md` inside `<!-- ast-outline:start -->` markers; a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
 - `jje <base>` is a shell function (defined in `modules/shell.nix`) that duplicates a commit range (`<base>::@`) then squashes the original — preserves evolution history while producing a single clean commit. Shell reload after applying.
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
 - When adding new reusable repository conventions, document them here so future agents can find them quickly.

@@ -25,6 +25,8 @@ sudo nixos-rebuild switch --flake .#workstation
 
 `NH_FLAKE` is always `~/.config/nixfiles` (same on every machine). After the first apply, `nixapply` works from any cwd. Use `nixfiles-here` from the clone root to (re)create the symlink.
 
+On a fresh machine, run `nixbootstrap` once to install the optional external tools and seed Executor/Skepsis. Run `nixcheck` from the checkout root before applying changes.
+
 If Home Manager stops on an existing `*.backup` file from an older manual run, rerun the switch with `-b hm-backup`. That keeps the old files in `*.hm-backup` instead of trying to reuse the same backup suffix.
 
 To add a new module, create a `.nix` file under `modules/`, expose it under `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, then add it to `hosts/macbook/default.nix`, `hosts/bazzite/default.nix`, or `hosts/workstation/default.nix`. If one file needs both scopes, export both module attrs from that same file.
@@ -36,8 +38,8 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 - `hosts/bazzite/default.nix` wires the standalone Home Manager profile for Linux/Bazzite.
 - `hosts/workstation/default.nix` wires the NixOS host.
 - `assets/.agents/` contains global Copilot skills and is linked into `~/.agents` by Home Manager.
-- `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.sh` seeds them idempotently on activation.
-- `assets/readbro/` contains the source for readbro (IR read cache MCP (it is currently disabled)
+- `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.ts` seeds them idempotently after `nixbootstrap` or when the activation hash changes.
+- `assets/readbro/` contains the source for readbro (an IR read-cache MCP); it is currently disabled.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## macOS setup
@@ -75,7 +77,7 @@ Resolution order is:
 3. Fall back to `GH_TOKEN` if that is set instead.
 4. If neither env var is present, ask the `gh` CLI for the current authenticated token with `gh auth token`.
 
-The Executor seeder (`assets/executor/setup.sh`) wires this token into `~/.local/share/executor/auth.json` during activation, where Executor's file provider picks it up for the GitHub Copilot MCP integration. The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` now point at the local Executor instance (`executor mcp`) instead of individual MCP servers.
+The Executor seeder (`assets/executor/setup.ts`) wires this token into `~/.local/share/executor/auth.json` after `nixbootstrap` or during activation when its inputs change, where Executor's file provider picks it up for the GitHub Copilot MCP integration. The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` now point at the local Executor instance (`executor mcp`) instead of individual MCP servers.
 
 If you want a fresh token written during a switch, make sure `gh` is logged in or export `GITHUB_TOKEN`/`GH_TOKEN` before running Home Manager.
 
@@ -190,7 +192,7 @@ apply the profile — the updated nixpkgs revision provides the latest versions.
 ## Node tooling
 
 The shell profile installs Node.js and pnpm. `pn`, `ppnm`, and `pnp` are shell aliases for `pnpm`.
-`nodejs_26` and `pnpm` are available for Nix builds and development use.
+`nodejs_24` and `pnpm` are available for Nix builds and development use.
 
 ## Common workflow
 
@@ -198,4 +200,10 @@ Inspect the flake outputs with:
 
 ```bash
 nix flake show
+```
+
+Validate a checkout with:
+
+```bash
+nixcheck
 ```

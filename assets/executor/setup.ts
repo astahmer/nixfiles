@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Seeder script for the local Executor catalog.
-// Idempotent: safe to re-run after home-manager switch.
+// Idempotent: safe to re-run after nixfiles-bootstrap or Home Manager switch.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -16,7 +16,7 @@ const GITHUB_TOKEN_FILE = path.join(homedir(), ".config", "opencode", "github-to
 process.env.EXECUTOR_SCOPE_DIR = EXECUTOR_DIR;
 
 if (!commandExists("executor")) {
-  console.error("executor is not on PATH. Install it first (home-manager activation handles this).");
+  console.error("executor is not on PATH. Run nixfiles-bootstrap first.");
   process.exit(1);
 }
 
