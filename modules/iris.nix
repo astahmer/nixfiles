@@ -8,17 +8,9 @@
     {
       home.packages = [ iris ];
 
-      programs.zsh.initContent = lib.mkOrder 400 ''
-        if command -v ${lib.getExe iris} >/dev/null 2>&1; then
-          eval "$(${lib.getExe iris} init zsh)"
-        fi
-      '';
-
-      programs.bash.initExtra = lib.mkBefore ''
-        if command -v ${lib.getExe iris} >/dev/null 2>&1; then
-          eval "$(${lib.getExe iris} init bash)"
-        fi
-      '';
+      # `iris init` makes IRIS the shell's always-on PTY wrapper. Keep the
+      # normal shell native and launch IRIS only when it is explicitly wanted.
+      home.shellAliases.i = lib.getExe iris;
 
       home.file.".config/iris/config.toml".text = ''
         [core]
@@ -27,6 +19,7 @@
         mode = "last"
         debug = false
         expand-alias = true
+        auto-execute = false
 
         [ui]
         style = "modern"
@@ -48,6 +41,9 @@
         [keybindings]
         toggle-mode = "ctrl+r"
         toggle-menu = "shift+tab"
+        select = "tab"
+        navigate-up = "up"
+        navigate-down = "down"
       '';
     };
 }
