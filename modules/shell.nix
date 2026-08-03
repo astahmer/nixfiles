@@ -462,6 +462,8 @@
         enableZshIntegration = true;
       };
 
+      programs.zsh.completionInit = "autoload -U compinit && compinit -C";
+
       home.sessionVariables = {
         HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
         # Clone anywhere; point ~/.config/nixfiles at it (nixfiles-here).
