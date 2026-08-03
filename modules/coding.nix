@@ -91,7 +91,8 @@ in
         pkgs.tokei
         pkgs.tmux
         pkgs.tree
-        zed
+        # Temporarily disabled while Zed is not in use.
+        # zed
         pkgs.curl
         pkgs.ripgrep
         pkgs.ripdrag
