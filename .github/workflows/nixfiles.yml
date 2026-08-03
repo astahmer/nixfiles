@@ -1,0 +1,31 @@
+name: nixfiles
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check flake and profiles
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run repository checks
+        run: nix shell nixpkgs#deadnix nixpkgs#nixfmt -c bash scripts/check.sh
+
+      - name: Evaluate Home Manager profiles
+        run: |
+          nix eval .#homeConfigurations.macbook.activationPackage.drvPath
+          nix eval .#homeConfigurations.bazzite.activationPackage.drvPath
