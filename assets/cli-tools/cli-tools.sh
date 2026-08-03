@@ -48,6 +48,7 @@ list_term() {
   print_row "fzf" "" "Fuzzy picker (often with bat preview)"
   print_row "bat" "cat" "Syntax-highlighted file viewer"
   print_row "delta" "" "Side-by-side git diffs"
+  print_row "ripdrag" "" "Drag/drop files from the terminal (GTK4)"
 
   print_section "Shell & envs"
   print_row "zsh + starship" "" "Interactive shell + prompt"

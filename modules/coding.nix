@@ -94,6 +94,7 @@ in
         zed
         pkgs.curl
         pkgs.ripgrep
+        pkgs.ripdrag
         pkgs."yt-dlp"
         pkgs.uv
         pkgs.opencode
