@@ -31,6 +31,42 @@
         ${lib.getExe jjPackage} util completion zsh > "$out"
       '';
 
+      starshipInitBash =
+        pkgs.runCommand "starship-init-bash"
+          {
+            nativeBuildInputs = [ pkgs.starship ];
+          }
+          ''
+            starship init bash --print-full-init > "$out"
+          '';
+
+      starshipInitZsh =
+        pkgs.runCommand "starship-init-zsh"
+          {
+            nativeBuildInputs = [ pkgs.starship ];
+          }
+          ''
+            starship init zsh > "$out"
+          '';
+
+      direnvHookBash =
+        pkgs.runCommand "direnv-hook-bash"
+          {
+            nativeBuildInputs = [ pkgs.direnv ];
+          }
+          ''
+            direnv hook bash > "$out"
+          '';
+
+      direnvHookZsh =
+        pkgs.runCommand "direnv-hook-zsh"
+          {
+            nativeBuildInputs = [ pkgs.direnv ];
+          }
+          ''
+            direnv hook zsh > "$out"
+          '';
+
       jjPrompt = pkgs.writeShellApplication {
         name = "jj-prompt";
         runtimeInputs = [
@@ -584,8 +620,8 @@
 
       programs.starship = {
         enable = true;
-        enableBashIntegration = true;
-        enableZshIntegration = true;
+        enableBashIntegration = false;
+        enableZshIntegration = false;
       };
 
       programs.starship.settings = {
@@ -634,8 +670,8 @@
       programs.direnv = {
         enable = true;
         nix-direnv.enable = true;
-        enableBashIntegration = true;
-        enableZshIntegration = true;
+        enableBashIntegration = false;
+        enableZshIntegration = false;
         silent = true;
         config.global = {
           hide_env_diff = true;
@@ -656,8 +692,10 @@
         ${jjEvolveFunction}
         ${initagentFunction}
         ${nixfilesHereFunction}
-        ${shellAliasesFunction}
-        source ${jjCompletionBash}
+          ${shellAliasesFunction}
+          source ${jjCompletionBash}
+          source ${direnvHookBash}
+          source ${starshipInitBash}
       '';
 
       programs.zsh.initContent = lib.mkMerge [
@@ -692,6 +730,8 @@
         '')
 
         (lib.mkAfter ''
+          source ${starshipInitZsh}
+          source ${direnvHookZsh}
           source ${jjCompletionZsh}
         '')
       ];
