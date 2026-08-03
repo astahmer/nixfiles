@@ -535,13 +535,32 @@
           ''
             export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
 
-            if [ -x "${config.home.homeDirectory}/.executor/setup.ts" ]; then
-              $DRY_RUN_CMD "${config.home.homeDirectory}/.executor/setup.ts" || true
+            setup_file="${config.home.homeDirectory}/.executor/setup.ts"
+            executor_config="${config.home.homeDirectory}/.executor/executor.jsonc"
+            github_token_file="${config.home.homeDirectory}/.config/opencode/github-token"
+            setup_hash_file="${config.home.homeDirectory}/.executor/.setup-inputs.sha256"
+            setup_hash="$(
+              for input in "$setup_file" "$executor_config" "$github_token_file"; do
+                if [ -f "$input" ]; then
+                  ${pkgs.coreutils}/bin/sha256sum "$input"
+                fi
+              done | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1
+            )"
+            previous_setup_hash="$(${pkgs.coreutils}/bin/cat "$setup_hash_file" 2>/dev/null || true)"
+            setup_changed=0
+
+            if [ -x "$setup_file" ] && [ "$setup_hash" != "$previous_setup_hash" ]; then
+              if $DRY_RUN_CMD "$setup_file"; then
+                setup_changed=1
+                if [ -z "$DRY_RUN_CMD" ]; then
+                  printf '%s\n' "$setup_hash" > "$setup_hash_file"
+                fi
+              else
+                echo "warning: Executor seeding failed; it will be retried on the next activation" >&2
+              fi
             fi
 
-            # Restart the local Executor daemon if it is running so it picks up
-            # any newly installed or updated MCP server binaries.
-            if command -v executor >/dev/null 2>&1; then
+            if [ "$setup_changed" -eq 1 ] && command -v executor >/dev/null 2>&1; then
               $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
             fi
           '';
