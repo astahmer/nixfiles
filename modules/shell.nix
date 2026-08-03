@@ -68,54 +68,111 @@
             behind="$(count_revisions "$2..$1")"
 
             if (( ahead > 0 && behind > 0 )); then
-              printf '↕%s/%s' "$ahead" "$behind"
+              printf '+%s/-%s' "$ahead" "$behind"
             elif (( ahead > 0 )); then
-              printf '↑%s' "$ahead"
+              printf '+%s' "$ahead"
             elif (( behind > 0 )); then
-              printf '↓%s' "$behind"
+              printf '-%s' "$behind"
             else
               printf '='
             fi
           }
 
-          if ! "$jj_cmd" root >/dev/null 2>&1; then
-            exec "$jj_starship" prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name --no-color
+          compact_number() {
+            local value="$1"
+            local rounded
+
+            if (( value < 1000 )); then
+              printf '%d' "$value"
+            elif (( value < 1000000 )); then
+              rounded=$(( (value + 500) / 1000 ))
+              if (( rounded >= 1000 )); then
+                printf '1M'
+              else
+                printf '%dk' "$rounded"
+              fi
+            elif (( value < 1000000000 )); then
+              rounded=$(( (value + 500000) / 1000000 ))
+              if (( rounded >= 1000 )); then
+                printf '1B'
+              else
+                printf '%dM' "$rounded"
+              fi
+            else
+              rounded=$(( (value + 500000000) / 1000000000 ))
+              printf '%dB' "$rounded"
+            fi
+          }
+
+          if [[ -n "''${NO_COLOR:-}" || "''${TERM:-}" == "dumb" ]]; then
+            ansi_reset=""
+            ansi_bookmark=""
+            ansi_add=""
+            ansi_remove=""
+          else
+            ansi_reset=$'\033[0m'
+            ansi_bookmark=$'\033[36m'
+            ansi_add=$'\033[32m'
+            ansi_remove=$'\033[31m'
           fi
 
-          trunk_name="$(query_bookmarks 'trunk()')"
-          trunk_name="''${trunk_name:-trunk}"
+          jj_starship_args=(
+            prompt
+            --no-jj-prefix
+            --no-jj-name
+            --no-git-prefix
+            --no-git-name
+          )
+          if [[ -n "''${NO_COLOR:-}" || "''${TERM:-}" == "dumb" ]]; then
+            jj_starship_args+=(--no-color)
+          fi
 
-            bookmark_revset='closest_bookmark(@)'
+          if ! "$jj_cmd" root >/dev/null 2>&1; then
+            exec "$jj_starship" "''${jj_starship_args[@]}"
+          fi
+
+          bookmark_revset='closest_bookmark(@)'
+          bookmark_name="$(query_bookmarks "$bookmark_revset")"
+          if [[ -z "$bookmark_name" ]]; then
+            bookmark_revset='roots(@:: & bookmarks())'
             bookmark_name="$(query_bookmarks "$bookmark_revset")"
-            if [[ -z "$bookmark_name" ]]; then
-              bookmark_revset='roots(@:: & bookmarks())'
-              bookmark_name="$(query_bookmarks "$bookmark_revset")"
-            fi
-            if [[ -z "$bookmark_name" ]]; then
-              bookmark_revset='trunk()'
-              bookmark_name="$trunk_name"
-            fi
+          fi
+          if [[ -z "$bookmark_name" ]]; then
+            trunk_name="$(query_bookmarks 'trunk()')"
+            bookmark_name="''${trunk_name:-trunk}"
+            bookmark_revset='trunk()'
+          fi
 
-          jj_label="$("$jj_starship" prompt --no-jj-prefix --no-jj-name --no-git-prefix --no-git-name --no-color 2>/dev/null || true)"
+          jj_label="$("$jj_starship" "''${jj_starship_args[@]}" 2>/dev/null || true)"
           jj_label="$(first_line "$jj_label")"
 
+          # Keep trunk() as the shortstat baseline; omit its separate distance to keep the prompt compact.
           diff_output="$("$jj_cmd" diff --from 'trunk()' --to @ --stat --no-pager --color=never 2>/dev/null || true)"
           shortstat="''${diff_output##*$'\n'}"
           shortstat="''${shortstat:-stat unavailable}"
 
+          files_changed=""
+          insertions=""
+          deletions=""
           stat_pattern='^([0-9]+)[[:space:]]+files?[[:space:]]+changed,[[:space:]]+([0-9]+)[[:space:]]+insertions?\(\+\),[[:space:]]+([0-9]+)[[:space:]]+deletions?\(-\)$'
           if [[ "$shortstat" =~ $stat_pattern ]]; then
-            shortstat="''${BASH_REMATCH[1]} files changed, +''${BASH_REMATCH[2]} -''${BASH_REMATCH[3]}"
+            files_changed="''${BASH_REMATCH[1]}"
+            insertions="''${BASH_REMATCH[2]}"
+            deletions="''${BASH_REMATCH[3]}"
+            diff_summary="$(printf '%s files changed, %s+%s%s %s-%s%s' \
+              "$files_changed" \
+              "$ansi_add" "$(compact_number "$insertions")" "$ansi_reset" \
+              "$ansi_remove" "$(compact_number "$deletions")" "$ansi_reset")"
+          else
+            diff_summary="$shortstat"
           fi
 
           bookmark_distance="$(distance "$bookmark_revset" '@')"
-          trunk_distance="$(distance 'trunk()' '@')"
 
-          printf '%s · %s · bm %s %s · trunk %s %s\n' \
+          printf '%s · %s · (%s%s%s %s)\n' \
             "$jj_label" \
-            "$shortstat" \
-            "$bookmark_name" "$bookmark_distance" \
-            "$trunk_name" "$trunk_distance"
+            "$diff_summary" \
+            "$ansi_bookmark" "$bookmark_name" "$ansi_reset" "$bookmark_distance"
         '';
       };
 
