@@ -57,6 +57,13 @@
         {
           formatter = pkgs.nixfmt;
 
+          devShells.default = pkgs'.mkShell {
+            packages = [
+              pkgs'.deadnix
+              pkgs'.nixfmt
+            ];
+          };
+
           packages = {
             hunk = import ./packages/hunk.nix { pkgs = pkgs'; };
             lightjj = import ./packages/lightjj.nix { pkgs = pkgs'; };

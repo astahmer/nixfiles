@@ -23,7 +23,7 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run repository checks
-        run: nix shell nixpkgs#deadnix nixpkgs#nixfmt -c bash scripts/check.sh
+        run: nix develop --command bash scripts/check.sh
 
       - name: Evaluate Home Manager profiles
         run: |
