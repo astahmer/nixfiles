@@ -213,6 +213,17 @@
         '';
       };
 
+      nixfilesCheck = pkgs.writeShellApplication {
+        name = "nixfiles-check";
+        runtimeInputs = [
+          pkgs.deadnix
+          pkgs.git
+          pkgs.nix
+          pkgs.nixfmt
+        ];
+        text = builtins.readFile ../scripts/check.sh;
+      };
+
       shellAliasNames = builtins.attrNames config.home.shellAliases;
       shellAliasPattern = lib.concatStringsSep "|" (map lib.escapeRegex shellAliasNames);
 
@@ -497,6 +508,7 @@
         pkgs.fd
         pkgs.nh
         nixfilesBootstrap
+        nixfilesCheck
         jjPrompt
         pkgs.nodejs_24
         pkgs.pnpm
@@ -786,7 +798,7 @@
         nixupdate = "nh home switch -c macbook -b hm-backup -u";
         nixbootstrap = "nixfiles-bootstrap";
         nixlint = "nix run github:nix-community/nixpkgs-lint -- .";
-        nixcheck = "nix-instantiate --parse $(git ls-files '*.nix') >/dev/null";
+        nixcheck = "nixfiles-check";
         #
         zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";
