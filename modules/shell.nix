@@ -40,44 +40,6 @@
             printf '%s' "''${value%%$'\n'*}"
           }
 
-          query_bookmarks() {
-            local output
-            output="$("$jj_cmd" log -r "$1" --no-graph --no-pager -T 'bookmarks ++ "\n"' 2>/dev/null || true)"
-            first_line "$output"
-          }
-
-          count_revisions() {
-            local output count=0
-            output="$("$jj_cmd" log -r "$1" --no-graph --no-pager -T 'change_id.short() ++ "\n"' 2>/dev/null || true)"
-
-            while [[ -n "$output" ]]; do
-              count=$((count + 1))
-              if [[ "$output" == *$'\n'* ]]; then
-                output="''${output#*$'\n'}"
-              else
-                output=""
-              fi
-            done
-
-            printf '%d' "$count"
-          }
-
-          distance() {
-            local ahead behind
-            ahead="$(count_revisions "$1..$2")"
-            behind="$(count_revisions "$2..$1")"
-
-            if (( ahead > 0 && behind > 0 )); then
-              printf '+%s/-%s' "$ahead" "$behind"
-            elif (( ahead > 0 )); then
-              printf '+%s' "$ahead"
-            elif (( behind > 0 )); then
-              printf '-%s' "$behind"
-            else
-              printf '='
-            fi
-          }
-
           compact_number() {
             local value="$1"
             local rounded
@@ -106,12 +68,10 @@
 
           if [[ -n "''${NO_COLOR:-}" || "''${TERM:-}" == "dumb" ]]; then
             ansi_reset=""
-            ansi_bookmark=""
             ansi_add=""
             ansi_remove=""
           else
             ansi_reset=$'\033[0m'
-            ansi_bookmark=$'\033[36m'
             ansi_add=$'\033[32m'
             ansi_remove=$'\033[31m'
           fi
@@ -119,7 +79,6 @@
           jj_starship_args=(
             prompt
             --no-jj-prefix
-            --no-jj-name
             --no-git-prefix
             --no-git-name
           )
@@ -127,27 +86,15 @@
             jj_starship_args+=(--no-color)
           fi
 
-          if ! "$jj_cmd" root >/dev/null 2>&1; then
+          if ! "$jj_cmd" --ignore-working-copy root >/dev/null 2>&1; then
             exec "$jj_starship" "''${jj_starship_args[@]}"
-          fi
-
-          bookmark_revset='closest_bookmark(@)'
-          bookmark_name="$(query_bookmarks "$bookmark_revset")"
-          if [[ -z "$bookmark_name" ]]; then
-            bookmark_revset='roots(@:: & bookmarks())'
-            bookmark_name="$(query_bookmarks "$bookmark_revset")"
-          fi
-          if [[ -z "$bookmark_name" ]]; then
-            trunk_name="$(query_bookmarks 'trunk()')"
-            bookmark_name="''${trunk_name:-trunk}"
-            bookmark_revset='trunk()'
           fi
 
           jj_label="$("$jj_starship" "''${jj_starship_args[@]}" 2>/dev/null || true)"
           jj_label="$(first_line "$jj_label")"
 
-          # Keep trunk() as the shortstat baseline; omit its separate distance to keep the prompt compact.
-          diff_output="$("$jj_cmd" diff --from 'trunk()' --to @ --stat --no-pager --color=never 2>/dev/null || true)"
+          # jj-starship snapshots once; keep the aggregate diff read-only afterward.
+          diff_output="$("$jj_cmd" diff --ignore-working-copy --from 'trunk()' --to @ --stat --no-pager --color=never 2>/dev/null || true)"
           shortstat="''${diff_output##*$'\n'}"
           shortstat="''${shortstat:-stat unavailable}"
 
@@ -167,12 +114,9 @@
             diff_summary="$shortstat"
           fi
 
-          bookmark_distance="$(distance "$bookmark_revset" '@')"
-
-          printf '%s · %s · (%s%s%s %s)\n' \
+          printf '%s · %s\n' \
             "$jj_label" \
-            "$diff_summary" \
-            "$ansi_bookmark" "$bookmark_name" "$ansi_reset" "$bookmark_distance"
+            "$diff_summary"
         '';
       };
 
