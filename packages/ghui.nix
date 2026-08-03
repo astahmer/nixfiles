@@ -1,16 +1,16 @@
 { pkgs }:
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "ghui";
-  version = "0.9.0-unstable-2026-06-28";
+  version = "0.9.0";
 
   src = pkgs.fetchFromGitHub {
     owner = "kitlangton";
     repo = "ghui";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-dyfpCNjMa6PW4vYNUtoaMaBpi92+tll2ke0y8n+40Vo=";
+    hash = "sha256-XzcGOcAQNQP0u3mRWx+BuOaujsWqtT1on/P6AI1Wgr4=";
   };
 
-  outputHash = "sha256-4g8Al3YlqP7p+FslP84YnC5LoxjpyLZjlc/gX+htgVc=";
+  outputHash = "sha256-nb3EpeIu0d2NUlRlPBLhe/Yw0vCkWKMcWV8uK8q0q3Y=";
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   dontFixup = true;
