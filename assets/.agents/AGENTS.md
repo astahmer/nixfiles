@@ -7,6 +7,27 @@ description: Global agent instructions — caveman, ast-outline, rtk, code style
 - Always use `jj` instead of `git`; unless explicitly asked
 - Always split & describe your work using jj revisions when you make changes
 
+## Nix-backed debugging
+
+This workstation has Nix and `comma` available, so a command missing from
+`PATH` is not evidence that the capability is unavailable. Before installing
+anything into a profile or stopping at "command not found", try a one-shot
+Nix-backed invocation:
+
+- `rtk comma <command> [args...]` resolves and runs the executable from
+  nixpkgs without installing it; use `rtk comma -p <command>` or
+  `rtk comma -x <command>` to identify the package or store path.
+- `rtk nix run nixpkgs#<package> -- <args...>` runs a known package
+  explicitly.
+- `rtk nix shell nixpkgs#<package> --command <command> [args...]` provides a
+  temporary environment for multi-tool debugging.
+- `rtk nix develop` enters the repository's pinned development environment
+  when the flake provides one.
+
+Prefer these ephemeral paths for diagnostics. Keep profile changes and
+configuration edits deliberate, and report the exact Nix/comma failure when a
+tool genuinely cannot be resolved.
+
 <!-- ast-outline:start -->
 ## Code exploration — prefer `ast-outline` over full reads
 

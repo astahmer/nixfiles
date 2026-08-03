@@ -1,0 +1,2 @@
+{"kind":"cut","id":"pc_8csqzmn407li","ts":"2026-08-03T16:02:40.526Z","agent":"unknown","text":"AGENTS.md refers to assets/executor/setup.sh, but the deployed source is assets/executor/setup.ts; the path should be kept in sync to avoid dead-end inspection.","tags":["docs"],"severity":"minor"}
+{"kind":"resolve","id":"pc_3hqwrk8rrgh2","ts":"2026-08-03T16:03:54.086Z","cut_id":"pc_8csqzmn407li"}
