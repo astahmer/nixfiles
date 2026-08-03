@@ -25,6 +25,7 @@ in
           hm.vscode
           hm.agents
           hm.tools
+          hm.cliTools
           hm.launcher
           hm.linuxApps
           hm.work

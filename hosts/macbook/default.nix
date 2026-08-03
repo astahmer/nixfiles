@@ -27,6 +27,7 @@ in
           hm.vscode
           hm.agents
           hm.tools
+          hm.cliTools
           hm.work
           hm.iris
           (

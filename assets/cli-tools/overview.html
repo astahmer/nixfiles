@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nix CLI Cockpit</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #101418;
+        --panel: #171d22;
+        --panel-2: #1d242b;
+        --text: #eef4f1;
+        --muted: #9fafb3;
+        --line: #2b343d;
+        --green: #7bd88f;
+        --cyan: #72d5d5;
+        --blue: #8ab4ff;
+        --yellow: #f3c969;
+        --purple: #c9a0ff;
+        --shadow: 0 24px 80px rgb(0 0 0 / 0.35);
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 10% 0%, rgb(123 216 143 / 0.18), transparent 28rem),
+          radial-gradient(circle at 85% 10%, rgb(114 213 213 / 0.16), transparent 30rem),
+          linear-gradient(135deg, #101418 0%, #12181d 48%, #0e1317 100%);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.5;
+      }
+      a { color: inherit; }
+      code, pre {
+        font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+      }
+      p code, li code, td code {
+        overflow-wrap: anywhere;
+        background: rgb(255 255 255 / 0.06);
+        padding: 0.1em 0.35em;
+        border-radius: 6px;
+      }
+      .shell { width: min(1100px, calc(100% - 32px)); margin: 0 auto; }
+      .hero {
+        min-height: 70vh;
+        display: grid;
+        align-content: center;
+        gap: 28px;
+        padding: 56px 0 32px;
+      }
+      .topline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.04);
+        padding: 7px 12px;
+      }
+      .dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 20px var(--green);
+      }
+      h1 {
+        max-width: 920px;
+        margin: 0;
+        font-size: clamp(2.8rem, 7vw, 6.2rem);
+        line-height: 0.94;
+      }
+      .lede {
+        max-width: 720px;
+        margin: 0;
+        color: #cbd8d8;
+        font-size: clamp(1.05rem, 2vw, 1.35rem);
+      }
+      .terminal {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgb(0 0 0 / 0.35);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .terminal-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        background: rgb(255 255 255 / 0.03);
+      }
+      .terminal-light { width: 10px; height: 10px; border-radius: 50%; }
+      .terminal-light.red { background: #ff8b8b; }
+      .terminal-light.yellow { background: var(--yellow); }
+      .terminal-light.green { background: var(--green); }
+      .terminal-title { margin-left: 8px; color: var(--muted); font-size: 0.85rem; }
+      .terminal-body {
+        display: grid;
+        gap: 10px;
+        padding: 18px 16px 20px;
+        font-size: 0.95rem;
+      }
+      .terminal-body .prompt { color: var(--green); }
+      .terminal-body .cmd { color: var(--cyan); }
+      .terminal-body .comment { color: var(--muted); }
+      .terminal-body .output { color: var(--blue); }
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        backdrop-filter: blur(14px);
+        background: rgb(16 20 24 / 0.78);
+        border-bottom: 1px solid var(--line);
+      }
+      .nav-inner {
+        width: min(1100px, calc(100% - 32px));
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        padding: 12px 0;
+        font-size: 0.92rem;
+        color: var(--muted);
+      }
+      .nav-inner a { text-decoration: none; }
+      .nav-inner a:hover { color: var(--text); }
+      main { padding: 42px 0 72px; }
+      .section-head { margin-bottom: 22px; }
+      .section-head h2 { margin: 0 0 8px; font-size: 1.8rem; }
+      .section-copy { margin: 0; color: var(--muted); max-width: 62ch; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+        gap: 14px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        padding: 16px;
+        box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+      }
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: baseline;
+        margin-bottom: 8px;
+      }
+      .tool { color: var(--cyan); font-weight: 700; font-family: inherit; }
+      .replaces { color: var(--muted); font-size: 0.82rem; }
+      .card p { margin: 0; color: #d5e0e0; font-size: 0.95rem; }
+      .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+      .tag {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 3px 9px;
+        color: var(--purple);
+        font-size: 0.75rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 0.95rem;
+      }
+      th, td {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th { color: var(--muted); font-weight: 600; }
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        padding: 8px 4px;
+        overflow-x: auto;
+      }
+      footer {
+        padding: 0 0 48px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="shell hero">
+      <div class="topline">
+        <span class="pill"><span class="dot"></span>Home Manager</span>
+        <span class="pill">macOS + Linux</span>
+        <span class="pill">NH_FLAKE → ~/.config/nixfiles</span>
+        <span class="pill">cli-tools</span>
+      </div>
+      <h1>Nix CLI Cockpit</h1>
+      <p class="lede">
+        Curated map of the command-line stack this flake installs: search, shell, jujutsu,
+        agents, runtimes, and apply helpers. Inspired by Vincent’s command-line overview.
+      </p>
+      <section class="terminal" aria-label="Quick try">
+        <div class="terminal-bar">
+          <span class="terminal-light red"></span>
+          <span class="terminal-light yellow"></span>
+          <span class="terminal-light green"></span>
+          <span class="terminal-title">cli-tools --term</span>
+        </div>
+        <div class="terminal-body">
+          <code><span class="prompt">~</span> <span class="cmd">cli-tools</span> <span class="comment"># color map in the terminal</span></code>
+          <code><span class="prompt">~</span> <span class="cmd">cli-tools --web</span> <span class="comment"># this page</span></code>
+          <code><span class="prompt">~</span> <span class="cmd">nixapply</span> <span class="comment"># nh home switch via NH_FLAKE</span></code>
+          <code><span class="output">rg + fd + fzf + bat + jj + mise = daily driver</span></code>
+        </div>
+      </section>
+    </header>
+
+    <nav>
+      <div class="nav-inner">
+        <a href="#tools">Tools</a>
+        <a href="#aliases">Aliases</a>
+        <a href="#apply">Apply</a>
+      </div>
+    </nav>
+
+    <main class="shell">
+      <section id="tools">
+        <div class="section-head">
+          <h2>Tool map</h2>
+          <p class="section-copy">
+            Sharp tools that compose. Familiar names stay as aliases where useful; the
+            binaries underneath are the modern replacements.
+          </p>
+        </div>
+        <div class="grid">
+          <article class="card">
+            <div class="card-header"><span class="tool">ripgrep</span><span class="replaces">grep</span></div>
+            <p>Project-wide search that respects ignore files.</p>
+            <div class="tag-row"><span class="tag">search</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">fd</span><span class="replaces">find</span></div>
+            <p>Fast file finder with sane defaults.</p>
+            <div class="tag-row"><span class="tag">search</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">fzf</span><span class="replaces"></span></div>
+            <p>Fuzzy picker; pairs well with bat previews.</p>
+            <div class="tag-row"><span class="tag">picker</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">bat</span><span class="replaces">cat</span></div>
+            <p>Syntax-highlighted file viewing.</p>
+            <div class="tag-row"><span class="tag">preview</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">delta</span><span class="replaces"></span></div>
+            <p>Readable side-by-side git diffs.</p>
+            <div class="tag-row"><span class="tag">vcs</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">mise</span><span class="replaces"></span></div>
+            <p>Per-repo toolchains via <code>mise.toml</code> on PATH.</p>
+            <div class="tag-row"><span class="tag">env</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">jj / jjui</span><span class="replaces">git UI</span></div>
+            <p>Jujutsu + TUI; lightjj/ryu for flow helpers.</p>
+            <div class="tag-row"><span class="tag">vcs</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">lazygit</span><span class="replaces"></span></div>
+            <p>Git TUI when you still need the git forge workflow.</p>
+            <div class="tag-row"><span class="tag">vcs</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">herdr / iris</span><span class="replaces"></span></div>
+            <p>Agent multiplexer + TTY command suggestions.</p>
+            <div class="tag-row"><span class="tag">agents</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">opencode / nub</span><span class="replaces"></span></div>
+            <p>Coding agent + agent utilities.</p>
+            <div class="tag-row"><span class="tag">agents</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">nh</span><span class="replaces"></span></div>
+            <p>Pretty Home Manager / NixOS switch wrapper.</p>
+            <div class="tag-row"><span class="tag">nix</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">btop</span><span class="replaces">top</span></div>
+            <p>Rich process and resource monitor.</p>
+            <div class="tag-row"><span class="tag">system</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">httpie / jq</span><span class="replaces">curl*</span></div>
+            <p>Human HTTP client + JSON queries.</p>
+            <div class="tag-row"><span class="tag">net</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">rtk</span><span class="replaces"></span></div>
+            <p>Token-optimized shell for agent sessions.</p>
+            <div class="tag-row"><span class="tag">agents</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">node / pnpm / uv</span><span class="replaces"></span></div>
+            <p>JS and Python toolchains for local work.</p>
+            <div class="tag-row"><span class="tag">runtime</span></div>
+          </article>
+          <article class="card">
+            <div class="card-header"><span class="tool">starship</span><span class="replaces"></span></div>
+            <p>Cross-shell prompt with jj awareness.</p>
+            <div class="tag-row"><span class="tag">shell</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="aliases" style="margin-top: 48px">
+        <div class="section-head">
+          <h2>Shell aliases</h2>
+          <p class="section-copy">High-traffic shortcuts from <code>modules/shell.nix</code>.</p>
+        </div>
+        <div class="panel">
+          <table>
+            <thead>
+              <tr><th>Alias</th><th>Expands to</th><th>Why</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>nixapply</code></td><td><code>nh home switch -c macbook -b hm-backup</code></td><td>Apply flake via <code>NH_FLAKE</code></td></tr>
+              <tr><td><code>nixupdate</code></td><td><code>nh home switch … -u</code></td><td>Update inputs + switch</td></tr>
+              <tr><td><code>nixfiles-here</code></td><td>symlink cwd → <code>~/.config/nixfiles</code></td><td>Path-agnostic clone pointer</td></tr>
+              <tr><td><code>cli-tools</code></td><td>this cockpit</td><td>Terminal or browser inventory</td></tr>
+              <tr><td><code>pn</code> / <code>ppnm</code></td><td><code>pnpm</code></td><td>Shorter package manager</td></tr>
+              <tr><td><code>jje</code></td><td>duplicate + squash range</td><td>Keep evolution, land clean tip</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="apply" style="margin-top: 48px">
+        <div class="section-head">
+          <h2>Apply contract</h2>
+          <p class="section-copy">
+            Clone anywhere. Point the stable symlink once. Same config on every Mac.
+          </p>
+        </div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="terminal-light red"></span>
+            <span class="terminal-light yellow"></span>
+            <span class="terminal-light green"></span>
+            <span class="terminal-title">bootstrap</span>
+          </div>
+          <div class="terminal-body">
+            <code><span class="cmd">cd</span> ~/wherever/nixfiles</code>
+            <code><span class="cmd">ln -sfn "$(pwd)" ~/.config/nixfiles</span> <span class="comment"># or nixfiles-here</span></code>
+            <code><span class="cmd">nh home switch . -c macbook -b hm-backup</span></code>
+            <code><span class="output">NH_FLAKE=~/.config/nixfiles → nixapply from any cwd</span></code>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="shell">
+      Source of truth: this flake’s Home Manager modules. Full bin list:
+      <code>ls ~/.nix-profile/bin</code>. Terminal twin: <code>cli-tools --term</code>.
+      Visual language adapted from Vincent-HD/.nixfiles command-line overview.
+    </footer>
+  </body>
+</html>

@@ -8,7 +8,7 @@ Local clones under `~/.references/` (globally shared). Refresh with the `referen
 | cachebro | https://github.com/glommer/cachebro | `~/.references/cachebro` | Raw read cache (reference only — benchmark baseline) |
 | effect | https://github.com/Effect-TS/effect | `~/.references/effect` | Effect, Platform, CLI, `@effect/ai` MCP patterns |
 | neolectron/nixfiles | https://github.com/neolectron/nixfiles | `~/.references/manu-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
-| Vincent-HD/.nixfiles | https://github.com/Vincent-HD/.nixfiles | `~/.references/vincent-nixfiles` | nix-darwin + home-manager macOS config |
+| Vincent-HD/.nixfiles | https://github.com/Vincent-HD/.nixfiles | `~/.references/vincent-nixfiles` (+ `.references/vincent-nixfiles`) | nix-darwin + home-manager; command-line overview/cockpit inspiration for `cli-tools` |
 | Christopher2K/NixConfig | https://github.com/Christopher2K/NixConfig | `~/.references/chris2-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
 | executor | https://github.com/UsefulSoftwareCo/executor | `~/.references/executor` | Agent integration layer — MCP/OpenAPI/GraphQL catalog with policies |
 | plannotator | https://github.com/backnotprop/plannotator | `~/.references/plannotator` | Interactive plan/code review UI with hook/bridge CLI protocol |
