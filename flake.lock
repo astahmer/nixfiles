@@ -80,16 +80,16 @@
         "systems": "systems"
       },
       "locked": {
-        "lastModified": 1785499418,
-        "narHash": "sha256-MzgEHOYjsjtWuZMpv9LoGqDhct1pjusEt4P3LelUzVk=",
+        "lastModified": 1785518356,
+        "narHash": "sha256-KsZ2mKWKDeI0Art2wHCWm7OPJBWZ4YiA6d1z0jvkm+s=",
         "owner": "versenilvis",
         "repo": "iris",
-        "rev": "8a1cec331aff82cb7c9463be77240c1775eeb8df",
+        "rev": "efc49bacfe7249880e3d2d2410abc43df51f5c18",
         "type": "github"
       },
       "original": {
         "owner": "versenilvis",
-        "ref": "v0.4.20",
+        "ref": "v0.4.21",
         "repo": "iris",
         "type": "github"
       }

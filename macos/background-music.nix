@@ -2,11 +2,11 @@
 let
   backgroundMusic = pkgs.stdenvNoCC.mkDerivation {
     pname = "background-music";
-    version = "0.4.3";
+    version = "0.5.0";
 
     src = pkgs.fetchurl {
-      url = "https://github.com/kyleneideck/BackgroundMusic/releases/download/v0.4.3/BackgroundMusic-0.4.3.pkg";
-      hash = "sha256-wcSKN8g69EzlC+5oh5hWyWsvbJc2DORhscfWU1Fb5/0=";
+      url = "https://github.com/kyleneideck/BackgroundMusic/releases/download/v0.5.0/BackgroundMusic-0.5.0.pkg";
+      hash = "sha256-x3QrSKwunqlV/qZuXBO7Vr5fFIfgsSutk4IJhLzLae8=";
     };
 
     dontUnpack = true;

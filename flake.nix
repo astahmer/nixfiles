@@ -19,7 +19,7 @@
     };
 
     iris = {
-      url = "github:versenilvis/iris/v0.4.20";
+      url = "github:versenilvis/iris/v0.4.21";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -54,13 +54,15 @@
           formatter = pkgs.nixfmt;
 
           packages = {
-            ghui = import ./packages/ghui.nix { pkgs = pkgs'; };
             hunk = import ./packages/hunk.nix { pkgs = pkgs'; };
             lightjj = import ./packages/lightjj.nix { pkgs = pkgs'; };
             nub = inputs.nub.packages.${system}.default;
             opencodex = import ./packages/opencodex.nix { pkgs = pkgs'; };
             plannotator = import ./packages/plannotator.nix { pkgs = pkgs'; };
             ryu = import ./packages/ryu.nix { pkgs = pkgs'; };
+          }
+          // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+            ghui = import ./packages/ghui.nix { pkgs = pkgs'; };
           };
         };
     };

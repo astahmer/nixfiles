@@ -18,20 +18,20 @@ in
               if pkgs.stdenv.hostPlatform.isAarch64 then
                 {
                   arch = "aarch64";
-                  hash = "sha256-4PYINx7QWxjgiTG6A6Eg411cX5NZye28WPRztPewNlE=";
+                  hash = "sha256-FBlxuYqZ94i7spy/nuYiQK5mIiG3nlCIBYYkiN6c2Rw=";
                 }
               else
                 {
                   arch = "x86_64";
-                  hash = "sha256-JAS48KX0Dea/AQRR9VUjmkBp4iRnRP845ihOgni33gc=";
+                  hash = "sha256-Ucgg/5CTe5SD0c+gaK73+Db2UFEzWQ5yWUGS4BHPC5w=";
                 };
           in
           pkgs.stdenvNoCC.mkDerivation {
             pname = "zed-editor-bin";
-            version = "1.13.1";
+            version = "1.13.2";
 
             src = pkgs.fetchurl {
-              url = "https://github.com/zed-industries/zed/releases/download/v1.13.1/Zed-${zedRelease.arch}.dmg";
+              url = "https://github.com/zed-industries/zed/releases/download/v1.13.2/Zed-${zedRelease.arch}.dmg";
               sha256 = zedRelease.hash;
             };
 
