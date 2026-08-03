@@ -11,57 +11,6 @@ in
       lightjj = import ../packages/lightjj.nix { inherit pkgs; };
       nub = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
       plannotator = import ../packages/plannotator.nix { inherit pkgs; };
-      zed =
-        if pkgs.stdenv.hostPlatform.isDarwin then
-          let
-            zedRelease =
-              if pkgs.stdenv.hostPlatform.isAarch64 then
-                {
-                  arch = "aarch64";
-                  hash = "sha256-FBlxuYqZ94i7spy/nuYiQK5mIiG3nlCIBYYkiN6c2Rw=";
-                }
-              else
-                {
-                  arch = "x86_64";
-                  hash = "sha256-Ucgg/5CTe5SD0c+gaK73+Db2UFEzWQ5yWUGS4BHPC5w=";
-                };
-          in
-          pkgs.stdenvNoCC.mkDerivation {
-            pname = "zed-editor-bin";
-            version = "1.13.2";
-
-            src = pkgs.fetchurl {
-              url = "https://github.com/zed-industries/zed/releases/download/v1.13.2/Zed-${zedRelease.arch}.dmg";
-              sha256 = zedRelease.hash;
-            };
-
-            dontUnpack = true;
-            dontFixup = true;
-
-            installPhase = ''
-              runHook preInstall
-
-              mount_point=$(mktemp -d)
-              /usr/bin/hdiutil attach -readonly -nobrowse -mountpoint "$mount_point" "$src"
-
-              mkdir -p "$out/Applications" "$out/bin"
-              cp -R "$mount_point/Zed.app" "$out/Applications/"
-              ln -s "$out/Applications/Zed.app/Contents/MacOS/Zed" "$out/bin/zeditor"
-
-              /usr/bin/hdiutil detach "$mount_point"
-
-              runHook postInstall
-            '';
-
-            meta = {
-              description = "High-performance, multiplayer code editor from the creators of Atom and Tree-sitter";
-              homepage = "https://zed.dev";
-              mainProgram = "zeditor";
-              platforms = pkgs.lib.platforms.darwin;
-            };
-          }
-        else
-          pkgs.zed-editor;
     in
     {
       home.packages = [

@@ -10,11 +10,11 @@
     let
       executorDir = "${config.home.homeDirectory}/.executor";
       executorScopeDir = executorDir;
-      githubTokenFile = "${config.home.homeDirectory}/.config/opencode/github-token";
 
       # Exclude deprecated readbro skill from the deployed .agents directory.
       # The source tree itself is kept under assets/ for reference.
-      agentsFilter = path: type:
+      agentsFilter =
+        path: _type:
         let
           relPath = lib.removePrefix (toString ../assets/.agents) (toString path);
         in
@@ -27,37 +27,51 @@
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);
       cursorMcp = cursorMcpBase // {
-        mcpServers = lib.mapAttrs (_: server: server // {
-          env = (server.env or { }) // {
-            EXECUTOR_SCOPE_DIR = executorScopeDir;
-          };
-        }) cursorMcpBase.mcpServers;
+        mcpServers = lib.mapAttrs (
+          _: server:
+          server
+          // {
+            env = (server.env or { }) // {
+              EXECUTOR_SCOPE_DIR = executorScopeDir;
+            };
+          }
+        ) cursorMcpBase.mcpServers;
       };
 
       vscodeMcpBase = builtins.fromJSON (builtins.readFile ../assets/vscode/mcp.json);
       vscodeMcp = vscodeMcpBase // {
-        servers = lib.mapAttrs (_: server: server // {
-          env = (server.env or { }) // {
-            EXECUTOR_SCOPE_DIR = executorScopeDir;
-          };
-        }) vscodeMcpBase.servers;
+        servers = lib.mapAttrs (
+          _: server:
+          server
+          // {
+            env = (server.env or { }) // {
+              EXECUTOR_SCOPE_DIR = executorScopeDir;
+            };
+          }
+        ) vscodeMcpBase.servers;
       };
 
       opencodeBase = builtins.fromJSON (builtins.readFile ../assets/.config/opencode/opencode.json);
       opencodeConfig = opencodeBase // {
-        mcp = lib.mapAttrs (_: server: server // {
-          env = (server.env or { }) // {
-            EXECUTOR_SCOPE_DIR = executorScopeDir;
-          };
-        }) opencodeBase.mcp;
+        mcp = lib.mapAttrs (
+          _: server:
+          server
+          // {
+            env = (server.env or { }) // {
+              EXECUTOR_SCOPE_DIR = executorScopeDir;
+            };
+          }
+        ) opencodeBase.mcp;
       };
       # Ensure .ts scripts are stored with executable bit so home-manager
       # symlinks them (preserving the .ts extension for --experimental-strip-types)
       # instead of copying them as extensionless regular files.
-      mkExecutableFile = name: src: pkgs.runCommandLocal name {
-        inherit src;
-        preferLocalBuild = true;
-      } "cp $src $out; chmod +x $out";
+      mkExecutableFile =
+        name: src:
+        pkgs.runCommandLocal name {
+          inherit src;
+          preferLocalBuild = true;
+        } "cp $src $out; chmod +x $out";
     in
     {
       home.file.".agents".source = agentsSrc;

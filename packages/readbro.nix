@@ -13,7 +13,7 @@ let
   src = lib.cleanSourceWith {
     src = ./assets/readbro;
     filter =
-      path: type:
+      path: _type:
       let
         base = builtins.baseNameOf path;
       in

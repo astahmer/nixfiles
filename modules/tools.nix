@@ -1,7 +1,7 @@
 { ... }:
 {
   config.flake.modules.homeManager.tools =
-    { pkgs, lib, ... }:
+    { lib, ... }:
     lib.mkMerge [
       {
         programs.jjui.enable = true;
