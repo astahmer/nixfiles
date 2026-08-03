@@ -23,6 +23,14 @@
       jjPackage =
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
 
+      jjCompletionBash = pkgs.runCommand "jj-completion-bash" { } ''
+        ${lib.getExe jjPackage} util completion bash > "$out"
+      '';
+
+      jjCompletionZsh = pkgs.runCommand "jj-completion-zsh" { } ''
+        ${lib.getExe jjPackage} util completion zsh > "$out"
+      '';
+
       jjPrompt = pkgs.writeShellApplication {
         name = "jj-prompt";
         runtimeInputs = [
@@ -84,10 +92,6 @@
           )
           if [[ -n "''${NO_COLOR:-}" || "''${TERM:-}" == "dumb" ]]; then
             jj_starship_args+=(--no-color)
-          fi
-
-          if ! "$jj_cmd" --ignore-working-copy root >/dev/null 2>&1; then
-            exec "$jj_starship" "''${jj_starship_args[@]}"
           fi
 
           jj_label="$("$jj_starship" "''${jj_starship_args[@]}" 2>/dev/null || true)"
@@ -589,7 +593,7 @@
         custom.jj = {
           format = "$output ";
           command = lib.getExe jjPrompt;
-          when = "${lib.getExe pkgs."jj-starship"} detect";
+          detect_folders = [ ".jj" ];
           ignore_timeout = true;
         };
 
@@ -634,7 +638,7 @@
         ${initagentFunction}
         ${nixfilesHereFunction}
         ${shellAliasesFunction}
-        eval "$(${lib.getExe jjPackage} util completion bash)"
+        source ${jjCompletionBash}
       '';
 
       programs.zsh.initContent = lib.mkMerge [
@@ -669,7 +673,7 @@
         '')
 
         (lib.mkAfter ''
-          eval "$(${lib.getExe jjPackage} util completion zsh)"
+          source ${jjCompletionZsh}
         '')
       ];
 
