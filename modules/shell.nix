@@ -31,6 +31,14 @@
         ${lib.getExe jjPackage} util completion zsh > "$out"
       '';
 
+      bootstrap = {
+        executorVersion = "1.5.35";
+        piVersion = "0.81.0";
+        astOutlineVersion = "1.8.2";
+        skepsisRevision = "cf699d2593e270fb8767daffcd9c46c8ce539f15";
+        skepsisUrl = "https://github.com/oxidecomputer/skepsis.git";
+      };
+
       starshipInitBash =
         pkgs.runCommand "starship-init-bash"
           {
@@ -179,28 +187,47 @@
 
           mkdir -p "$PNPM_HOME/bin" "$PNPM_STORE_DIR"
 
-          if ! command -v executor >/dev/null 2>&1 || ! executor --version >/dev/null 2>&1; then
+          if ! command -v executor >/dev/null 2>&1 || [ "$(executor --version 2>/dev/null || true)" != "v${bootstrap.executorVersion}" ]; then
             pnpm remove -g executor >/dev/null 2>&1 || true
-            pnpm add -g executor
+            pnpm add -g "executor@${bootstrap.executorVersion}"
           fi
 
-          if ! command -v pi >/dev/null 2>&1; then
-            pnpm add -g @earendil-works/pi-coding-agent
+          if ! command -v pi >/dev/null 2>&1 || [ "$(pi --version 2>/dev/null || true)" != "${bootstrap.piVersion}" ]; then
+            pnpm remove -g @earendil-works/pi-coding-agent >/dev/null 2>&1 || true
+            pnpm add -g "@earendil-works/pi-coding-agent@${bootstrap.piVersion}"
           fi
 
-          if ! command -v ast-outline >/dev/null 2>&1; then
-            uv tool install ast-outline
+          ast_outline_version="$(ast-outline --version 2>/dev/null | head -n 1 || true)"
+          if [ "$ast_outline_version" != "ast-outline ${bootstrap.astOutlineVersion}" ]; then
+            uv tool install --force "ast-outline==${bootstrap.astOutlineVersion}"
           fi
 
           deps_dir="$HOME/dev/deps"
           skepsis_dir="$deps_dir/skepsis"
-          if [ ! -d "$skepsis_dir" ]; then
+          if [ ! -d "$skepsis_dir/.git" ]; then
+            if [ -e "$skepsis_dir" ]; then
+              echo "nixfiles bootstrap: refusing to replace non-git directory $skepsis_dir" >&2
+              exit 1
+            fi
             mkdir -p "$deps_dir"
-            git clone https://github.com/oxidecomputer/skepsis.git "$skepsis_dir"
+            git clone --filter=blob:none --no-checkout "${bootstrap.skepsisUrl}" "$skepsis_dir"
+            git -C "$skepsis_dir" checkout --detach "${bootstrap.skepsisRevision}"
+          elif [ -z "$(git -C "$skepsis_dir" status --porcelain)" ]; then
+            current_revision="$(git -C "$skepsis_dir" rev-parse HEAD 2>/dev/null || true)"
+            if [ "$current_revision" != "${bootstrap.skepsisRevision}" ]; then
+              git -C "$skepsis_dir" fetch --depth 1 origin "${bootstrap.skepsisRevision}"
+              git -C "$skepsis_dir" checkout --detach "${bootstrap.skepsisRevision}"
+            fi
+          else
+            echo "warning: leaving dirty Skepsis checkout unchanged: $skepsis_dir" >&2
           fi
 
           if [ -f "$skepsis_dir/package.json" ] && [ ! -d "$skepsis_dir/node_modules" ]; then
-            pnpm --dir "$skepsis_dir" install
+            if [ -f "$skepsis_dir/pnpm-lock.yaml" ]; then
+              pnpm --dir "$skepsis_dir" install --frozen-lockfile
+            else
+              pnpm --dir "$skepsis_dir" install
+            fi
           fi
 
           setup_file="$HOME/.executor/setup.ts"
