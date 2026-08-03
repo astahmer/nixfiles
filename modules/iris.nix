@@ -3,7 +3,12 @@
   config.flake.modules.homeManager.iris =
     { pkgs, lib, ... }:
     let
-      iris = inputs.iris.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      iris = inputs.iris.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (old: {
+        vendorHash = "sha256-KQNloP/Aj283YQ4d5LFu/2Pbb2HbVTZPhLK1fs4xvGw=";
+        goModules = old.goModules.overrideAttrs (_: {
+          outputHash = "sha256-KQNloP/Aj283YQ4d5LFu/2Pbb2HbVTZPhLK1fs4xvGw=";
+        });
+      });
     in
     {
       home.packages = [ iris ];
