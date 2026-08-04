@@ -76,6 +76,24 @@ const findProjectConfig = (): string | undefined => {
   }
 };
 
+const configWithAlias = (alias: string, projectPath?: string): { filePath: string; config: SecretConfig } | undefined => {
+  for (const filePath of projectPath ? [projectPath] : []) {
+    const config = readJson(filePath);
+    const hasAlias =
+      config.secrets?.[alias] !== undefined ||
+      Object.values(config.environments || {}).some((environment) => environment.secrets?.[alias] !== undefined);
+    if (hasAlias) return { filePath, config };
+  }
+  if (existsSync(userConfigPath)) {
+    const config = readJson(userConfigPath);
+    const hasAlias =
+      config.secrets?.[alias] !== undefined ||
+      Object.values(config.environments || {}).some((environment) => environment.secrets?.[alias] !== undefined);
+    if (hasAlias) return { filePath: userConfigPath, config };
+  }
+  return undefined;
+};
+
 const parseOptions = (argv: string[]): ParsedOptions => {
   const positional: string[] = [];
   let selectedConfig: string | undefined;
@@ -453,7 +471,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|id|totp|sync|env|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|get|set|id|totp|sync|pin|env|doctor|recent|history> [options]
 
 Commands:
   status              Check Bitwarden auth state and print the next command to run
@@ -463,6 +481,7 @@ Commands:
   id <alias>          Print the resolved Bitwarden item id (no value)
   totp <alias>        Print the current TOTP code (--copy to clipboard)
   sync                Refresh the Bitwarden vault cache (explicit)
+  pin <alias>         Replace the config item name with its resolved id
   env                 Generate dotenv from the project config
   doctor              Validate configs, Bitwarden state, and alias resolvability
   recent              Show recently used aliases
@@ -565,6 +584,39 @@ const main = async (): Promise<void> => {
     runBw(["sync"]);
     recordHistory({ at: new Date().toISOString(), cmd: "sync", target: "", env: environment });
     console.error("secret: vault synced");
+  } else if (options.command === "pin") {
+    const alias = options.positional[0] || fail("pin requires an alias, e.g. secret pin github-token (see 'secret list')");
+    if (!loaded.definitions[alias]) fail(`unknown alias: ${alias} (see 'secret list')`);
+    const holder = configWithAlias(alias, options.configPath || findProjectConfig());
+    if (!holder) {
+      fail(`alias ${alias} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to pin`);
+    }
+    requireUnlocked();
+    const itemNames = new Set<string>();
+    if (holder.config.secrets?.[alias]?.item) itemNames.add(holder.config.secrets[alias].item);
+    for (const environment of Object.values(holder.config.environments || {})) {
+      if (environment.secrets?.[alias]?.item) itemNames.add(environment.secrets[alias].item);
+    }
+    const ids = new Map<string, string>();
+    for (const item of itemNames) {
+      const raw = tryGetItemRaw(item);
+      if (raw === undefined) fail(`item not found for ${alias}: ${item}`);
+      try {
+        const parsed = JSON.parse(raw) as { id?: string };
+        if (!parsed.id) fail(`Bitwarden item has no id: ${item}`);
+        ids.set(item, parsed.id);
+      } catch {
+        fail(`Bitwarden returned invalid item data for ${alias}`);
+      }
+    }
+    const updated = JSON.parse(JSON.stringify(holder.config)) as SecretConfig;
+    if (updated.secrets?.[alias]?.item) updated.secrets[alias].item = ids.get(updated.secrets[alias].item)!;
+    for (const environment of Object.values(updated.environments || {})) {
+      if (environment.secrets?.[alias]?.item) environment.secrets[alias].item = ids.get(environment.secrets[alias].item)!;
+    }
+    writeAtomic(holder.filePath, `${JSON.stringify(updated, null, 2)}\n`);
+    recordHistory({ at: new Date().toISOString(), cmd: "pin", target: alias, env: environment });
+    console.error(`secret: pinned ${alias} in ${holder.filePath}`);
   } else if (options.command === "env") {
     if (!loaded.selectedAliases?.length) {
       fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
