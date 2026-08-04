@@ -26,6 +26,7 @@ case "$1" in
     ;;
   create) printf "%s\n" "-- create --" >> "$FAKE_LOG"; cat >> "$FAKE_LOG" ;;
   edit) printf "%s\n" "-- edit --" >> "$FAKE_LOG"; base64 -d >> "$FAKE_LOG" ;;
+  delete) printf "%s\n" "-- delete $3 --" >> "$FAKE_LOG" ;;
 esac
 EOF
 chmod +x "$tmp/bin/bw"
@@ -102,7 +103,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|pin\|init\|env\|print\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|pin|init|env|print|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|pin\|rotate\|rm\|init\|env\|print\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|pin|rotate|rm|init|env|print|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
@@ -144,8 +145,23 @@ rg -q '"item": "item-1"' "$tmp/proj/.secret.json" && pass=$((pass + 1)) || {
 assert_eq "$(secret pin github-token 2>&1 || true)" "secret: alias github-token is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to pin" "pin refuses Nix-managed defaults"
 assert_fail secret pin nope
 
+assert_eq "$(secret rotate github-token 2>&1 || true)" "secret: item already exists; pass --force to overwrite" "rotate blocked without force"
+assert_ok secret rotate github-token --force
+rg -q -- "-- edit --" "$FAKE_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: rotate edits the vault item" >&2
+}
+assert_eq "$(secret rm github-token 2>&1 || true)" "secret: refusing to delete nixfiles/github-token without confirmation; pass --force" "rm blocked without force"
+assert_ok secret rm github-token --force
+rg -q -- "-- delete nixfiles/github-token --" "$FAKE_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: rm deletes the vault item" >&2
+}
+assert_eq "$(FAKE_GET_MISSING=1 secret rm github-token --force 2>&1 || true)" "secret: item not found for github-token: nixfiles/github-token" "rm missing item"
+assert_fail secret rotate nope
+
 assert_ok secret doctor
-assert_fail env FAKE_GET_MISSING=1 secret doctor
+assert_fail FAKE_GET_MISSING=1 secret doctor
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret doctor 2>&1 | head -1)" 'bitwarden: locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "doctor locked hint"
 
 assert_eq "$(secret print)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "print project scope after pin"
@@ -153,6 +169,9 @@ assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABAS
 assert_eq "$(secret print nix)" "github-token	prod	nixfiles/github-token	password	GITHUB_TOKEN" "print nix scope"
 assert_eq "$(secret print global 2>&1 || true)" "secret: no config file for global scope: $tmp/.config/secret/config.json" "print global missing config explains"
 assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, nix)" "print rejects unknown scope"
+assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"DATABASE_URL\",\"env\":\"prod\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "print --json rows after pin"
+assert_eq "$(secret list --json)" "[{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"},{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "list --json merged aliases after pin"
+assert_eq "$(secret env --export)" "export DATABASE_URL='old-pass'" "env --export shell lines"
 
 secret get github-token >/dev/null
 secret history | rg -q "get.*github-token" || {
@@ -174,6 +193,12 @@ rg -q '"item": "initdir/example"' .secret.json && pass=$((pass + 1)) || {
 assert_eq "$(secret init 2>&1 || true)" "secret: .secret.json already exists (use --force to overwrite): $(cd "$tmp/initdir" && pwd -P)/.secret.json" "init refuses overwrite without --force"
 assert_ok secret init --force
 assert_eq "$(secret print)" "EXAMPLE	prod	initdir/example	password	EXAMPLE" "print after init"
+assert_ok secret init --force API_TOKEN STRIPE_KEY
+rg -q 'API_TOKEN' .secret.json && rg -q 'STRIPE_KEY' .secret.json && rg -q 'initdir/api-token' .secret.json && rg -q 'initdir/stripe-key' .secret.json || {
+  fail=$((fail + 1))
+  echo "FAIL: init prefills first alias" >&2
+}
+assert_eq "$(secret init --force BAD-NAME 2>&1 || true)" "secret: invalid alias name: BAD-NAME (letters, digits, underscore; must not start with a digit)" "init rejects invalid alias"
 cd "$tmp"
 assert_eq "$(secret print 2>&1 || true)" "secret: no .secret.json found (searched up to \$HOME) — run 'secret init' to scaffold one, or pass --config FILE" "print outside project suggests init"
 

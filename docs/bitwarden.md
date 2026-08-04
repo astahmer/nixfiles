@@ -42,6 +42,8 @@ secret get github-token
 secret get github-token --copy
 secret id github-token
 secret pin github-token
+secret rotate github-token
+secret rm github-token
 secret totp github-token --copy
 secret sync
 secret status --check
@@ -56,13 +58,17 @@ Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
 in configs when two vault items could share a name. `secret pin` automates
 that: it replaces the item name with the resolved id in the project or user
 config (base mapping and environment overrides), atomically, and refuses the
-Nix-managed `defaults.json`. `secret totp` prints the current 2FA code for an
-item that carries a TOTP seed. `secret sync` refreshes the cached vault
-explicitly — never automatic. `secret status --check` exits nonzero when the
-vault is not unlocked, for scripts.
+Nix-managed `defaults.json`. `secret rotate` generates a new password and
+overwrites the item (confirms first unless `--force`/`-f`). `secret rm` deletes
+the vault item (also confirms unless `--force`) and keeps the config entry, so
+remove the alias from `.secret.json` by hand once the item is gone. `secret
+totp` prints the current 2FA code for an item that carries a TOTP seed. `secret
+sync` refreshes the cached vault explicitly — never automatic. `secret status
+--check` exits nonzero when the vault is not unlocked, for scripts.
 
-Aliases complete in zsh for `get`/`set`/`id`/`totp`; the completion is lazy and
-cached for 60 seconds, so shell startup is unaffected.
+`zsh` and `bash` complete a `secret` command word first, then aliases for
+`get`/`set`/`id`/`totp`/`pin`/`rotate`/`rm`. The completion is lazy and cached
+for 60 seconds, so shell startup is unaffected.
 
 ## Project setup
 
@@ -77,6 +83,16 @@ alias whose item prefix is the directory name (`myapp/example` from a `myapp/`
 directory), so only the names need editing. It refuses to overwrite an existing
 file unless `--force`/`-f` is given.
 
+Pass aliases to prefill the scaffold instead:
+
+```sh
+secret init GITHUB_TOKEN STRIPE_KEY
+```
+
+Each alias becomes an item named after the directory plus the kebab-cased alias
+(`myapp/github-token`), `field` defaulting to `password`. Names are validated,
+so `secret init` never writes a config that `secret env` would reject later.
+
 See everything a scope resolves without touching the vault:
 
 ```sh
@@ -90,6 +106,10 @@ secret print nix      # Nix-managed defaults.json
 key — sorted for stable diffing. Values are never shown and no vault access
 happens, so it is safe anywhere. Missing files and unknown scopes explain the
 next step.
+
+`secret list --json` and `secret print --json` print the same information as
+JSON rows on stdout (stderr keeps the human summary), for scripts and for
+feeding the completion cache.
 
 ## Writing secrets
 
@@ -146,10 +166,13 @@ Environments override the base (prod) mappings with per-env items:
 ```sh
 secret env --env dev --output .env.dev
 secret env --required DATABASE_URL,STRIPE_KEY --output .env
+secret env --export --output exports.sh
 ```
 
 `--env` defaults to `prod`; unknown environments are rejected. `--required`
 fails unless every listed alias is present in the selected project config.
+`--export` prints `export KEY='value'` lines (or writes them atomically with
+`--output`) for sourcing instead of dotenv format.
 
 Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are

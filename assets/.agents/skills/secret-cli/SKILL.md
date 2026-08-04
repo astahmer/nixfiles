@@ -17,17 +17,20 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.
 - `secret id <alias>` — print the resolved Bitwarden item id without the value; use ids in configs when names can collide.
 - `secret pin <alias>` — replace the item name with the resolved id in the project/user config (never the Nix-managed defaults).
+- `secret rotate <alias>` — generate a new password and overwrite the item; confirm unless `--force`/`-f`.
+- `secret rm <alias>` — delete the vault item; confirm unless `--force`/`-f`; the config entry stays.
 - `secret totp <alias>` — current 2FA code (`--copy` to the clipboard).
 - `secret sync` — refresh the cached vault explicitly; never automatic.
-- `secret init` — scaffold a project `.secret.json` (directory name as item prefix); refuses to overwrite without `--force`.
+- `secret init [alias...]` — scaffold a project `.secret.json` (directory name + kebab alias as item prefix); pass aliases to prefill; refuses to overwrite without `--force`.
 - `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); never values, no vault access; default scope is project.
-- `secret env --output .env` — generate a project dotenv atomically with mode 0600.
+- `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--export` prints `export KEY='value'` lines instead.
 - `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
 - `secret recent` / `secret history` — recently used aliases and recent commands from a value-free local log.
 
 Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
-`in`, `e`, `pr`, `d`, `re`, `h`); `secret g github-token` equals `secret get
-github-token`.
+`r`, `in`, `e`, `pr`, `d`, `re`, `h`); `secret g github-token` equals `secret
+get github-token`. `secret list --json` and `secret print --json` emit
+machine-readable rows on stdout for scripts.
 
 ## Config
 
@@ -43,8 +46,9 @@ Common flows: `secret env --env dev --output .env.dev` for a per-env dotenv,
 and `secret env --required A,B --output .env` to fail fast when a required
 alias is missing from the project config.
 
-zsh completes aliases for `get`/`set`/`id`/`totp` lazily with a 60-second
-cache; it never runs at shell startup.
+zsh and bash complete command words and then aliases for
+`get`/`set`/`id`/`totp`/`pin`/`rotate`/`rm` lazily with a shared 60-second
+cache; neither runs at shell startup.
 
 ## Safety
 
