@@ -65,8 +65,14 @@ const optionalConfig = (filePath: string): SecretConfig => (existsSync(filePath)
 const configPath = (value: string): string => (isAbsolute(value) ? value : resolve(process.cwd(), value));
 
 const findProjectConfig = (): string | undefined => {
-  const candidate = join(process.cwd(), projectConfigName);
-  return existsSync(candidate) ? candidate : undefined;
+  let directory = process.cwd();
+  for (;;) {
+    const candidate = join(directory, projectConfigName);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(directory);
+    if (directory === home || parent === directory) return undefined;
+    directory = parent;
+  }
 };
 
 const parseOptions = (argv: string[]): ParsedOptions => {
@@ -442,13 +448,14 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|env|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|get|set|id|env|doctor|recent|history> [options]
 
 Commands:
   status              Check Bitwarden auth state and print the next command to run
   list                List configured aliases (never touches the vault)
   get <alias>         Print exactly one configured value
   set <alias>         Prompt (hidden) a value and write it to Bitwarden
+  id <alias>          Print the resolved Bitwarden item id (no value)
   env                 Generate dotenv from the project config
   doctor              Validate configs, Bitwarden state, and alias resolvability
   recent              Show recently used aliases
@@ -515,6 +522,21 @@ const main = async (): Promise<void> => {
     await setValue(alias, definition, value, options.force ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "set", target: alias, env: environment });
     console.error(`secret: set ${alias} (${definition.item}, ${definition.field || "password"})`);
+  } else if (options.command === "id") {
+    const alias = options.positional[0] || fail("id requires an alias, e.g. secret id github-token (see 'secret list')");
+    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    requireUnlocked();
+    const raw = tryGetItemRaw(definition.item);
+    if (raw === undefined) fail(`item not found for ${alias}: ${definition.item}`);
+    let item: Record<string, any>;
+    try {
+      item = JSON.parse(raw) as Record<string, any>;
+    } catch {
+      fail(`Bitwarden returned invalid item data for ${alias}`);
+    }
+    if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
+    recordHistory({ at: new Date().toISOString(), cmd: "id", target: alias, env: environment });
+    console.log(String(item.id));
   } else if (options.command === "env") {
     if (!loaded.selectedAliases?.length) {
       fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
