@@ -60,9 +60,11 @@ list_term() {
   print_row "jj / jjui / lightjj / ryu" "git UI" "Jujutsu stack + helpers"
   print_row "lazygit / lazydocker" "" "TUI for git and docker"
   print_row "gh / ghui" "" "GitHub CLI + TUI"
+  print_row "bw / rbw" "" "Bitwarden CLI + agent-backed interactive client"
   print_row "herdr / iris / opencode" "" "Agent multiplexer + command suggest + coding agent"
   print_row "cursor-agent" "" "Cursor Agent CLI for terminal and T3 Code"
   print_row "codex" "" "OpenAI Codex CLI for terminal and T3 Code"
+  print_row "modlens" "" "Image-to-structured-evidence CLI for text-only agents"
   print_row "openusage" "" "AI usage and quota dashboard for the macOS menu bar"
   print_row "plannotator / nub" "" "Plan review UI + agent utils"
 

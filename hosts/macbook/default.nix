@@ -19,10 +19,12 @@ in
           hm.base
           hm.terminal
           hm.shell
+          hm.bitwarden
           hm.git
           hm.jujutsu
           hm.ryu
           hm.opencodex
+          hm.t3code
           hm.coding
           hm.vscode
           hm.agents
@@ -46,6 +48,10 @@ in
               {
                 home.homeDirectory = "/Users/${username}";
                 home.username = username;
+
+                # Keep existing copied app bundles untouched. Updating them
+                # requires macOS App Management permission; CLI tools do not.
+                targets.darwin.copyApps.enable = false;
               }
 
               # Temporary: on Darwin, avoid evaluating any contributed

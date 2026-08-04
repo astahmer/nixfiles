@@ -93,6 +93,7 @@
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
             iris = pkgs'.callPackage ./packages/iris { };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
+            modlens = pkgs'.callPackage ./packages/modlens { };
             nub = inputs.nub.packages.${system}.default;
             opencode = inputs.llm-agents.packages.${system}.opencode;
             opencodex = pkgs'.callPackage ./packages/opencodex { pkgs = pkgs'; };
