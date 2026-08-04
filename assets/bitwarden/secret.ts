@@ -21,6 +21,7 @@ type ParsedOptions = {
   configPath?: string;
   outputPath?: string;
   generate?: boolean;
+  force?: boolean;
 };
 
 const home = homedir();
@@ -60,6 +61,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let selectedConfig: string | undefined;
   let outputPath: string | undefined;
   let generate = false;
+  let force = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -69,6 +71,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       outputPath = argv[++index] || fail("--output requires a file path");
     } else if (argument === "--generate") {
       generate = true;
+    } else if (argument === "--force" || argument === "-f") {
+      force = true;
     } else if (argument.startsWith("--")) {
       fail(`unknown option: ${argument}`);
     } else {
@@ -82,6 +86,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     configPath: selectedConfig ? configPath(selectedConfig) : undefined,
     outputPath: outputPath ? configPath(outputPath) : undefined,
     generate,
+    force,
   };
 };
 
@@ -212,6 +217,19 @@ const promptHidden = async (label: string): Promise<string> => {
   }
 };
 
+const confirmPrompt = async (label: string): Promise<boolean> => {
+  if (!process.stdin.isTTY) return false;
+  process.stderr.write(`${label} [y/N] `);
+  const rl = createInterface({ input: process.stdin, terminal: false });
+  const answer = await new Promise<string>((resolve) => {
+    rl.once("line", (line) => {
+      rl.close();
+      resolve(line);
+    });
+  });
+  return /^y(es)?$/i.test(answer.trim());
+};
+
 const fieldName = (field: string): string =>
   field.startsWith("custom:") ? field.slice("custom:".length) : field;
 
@@ -245,7 +263,7 @@ const newItem = (name: string, field: string, value: string): Record<string, any
   return item;
 };
 
-const setValue = (alias: string, definition: SecretDefinition, value: string): void => {
+const setValue = async (alias: string, definition: SecretDefinition, value: string, force: boolean): Promise<void> => {
   requireUnlocked();
   const field = definition.field || "password";
   const raw = tryGetItemRaw(definition.item);
@@ -260,6 +278,12 @@ const setValue = (alias: string, definition: SecretDefinition, value: string): v
       fail(`Bitwarden returned invalid item data for ${alias}`);
     }
     if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
+    if (!force) {
+      if (!process.stdin.isTTY) fail("item already exists; pass --force to overwrite");
+      const created = item.creationDate ? String(item.creationDate).slice(0, 10) : "unknown date";
+      const confirmed = await confirmPrompt(`Overwrite ${definition.item} (created ${created})?`);
+      if (!confirmed) fail("aborted; use --force to overwrite without confirmation");
+    }
     setItemField(item, field, value);
     runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(item)).toString("base64"));
     console.error(`secret: updated item ${definition.item}`);
@@ -280,6 +304,7 @@ Options:
   --config FILE       Use FILE instead of ./.secret.json
   --output FILE       With env: atomically write dotenv to FILE (mode 0600)
   --generate          With set: generate a random password instead of prompting
+  --force, -f         With set: overwrite an existing item without confirmation
 
 Config precedence (later wins):
   ~/.config/secret/defaults.json  Nix-managed global aliases
@@ -322,7 +347,7 @@ const main = async (): Promise<void> => {
       ? runBw(["generate", "-ulns", "--length", "32"])
       : await promptHidden(`Enter value for ${alias}`);
     if (!value || placeholderValues.has(value)) fail(`refusing empty or placeholder value for ${alias}`);
-    setValue(alias, definition, value);
+    await setValue(alias, definition, value, options.force ?? false);
     console.error(`secret: set ${alias} (${definition.item}, ${definition.field || "password"})`);
   } else if (options.command === "env") {
     if (!loaded.selectedAliases?.length) {
