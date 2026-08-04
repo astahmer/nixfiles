@@ -47,6 +47,10 @@ secret sync
 secret status --check
 ```
 
+Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
+`in`, `e`, `pr`, `d`, `re`, `h`), so `secret g github-token` is the same as
+`secret get github-token`.
+
 `--copy` puts the value on the clipboard instead of stdout.
 `secret id` prints the resolved Bitwarden item id without the value; use ids
 in configs when two vault items could share a name. `secret pin` automates
@@ -59,6 +63,33 @@ vault is not unlocked, for scripts.
 
 Aliases complete in zsh for `get`/`set`/`id`/`totp`; the completion is lazy and
 cached for 60 seconds, so shell startup is unaffected.
+
+## Project setup
+
+Scaffold a project `.secret.json` without writing JSON by hand:
+
+```sh
+secret init
+```
+
+`secret init` writes `.secret.json` in the current directory with one `EXAMPLE`
+alias whose item prefix is the directory name (`myapp/example` from a `myapp/`
+directory), so only the names need editing. It refuses to overwrite an existing
+file unless `--force`/`-f` is given.
+
+See everything a scope resolves without touching the vault:
+
+```sh
+secret print          # project scope (.secret.json found upward), incl. env overrides
+secret print global   # ~/.config/secret/config.json
+secret print nix      # Nix-managed defaults.json
+```
+
+`secret print [project|global|nix]` prints one line per alias — alias, env
+(`prod` for the base mapping, or the override name), item, field, and dotenv
+key — sorted for stable diffing. Values are never shown and no vault access
+happens, so it is safe anywhere. Missing files and unknown scopes explain the
+next step.
 
 ## Writing secrets
 

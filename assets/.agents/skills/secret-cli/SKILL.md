@@ -19,9 +19,15 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret pin <alias>` — replace the item name with the resolved id in the project/user config (never the Nix-managed defaults).
 - `secret totp <alias>` — current 2FA code (`--copy` to the clipboard).
 - `secret sync` — refresh the cached vault explicitly; never automatic.
+- `secret init` — scaffold a project `.secret.json` (directory name as item prefix); refuses to overwrite without `--force`.
+- `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); never values, no vault access; default scope is project.
 - `secret env --output .env` — generate a project dotenv atomically with mode 0600.
 - `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
 - `secret recent` / `secret history` — recently used aliases and recent commands from a value-free local log.
+
+Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
+`in`, `e`, `pr`, `d`, `re`, `h`); `secret g github-token` equals `secret get
+github-token`.
 
 ## Config
 

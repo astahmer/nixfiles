@@ -102,8 +102,9 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|pin\|env\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|pin|env|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|pin\|init\|env\|print\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|pin|init|env|print|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
+assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
 rm -f "$FAKE_CLIP"
 secret get github-token --copy
@@ -147,6 +148,12 @@ assert_ok secret doctor
 assert_fail env FAKE_GET_MISSING=1 secret doctor
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret doctor 2>&1 | head -1)" 'bitwarden: locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "doctor locked hint"
 
+assert_eq "$(secret print)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "print project scope after pin"
+assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "alias pr maps to print"
+assert_eq "$(secret print nix)" "github-token	prod	nixfiles/github-token	password	GITHUB_TOKEN" "print nix scope"
+assert_eq "$(secret print global 2>&1 || true)" "secret: no config file for global scope: $tmp/.config/secret/config.json" "print global missing config explains"
+assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, nix)" "print rejects unknown scope"
+
 secret get github-token >/dev/null
 secret history | rg -q "get.*github-token" || {
   fail=$((fail + 1))
@@ -156,6 +163,19 @@ secret recent | rg -q "github-token" || {
   fail=$((fail + 1))
   echo "FAIL: recent lists used alias" >&2
 }
+
+mkdir -p "$tmp/initdir"
+cd "$tmp/initdir"
+assert_ok secret init
+rg -q '"item": "initdir/example"' .secret.json && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: init scaffolds with directory prefix" >&2
+}
+assert_eq "$(secret init 2>&1 || true)" "secret: .secret.json already exists (use --force to overwrite): $(cd "$tmp/initdir" && pwd -P)/.secret.json" "init refuses overwrite without --force"
+assert_ok secret init --force
+assert_eq "$(secret print)" "EXAMPLE	prod	initdir/example	password	EXAMPLE" "print after init"
+cd "$tmp"
+assert_eq "$(secret print 2>&1 || true)" "secret: no .secret.json found (searched up to \$HOME) — run 'secret init' to scaffold one, or pass --config FILE" "print outside project suggests init"
 
 cd "$tmp/proj/sub"
 assert_ok secret env --output .env
