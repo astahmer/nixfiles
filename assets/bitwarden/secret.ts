@@ -22,6 +22,8 @@ type ParsedOptions = {
   configPath?: string;
   outputPath?: string;
   envName?: string;
+  required?: string[];
+  copy?: boolean;
   generate?: boolean;
   force?: boolean;
 };
@@ -63,6 +65,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let selectedConfig: string | undefined;
   let outputPath: string | undefined;
   let selectedEnv: string | undefined;
+  const required: string[] = [];
+  let copy = false;
   let generate = false;
   let force = false;
 
@@ -76,6 +80,11 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       const value = argv[++index] || fail("--env requires a name");
       if (!/^[A-Za-z0-9_-]+$/.test(value)) fail(`invalid environment name: ${value}`);
       selectedEnv = value;
+    } else if (argument === "--required") {
+      const value = argv[++index] || fail("--required needs alias names");
+      required.push(...value.split(",").map((item) => item.trim()).filter(Boolean));
+    } else if (argument === "--copy") {
+      copy = true;
     } else if (argument === "--generate") {
       generate = true;
     } else if (argument === "--force" || argument === "-f") {
@@ -93,6 +102,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     configPath: selectedConfig ? configPath(selectedConfig) : undefined,
     outputPath: outputPath ? configPath(outputPath) : undefined,
     envName: selectedEnv,
+    required,
+    copy,
     generate,
     force,
   };
@@ -314,8 +325,66 @@ const setValue = async (alias: string, definition: SecretDefinition, value: stri
   }
 };
 
+const copyToClipboard = (value: string): void => {
+  const candidates =
+    process.platform === "darwin"
+      ? [{ command: "pbcopy", args: [] as string[] }]
+      : [
+          { command: "wl-copy", args: [] as string[] },
+          { command: "xclip", args: ["-selection", "clipboard"] },
+        ];
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate.command, candidate.args, { encoding: "utf8", input: value });
+    if (!result.error && result.status === 0) return;
+  }
+  fail(`no clipboard tool available (tried ${candidates.map((candidate) => candidate.command).join(", ")})`);
+};
+
+const doctor = (definitions: Record<string, SecretDefinition>): void => {
+  const current = status();
+  if (!current.authenticated) {
+    console.log('bitwarden: unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"');
+    process.exit(1);
+  }
+  if (!current.unlocked) {
+    console.log('bitwarden: locked — unlock with: export BW_SESSION="$(bw unlock --raw)"');
+    process.exit(1);
+  }
+  console.log("bitwarden: unlocked");
+
+  let problems = 0;
+  for (const [alias, definition] of Object.entries(definitions)) {
+    const field = definition.field || "password";
+    const raw = tryGetItemRaw(definition.item);
+    if (raw === undefined) {
+      console.log(`missing\t${alias}\t${definition.item}`);
+      problems += 1;
+      continue;
+    }
+    let item: Record<string, any>;
+    try {
+      item = JSON.parse(raw) as Record<string, any>;
+    } catch {
+      console.log(`invalid\t${alias}\t${definition.item}`);
+      problems += 1;
+      continue;
+    }
+    const value = itemField(item, field);
+    if (typeof value !== "string" || !value || placeholderValues.has(value)) {
+      console.log(`invalid value\t${alias}\t${definition.item}\t${field}`);
+      problems += 1;
+      continue;
+    }
+    console.log(`ok\t${alias}\t${definition.item}\t${field}`);
+  }
+
+  const total = Object.keys(definitions).length;
+  console.error(`secret doctor: ${total - problems}/${total} aliases ok, ${problems} problem(s)`);
+  if (problems > 0) process.exit(1);
+};
+
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|env> [options]
+  console.log(`Usage: secret <status|list|get|set|env|doctor> [options]
 
 Commands:
   status              Check Bitwarden auth state and print the next command to run
@@ -323,11 +392,14 @@ Commands:
   get <alias>         Print exactly one configured value
   set <alias>         Prompt (hidden) a value and write it to Bitwarden
   env                 Generate dotenv from the project config
+  doctor              Validate configs, Bitwarden state, and alias resolvability
 
 Options:
   --config FILE       Use FILE instead of ./.secret.json
   --output FILE       With env: atomically write dotenv to FILE (mode 0600)
   --env NAME          With env/list/get/set: environment overrides (default: prod)
+  --required a,b,c    With env: fail unless these aliases are in the project config
+  --copy              With get: copy the value to the clipboard instead of stdout
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
@@ -365,7 +437,13 @@ const main = async (): Promise<void> => {
   } else if (options.command === "get") {
     const alias = options.positional[0] || fail("get requires an alias, e.g. secret get github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    console.log(getValue(alias, definition));
+    const value = getValue(alias, definition);
+    if (options.copy) {
+      copyToClipboard(value);
+      console.error(`secret: copied ${alias} to clipboard`);
+    } else {
+      console.log(value);
+    }
   } else if (options.command === "set") {
     const alias = options.positional[0] || fail("set requires an alias, e.g. secret set github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
@@ -379,6 +457,10 @@ const main = async (): Promise<void> => {
     if (!loaded.selectedAliases?.length) {
       fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
     }
+    const missingRequired = options.required?.filter((alias) => !loaded.selectedAliases?.includes(alias)) || [];
+    if (missingRequired.length) {
+      fail(`required alias(es) not in project config: ${missingRequired.join(", ")} (add them to .secret.json)`);
+    }
     const lines = loaded.selectedAliases.map((alias) => {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
       return `${dotenvKey(alias, definition)}=${dotenvValue(getValue(alias, definition))}`;
@@ -390,6 +472,8 @@ const main = async (): Promise<void> => {
     } else {
       process.stdout.write(output);
     }
+  } else if (options.command === "doctor") {
+    doctor(loaded.definitions);
   } else {
     fail(`unknown command: ${options.command}`);
   }
