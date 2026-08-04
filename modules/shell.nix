@@ -241,6 +241,37 @@ in
 
       programs.zsh.completionInit = "autoload -U compinit && compinit -C";
 
+      # secret: lazy alias completion, cached 60s; no startup cost beyond
+      # registering one widget. The cache is refreshed only when TAB is used.
+      programs.zsh.initExtra = ''
+        _secret_alias_cache() {
+          local cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/secret"
+          local cache="$cache_dir/aliases"
+          mkdir -p "$cache_dir"
+          local mtime
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            mtime="$(stat -f %m "$cache" 2>/dev/null || true)"
+          else
+            mtime="$(stat -c %Y "$cache" 2>/dev/null || true)"
+          fi
+          if [[ -z "$mtime" ]] || (( $(date +%s) - mtime > 60 )); then
+            secret list 2>/dev/null > "$cache"
+          fi
+          cat "$cache" 2>/dev/null
+        }
+
+        _secret() {
+          local -a aliases
+          local line
+          for line in ''${(f)"$(_secret_alias_cache)"}; do
+            aliases+=("''${line%%$'\t'*}:''${line}")
+          done
+          _describe 'alias' aliases
+        }
+
+        compdef _secret secret
+      '';
+
       home.sessionVariables = {
         HISTFILE = "${config.xdg.configHome}/zsh/.zsh_history";
         # Clone anywhere; point ~/.config/nixfiles at it (nixfiles-here).
