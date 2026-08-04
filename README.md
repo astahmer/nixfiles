@@ -68,7 +68,7 @@ The default user is `astahmer`. Change `flake.username` in `modules/global-optio
 
 ### Secrets and MCP credentials
 
-Bitwarden projection, the optional `rbw` client, and the GitHub token flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). The Executor seeder wires the projected token into its local auth store when needed; Home Manager does not refresh vault secrets automatically.
+The global `secret` command, project-local `.secret.json` files, Bitwarden, and the explicit `.env` projection flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). Home Manager does not contact Bitwarden during activation.
 
 The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` point at the local Executor instance (`executor mcp`).
 
@@ -110,7 +110,7 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/tools.nix` for jjui, lazygit, and lazydocker
 - `modules/launcher.nix` for Vicinae on Linux
 - `modules/git.nix` for git defaults
-- `modules/bitwarden.nix` for Bitwarden desktop, CLI, and optional `rbw` client; see [`docs/bitwarden.md`](docs/bitwarden.md)
+- `modules/bitwarden.nix` for Bitwarden, `rbw`, and the scoped `secret` CLI; see [`docs/bitwarden.md`](docs/bitwarden.md)
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
 - `modules/opencodex.nix` for `opencodex` (`ocx`) on both macOS and NixOS
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills

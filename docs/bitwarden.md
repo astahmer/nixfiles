@@ -1,14 +1,10 @@
-# Bitwarden and local secret projections
+# Bitwarden and the `secret` command
 
-Bitwarden Password Manager remains the source of truth for the few runtime
-secrets used by this setup. The Home Manager module installs the official
-`bw` CLI, Bitwarden Desktop, the optional agent-backed `rbw` client, and the
-explicit `secrets-refresh` projection command.
+Bitwarden Password Manager remains the source of truth. The profile installs
+`bw`, Bitwarden Desktop, optional agent-backed `rbw`, and a small global
+`secret` command for scoped retrieval.
 
-## Interactive access
-
-`bw` is the official, fully featured client. It requires an unlocked session
-key for vault reads:
+## Login
 
 ```sh
 bw config server https://vault.bitwarden.eu
@@ -16,46 +12,60 @@ bw login
 export BW_SESSION="$(bw unlock --raw)"
 ```
 
-`rbw` is optional and is more convenient for interactive lookups because its
-background agent keeps the unlocked state in memory instead of requiring
-`BW_SESSION` to be passed around. It is not used by automation and does not
-replace the official `bw` CLI for the projection script.
+`rbw` is convenient for interactive lookups because its agent holds unlocked
+state in memory. `secret` uses the official `bw` CLI and the current
+`BW_SESSION`; it never stores or exports that session.
 
-## Runtime projections
+## Nix defaults
 
-`secrets-refresh` is intentionally manual. Run it after unlocking Bitwarden
-or after changing a vault item:
+Nix deploys public aliases to `~/.config/secret/defaults.json`. Values are
+never committed. Inspect configured aliases without touching the vault:
 
 ```sh
-secrets-refresh
-unset BW_SESSION
+secret list
+secret status
 ```
 
-It reads these stable item names:
+Retrieve exactly one configured value:
 
-- `nixfiles/opencodex-opencode-go-api-key`
-- `nixfiles/github-token`
+```sh
+secret get github-token
+```
 
-It writes mode-600 files used by local tools:
+## Project `.env` files
 
-- `~/.config/opencodex/secrets.env`
-- `~/.config/opencode/github-token`
+Any app repository can add a value-free `.secret.json`:
 
-The projected GitHub token file is consumed by Executor's GitHub integration.
+```json
+{
+  "secrets": {
+    "DATABASE_URL": { "item": "myapp/database-url", "field": "password" },
+    "STRIPE_KEY": { "item": "myapp/stripe-key", "field": "password" }
+  }
+}
+```
 
-The script writes through temporary files and atomic renames. It does not
-export secrets globally, and Home Manager does not run it during every switch.
-If the vault is locked, existing projections remain unchanged until the next
-manual refresh.
+Then generate only those declared values:
 
-## Why not another hosted secret manager?
+```sh
+secret env --output .env
+```
 
-Bitwarden Password Manager already provides the cross-machine encrypted vault
-needed here. Bitwarden Secrets Manager (`bws`) is a separate machine-account
-product, not a free personal-plan extension, so adding it would introduce a
-second hosted system and another token without improving this small workflow.
+Use `--config path/to/secrets.json` for another config. Existing `.env` files
+are replaced atomically only after every requested value succeeds and are
+written mode `0600`. `secret` never enumerates or synchronizes the whole vault.
 
-If the main pain is interactive CLI friction, use `rbw`. If the goal later
-becomes encrypted project secrets committed to the repository, evaluate SOPS
-with age separately; it solves a different problem and should not replace the
-runtime projection needed by OpenCodex and MCP clients.
+The Nix-managed consumers use the same scoped model:
+
+- `opencodex-opencode-go-api-key` maps to the OpenCodex dotenv variable.
+- `github-token` maps to the raw GitHub token projection consumed by Executor.
+
+## Why not `sdk-sm`/`bws`?
+
+`bitwarden/sdk-sm` and `bws` are for the separate Bitwarden Secrets Manager
+product. They require organization machine-account/project credentials and
+cannot read a personal free-tier Password Manager vault. Keep using `bw` here.
+
+If the goal later becomes encrypted secrets committed to a repository, evaluate
+SOPS with age separately; it solves a different problem than runtime `.env`
+projection.

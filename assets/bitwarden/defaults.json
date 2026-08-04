@@ -1,0 +1,14 @@
+{
+  "secrets": {
+    "opencodex-opencode-go-api-key": {
+      "item": "nixfiles/opencodex-opencode-go-api-key",
+      "field": "password",
+      "env": "OPENCODEX_OPENCODE_GO_API_KEY"
+    },
+    "github-token": {
+      "item": "nixfiles/github-token",
+      "field": "password",
+      "env": "GITHUB_TOKEN"
+    }
+  }
+}
