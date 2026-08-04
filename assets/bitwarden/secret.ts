@@ -553,7 +553,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|id|totp|sync|pin|rotate|init|env|print|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|get|set|id|totp|sync|pin|rotate|rm|init|env|print|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -565,6 +565,7 @@ Commands:
   sync (sy)           Refresh the Bitwarden vault cache (explicit)
   pin (p) <alias>     Replace the config item name with its resolved id
   rotate (r) <alias>  Generate a new password and overwrite the item (confirm unless --force)
+  rm <alias>          Delete the vault item (confirm unless --force); config entry kept
   init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
   print (pr) [scope]  Show all aliases in a scope: project (default), global, nix
@@ -711,6 +712,27 @@ const main = async (): Promise<void> => {
     await setValue(alias, definition, value, options.force ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "rotate", target: alias, env: environment });
     console.error(`secret: rotated ${alias} (${definition.item}, ${definition.field || "password"})`);
+  } else if (options.command === "rm") {
+    const alias = options.positional[0] || fail("rm requires an alias, e.g. secret rm github-token (see 'secret list')");
+    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    requireUnlocked();
+    const raw = tryGetItemRaw(definition.item);
+    if (raw === undefined) fail(`item not found for ${alias}: ${definition.item}`);
+    let item: Record<string, any>;
+    try {
+      item = JSON.parse(raw) as Record<string, any>;
+    } catch {
+      fail(`Bitwarden returned invalid item data for ${alias}`);
+    }
+    const name = String(item.name || definition.item);
+    if (!options.force) {
+      if (!process.stdin.isTTY) fail(`refusing to delete ${name} without confirmation; pass --force`);
+      const confirmed = await confirmPrompt(`Delete item ${name}?`);
+      if (!confirmed) fail("aborted; use --force to delete without confirmation");
+    }
+    runBw(["delete", "item", definition.item]);
+    recordHistory({ at: new Date().toISOString(), cmd: "rm", target: alias, env: environment });
+    console.error(`secret: deleted item ${definition.item} for ${alias} (config entry kept)`);
   } else if (options.command === "init") {
     initProjectConfig(options.force ?? false, options.positional);
   } else if (options.command === "env") {
