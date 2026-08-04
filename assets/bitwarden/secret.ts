@@ -706,7 +706,7 @@ Options:
   --export            With env: print shell export lines instead of dotenv
   --json              With list/print: machine-readable JSON on stdout
   --all               With print: merge project, global, and nix scopes
-  --diff              With env: show what --output would write without writing
+  --diff              With env: show what --output would write without writing (default target ./.env)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
@@ -898,6 +898,17 @@ const main = async (): Promise<void> => {
       const value = dotenvValue(getValue(alias, definition));
       return options.export ? `export ${key}=${value}` : `${key}=${value}`;
     });
+    if (options.diff) {
+      const target = options.outputPath || join(process.cwd(), ".env");
+      const previous = existsSync(target) ? readFileSync(target, "utf8").split("\n").filter((line) => line !== "") : [];
+      const added = lines.filter((line) => !previous.includes(line));
+      const removed = previous.filter((line) => !lines.includes(line));
+      for (const line of removed) console.log(`- ${line}`);
+      for (const line of added) console.log(`+ ${line}`);
+      recordHistory({ at: new Date().toISOString(), cmd: "env", target: `${target} (diff)`, env: environment });
+      console.error(`secret env --diff: ${added.length} addition(s), ${removed.length} removal(s) for ${target}`);
+      return;
+    }
     const output = `${lines.join("\n")}\n`;
     recordHistory({ at: new Date().toISOString(), cmd: "env", target: options.outputPath || "stdout", env: environment });
     if (options.outputPath) {
