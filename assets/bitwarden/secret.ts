@@ -352,6 +352,43 @@ const initProjectConfig = (force: boolean): void => {
   console.error(`secret: created ${filePath}; replace EXAMPLE, then run 'secret env --output .env'`);
 };
 
+const printConfig = (scope: string, filePath: string): void => {
+  if (!existsSync(filePath)) fail(`no config file for ${scope} scope: ${filePath}`);
+  const config = readJson(filePath);
+  const rows: Array<[string, string, string, string, string]> = [];
+  const addDefinitions = (definitions: Record<string, SecretDefinition> | undefined, envName: string): void => {
+    for (const [alias, definition] of Object.entries(definitions || {})) {
+      if (!definition || typeof definition.item !== "string" || !definition.item) {
+        fail(`invalid definition for ${alias}`);
+      }
+      rows.push([alias, envName, definition.item, definition.field || "password", dotenvKey(alias, definition)]);
+    }
+  };
+  addDefinitions(config.secrets, "prod");
+  for (const [envName, environment] of Object.entries(config.environments || {}).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    addDefinitions(environment.secrets, envName);
+  }
+  rows.sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : 1) : a[0] < b[0] ? -1 : 1));
+  for (const row of rows) console.log(row.join("\t"));
+  console.error(`secret print: ${rows.length} aliases in ${scope} scope (${filePath}). next: secret get <alias>, or secret env --output .env`);
+};
+
+const printScope = (scope: string, selectedConfig?: string): void => {
+  if (scope === "project") {
+    const projectPath = selectedConfig || findProjectConfig();
+    if (!projectPath) {
+      fail(`no ${projectConfigName} found (searched up to $HOME) — run 'secret init' to scaffold one, or pass --config FILE`);
+    }
+    printConfig("project", projectPath);
+  } else if (scope === "global") {
+    printConfig("global", userConfigPath);
+  } else if (scope === "nix") {
+    printConfig("nix", defaultsPath);
+  } else {
+    fail(`unknown scope: ${scope} (available: project, global, nix)`);
+  }
+};
+
 const promptHidden = async (label: string): Promise<string> => {
   if (!process.stdin.isTTY) return readFileSync(0, "utf8").trim();
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
@@ -503,7 +540,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|id|totp|sync|pin|env|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|get|set|id|totp|sync|pin|init|env|print|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -516,6 +553,7 @@ Commands:
   pin (p) <alias>     Replace the config item name with its resolved id
   init (in)           Scaffold a .secret.json template in the current directory
   env (e)             Generate dotenv from the project config
+  print (pr) [scope]  Show all aliases in a scope: project (default), global, nix
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent (re)         Show recently used aliases
   history (h)         Show recent secret commands
@@ -536,7 +574,8 @@ Config precedence (later wins):
   ./.secret.json                  project aliases
 
 Start with 'secret status', then 'secret list' to see aliases, and
-'secret env --output .env' to generate a project .env file.`);
+'secret env --output .env' to generate a project .env file.
+Use 'secret print' to inspect a single scope without vault access.`);
 };
 
 const main = async (): Promise<void> => {
@@ -673,6 +712,10 @@ const main = async (): Promise<void> => {
     } else {
       process.stdout.write(output);
     }
+  } else if (options.command === "print") {
+    const scope = options.positional[0] || "project";
+    printScope(scope, options.configPath);
+    recordHistory({ at: new Date().toISOString(), cmd: "print", target: scope, env: environment });
   } else if (options.command === "doctor") {
     doctor(loaded.definitions);
   } else if (options.command === "recent") {
