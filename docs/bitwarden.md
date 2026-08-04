@@ -24,6 +24,7 @@ never committed. Inspect configured aliases without touching the vault:
 ```sh
 secret list
 secret status
+secret lint
 secret doctor
 secret recent
 secret history
@@ -31,9 +32,14 @@ secret history
 
 `secret status` prints the current auth state and the exact next command to
 run: `bw login` when unauthenticated, `bw unlock` when locked, or the next
-`secret` step when ready. `secret doctor` validates configs, Bitwarden state,
-and every alias without printing values. `secret recent` and `secret history`
-show recently used aliases and recent commands from a value-free local log.
+`secret` step when ready. `secret lint` validates every config offline — item
+references, dotenv keys, and dotenv-key collisions across scopes (two different
+aliases mapping to the same key overwrite each other silently in `.env`; the
+same alias overriding another scope is fine). It never touches the vault, so it
+works locked or unauthenticated and is CI-friendly. `secret doctor` validates
+configs, Bitwarden state, and every alias against the vault without printing
+values. `secret recent` and `secret history` show recently used aliases and
+recent commands from a value-free local log.
 
 Retrieve exactly one configured value:
 
@@ -67,6 +73,9 @@ gone. `secret totp` prints the current 2FA code for an item that carries a TOTP
 seed. `secret sync` refreshes the cached vault explicitly — never automatic.
 `secret status --check` exits nonzero when the vault is not unlocked, for
 scripts.
+
+`secret history --json` and `secret recent --json` print the same information
+as JSON rows for scripts.
 
 `zsh` and `bash` complete a `secret` command word first, then aliases for
 `get`/`set`/`id`/`totp`/`pin`/`rotate`/`rm`. The completion is lazy and cached

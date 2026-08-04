@@ -27,6 +27,7 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret init [alias...]` — scaffold a project `.secret.json` (directory name + kebab alias as item prefix); pass aliases to prefill; refuses to overwrite without `--force`.
 - `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); `--all` merges scopes with a scope column; never values, no vault access.
 - `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--export` prints `export KEY='value'` lines, `--diff` dry-runs without writing.
+- `secret lint` — validate configs offline (items, env keys, dotenv-key collisions); no vault access, works locked; `--json` supported.
 - `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
 - `secret recent` / `secret history` — recently used aliases and recent commands from a value-free local log.
 
@@ -34,6 +35,10 @@ Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
 `r`, `in`, `e`, `pr`, `d`, `re`, `h`); `secret g github-token` equals `secret
 get github-token`. `secret list --json` and `secret print --json` emit
 machine-readable rows on stdout for scripts.
+
+`secret lint` runs before `secret doctor` in a workflow: lint is offline and
+CI-friendly, doctor needs an unlocked vault. Use `secret lint --json` in
+pre-commit checks.
 
 ## Config
 

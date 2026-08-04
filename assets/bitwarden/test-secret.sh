@@ -103,7 +103,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|search\|get\|set\|id\|totp\|sync\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|doctor\|recent\|history')" "status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|search\|get\|set\|id\|totp\|sync\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|lint\|doctor\|recent\|history')" "status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
@@ -168,6 +168,17 @@ assert_ok secret doctor
 assert_fail FAKE_GET_MISSING=1 secret doctor
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret doctor 2>&1 | head -1)" 'bitwarden: locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "doctor locked hint"
 
+assert_ok secret lint
+printf '%s' '{"secrets":{"A":{"item":"x/a"},"B":{"item":"x/b","env":"A"}}}' > "$tmp/collide.json"
+assert_fail secret lint --config "$tmp/collide.json"
+assert_eq "$(secret lint --config "$tmp/collide.json" 2>&1 | head -1)" "project	B	dotenv key A collides with project:A (last wins silently)" "lint flags env-key collision"
+printf '%s' '{"secrets":{"BAD-NAME":{"item":"x/bad"}}}' > "$tmp/badkey.json"
+assert_fail secret lint --config "$tmp/badkey.json"
+assert_eq "$(secret lint --config "$tmp/badkey.json" 2>&1 | head -1)" 'project	BAD-NAME	invalid dotenv key (add an explicit "env" field)' "lint flags invalid dotenv key"
+printf '%s' '{"secrets":{"X":{}}}' > "$tmp/missing.json"
+assert_fail secret lint --config "$tmp/missing.json"
+assert_eq "$(secret lint --config "$tmp/missing.json" --json)" '[{"scope":"project","alias":"X","message":"invalid definition (missing item)"}]' "lint --json rows"
+
 assert_eq "$(secret print)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "print project scope after pin"
 assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "alias pr maps to print"
 assert_eq "$(secret print nix)" "github-token	prod	nixfiles/github-token	password	GITHUB_TOKEN" "print nix scope"
@@ -206,6 +217,14 @@ secret history | rg -q "get.*github-token" || {
 secret recent | rg -q "github-token" || {
   fail=$((fail + 1))
   echo "FAIL: recent lists used alias" >&2
+}
+secret history --json | rg -q '"cmd":"get"' || {
+  fail=$((fail + 1))
+  echo "FAIL: history --json rows" >&2
+}
+secret recent --json | rg -q '"alias":"github-token"' || {
+  fail=$((fail + 1))
+  echo "FAIL: recent --json rows" >&2
 }
 
 mkdir -p "$tmp/initdir"
