@@ -337,19 +337,31 @@ const printHistory = (): void => {
   console.error(`secret history: last ${entries.length} commands (${readHistory().length} total)`);
 };
 
-const initProjectConfig = (force: boolean): void => {
+const initProjectConfig = (force: boolean, aliases: string[]): void => {
   const filePath = join(process.cwd(), projectConfigName);
   if (existsSync(filePath) && !force) {
     fail(`.secret.json already exists (use --force to overwrite): ${filePath}`);
   }
   const prefix = basename(process.cwd());
+  const secrets: Record<string, SecretDefinition> = {};
+  for (const alias of aliases) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(alias)) {
+      fail(`invalid alias name: ${alias} (letters, digits, underscore; must not start with a digit)`);
+    }
+    secrets[alias] = { item: `${prefix}/${alias.toLowerCase().replaceAll("_", "-")}`, field: "password" };
+  }
+  if (!aliases.length) {
+    secrets.EXAMPLE = { item: `${prefix}/example`, field: "password" };
+  }
   const template = {
-    secrets: {
-      EXAMPLE: { item: `${prefix}/example`, field: "password" },
-    },
+    secrets,
   };
   writeAtomic(filePath, `${JSON.stringify(template, null, 2)}\n`);
-  console.error(`secret: created ${filePath}; replace EXAMPLE, then run 'secret env --output .env'`);
+  console.error(
+    aliases.length
+      ? `secret: created ${filePath} with ${aliases.length} alias(es); then run 'secret env --output .env'`
+      : `secret: created ${filePath}; replace EXAMPLE, then run 'secret env --output .env'`,
+  );
 };
 
 const printConfig = (scope: string, filePath: string): void => {
@@ -551,7 +563,7 @@ Commands:
   totp (t) <alias>    Print the current TOTP code (--copy to clipboard)
   sync (sy)           Refresh the Bitwarden vault cache (explicit)
   pin (p) <alias>     Replace the config item name with its resolved id
-  init (in)           Scaffold a .secret.json template in the current directory
+  init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
   print (pr) [scope]  Show all aliases in a scope: project (default), global, nix
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
@@ -691,7 +703,7 @@ const main = async (): Promise<void> => {
     recordHistory({ at: new Date().toISOString(), cmd: "pin", target: alias, env: environment });
     console.error(`secret: pinned ${alias} in ${holder.filePath}`);
   } else if (options.command === "init") {
-    initProjectConfig(options.force ?? false);
+    initProjectConfig(options.force ?? false, options.positional);
   } else if (options.command === "env") {
     if (!loaded.selectedAliases?.length) {
       fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
