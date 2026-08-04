@@ -26,6 +26,10 @@ secret list
 secret status
 ```
 
+`secret status` prints the current auth state and the exact next command to
+run: `bw login` when unauthenticated, `bw unlock` when locked, or the next
+`secret` step when ready.
+
 Retrieve exactly one configured value:
 
 ```sh

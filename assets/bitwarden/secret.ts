@@ -107,14 +107,14 @@ const loadDefinitions = (selectedConfig?: string): {
 
 const runBw = (arguments_: string[]): string => {
   const result = spawnSync("bw", arguments_, { encoding: "utf8" });
-  if (result.error) fail(`could not run Bitwarden CLI: ${result.error.message}`);
+  if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
   if (result.status !== 0) fail("Bitwarden CLI request failed");
   return result.stdout.trim();
 };
 
 const status = (): { authenticated: boolean; unlocked: boolean } => {
   const result = spawnSync("bw", ["status"], { encoding: "utf8" });
-  if (result.error) fail(`could not run Bitwarden CLI: ${result.error.message}`);
+  if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
   if (result.status !== 0) fail("Bitwarden status request failed");
   try {
     const data = JSON.parse(result.stdout) as { status?: string };
@@ -177,14 +177,23 @@ const writeAtomic = (filePath: string, contents: string): void => {
 const printHelp = (): void => {
   console.log(`Usage: secret <status|list|get|env> [options]
 
-  secret status
-  secret list [--config FILE]
-  secret get <alias> [--config FILE]
-  secret env [--config FILE] [--output FILE]
+Commands:
+  status              Check Bitwarden auth state and print the next command to run
+  list                List configured aliases (never touches the vault)
+  get <alias>         Print exactly one configured value
+  env                 Generate dotenv from the project config
 
-Project configuration defaults to .secret.json in the current directory for env.
-Global aliases live in ~/.config/secret/config.json and Nix defaults are deployed
-at ~/.config/secret/defaults.json.`);
+Options:
+  --config FILE       Use FILE instead of ./.secret.json
+  --output FILE       With env: atomically write dotenv to FILE (mode 0600)
+
+Config precedence (later wins):
+  ~/.config/secret/defaults.json  Nix-managed global aliases
+  ~/.config/secret/config.json    personal global aliases
+  ./.secret.json                  project aliases
+
+Start with 'secret status', then 'secret list' to see aliases, and
+'secret env --output .env' to generate a project .env file.`);
 };
 
 const options = parseOptions(Bun.argv.slice(2));
@@ -194,18 +203,26 @@ if (options.command === "help" || options.command === "--help" || options.comman
   printHelp();
 } else if (options.command === "status") {
   const current = status();
-  console.log(current.unlocked ? "unlocked" : current.authenticated ? "locked" : "unauthenticated");
+  if (current.unlocked) {
+    console.log("unlocked — ready. next: secret list, or secret env --output .env");
+  } else if (current.authenticated) {
+    console.log('locked — unlock with: export BW_SESSION="$(bw unlock --raw)"');
+  } else {
+    console.log('unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"');
+  }
 } else if (options.command === "list") {
-  for (const [alias, definition] of Object.entries(loaded.definitions)) {
+  const entries = Object.entries(loaded.definitions);
+  for (const [alias, definition] of entries) {
     console.log(`${alias}\t${definition.item}\t${definition.field || "password"}`);
   }
+  console.error(`secret: ${entries.length} aliases configured. next: secret get <alias>, or secret env --output .env`);
 } else if (options.command === "get") {
-  const alias = options.positional[0] || fail("get requires an alias");
-  const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
+  const alias = options.positional[0] || fail("get requires an alias, e.g. secret get github-token (see 'secret list')");
+  const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
   console.log(getValue(alias, definition));
 } else if (options.command === "env") {
   if (!loaded.selectedAliases?.length) {
-    fail("env requires .secret.json or --config FILE with a secrets map");
+    fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
   }
   const lines = loaded.selectedAliases.map((alias) => {
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
@@ -214,6 +231,7 @@ if (options.command === "help" || options.command === "--help" || options.comman
   const output = `${lines.join("\n")}\n`;
   if (options.outputPath) {
     writeAtomic(options.outputPath, output);
+    console.error(`secret: wrote ${lines.length} aliases to ${options.outputPath} (mode 0600)`);
   } else {
     process.stdout.write(output);
   }
