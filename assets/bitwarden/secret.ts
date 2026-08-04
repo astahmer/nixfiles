@@ -53,6 +53,7 @@ const commandAliases: Record<string, string> = {
   p: "pin",
   r: "rotate",
   u: "unset",
+  l: "lint",
   e: "env",
   d: "doctor",
   pr: "print",
@@ -477,6 +478,69 @@ const searchAliases = (query: string, selectedConfig: string | undefined, json: 
   console.error(`secret search: ${rows.length} match(es) for '${query}'. next: secret get <alias>`);
 };
 
+type LintProblem = { scope: string; alias: string; message: string };
+
+const lint = (selectedConfig: string | undefined, json: boolean): void => {
+  const projectPath = selectedConfig || findProjectConfig();
+  const sources = [
+    { scope: "project", filePath: projectPath },
+    { scope: "global", filePath: userConfigPath },
+    { scope: "nix", filePath: defaultsPath },
+  ];
+  const problems: LintProblem[] = [];
+  const envKeys = new Map<string, { scope: string; alias: string }>();
+  let count = 0;
+
+  for (const source of sources) {
+    if (!source.filePath || !existsSync(source.filePath)) continue;
+    const config = readJson(source.filePath);
+    const addDefinitions = (definitions: Record<string, SecretDefinition> | undefined, envName: string): void => {
+      for (const [alias, definition] of Object.entries(definitions || {})) {
+        count += 1;
+        if (!definition || typeof definition.item !== "string" || !definition.item) {
+          problems.push({ scope: source.scope, alias, message: "invalid definition (missing item)" });
+          continue;
+        }
+        if (envName !== "prod" && !/^[A-Za-z0-9_-]+$/.test(envName)) {
+          problems.push({ scope: source.scope, alias, message: `invalid environment name: ${envName}` });
+        }
+        const envKey = definition.env || alias;
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(envKey)) {
+          problems.push({ scope: source.scope, alias, message: 'invalid dotenv key (add an explicit "env" field)' });
+          continue;
+        }
+        const previous = envKeys.get(envKey);
+        if (previous && previous.alias !== alias) {
+          problems.push({
+            scope: source.scope,
+            alias,
+            message: `dotenv key ${envKey} collides with ${previous.scope}:${previous.alias} (last wins silently)`,
+          });
+        } else {
+          envKeys.set(envKey, { scope: source.scope, alias });
+        }
+      }
+    };
+    addDefinitions(config.secrets, "prod");
+    for (const [envName, environment] of Object.entries(config.environments || {}).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+      addDefinitions(environment.secrets, envName);
+    }
+  }
+
+  if (json) {
+    console.log(JSON.stringify(problems));
+  } else {
+    for (const problem of problems) {
+      console.log(`${problem.scope}\t${problem.alias}\t${problem.message}`);
+    }
+  }
+  if (problems.length) {
+    console.error(`secret lint: ${problems.length} problem(s) across ${count} alias(es). next: fix the config, or run 'secret doctor' for vault checks`);
+    process.exit(1);
+  }
+  console.error(`secret lint: clean — ${count} alias(es) across project, global, and nix. next: secret doctor, or secret env --output .env`);
+};
+
 const printScope = (scope: string, selectedConfig?: string, json = false): void => {
   if (scope === "project") {
     const projectPath = selectedConfig || findProjectConfig();
@@ -698,7 +762,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -717,6 +781,7 @@ Commands:
   init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
   print (pr) [scope]  Show aliases in project (default), global, or nix; --all merges scopes
+  lint (l)            Validate configs offline: items, env keys, collisions (no vault)
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent (re)         Show recently used aliases
   history (h)         Show recent secret commands
@@ -749,7 +814,10 @@ const main = async (): Promise<void> => {
   const options = parseOptions(Bun.argv.slice(2));
   options.command = commandAliases[options.command] || options.command;
   const environment = options.envName || "prod";
-  const loaded = loadDefinitions(options.configPath, environment);
+  const loaded =
+    options.command === "lint"
+      ? { definitions: {} as Record<string, SecretDefinition>, selectedAliases: undefined }
+      : loadDefinitions(options.configPath, environment);
 
   if (options.command === "help" || options.command === "--help" || options.command === "-h") {
     printHelp();
@@ -969,6 +1037,8 @@ const main = async (): Promise<void> => {
     const query = options.positional[0] || fail("search requires a term, e.g. secret search token (matches alias, item, env key)");
     searchAliases(query, options.configPath, options.json);
     recordHistory({ at: new Date().toISOString(), cmd: "search", target: query, env: environment });
+  } else if (options.command === "lint") {
+    lint(options.configPath, options.json);
   } else if (options.command === "doctor") {
     doctor(loaded.definitions);
   } else if (options.command === "recent") {
