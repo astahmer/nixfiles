@@ -102,7 +102,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|env\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|env|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|pin\|env\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|pin|env|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 
 rm -f "$FAKE_CLIP"
@@ -134,6 +134,14 @@ assert_eq "$(secret env --env staging --output x 2>&1 || true)" "secret: unknown
 assert_ok secret env --env dev --output .env.dev
 assert_eq "$(secret env --required DATABASE_URL,STRIPE_KEY --output x 2>&1 || true)" "secret: required alias(es) not in project config: STRIPE_KEY (add them to .secret.json)" "env --required fails on missing alias"
 assert_ok secret env --required DATABASE_URL --output .env
+
+assert_ok secret pin DATABASE_URL
+rg -q '"item": "item-1"' "$tmp/proj/.secret.json" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: pin rewrites item names to ids" >&2
+}
+assert_eq "$(secret pin github-token 2>&1 || true)" "secret: alias github-token is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to pin" "pin refuses Nix-managed defaults"
+assert_fail secret pin nope
 
 assert_ok secret doctor
 assert_fail env FAKE_GET_MISSING=1 secret doctor

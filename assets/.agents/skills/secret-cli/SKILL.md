@@ -16,6 +16,7 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
 - `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.
 - `secret id <alias>` — print the resolved Bitwarden item id without the value; use ids in configs when names can collide.
+- `secret pin <alias>` — replace the item name with the resolved id in the project/user config (never the Nix-managed defaults).
 - `secret totp <alias>` — current 2FA code (`--copy` to the clipboard).
 - `secret sync` — refresh the cached vault explicitly; never automatic.
 - `secret env --output .env` — generate a project dotenv atomically with mode 0600.
