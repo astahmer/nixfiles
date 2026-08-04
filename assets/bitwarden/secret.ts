@@ -52,6 +52,7 @@ const commandAliases: Record<string, string> = {
   sy: "sync",
   p: "pin",
   r: "rotate",
+  u: "unset",
   e: "env",
   d: "doctor",
   pr: "print",
@@ -98,20 +99,18 @@ const findProjectConfig = (): string | undefined => {
   }
 };
 
+const configContainsAlias = (config: SecretConfig, alias: string): boolean =>
+  config.secrets?.[alias] !== undefined ||
+  Object.values(config.environments || {}).some((environment) => environment.secrets?.[alias] !== undefined);
+
 const configWithAlias = (alias: string, projectPath?: string): { filePath: string; config: SecretConfig } | undefined => {
   for (const filePath of projectPath ? [projectPath] : []) {
     const config = readJson(filePath);
-    const hasAlias =
-      config.secrets?.[alias] !== undefined ||
-      Object.values(config.environments || {}).some((environment) => environment.secrets?.[alias] !== undefined);
-    if (hasAlias) return { filePath, config };
+    if (configContainsAlias(config, alias)) return { filePath, config };
   }
   if (existsSync(userConfigPath)) {
     const config = readJson(userConfigPath);
-    const hasAlias =
-      config.secrets?.[alias] !== undefined ||
-      Object.values(config.environments || {}).some((environment) => environment.secrets?.[alias] !== undefined);
-    if (hasAlias) return { filePath: userConfigPath, config };
+    if (configContainsAlias(config, alias)) return { filePath: userConfigPath, config };
   }
   return undefined;
 };
@@ -486,6 +485,43 @@ const printScope = (scope: string, selectedConfig?: string, json = false): void 
   }
 };
 
+const unsetAlias = (alias: string, selectedConfig?: string): void => {
+  const holder = configWithAlias(alias, selectedConfig || findProjectConfig());
+  if (!holder) {
+    fail(`alias ${alias} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to remove it`);
+  }
+  const updated = JSON.parse(JSON.stringify(holder.config)) as SecretConfig;
+  delete updated.secrets?.[alias];
+  for (const environment of Object.values(updated.environments || {})) delete environment.secrets?.[alias];
+  writeAtomic(holder.filePath, `${JSON.stringify(updated, null, 2)}\n`);
+  console.error(`secret: removed ${alias} from ${holder.filePath}`);
+};
+
+const aliasNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+const moveAlias = (from: string, to: string, selectedConfig?: string): void => {
+  if (!aliasNamePattern.test(to)) {
+    fail(`invalid alias name: ${to} (letters, digits, underscore; must not start with a digit)`);
+  }
+  if (from === to) fail(`alias is already named ${to}`);
+  const holder = configWithAlias(from, selectedConfig || findProjectConfig());
+  if (!holder) {
+    fail(`alias ${from} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to rename it`);
+  }
+  if (configContainsAlias(holder.config, to)) fail(`alias ${to} already exists in ${holder.filePath}`);
+  const updated = JSON.parse(JSON.stringify(holder.config)) as SecretConfig;
+  const rename = (definitions: Record<string, SecretDefinition> | undefined): void => {
+    if (definitions?.[from]) {
+      definitions[to] = definitions[from];
+      delete definitions[from];
+    }
+  };
+  rename(updated.secrets);
+  for (const environment of Object.values(updated.environments || {})) rename(environment.secrets);
+  writeAtomic(holder.filePath, `${JSON.stringify(updated, null, 2)}\n`);
+  console.error(`secret: renamed ${from} to ${to} in ${holder.filePath}`);
+};
+
 const promptHidden = async (label: string): Promise<string> => {
   if (!process.stdin.isTTY) return readFileSync(0, "utf8").trim();
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
@@ -637,7 +673,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|search|get|set|id|totp|sync|pin|rotate|rm|init|env|print|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -651,6 +687,8 @@ Commands:
   pin (p) <alias>     Replace the config item name with its resolved id
   rotate (r) <alias>  Generate a new password and overwrite the item (confirm unless --force)
   rm <alias>          Delete the vault item (confirm unless --force); config entry kept
+  unset (u) <alias>   Remove an alias from the project or user config
+  mv <alias> <new>    Rename an alias in the project or user config
   init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
   print (pr) [scope]  Show aliases in project (default), global, or nix; --all merges scopes
@@ -835,6 +873,15 @@ const main = async (): Promise<void> => {
     runBw(["delete", "item", definition.item]);
     recordHistory({ at: new Date().toISOString(), cmd: "rm", target: alias, env: environment });
     console.error(`secret: deleted item ${definition.item} for ${alias} (config entry kept)`);
+  } else if (options.command === "unset") {
+    const alias = options.positional[0] || fail("unset requires an alias, e.g. secret unset github-token (see 'secret list')");
+    unsetAlias(alias, options.configPath);
+    recordHistory({ at: new Date().toISOString(), cmd: "unset", target: alias, env: environment });
+  } else if (options.command === "mv") {
+    const from = options.positional[0] || fail("mv requires an alias, e.g. secret mv github-token gh-token (see 'secret list')");
+    const to = options.positional[1] || fail("mv requires the new alias name, e.g. secret mv github-token gh-token");
+    moveAlias(from, to, options.configPath);
+    recordHistory({ at: new Date().toISOString(), cmd: "mv", target: `${from} -> ${to}`, env: environment });
   } else if (options.command === "init") {
     initProjectConfig(options.force ?? false, options.positional);
   } else if (options.command === "env") {
