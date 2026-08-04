@@ -36,6 +36,21 @@ Retrieve exactly one configured value:
 secret get github-token
 ```
 
+## Writing secrets
+
+Write or rotate a configured value without exposing it in the shell:
+
+```sh
+secret set github-token
+secret set STRIPE_KEY --generate
+```
+
+`secret set` prompts on the terminal with echo disabled (or reads a piped
+value), never prints the value, and creates the vault item when it does not
+exist yet. Values are accepted only from the prompt, stdin, or `--generate`;
+never pass one as an argument. Prefer item IDs over names in configs when two
+vault items could share a name.
+
 ## Project `.env` files
 
 Any app repository can add a value-free `.secret.json`:

@@ -12,6 +12,7 @@
         runtimeInputs = [
           pkgs.bun
           pkgs.bitwarden-cli
+          pkgs.coreutils
         ];
         text = ''
           exec ${pkgs.bun}/bin/bun ${../assets/bitwarden/secret.ts} "$@"
