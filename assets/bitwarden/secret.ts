@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline";
 
@@ -337,6 +337,21 @@ const printHistory = (): void => {
   console.error(`secret history: last ${entries.length} commands (${readHistory().length} total)`);
 };
 
+const initProjectConfig = (force: boolean): void => {
+  const filePath = join(process.cwd(), projectConfigName);
+  if (existsSync(filePath) && !force) {
+    fail(`.secret.json already exists (use --force to overwrite): ${filePath}`);
+  }
+  const prefix = basename(process.cwd());
+  const template = {
+    secrets: {
+      EXAMPLE: { item: `${prefix}/example`, field: "password" },
+    },
+  };
+  writeAtomic(filePath, `${JSON.stringify(template, null, 2)}\n`);
+  console.error(`secret: created ${filePath}; replace EXAMPLE, then run 'secret env --output .env'`);
+};
+
 const promptHidden = async (label: string): Promise<string> => {
   if (!process.stdin.isTTY) return readFileSync(0, "utf8").trim();
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
@@ -499,6 +514,7 @@ Commands:
   totp (t) <alias>    Print the current TOTP code (--copy to clipboard)
   sync (sy)           Refresh the Bitwarden vault cache (explicit)
   pin (p) <alias>     Replace the config item name with its resolved id
+  init (in)           Scaffold a .secret.json template in the current directory
   env (e)             Generate dotenv from the project config
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent (re)         Show recently used aliases
@@ -635,6 +651,8 @@ const main = async (): Promise<void> => {
     writeAtomic(holder.filePath, `${JSON.stringify(updated, null, 2)}\n`);
     recordHistory({ at: new Date().toISOString(), cmd: "pin", target: alias, env: environment });
     console.error(`secret: pinned ${alias} in ${holder.filePath}`);
+  } else if (options.command === "init") {
+    initProjectConfig(options.force ?? false);
   } else if (options.command === "env") {
     if (!loaded.selectedAliases?.length) {
       fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
