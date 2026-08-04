@@ -1,6 +1,13 @@
 {
   description = "Alex's nixfiles";
 
+  nixConfig = {
+    extra-substituters = [ "https://cache.numtide.com" ];
+    extra-trusted-public-keys = [
+      "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+    ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -18,12 +25,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    iris = {
-      url = "github:versenilvis/iris/v0.4.21";
-      inputs.flake-parts.follows = "flake-parts";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     nub = {
       url = "github:nubjs/nub/v0.6.0";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -31,7 +32,6 @@
 
     llm-agents = {
       url = "github:numtide/llm-agents.nix";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
 
   };
@@ -70,12 +70,14 @@
           };
 
           packages = {
+            codex = pkgs'.callPackage ./packages/codex { };
             hunk = import ./packages/hunk.nix { pkgs = pkgs'; };
+            iris = pkgs'.callPackage ./packages/iris { };
             lightjj = import ./packages/lightjj.nix { pkgs = pkgs'; };
             nub = inputs.nub.packages.${system}.default;
             opencodex = import ./packages/opencodex.nix { pkgs = pkgs'; };
             plannotator = import ./packages/plannotator.nix { pkgs = pkgs'; };
-            ryu = import ./packages/ryu.nix { pkgs = pkgs'; };
+            ryu = pkgs'.callPackage ./packages/ryu { };
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
             ghui = import ./packages/ghui.nix { pkgs = pkgs'; };

@@ -6,12 +6,15 @@ in
   config.flake.modules.homeManager.coding =
     { pkgs, lib, ... }:
     let
-      ghui = import ../packages/ghui.nix { inherit pkgs; };
-      hunk = import ../packages/hunk.nix { inherit pkgs; };
-      lightjj = import ../packages/lightjj.nix { inherit pkgs; };
+      packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
       nub = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
-      plannotator = import ../packages/plannotator.nix { inherit pkgs; };
       cursorAgent = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."cursor-agent";
+      ghui = packages.ghui;
+      hunk = packages.hunk;
+      lightjj = packages.lightjj;
+      plannotator = packages.plannotator;
+      codex = packages.codex;
+      opencode = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
     in
     {
       home.packages = [
@@ -20,7 +23,7 @@ in
         pkgs.gh
         pkgs."github-copilot-cli"
         cursorAgent
-        pkgs.codex
+        codex
         plannotator
         pkgs.comma
         pkgs.delta
@@ -50,7 +53,7 @@ in
         pkgs.ripdrag
         pkgs."yt-dlp"
         pkgs.uv
-        pkgs.opencode
+        opencode
         pkgs.htop
         pkgs.btop
         pkgs.devenv

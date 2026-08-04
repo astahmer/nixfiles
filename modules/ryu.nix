@@ -1,14 +1,14 @@
-{ ... }:
+{ inputs, ... }:
 {
   config.flake.modules.homeManager.ryu =
     { pkgs, ... }:
     {
-      home.packages = [ (import ../packages/ryu.nix { inherit pkgs; }) ];
+      home.packages = [ inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.ryu ];
     };
 
   config.flake.modules.nixos.ryu =
     { pkgs, ... }:
     {
-      environment.systemPackages = [ (import ../packages/ryu.nix { inherit pkgs; }) ];
+      environment.systemPackages = [ inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.ryu ];
     };
 }

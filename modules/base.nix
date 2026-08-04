@@ -40,6 +40,18 @@ in
         "nix-command"
         "flakes"
       ];
+      # Keep the Numtide cache available for the pinned binary packages from
+      # llm-agents.nix when this host applies the configuration.
+      nix.settings.extra-substituters = [ "https://cache.numtide.com" ];
+      nix.settings.extra-trusted-public-keys = [
+        "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+      ];
+      # Permit the normal login user to use the additional substituter on this
+      # single-user machine; root remains trusted for system operations.
+      nix.settings.trusted-users = [
+        "root"
+        username
+      ];
       nix.gc = {
         automatic = true;
         dates = "weekly";
