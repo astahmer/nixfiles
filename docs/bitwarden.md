@@ -40,9 +40,12 @@ Retrieve exactly one configured value:
 ```sh
 secret get github-token
 secret get github-token --copy
+secret id github-token
 ```
 
 `--copy` puts the value on the clipboard instead of stdout.
+`secret id` prints the resolved Bitwarden item id without the value; use ids
+in configs when two vault items could share a name.
 
 ## Writing secrets
 
@@ -106,7 +109,15 @@ fails unless every listed alias is present in the selected project config.
 
 Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are
-written mode `0600`. `secret` never enumerates or synchronizes the whole vault.
+written mode `0600`. `.secret.json` is discovered from the current directory
+upward to `$HOME`, so subdirectories of a project work too. `secret` never
+enumerates or synchronizes the whole vault.
+
+## Regression tests
+
+`assets/bitwarden/test-secret.sh` runs a self-contained fake-`bw` suite
+(temp HOME, fake vault, no network); `nixfiles-check` runs it when `bun` is on
+`PATH`.
 
 The Nix-managed consumers use the same scoped model:
 

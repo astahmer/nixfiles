@@ -20,4 +20,9 @@ if [ -n "$nix_files" ]; then
 fi
 
 git diff --check
+if command -v bun >/dev/null 2>&1; then
+  assets/bitwarden/test-secret.sh
+else
+  echo "nixfiles-check: skipping secret regression tests (bun not on PATH)" >&2
+fi
 nix flake check --no-build "$root"
