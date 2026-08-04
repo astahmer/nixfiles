@@ -324,7 +324,7 @@ const recordHistory = (entry: HistoryEntry): void => {
   writeAtomic(historyPath, `${JSON.stringify(entries.slice(-HISTORY_LIMIT), null, 2)}\n`);
 };
 
-const printRecent = (): void => {
+const printRecent = (json: boolean): void => {
   const byAlias = new Map<string, { last: string; count: number }>();
   for (const entry of readHistory()) {
     if (entry.cmd !== "get" && entry.cmd !== "set") continue;
@@ -341,18 +341,26 @@ const printRecent = (): void => {
     console.error("secret recent: no aliases used yet — try secret get <alias> or secret set <alias>");
     return;
   }
-  for (const [alias, info] of rows) console.log(`${alias}\t${info.last}\t${info.count}`);
+  if (json) {
+    console.log(JSON.stringify(rows.map(([alias, info]) => ({ alias, last: info.last, count: info.count }))));
+  } else {
+    for (const [alias, info] of rows) console.log(`${alias}\t${info.last}\t${info.count}`);
+  }
   console.error(`secret recent: ${rows.length} aliases, most recent first`);
 };
 
-const printHistory = (): void => {
+const printHistory = (json: boolean): void => {
   const entries = readHistory().slice(-20);
   if (!entries.length) {
     console.error("secret history: empty — run a secret command first");
     return;
   }
-  for (const entry of entries) {
-    console.log(`${entry.at}\t${entry.cmd}\t${entry.target}\t${entry.env || ""}`);
+  if (json) {
+    console.log(JSON.stringify(entries));
+  } else {
+    for (const entry of entries) {
+      console.log(`${entry.at}\t${entry.cmd}\t${entry.target}\t${entry.env || ""}`);
+    }
   }
   console.error(`secret history: last ${entries.length} commands (${readHistory().length} total)`);
 };
@@ -721,7 +729,7 @@ Options:
   --copy              With get: copy the value to the clipboard instead of stdout
   --check             With status: exit nonzero when not unlocked
   --export            With env: print shell export lines instead of dotenv
-  --json              With list/print: machine-readable JSON on stdout
+  --json              With list/print/history/recent: machine-readable JSON on stdout
   --all               With print: merge project, global, and nix scopes
   --diff              With env: show what --output would write without writing (default target ./.env)
   --generate          With set: generate a random password instead of prompting
@@ -964,9 +972,9 @@ const main = async (): Promise<void> => {
   } else if (options.command === "doctor") {
     doctor(loaded.definitions);
   } else if (options.command === "recent") {
-    printRecent();
+    printRecent(options.json);
   } else if (options.command === "history") {
-    printHistory();
+    printHistory(options.json);
   } else {
     fail(`unknown command: ${options.command}`);
   }
