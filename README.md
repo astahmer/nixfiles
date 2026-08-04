@@ -66,20 +66,11 @@ After that, `nixapply` works from any directory (`NH_FLAKE=~/.config/nixfiles`).
 
 The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
 
-### GitHub token for MCP tools
+### Secrets and MCP credentials
 
-The Home Manager activation hook in `modules/shell.nix` writes a stable token file at `~/.config/opencode/github-token` for the MCP clients used by the editor integrations.
+Bitwarden projection, the optional `rbw` client, and the GitHub token flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). The Executor seeder wires the projected token into its local auth store when needed; Home Manager does not refresh vault secrets automatically.
 
-Resolution order is:
-
-1. Reuse the existing file at `~/.config/opencode/github-token` if it already exists.
-2. Use `GITHUB_TOKEN` if it is set in the current environment.
-3. Fall back to `GH_TOKEN` if that is set instead.
-4. If neither env var is present, ask the `gh` CLI for the current authenticated token with `gh auth token`.
-
-The Executor seeder (`assets/executor/setup.ts`) wires this token into `~/.local/share/executor/auth.json` after `nixbootstrap` or during activation when its inputs change, where Executor's file provider picks it up for the GitHub Copilot MCP integration. The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` now point at the local Executor instance (`executor mcp`) instead of individual MCP servers.
-
-If you want a fresh token written during a switch, make sure `gh` is logged in or export `GITHUB_TOKEN`/`GH_TOKEN` before running Home Manager.
+The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` point at the local Executor instance (`executor mcp`).
 
 ## Linux setup
 
@@ -119,10 +110,12 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/tools.nix` for jjui, lazygit, and lazydocker
 - `modules/launcher.nix` for Vicinae on Linux
 - `modules/git.nix` for git defaults
-- `modules/bitwarden.nix` for Bitwarden desktop plus SSH agent socket wiring
+- `modules/bitwarden.nix` for Bitwarden desktop, CLI, and optional `rbw` client; see [`docs/bitwarden.md`](docs/bitwarden.md)
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
 - `modules/opencodex.nix` for `opencodex` (`ocx`) on both macOS and NixOS
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
+
+The coding profile also installs `modlens`, an image-to-structured-evidence CLI for text-only agents. Its bundled skill is merged into the deployed `~/.agents/skills` tree. Nix does not install or authenticate ModLens providers; configure `agy` or an API provider at runtime, and keep credentials out of the repository.
 
 ## Updating versions
 

@@ -1,4 +1,4 @@
-{ ... }:
+{ inputs, ... }:
 {
   config.flake.modules.homeManager.agents =
     {
@@ -9,6 +9,8 @@
     }:
     let
       executorDir = "${config.home.homeDirectory}/.executor";
+      packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
+      modlens = packages.modlens;
       executorScopeDir = executorDir;
 
       # Exclude deprecated readbro skill from the deployed .agents directory.
@@ -24,6 +26,12 @@
         src = lib.cleanSource ../assets/.agents;
         filter = agentsFilter;
       };
+
+      agentsWithModlens = pkgs.runCommandLocal "agents-with-modlens" { } ''
+        mkdir -p "$out"
+        cp -R --no-preserve=mode "${agentsSrc}/." "$out/"
+        cp -R "${modlens}/share/modlens/skills/modlens" "$out/skills/"
+      '';
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);
       cursorMcp = cursorMcpBase // {
@@ -74,7 +82,7 @@
         } "cp $src $out; chmod +x $out";
     in
     {
-      home.file.".agents".source = agentsSrc;
+      home.file.".agents".source = agentsWithModlens;
       home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
       home.file.".cursor/hooks/caveman-thinking.sh" = {
         source = ../assets/.cursor/hooks/caveman-thinking.sh;

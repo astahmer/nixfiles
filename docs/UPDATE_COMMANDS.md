@@ -28,10 +28,13 @@ refresh the other platform hashes before applying a cross-platform change.
 
 ## Manual package updates
 
-`hunk`, `opencodex`, `plannotator`, and `ghui` remain in the registry as
+`hunk`, `opencodex`, `plannotator`, `ghui`, and `modlens` remain in the registry as
 disabled manual entries because their release version is coupled to an npm
-binary, Bun lockfile, recursive dependency hash, or several platform hashes.
-Update those values together, then run the package build and `--validate fast`.
+binary, Bun lockfile, recursive dependency hash, bundled skill, or several
+platform hashes. Update those values together, then run the package build and
+`--validate fast`. ModLens updates must verify both npm tarballs, the published
+CLI entry point, and the bundled `skills/modlens` references; provider setup
+remains a runtime concern.
 
 ## Flake inputs
 
@@ -49,5 +52,5 @@ OpenCode is consumed from that package set, so update it by updating the
 
 ```bash
 nix flake check --no-build --all-systems
-nix build .#codex .#iris .#ryu --no-link
+nix build .#codex .#iris .#modlens .#ryu --no-link
 ```

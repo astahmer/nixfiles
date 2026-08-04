@@ -200,6 +200,20 @@
         "--flake",
         "ghui"
       ]
+    },
+    {
+      "name": "modlens",
+      "type": "manual",
+      "description": "ModLens and Commander npm tarballs plus bundled agent skill move together",
+      "enabled": false,
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "modlens"
+      ]
     }
   ],
   "validations": {
@@ -256,6 +270,7 @@
           "build",
           ".#codex",
           ".#iris",
+          ".#modlens",
           ".#ryu",
           "--no-link"
         ]

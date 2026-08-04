@@ -3,6 +3,7 @@ result
 .direnv
 *.local.md
 node_modules
+.opencodex-secrets.env
 assets/readbro/node_modules
 .readbro
 .composto

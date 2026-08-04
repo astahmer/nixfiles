@@ -300,41 +300,7 @@ in
         fi
       '';
 
-      home.activation.writeGithubToken = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        token_file="${config.home.homeDirectory}/.config/opencode/github-token"
-        token="$(cat "$token_file" 2>/dev/null || true)"
-
-        if [ -z "$token" ]; then
-          token="''${GITHUB_TOKEN:-}"
-        fi
-
-        if [ -z "$token" ]; then
-          token="''${GH_TOKEN:-}"
-        fi
-
-        if [ -z "$token" ] && command -v gh >/dev/null 2>&1; then
-          token="$(gh auth token 2>/dev/null || true)"
-        fi
-
-        if [ -n "$token" ]; then
-          token_dir="${config.home.homeDirectory}/.config/opencode"
-          mkdir -p "$token_dir"
-          if [ ! -f "$token_file" ] || ! ${pkgs.coreutils}/bin/cmp -s <(printf '%s' "$token") "$token_file"; then
-            if [ -z "$DRY_RUN_CMD" ]; then
-              tmp_file="$token_file.tmp.$$"
-              (umask 077; printf '%s' "$token" > "$tmp_file")
-              ${pkgs.coreutils}/bin/mv "$tmp_file" "$token_file"
-            else
-              echo "Would update GitHub token file: $token_file"
-            fi
-          fi
-          if [ -f "$token_file" ]; then
-            $DRY_RUN_CMD ${pkgs.coreutils}/bin/chmod 600 "$token_file"
-          fi
-        fi
-      '';
-
-      home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" "writeGithubToken" ] ''
+      home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
 
           setup_file="${config.home.homeDirectory}/.executor/setup.ts"

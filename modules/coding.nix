@@ -12,6 +12,7 @@ in
       ghui = packages.ghui;
       hunk = packages.hunk;
       lightjj = packages.lightjj;
+      modlens = packages.modlens;
       plannotator = packages.plannotator;
       codex = packages.codex;
       opencode = packages.opencode;
@@ -34,6 +35,7 @@ in
         pkgs.hyperfine
         pkgs.fresh-editor
         lightjj
+        modlens
         pkgs."jj-starship"
         pkgs.jq
         pkgs.httpie

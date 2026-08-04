@@ -22,6 +22,7 @@ in
             hm.base
             hm.terminal
             hm.shell
+            hm.bitwarden
             hm.git
             hm.jujutsu
             hm.coding

@@ -1,0 +1,280 @@
+{
+  "port": 10100,
+  "managementUsageMaxReadBytes": 67108864,
+  "appOwnedMemoryBudgetMb": 256,
+  "openaiProviderTierVersion": 2,
+  "defaultProvider": "openai",
+  "multiAgentGuidanceEnabled": true,
+  "websockets": false,
+  "codexAutoStart": true,
+  "codexShimAutoRestore": true,
+  "providers": {
+    "openai": {
+      "adapter": "openai-responses",
+      "baseUrl": "https://chatgpt.com/backend-api/codex",
+      "codexAccountMode": "pool",
+      "authMode": "forward"
+    },
+    "opencode-go": {
+      "adapter": "openai-chat",
+      "baseUrl": "https://opencode.ai/zen/go/v1",
+      "authMode": "key",
+      "apiKey": "$OPENCODEX_OPENCODE_GO_API_KEY",
+      "defaultModel": "deepseek-v4-flash",
+      "modelContextWindows": {
+        "kimi-k3": 262144
+      },
+      "modelInputModalities": {
+        "kimi-k3": [
+          "text",
+          "image"
+        ]
+      },
+      "modelReasoningEfforts": {
+        "glm-5.2": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "kimi-k3": [
+          "low",
+          "high",
+          "max"
+        ],
+        "kimi-k2.7-code": [],
+        "kimi-k2.7-code-highspeed": [],
+        "mimo-v2.5": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "mimo-v2.5-pro": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "mimo-v2-omni": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "mimo-v2-pro": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "glm-5": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "glm-5.1": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "qwen3.5-plus": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "qwen3.6-plus": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "qwen3.7-max": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "qwen3.7-plus": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "deepseek-v4-pro": [
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "deepseek-v4-flash": [
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "modelDefaultReasoningEfforts": {
+        "kimi-k3": "max"
+      },
+      "modelReasoningEffortMap": {
+        "kimi-k3": {
+          "none": "none",
+          "low": "low",
+          "medium": "high",
+          "high": "high",
+          "xhigh": "max",
+          "max": "max"
+        },
+        "mimo-v2.5": {
+          "none": "disabled",
+          "minimal": "disabled",
+          "low": "disabled",
+          "medium": "enabled",
+          "high": "enabled",
+          "xhigh": "enabled",
+          "max": "enabled"
+        },
+        "mimo-v2.5-pro": {
+          "none": "disabled",
+          "minimal": "disabled",
+          "low": "disabled",
+          "medium": "enabled",
+          "high": "enabled",
+          "xhigh": "enabled",
+          "max": "enabled"
+        },
+        "mimo-v2-omni": {
+          "none": "disabled",
+          "minimal": "disabled",
+          "low": "disabled",
+          "medium": "enabled",
+          "high": "enabled",
+          "xhigh": "enabled",
+          "max": "enabled"
+        },
+        "mimo-v2-pro": {
+          "none": "disabled",
+          "minimal": "disabled",
+          "low": "disabled",
+          "medium": "enabled",
+          "high": "enabled",
+          "xhigh": "enabled",
+          "max": "enabled"
+        },
+        "glm-5": {
+          "none": "disabled",
+          "minimal": "disabled",
+          "low": "disabled",
+          "medium": "enabled",
+          "high": "enabled",
+          "xhigh": "enabled",
+          "max": "enabled"
+        },
+        "glm-5.1": {
+          "none": "disabled",
+          "minimal": "disabled",
+          "low": "disabled",
+          "medium": "enabled",
+          "high": "enabled",
+          "xhigh": "enabled",
+          "max": "enabled"
+        },
+        "deepseek-v4-pro": {
+          "low": "high",
+          "medium": "high",
+          "high": "high",
+          "xhigh": "max",
+          "max": "max"
+        },
+        "deepseek-v4-flash": {
+          "low": "high",
+          "medium": "high",
+          "high": "high",
+          "xhigh": "max",
+          "max": "max"
+        }
+      },
+      "noVisionModels": [
+        "glm-5.2",
+        "glm-5",
+        "glm-5.1",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "mimo-v2-pro",
+        "mimo-v2.5-pro",
+        "minimax-m2.5",
+        "minimax-m2.7",
+        "qwen3.7-max"
+      ],
+      "noReasoningModels": [
+        "kimi-k2.7-code",
+        "kimi-k2.7-code-highspeed"
+      ],
+      "noTemperatureModels": [
+        "kimi-k3",
+        "kimi-k2.7-code",
+        "kimi-k2.7-code-highspeed"
+      ],
+      "noTopPModels": [
+        "kimi-k3",
+        "kimi-k2.7-code",
+        "kimi-k2.7-code-highspeed"
+      ],
+      "noPenaltyModels": [
+        "kimi-k3",
+        "kimi-k2.7-code",
+        "kimi-k2.7-code-highspeed"
+      ],
+      "autoToolChoiceOnlyModels": [
+        "kimi-k2.7-code",
+        "kimi-k2.7-code-highspeed"
+      ],
+      "preserveReasoningContentModels": [
+        "glm-5.2",
+        "kimi-k3",
+        "kimi-k2.7-code",
+        "kimi-k2.7-code-highspeed",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash"
+      ],
+      "thinkingToggleModels": [
+        "mimo-v2.5",
+        "mimo-v2.5-pro",
+        "mimo-v2-omni",
+        "mimo-v2-pro",
+        "glm-5",
+        "glm-5.1"
+      ],
+      "thinkingBudgetModels": [
+        "qwen3.5-397b",
+        "qwen3.6-35b",
+        "qwen3.5-plus",
+        "qwen3.6-plus",
+        "qwen3.7-max",
+        "qwen3.7-plus"
+      ],
+      "apiKeyPool": [
+        {
+          "id": "opencode-go-primary",
+          "name": "OpenCode Go",
+          "key": "$OPENCODEX_OPENCODE_GO_API_KEY"
+        }
+      ],
+      "note": "GLM, DeepSeek, Kimi, Qwen, MiMo…",
+      "allowPrivateNetwork": false
+    }
+  }
+}

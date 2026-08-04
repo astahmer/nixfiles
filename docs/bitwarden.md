@@ -41,6 +41,8 @@ It writes mode-600 files used by local tools:
 - `~/.config/opencodex/secrets.env`
 - `~/.config/opencode/github-token`
 
+The projected GitHub token file is consumed by Executor's GitHub integration.
+
 The script writes through temporary files and atomic renames. It does not
 export secrets globally, and Home Manager does not run it during every switch.
 If the vault is locked, existing projections remain unchanged until the next

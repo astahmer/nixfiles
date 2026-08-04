@@ -143,11 +143,7 @@ function connectionExists(integration: string): boolean {
 }
 
 function seedGithubToken(): string | undefined {
-  const token =
-    readText(GITHUB_TOKEN_FILE) ??
-    process.env.GITHUB_TOKEN ??
-    process.env.GH_TOKEN ??
-    (commandExists("gh") ? execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim() : undefined);
+  const token = readText(GITHUB_TOKEN_FILE);
 
   if (!token) {
     console.error("No GitHub token found; skipping GitHub Copilot connection.");
