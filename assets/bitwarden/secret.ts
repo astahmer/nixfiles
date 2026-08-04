@@ -614,19 +614,36 @@ const setValue = async (alias: string, definition: SecretDefinition, value: stri
   }
 };
 
-const copyToClipboard = (value: string): void => {
-  const candidates =
-    process.platform === "darwin"
-      ? [{ command: "pbcopy", args: [] as string[] }]
-      : [
-          { command: "wl-copy", args: [] as string[] },
-          { command: "xclip", args: ["-selection", "clipboard"] },
-        ];
-  for (const candidate of candidates) {
+const clipboardCandidates = (): Array<{ command: string; args: string[] }> =>
+  process.platform === "darwin"
+    ? [{ command: "pbcopy", args: [] as string[] }]
+    : [
+        { command: "wl-copy", args: [] as string[] },
+        { command: "xclip", args: ["-selection", "clipboard"] },
+      ];
+
+const tryCopyToClipboard = (value: string): boolean => {
+  for (const candidate of clipboardCandidates()) {
     const result = spawnSync(candidate.command, candidate.args, { encoding: "utf8", input: value });
-    if (!result.error && result.status === 0) return;
+    if (!result.error && result.status === 0) return true;
   }
-  fail(`no clipboard tool available (tried ${candidates.map((candidate) => candidate.command).join(", ")})`);
+  return false;
+};
+
+const copyToClipboard = (value: string): void => {
+  if (!tryCopyToClipboard(value)) {
+    const candidates = clipboardCandidates();
+    fail(`no clipboard tool available (tried ${candidates.map((candidate) => candidate.command).join(", ")})`);
+  }
+};
+
+const deliverValue = (value: string, alias: string): void => {
+  if (tryCopyToClipboard(value)) {
+    console.error(`secret: copied ${alias} to clipboard`);
+  } else {
+    console.log(value);
+    console.error(`secret: clipboard unavailable, printed ${alias} value above`);
+  }
 };
 
 const doctor = (definitions: Record<string, SecretDefinition>): void => {
@@ -680,12 +697,12 @@ Commands:
   list (ls)           List configured aliases (never touches the vault)
   search <term>       Find aliases by alias, item, or env key across scopes (no values)
   get (g) <alias>     Print exactly one configured value
-  set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden
+  set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden; --generate delivers the new value
   id (i) <alias>      Print the resolved Bitwarden item id (no value)
   totp (t) <alias>    Print the current TOTP code (--copy to clipboard)
   sync (sy)           Refresh the Bitwarden vault cache (explicit)
   pin (p) <alias>     Replace the config item name with its resolved id
-  rotate (r) <alias>  Generate a new password and overwrite the item (confirm unless --force)
+  rotate (r) <alias>  Generate a new password and overwrite the item (confirm unless --force); delivers the new value
   rm <alias>          Delete the vault item (confirm unless --force); config entry kept
   unset (u) <alias>   Remove an alias from the project or user config
   mv <alias> <new>    Rename an alias in the project or user config
@@ -780,6 +797,14 @@ const main = async (): Promise<void> => {
     await setValue(alias, definition, value, options.force ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "set", target: alias, env: environment });
     console.error(`secret: set ${alias} (${definition.item}, ${definition.field || "password"})`);
+    if (options.generate) {
+      if (options.copy) {
+        copyToClipboard(value);
+        console.error(`secret: copied ${alias} to clipboard`);
+      } else {
+        deliverValue(value, alias);
+      }
+    }
   } else if (options.command === "id") {
     const alias = options.positional[0] || fail("id requires an alias, e.g. secret id github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
@@ -852,6 +877,12 @@ const main = async (): Promise<void> => {
     await setValue(alias, definition, value, options.force ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "rotate", target: alias, env: environment });
     console.error(`secret: rotated ${alias} (${definition.item}, ${definition.field || "password"})`);
+    if (options.copy) {
+      copyToClipboard(value);
+      console.error(`secret: copied ${alias} to clipboard`);
+    } else {
+      deliverValue(value, alias);
+    }
   } else if (options.command === "rm") {
     const alias = options.positional[0] || fail("rm requires an alias, e.g. secret rm github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
