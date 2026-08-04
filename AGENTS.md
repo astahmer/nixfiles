@@ -70,6 +70,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 ## Notes for Agents
 
 - `assets/.agents` is the source of the global skills tree; update it when adding or changing global skills.
+- Read `AGENTS_TASTE.md` for undocumented user preferences before making changes. After completing a task, update it only when the session revealed a new durable preference not already documented in the repository instructions.
 - `ast-outline` (installed via `nixbootstrap`) is the primary code-exploration tool, replacing readbro. The canonical agent snippet lives in `assets/.agents/AGENTS.md` inside `<!-- ast-outline:start -->` markers; a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
 - `jje <base>` is a shell function (defined in `modules/shell.nix`) that duplicates a commit range (`<base>::@`) then squashes the original — preserves evolution history while producing a single clean commit. Shell reload after applying.
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.
