@@ -15,8 +15,7 @@ Maintain the repository's `AGENTS_TASTE.md` from durable preferences communicate
 
 ## Contract
 
-- Use the current repository by default; accept a repository path when supplied.
-- Read applicable repository instructions and existing `AGENTS_TASTE.md` first.
+- Use the current repository by default (accept a path when supplied); read applicable repository instructions and existing `AGENTS_TASTE.md` first.
 - Work locally and read-only except for `AGENTS_TASTE.md`; never authenticate, use the network, run mutating provider commands, or inspect unrelated repositories.
 - Read bounded excerpts only. Never recursively scan all of `$HOME` or read credentials, tokens, environment dumps, attachments, screenshots, binaries, or unrelated files.
 - Associate a session with the repository only through project/cwd metadata, an unambiguous repository path, provider-directory identity, or a referenced file under the repository. Skip ambiguous records.
@@ -38,23 +37,16 @@ Prefer text or JSON exports. Inspect SQLite read-only when supported; otherwise 
 
 ## Evidence
 
-- Explicit or explicitly accepted and repeated preference: confidence `0.9`.
-- Accepted implementation repeated across sessions: `0.8`.
-- Clear repeated behavior: `0.7`.
-- One unconfirmed signal: normally do not persist; below `0.5` never persists.
+Persist only rules backed by explicit or repeated evidence (confidence `0.8+`):
+explicitly stated or accepted preferences, or accepted implementations
+repeated across sessions. Generalize durable rules, merge duplicates, and
+preserve intentional scope differences. Remove a rule only for explicit
+contradiction or clear obsolescence. Prefer fewer high-confidence rules over
+speculation.
 
-Generalize durable rules, merge duplicates, and preserve intentional scope differences. Remove a rule only for explicit contradiction or clear obsolescence. Prefer fewer high-confidence rules over speculation.
+## Writing rules
 
-## Output and verification
+- One bullet per rule, one line, imperative and specific to this user.
+- Write or rewrite technical text with the rules of ASD-STE100 Simplified Technical English so it is clear, unambiguous, and free of AI slop. One word one meaning, simple tenses, active voice, condition before command.
 
-Write only this format:
-
-```md
-# Agent Taste
-
-- <generalized undocumented preference>. Confidence: <0.0-1.0>
-```
-
-After writing, reread `AGENTS_TASTE.md`; verify its heading, bullets, confidence values, UTF-8 content, and absence of raw/private data. Report rules added or updated, sessions considered by harness and count, and records skipped as unavailable, unreadable, unrelated, ambiguous, or insufficiently evidenced.
-
-There is no taste CLI, dry-run mode, or category tree. If no new durable preference was communicated, do nothing.
+If no new durable preference was communicated, do nothing.
