@@ -59,12 +59,14 @@ in configs when two vault items could share a name. `secret pin` automates
 that: it replaces the item name with the resolved id in the project or user
 config (base mapping and environment overrides), atomically, and refuses the
 Nix-managed `defaults.json`. `secret rotate` generates a new password and
-overwrites the item (confirms first unless `--force`/`-f`). `secret rm` deletes
-the vault item (also confirms unless `--force`) and keeps the config entry, so
-remove the alias from `.secret.json` by hand once the item is gone. `secret
-totp` prints the current 2FA code for an item that carries a TOTP seed. `secret
-sync` refreshes the cached vault explicitly — never automatic. `secret status
---check` exits nonzero when the vault is not unlocked, for scripts.
+overwrites the item (confirms first unless `--force`/`-f`), then copies the new
+value to the clipboard (or prints it when no clipboard tool exists). `secret
+rm` deletes the vault item (also confirms unless `--force`) and keeps the
+config entry, so remove the alias from `.secret.json` by hand once the item is
+gone. `secret totp` prints the current 2FA code for an item that carries a TOTP
+seed. `secret sync` refreshes the cached vault explicitly — never automatic.
+`secret status --check` exits nonzero when the vault is not unlocked, for
+scripts.
 
 `zsh` and `bash` complete a `secret` command word first, then aliases for
 `get`/`set`/`id`/`totp`/`pin`/`rotate`/`rm`. The completion is lazy and cached
@@ -111,6 +113,12 @@ next step.
 JSON rows on stdout (stderr keeps the human summary), for scripts and for
 feeding the completion cache.
 
+`secret print --all` merges project, global, and nix into one view with a scope
+column — useful for audits: find where an alias lives, spot duplicates after a
+`nixapply`, or diff your configs against the Nix-managed defaults. `secret
+search <term>` does the same across scopes, matching alias, item, and dotenv
+key case-insensitively, never values; `--json` works on both.
+
 ## Writing secrets
 
 Write or rotate a configured value without exposing it in the shell:
@@ -126,6 +134,22 @@ exist yet. Overwriting an existing item asks for confirmation (showing its
 creation date); pass `--force`/`-f` to skip. Values are accepted only from the
 prompt, stdin, or `--generate`; never pass one as an argument. Prefer item IDs
 over names in configs when two vault items could share a name.
+
+`secret set --generate` creates a random password and delivers it like
+`secret rotate`: copied to the clipboard, or printed when no clipboard tool
+exists.
+
+Remove or rename an alias in your own configs without hand-editing JSON:
+
+```sh
+secret unset DATABASE_URL
+secret mv DATABASE_URL DB_URL
+```
+
+`unset` deletes the alias from the project or user config (base mapping and
+environment overrides); `mv` renames it in place, rejecting invalid or already
+taken names. Both refuse aliases that only exist in the Nix-managed
+`defaults.json` — copy those into your own config first.
 
 ## Project `.env` files
 
@@ -167,12 +191,15 @@ Environments override the base (prod) mappings with per-env items:
 secret env --env dev --output .env.dev
 secret env --required DATABASE_URL,STRIPE_KEY --output .env
 secret env --export --output exports.sh
+secret env --diff --output .env
 ```
 
 `--env` defaults to `prod`; unknown environments are rejected. `--required`
 fails unless every listed alias is present in the selected project config.
 `--export` prints `export KEY='value'` lines (or writes them atomically with
-`--output`) for sourcing instead of dotenv format.
+`--output`) for sourcing instead of dotenv format. `--diff` resolves every
+value, prints `+`/`-` lines against the target (default `./.env`), and writes
+nothing — a dry run for rotation checklists.
 
 Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are

@@ -13,17 +13,20 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 
 - `secret status` — auth state plus the exact next command; `--check` exits nonzero when not unlocked.
 - `secret list` — configured aliases from merged configs; never touches the vault.
+- `secret search <term>` — find aliases by alias, item, or env key across scopes; no values, no vault access.
 - `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
 - `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.
 - `secret id <alias>` — print the resolved Bitwarden item id without the value; use ids in configs when names can collide.
 - `secret pin <alias>` — replace the item name with the resolved id in the project/user config (never the Nix-managed defaults).
-- `secret rotate <alias>` — generate a new password and overwrite the item; confirm unless `--force`/`-f`.
+- `secret rotate <alias>` — generate a new password and overwrite the item; confirm unless `--force`/`-f`; delivers the new value (clipboard, stdout fallback).
 - `secret rm <alias>` — delete the vault item; confirm unless `--force`/`-f`; the config entry stays.
+- `secret unset <alias>` — remove an alias from the project/user config (never the Nix-managed defaults).
+- `secret mv <alias> <new>` — rename an alias in the project/user config, base and env overrides.
 - `secret totp <alias>` — current 2FA code (`--copy` to the clipboard).
 - `secret sync` — refresh the cached vault explicitly; never automatic.
 - `secret init [alias...]` — scaffold a project `.secret.json` (directory name + kebab alias as item prefix); pass aliases to prefill; refuses to overwrite without `--force`.
-- `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); never values, no vault access; default scope is project.
-- `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--export` prints `export KEY='value'` lines instead.
+- `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); `--all` merges scopes with a scope column; never values, no vault access.
+- `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--export` prints `export KEY='value'` lines, `--diff` dry-runs without writing.
 - `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
 - `secret recent` / `secret history` — recently used aliases and recent commands from a value-free local log.
 

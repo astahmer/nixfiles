@@ -103,7 +103,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|pin\|rotate\|rm\|init\|env\|print\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|pin|rotate|rm|init|env|print|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|search\|get\|set\|id\|totp\|sync\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|doctor\|recent\|history')" "status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
@@ -114,6 +114,9 @@ assert_eq "$(cat "$FAKE_CLIP")" "old-pass" "get --copy"
 assert_eq "$(printf "x" | secret set github-token 2>&1 || true)" "secret: item already exists; pass --force to overwrite" "set blocked without force"
 assert_ok bash -c 'printf "v2" | "$0" "$1" set github-token --force' "$bun_bin" "$script"
 assert_ok env FAKE_GET_MISSING=1 bash -c 'printf "v3" | "$0" "$1" set github-token' "$bun_bin" "$script"
+rm -f "$FAKE_CLIP"
+assert_ok secret set github-token --generate --force
+assert_eq "$(cat "$FAKE_CLIP")" "gen-pass-123" "set --generate delivers value to clipboard"
 assert_eq "$(secret id github-token)" "item-1" "id resolves item id"
 assert_fail secret get nope
 assert_eq "$(secret totp github-token)" "123456" "totp code"
@@ -151,6 +154,7 @@ rg -q -- "-- edit --" "$FAKE_LOG" || {
   fail=$((fail + 1))
   echo "FAIL: rotate edits the vault item" >&2
 }
+assert_eq "$(cat "$FAKE_CLIP")" "gen-pass-123" "rotate delivers new value to clipboard"
 assert_eq "$(secret rm github-token 2>&1 || true)" "secret: refusing to delete nixfiles/github-token without confirmation; pass --force" "rm blocked without force"
 assert_ok secret rm github-token --force
 rg -q -- "-- delete nixfiles/github-token --" "$FAKE_LOG" || {
@@ -169,9 +173,30 @@ assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABAS
 assert_eq "$(secret print nix)" "github-token	prod	nixfiles/github-token	password	GITHUB_TOKEN" "print nix scope"
 assert_eq "$(secret print global 2>&1 || true)" "secret: no config file for global scope: $tmp/.config/secret/config.json" "print global missing config explains"
 assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, nix)" "print rejects unknown scope"
+assert_eq "$(secret print --all)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tnix\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print --all merges scopes"
+assert_eq "$(secret search database)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL')" "search matches alias and env key"
+assert_eq "$(secret search github --json)" "[{\"alias\":\"github-token\",\"scope\":\"nix\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "search --json rows"
+assert_eq "$(secret search nope 2>&1 || true)" "secret search: no matches for 'nope'. next: try another term, or 'secret print --all'" "search no match exits nonzero"
 assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"DATABASE_URL\",\"env\":\"prod\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "print --json rows after pin"
 assert_eq "$(secret list --json)" "[{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"},{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "list --json merged aliases after pin"
 assert_eq "$(secret env --export)" "export DATABASE_URL='old-pass'" "env --export shell lines"
+printf "DATABASE_URL='stale'\n" > .env
+assert_eq "$(secret env --diff --output .env)" "- DATABASE_URL='stale'
++ DATABASE_URL='old-pass'" "env --diff shows changes without writing"
+assert_eq "$(cat .env)" "DATABASE_URL='stale'" "env --diff leaves file untouched"
+cd "$tmp/proj/sub"
+assert_ok secret env --output .env
+cd "$tmp/proj"
+
+assert_ok secret mv DATABASE_URL DB_URL
+assert_eq "$(secret print | head -1)" "DB_URL	dev	item-1	password	DB_URL" "mv renames base and env overrides"
+assert_ok secret mv DB_URL DATABASE_URL
+assert_eq "$(secret mv DATABASE_URL BAD-NAME 2>&1 || true)" "secret: invalid alias name: BAD-NAME (letters, digits, underscore; must not start with a digit)" "mv rejects invalid alias name"
+assert_eq "$(secret mv github-token GH 2>&1 || true)" "secret: alias github-token is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to rename it" "mv refuses Nix-managed defaults"
+assert_ok secret u DATABASE_URL
+assert_fail secret get DATABASE_URL
+assert_eq "$(secret unset DATABASE_URL 2>&1 || true)" "secret: alias DATABASE_URL is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to remove it" "unset second time reports defaults-only"
+assert_eq "$(secret unset github-token 2>&1 || true)" "secret: alias github-token is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to remove it" "unset refuses Nix-managed defaults"
 
 secret get github-token >/dev/null
 secret history | rg -q "get.*github-token" || {
@@ -199,11 +224,9 @@ rg -q 'API_TOKEN' .secret.json && rg -q 'STRIPE_KEY' .secret.json && rg -q 'init
   echo "FAIL: init prefills first alias" >&2
 }
 assert_eq "$(secret init --force BAD-NAME 2>&1 || true)" "secret: invalid alias name: BAD-NAME (letters, digits, underscore; must not start with a digit)" "init rejects invalid alias"
+assert_eq "$(secret mv API_TOKEN STRIPE_KEY 2>&1 || true)" "secret: alias STRIPE_KEY already exists in $(cd "$tmp/initdir" && pwd -P)/.secret.json" "mv refuses rename onto existing alias"
 cd "$tmp"
 assert_eq "$(secret print 2>&1 || true)" "secret: no .secret.json found (searched up to \$HOME) — run 'secret init' to scaffold one, or pass --config FILE" "print outside project suggests init"
-
-cd "$tmp/proj/sub"
-assert_ok secret env --output .env
 
 echo "secret tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
