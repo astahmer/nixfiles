@@ -29,6 +29,8 @@ type ParsedOptions = {
   force?: boolean;
   export?: boolean;
   json?: boolean;
+  all?: boolean;
+  diff?: boolean;
 };
 
 const home = homedir();
@@ -126,6 +128,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let force = false;
   let exportOutput = false;
   let json = false;
+  let all = false;
+  let diff = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -152,6 +156,10 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       exportOutput = true;
     } else if (argument === "--json") {
       json = true;
+    } else if (argument === "--all") {
+      all = true;
+    } else if (argument === "--diff") {
+      diff = true;
     } else if (argument.startsWith("--")) {
       fail(`unknown option: ${argument}`);
     } else {
@@ -172,6 +180,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     force,
     export: exportOutput,
     json,
+    all,
+    diff,
   };
 };
 
@@ -375,29 +385,89 @@ const initProjectConfig = (force: boolean, aliases: string[]): void => {
   );
 };
 
-const printConfig = (scope: string, filePath: string, json: boolean): void => {
-  if (!existsSync(filePath)) fail(`no config file for ${scope} scope: ${filePath}`);
-  const config = readJson(filePath);
-  const rows: Array<{ alias: string; env: string; item: string; field: string; envKey: string }> = [];
+type PrintRow = { alias: string; scope: string; env: string; item: string; field: string; envKey: string };
+
+const configRows = (config: SecretConfig, scope: string): PrintRow[] => {
+  const rows: PrintRow[] = [];
   const addDefinitions = (definitions: Record<string, SecretDefinition> | undefined, envName: string): void => {
     for (const [alias, definition] of Object.entries(definitions || {})) {
       if (!definition || typeof definition.item !== "string" || !definition.item) {
         fail(`invalid definition for ${alias}`);
       }
-      rows.push({ alias, env: envName, item: definition.item, field: definition.field || "password", envKey: dotenvKey(alias, definition) });
+      rows.push({ alias, scope, env: envName, item: definition.item, field: definition.field || "password", envKey: dotenvKey(alias, definition) });
     }
   };
   addDefinitions(config.secrets, "prod");
   for (const [envName, environment] of Object.entries(config.environments || {}).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     addDefinitions(environment.secrets, envName);
   }
-  rows.sort((a, b) => (a.alias === b.alias ? (a.env < b.env ? -1 : 1) : a.alias < b.alias ? -1 : 1));
+  return rows;
+};
+
+const scopeRows = (scope: string, filePath: string | undefined): PrintRow[] =>
+  filePath && existsSync(filePath) ? configRows(readJson(filePath), scope) : [];
+
+const SCOPE_ORDER: Record<string, number> = { project: 0, global: 1, nix: 2 };
+
+const sortRows = (rows: PrintRow[]): void => {
+  rows.sort((a, b) =>
+    a.alias === b.alias
+      ? SCOPE_ORDER[a.scope] - SCOPE_ORDER[b.scope] || (a.env < b.env ? -1 : 1)
+      : a.alias < b.alias
+        ? -1
+        : 1,
+  );
+};
+
+const emitRows = (rows: PrintRow[], json: boolean, includeScope: boolean): void => {
   if (json) {
-    console.log(JSON.stringify(rows));
+    console.log(JSON.stringify(includeScope ? rows : rows.map(({ scope: _scope, ...rest }) => rest)));
+  } else if (includeScope) {
+    for (const row of rows) console.log([row.alias, row.scope, row.env, row.item, row.field, row.envKey].join("\t"));
   } else {
     for (const row of rows) console.log([row.alias, row.env, row.item, row.field, row.envKey].join("\t"));
   }
+};
+
+const printConfig = (scope: string, filePath: string, json: boolean): void => {
+  if (!existsSync(filePath)) fail(`no config file for ${scope} scope: ${filePath}`);
+  const rows = configRows(readJson(filePath), scope);
+  sortRows(rows);
+  emitRows(rows, json, false);
   console.error(`secret print: ${rows.length} aliases in ${scope} scope (${filePath}). next: secret get <alias>, or secret env --output .env`);
+};
+
+const mergedRows = (selectedConfig?: string): PrintRow[] => {
+  const projectPath = selectedConfig || findProjectConfig();
+  const rows = [
+    ...scopeRows("project", projectPath),
+    ...scopeRows("global", userConfigPath),
+    ...scopeRows("nix", defaultsPath),
+  ];
+  sortRows(rows);
+  return rows;
+};
+
+const printAllScopes = (selectedConfig: string | undefined, json: boolean): void => {
+  const rows = mergedRows(selectedConfig);
+  emitRows(rows, json, true);
+  console.error(`secret print: ${rows.length} aliases across project, global, and nix scopes. next: secret get <alias>, or secret env --output .env`);
+};
+
+const searchAliases = (query: string, selectedConfig: string | undefined, json: boolean): void => {
+  const needle = query.toLowerCase();
+  const rows = mergedRows(selectedConfig).filter(
+    (row) =>
+      row.alias.toLowerCase().includes(needle) ||
+      row.item.toLowerCase().includes(needle) ||
+      row.envKey.toLowerCase().includes(needle),
+  );
+  if (!rows.length) {
+    console.error(`secret search: no matches for '${query}'. next: try another term, or 'secret print --all'`);
+    process.exit(1);
+  }
+  emitRows(rows, json, true);
+  console.error(`secret search: ${rows.length} match(es) for '${query}'. next: secret get <alias>`);
 };
 
 const printScope = (scope: string, selectedConfig?: string, json = false): void => {
@@ -567,11 +637,12 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|id|totp|sync|pin|rotate|rm|init|env|print|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|search|get|set|id|totp|sync|pin|rotate|rm|init|env|print|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
   list (ls)           List configured aliases (never touches the vault)
+  search <term>       Find aliases by alias, item, or env key across scopes (no values)
   get (g) <alias>     Print exactly one configured value
   set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden
   id (i) <alias>      Print the resolved Bitwarden item id (no value)
@@ -582,7 +653,7 @@ Commands:
   rm <alias>          Delete the vault item (confirm unless --force); config entry kept
   init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
-  print (pr) [scope]  Show all aliases in a scope: project (default), global, nix
+  print (pr) [scope]  Show aliases in project (default), global, or nix; --all merges scopes
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent (re)         Show recently used aliases
   history (h)         Show recent secret commands
@@ -596,6 +667,8 @@ Options:
   --check             With status: exit nonzero when not unlocked
   --export            With env: print shell export lines instead of dotenv
   --json              With list/print: machine-readable JSON on stdout
+  --all               With print: merge project, global, and nix scopes
+  --diff              With env: show what --output would write without writing
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
@@ -787,9 +860,18 @@ const main = async (): Promise<void> => {
       process.stdout.write(output);
     }
   } else if (options.command === "print") {
-    const scope = options.positional[0] || "project";
-    printScope(scope, options.configPath, options.json);
-    recordHistory({ at: new Date().toISOString(), cmd: "print", target: scope, env: environment });
+    if (options.all) {
+      printAllScopes(options.configPath, options.json);
+      recordHistory({ at: new Date().toISOString(), cmd: "print", target: "all", env: environment });
+    } else {
+      const scope = options.positional[0] || "project";
+      printScope(scope, options.configPath, options.json);
+      recordHistory({ at: new Date().toISOString(), cmd: "print", target: scope, env: environment });
+    }
+  } else if (options.command === "search") {
+    const query = options.positional[0] || fail("search requires a term, e.g. secret search token (matches alias, item, env key)");
+    searchAliases(query, options.configPath, options.json);
+    recordHistory({ at: new Date().toISOString(), cmd: "search", target: query, env: environment });
   } else if (options.command === "doctor") {
     doctor(loaded.definitions);
   } else if (options.command === "recent") {
