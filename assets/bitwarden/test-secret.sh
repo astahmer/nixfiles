@@ -17,7 +17,9 @@ cat > "$tmp/bin/bw" <<'EOF'
 case "$1" in
   status) printf "%s" "$FAKE_BW_STATUS" ;;
   generate) printf "%s" "gen-pass-123" ;;
+  sync) printf "%s\n" "-- sync --" >> "$FAKE_LOG" ;;
   get)
+    if [ "$2" = "totp" ]; then printf "%s" "123456"; exit 0; fi
     printf "%s\n" "-- get $3 --" >> "$FAKE_LOG"
     if [ -n "$FAKE_GET_MISSING" ]; then echo "not found" >&2; exit 1; fi
     printf '{"id":"item-1","name":"%s","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}' "$3"
@@ -100,7 +102,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|env\|doctor\|recent\|history')" "status|list|get|set|id|env|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|get\|set\|id\|totp\|sync\|env\|doctor\|recent\|history')" "status|list|get|set|id|totp|sync|env|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 
 rm -f "$FAKE_CLIP"
@@ -112,6 +114,20 @@ assert_ok bash -c 'printf "v2" | "$0" "$1" set github-token --force' "$bun_bin" 
 assert_ok env FAKE_GET_MISSING=1 bash -c 'printf "v3" | "$0" "$1" set github-token' "$bun_bin" "$script"
 assert_eq "$(secret id github-token)" "item-1" "id resolves item id"
 assert_fail secret get nope
+assert_eq "$(secret totp github-token)" "123456" "totp code"
+rm -f "$FAKE_CLIP"
+secret totp github-token --copy
+assert_eq "$(cat "$FAKE_CLIP")" "123456" "totp --copy"
+assert_ok secret sync
+
+FAKE_BW_STATUS='{"status":"unlocked"}' secret status --check >/dev/null 2>&1 && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: status --check exits 0 when unlocked" >&2
+}
+FAKE_BW_STATUS='{"status":"locked"}' secret status --check >/dev/null 2>&1 && {
+  fail=$((fail + 1))
+  echo "FAIL: status --check exits nonzero when locked" >&2
+} || pass=$((pass + 1))
 
 assert_eq "$(secret list --env dev | rg -c "database-url-dev")" "1" "list picks dev item"
 assert_eq "$(secret env --env staging --output x 2>&1 || true)" "secret: unknown environment: staging (available: prod, dev)" "unknown env rejected"

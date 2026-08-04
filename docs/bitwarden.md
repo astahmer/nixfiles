@@ -41,11 +41,20 @@ Retrieve exactly one configured value:
 secret get github-token
 secret get github-token --copy
 secret id github-token
+secret totp github-token --copy
+secret sync
+secret status --check
 ```
 
 `--copy` puts the value on the clipboard instead of stdout.
 `secret id` prints the resolved Bitwarden item id without the value; use ids
-in configs when two vault items could share a name.
+in configs when two vault items could share a name. `secret totp` prints the
+current 2FA code for an item that carries a TOTP seed. `secret sync` refreshes
+the cached vault explicitly — never automatic. `secret status --check` exits
+nonzero when the vault is not unlocked, for scripts.
+
+Aliases complete in zsh for `get`/`set`/`id`/`totp`; the completion is lazy and
+cached for 60 seconds, so shell startup is unaffected.
 
 ## Writing secrets
 
