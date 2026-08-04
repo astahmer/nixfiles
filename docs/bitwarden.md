@@ -219,8 +219,10 @@ enumerates or synchronizes the whole vault.
 ## Regression tests
 
 `assets/bitwarden/test-secret.sh` runs a self-contained fake-`bw` suite
-(temp HOME, fake vault, no network); `nixfiles-check` runs it when `bun` is on
-`PATH`.
+(temp HOME, fake vault, no network). `assets/bitwarden/tsconfig.json`
+typechecks `secret.ts` strictly (`bun run typecheck` from `assets/bitwarden`,
+after one `bun install`). `nixfiles-check` runs both when `bun` is on `PATH`;
+the typecheck is skipped with a hint until the dev deps are installed.
 
 The Nix-managed consumers use the same scoped model:
 

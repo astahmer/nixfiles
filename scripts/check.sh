@@ -22,6 +22,11 @@ fi
 git diff --check
 if command -v bun >/dev/null 2>&1; then
   assets/bitwarden/test-secret.sh
+  if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
+    (cd assets/bitwarden && bun run typecheck)
+  else
+    echo "nixfiles-check: skipping secret typecheck (run 'bun install' in assets/bitwarden first)" >&2
+  fi
 else
   echo "nixfiles-check: skipping secret regression tests (bun not on PATH)" >&2
 fi
