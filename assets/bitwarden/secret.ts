@@ -24,6 +24,7 @@ type ParsedOptions = {
   envName?: string;
   required?: string[];
   copy?: boolean;
+  check?: boolean;
   generate?: boolean;
   force?: boolean;
 };
@@ -82,6 +83,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let selectedEnv: string | undefined;
   const required: string[] = [];
   let copy = false;
+  let check = false;
   let generate = false;
   let force = false;
 
@@ -100,6 +102,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       required.push(...value.split(",").map((item) => item.trim()).filter(Boolean));
     } else if (argument === "--copy") {
       copy = true;
+    } else if (argument === "--check") {
+      check = true;
     } else if (argument === "--generate") {
       generate = true;
     } else if (argument === "--force" || argument === "-f") {
@@ -119,6 +123,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     envName: selectedEnv,
     required,
     copy,
+    check,
     generate,
     force,
   };
@@ -469,6 +474,7 @@ Options:
   --env NAME          With env/list/get/set: environment overrides (default: prod)
   --required a,b,c    With env: fail unless these aliases are in the project config
   --copy              With get: copy the value to the clipboard instead of stdout
+  --check             With status: exit nonzero when not unlocked
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
@@ -492,10 +498,13 @@ const main = async (): Promise<void> => {
     const current = status();
     if (current.unlocked) {
       console.log("unlocked — ready. next: secret list, or secret env --output .env");
-    } else if (current.authenticated) {
-      console.log('locked — unlock with: export BW_SESSION="$(bw unlock --raw)"');
     } else {
-      console.log('unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"');
+      console.log(
+        current.authenticated
+          ? 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"'
+          : 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"',
+      );
+      if (options.check) process.exit(1);
     }
   } else if (options.command === "list") {
     const entries = Object.entries(loaded.definitions);
