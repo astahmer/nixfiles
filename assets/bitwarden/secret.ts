@@ -13,6 +13,7 @@ type SecretDefinition = {
 
 type SecretConfig = {
   secrets?: Record<string, SecretDefinition>;
+  environments?: Record<string, { secrets?: Record<string, SecretDefinition> }>;
 };
 
 type ParsedOptions = {
@@ -20,6 +21,7 @@ type ParsedOptions = {
   positional: string[];
   configPath?: string;
   outputPath?: string;
+  envName?: string;
   generate?: boolean;
   force?: boolean;
 };
@@ -60,6 +62,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   const positional: string[] = [];
   let selectedConfig: string | undefined;
   let outputPath: string | undefined;
+  let selectedEnv: string | undefined;
   let generate = false;
   let force = false;
 
@@ -69,6 +72,10 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       selectedConfig = argv[++index] || fail("--config requires a file path");
     } else if (argument === "--output") {
       outputPath = argv[++index] || fail("--output requires a file path");
+    } else if (argument === "--env") {
+      const value = argv[++index] || fail("--env requires a name");
+      if (!/^[A-Za-z0-9_-]+$/.test(value)) fail(`invalid environment name: ${value}`);
+      selectedEnv = value;
     } else if (argument === "--generate") {
       generate = true;
     } else if (argument === "--force" || argument === "-f") {
@@ -85,12 +92,13 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     positional,
     configPath: selectedConfig ? configPath(selectedConfig) : undefined,
     outputPath: outputPath ? configPath(outputPath) : undefined,
+    envName: selectedEnv,
     generate,
     force,
   };
 };
 
-const loadDefinitions = (selectedConfig?: string): {
+const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
   definitions: Record<string, SecretDefinition>;
   selectedAliases?: string[];
 } => {
@@ -104,15 +112,31 @@ const loadDefinitions = (selectedConfig?: string): {
     ...(project.secrets || {}),
   };
 
+  if (environment !== "prod") {
+    const sources = [defaults, user, project];
+    if (!sources.some((source) => source.environments?.[environment])) {
+      const available = ["prod", ...new Set(sources.flatMap((source) => Object.keys(source.environments || {})))];
+      fail(`unknown environment: ${environment} (available: ${available.join(", ")})`);
+    }
+    for (const source of sources) {
+      Object.assign(definitions, source.environments?.[environment]?.secrets || {});
+    }
+  }
+
   for (const [alias, definition] of Object.entries(definitions)) {
     if (!definition || typeof definition.item !== "string" || !definition.item) {
       fail(`invalid definition for ${alias}`);
     }
   }
 
+  const projectAliases = projectPath ? Object.keys(project.secrets || {}) : [];
+  if (projectPath && environment !== "prod") {
+    projectAliases.push(...Object.keys(project.environments?.[environment]?.secrets || {}));
+  }
+
   return {
     definitions,
-    selectedAliases: projectPath ? Object.keys(project.secrets || {}) : undefined,
+    selectedAliases: projectPath ? [...new Set(projectAliases)] : undefined,
   };
 };
 
@@ -303,6 +327,7 @@ Commands:
 Options:
   --config FILE       Use FILE instead of ./.secret.json
   --output FILE       With env: atomically write dotenv to FILE (mode 0600)
+  --env NAME          With env/list/get/set: environment overrides (default: prod)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
@@ -317,7 +342,8 @@ Start with 'secret status', then 'secret list' to see aliases, and
 
 const main = async (): Promise<void> => {
   const options = parseOptions(Bun.argv.slice(2));
-  const loaded = loadDefinitions(options.configPath);
+  const environment = options.envName || "prod";
+  const loaded = loadDefinitions(options.configPath, environment);
 
   if (options.command === "help" || options.command === "--help" || options.command === "-h") {
     printHelp();
@@ -360,7 +386,7 @@ const main = async (): Promise<void> => {
     const output = `${lines.join("\n")}\n`;
     if (options.outputPath) {
       writeAtomic(options.outputPath, output);
-      console.error(`secret: wrote ${lines.length} aliases to ${options.outputPath} (mode 0600)`);
+      console.error(`secret: wrote ${lines.length} aliases (env ${environment}) to ${options.outputPath} (mode 0600)`);
     } else {
       process.stdout.write(output);
     }
