@@ -11,6 +11,7 @@ in
       lightjj = import ../packages/lightjj.nix { inherit pkgs; };
       nub = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
       plannotator = import ../packages/plannotator.nix { inherit pkgs; };
+      cursorAgent = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."cursor-agent";
     in
     {
       home.packages = [
@@ -18,6 +19,7 @@ in
         pkgs.bat
         pkgs.gh
         pkgs."github-copilot-cli"
+        cursorAgent
         plannotator
         pkgs.comma
         pkgs.delta
