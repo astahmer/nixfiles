@@ -448,7 +448,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|id|env|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|get|set|id|totp|sync|env|doctor|recent|history> [options]
 
 Commands:
   status              Check Bitwarden auth state and print the next command to run
@@ -456,6 +456,8 @@ Commands:
   get <alias>         Print exactly one configured value
   set <alias>         Prompt (hidden) a value and write it to Bitwarden
   id <alias>          Print the resolved Bitwarden item id (no value)
+  totp <alias>        Print the current TOTP code (--copy to clipboard)
+  sync                Refresh the Bitwarden vault cache (explicit)
   env                 Generate dotenv from the project config
   doctor              Validate configs, Bitwarden state, and alias resolvability
   recent              Show recently used aliases
@@ -537,6 +539,23 @@ const main = async (): Promise<void> => {
     if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
     recordHistory({ at: new Date().toISOString(), cmd: "id", target: alias, env: environment });
     console.log(String(item.id));
+  } else if (options.command === "totp") {
+    const alias = options.positional[0] || fail("totp requires an alias, e.g. secret totp github-token (see 'secret list')");
+    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    requireUnlocked();
+    const code = runBw(["get", "totp", definition.item]);
+    recordHistory({ at: new Date().toISOString(), cmd: "totp", target: alias, env: environment });
+    if (options.copy) {
+      copyToClipboard(code);
+      console.error(`secret: copied ${alias} totp code to clipboard`);
+    } else {
+      console.log(code);
+    }
+  } else if (options.command === "sync") {
+    requireUnlocked();
+    runBw(["sync"]);
+    recordHistory({ at: new Date().toISOString(), cmd: "sync", target: "", env: environment });
+    console.error("secret: vault synced");
   } else if (options.command === "env") {
     if (!loaded.selectedAliases?.length) {
       fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
