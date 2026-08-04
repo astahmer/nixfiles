@@ -1,0 +1,265 @@
+{
+  "updates": [
+    {
+      "name": "codex",
+      "type": "nix-update",
+      "description": "Codex CLI prebuilt release archive",
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "codex",
+        "--use-github-releases",
+        "--github-releases-limit",
+        "100",
+        "--version-regex",
+        "rust-v(.*)"
+      ]
+    },
+    {
+      "name": "iris",
+      "type": "nix-update",
+      "description": "IRIS prebuilt terminal binary",
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "iris"
+      ]
+    },
+    {
+      "name": "lightjj",
+      "type": "nix-update",
+      "description": "lightjj release binary for the current platform",
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "lightjj"
+      ]
+    },
+    {
+      "name": "ryu",
+      "type": "nix-update",
+      "description": "jj-ryu prebuilt release binary",
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "ryu",
+        "--version=unstable"
+      ]
+    },
+    {
+      "name": "nixpkgs",
+      "type": "flake-input",
+      "description": "Primary nixpkgs pin",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "nixpkgs"
+      ]
+    },
+    {
+      "name": "flake-parts",
+      "type": "flake-input",
+      "description": "Flake-parts framework pin",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "flake-parts"
+      ]
+    },
+    {
+      "name": "import-tree",
+      "type": "flake-input",
+      "description": "Automatic module discovery pin",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "import-tree"
+      ]
+    },
+    {
+      "name": "home-manager",
+      "type": "flake-input",
+      "description": "Home Manager module pin",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "home-manager"
+      ]
+    },
+    {
+      "name": "nix-index-database",
+      "type": "flake-input",
+      "description": "Nix index database pin",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "nix-index-database"
+      ]
+    },
+    {
+      "name": "nub",
+      "type": "flake-input",
+      "description": "Nub package pin",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "nub"
+      ]
+    },
+    {
+      "name": "llm-agents",
+      "type": "flake-input",
+      "description": "Numtide agent package set and its compatible nixpkgs pin",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "llm-agents"
+      ]
+    },
+    {
+      "name": "hunk",
+      "type": "manual",
+      "description": "Version, source, and platform npm binary hashes move together",
+      "enabled": false,
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "hunk"
+      ]
+    },
+    {
+      "name": "opencodex",
+      "type": "manual",
+      "description": "NPM tarball, Bun lockfile, and recursive dependency hash move together",
+      "enabled": false,
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "opencodex"
+      ]
+    },
+    {
+      "name": "plannotator",
+      "type": "manual",
+      "description": "Release version and per-platform executable hashes move together",
+      "enabled": false,
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "plannotator"
+      ]
+    },
+    {
+      "name": "ghui",
+      "type": "manual",
+      "description": "Bun dependency closure hash requires a coordinated refresh",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "ghui"
+      ]
+    }
+  ],
+  "validations": {
+    "fast": [
+      {
+        "name": "flake check",
+        "command": [
+          "nix",
+          "flake",
+          "check",
+          "--no-build",
+          "--all-systems"
+        ]
+      },
+      {
+        "name": "macOS Home Manager evaluation",
+        "command": [
+          "nix",
+          "eval",
+          ".#homeConfigurations.macbook.activationPackage.drvPath",
+          "--raw"
+        ]
+      },
+      {
+        "name": "Linux Home Manager evaluation",
+        "systems": [
+          "x86_64-linux"
+        ],
+        "command": [
+          "nix",
+          "eval",
+          ".#homeConfigurations.bazzite.activationPackage.drvPath",
+          "--raw"
+        ]
+      },
+      {
+        "name": "NixOS evaluation",
+        "systems": [
+          "x86_64-linux"
+        ],
+        "command": [
+          "nix",
+          "eval",
+          ".#nixosConfigurations.workstation.config.system.build.toplevel.drvPath",
+          "--raw"
+        ]
+      }
+    ],
+    "prebuilt": [
+      {
+        "name": "prebuilt agent binaries",
+        "command": [
+          "nix",
+          "build",
+          ".#codex",
+          ".#iris",
+          ".#ryu",
+          "--no-link"
+        ]
+      }
+    ]
+  }
+}

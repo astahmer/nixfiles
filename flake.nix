@@ -58,6 +58,25 @@
             inherit system;
             config.allowUnfree = true;
           };
+
+          mkBunApp =
+            name: script:
+            let
+              runner = pkgs'.writeTextFile {
+                name = name;
+                destination = "/bin/${name}";
+                executable = true;
+                text = ''
+                  #!${pkgs'.lib.getExe pkgs'.bun}
+                  await import("file://${script}");
+                '';
+              };
+            in
+            {
+              type = "app";
+              program = "${runner}/bin/${name}";
+              meta.description = "Run the ${name} maintenance app";
+            };
         in
         {
           formatter = pkgs.nixfmt;
@@ -71,17 +90,20 @@
 
           packages = {
             codex = pkgs'.callPackage ./packages/codex { };
-            hunk = import ./packages/hunk.nix { pkgs = pkgs'; };
+            hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
             iris = pkgs'.callPackage ./packages/iris { };
-            lightjj = import ./packages/lightjj.nix { pkgs = pkgs'; };
+            lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
             nub = inputs.nub.packages.${system}.default;
-            opencodex = import ./packages/opencodex.nix { pkgs = pkgs'; };
-            plannotator = import ./packages/plannotator.nix { pkgs = pkgs'; };
+            opencode = inputs.llm-agents.packages.${system}.opencode;
+            opencodex = pkgs'.callPackage ./packages/opencodex { pkgs = pkgs'; };
+            plannotator = pkgs'.callPackage ./packages/plannotator { pkgs = pkgs'; };
             ryu = pkgs'.callPackage ./packages/ryu { };
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
-            ghui = import ./packages/ghui.nix { pkgs = pkgs'; };
+            ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
           };
+
+          apps.update-pins = mkBunApp "update-pins" ./scripts/update-pins.ts;
         };
     };
 }

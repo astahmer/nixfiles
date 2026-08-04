@@ -8,7 +8,7 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-Ak4vx/NM/3pYcodzbG3ZuFkOkOaW/jeSG7kPkdQmqJo=";
   };
 
-  bunLock = ../assets/opencodex/bun.lock;
+  bunLock = ../../assets/opencodex/bun.lock;
 
   # Pins the bun-installed node_modules tree (no lockfile in the npm tarball).
   outputHash = "sha256-ckEOP2nyyJdIx4+V2EjLDu4OXFpA2KiARRSJX8OVAk0=";

@@ -14,7 +14,7 @@ in
       lightjj = packages.lightjj;
       plannotator = packages.plannotator;
       codex = packages.codex;
-      opencode = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
+      opencode = packages.opencode;
     in
     {
       home.packages = [

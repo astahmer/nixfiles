@@ -145,34 +145,29 @@ After updating, run `nix flake check` to verify nothing broke, then apply.
 
 ### Custom packages (`packages/`)
 
-Packages defined in `packages/` use the `finalAttrs` pattern and are exposed as
-flake outputs, making them compatible with
+Packages defined in `packages/<name>/default.nix` use the `finalAttrs` pattern
+and are exposed as flake outputs, making them compatible with
 [`nix-update`](https://github.com/Mic92/nix-update).
 
 ```bash
-# Update a single package to the latest stable release
-nix run nixpkgs#nix-update -- --flake hunk
+# Show the configured package and flake-input pins
+nix run .#update-pins -- --list
 
-# Update ghui to the latest stable release
-nix run nixpkgs#nix-update -- --flake ghui
+# Preview the routine update set without changing files
+nix run .#update-pins -- --dry-run
 
-# Update to the latest unstable (pre-release) version
-nix run nixpkgs#nix-update -- --flake --version unstable lightjj
+# Update a selected set
+nix run .#update-pins -- --only codex,iris,ryu
 
-# Update everything at once (or run per-package)
-nix run nixpkgs#nix-update -- --flake plannotator
-nix run nixpkgs#nix-update -- --flake ryu
-nix run nixpkgs#nix-update -- --flake opencodex
+# Update and run the fast evaluation checks
+nix run .#update-pins -- --validate fast
 ```
 
-
-`nix-update` automatically detects the new version from the upstream GitHub
-releases, updates the `version` field, and refreshes the source hash. For Rust
-packages (ryu) it also refreshes `cargoHash`. For packages with per-platform
-fetch URLs (lightjj, plannotator), the per-platform hashes still need
-manual updates — the main version and source hash are handled automatically.
-`opencodex` is fetched from the npm registry (prebuilt `gui/dist`); bump
-`version`, refresh the tarball `hash`, then rebuild once to refresh `outputHash`.
+The full registry and platform caveats live in
+[`docs/UPDATE_COMMANDS.md`](docs/UPDATE_COMMANDS.md). Iris, Ryu, and Codex are
+packaged from upstream release archives, so normal profile updates do not
+compile their Go or Rust workspaces. Packages with coupled lockfiles or
+per-platform hashes remain explicitly manual in the registry.
 
 After updating, verify with:
 
@@ -184,6 +179,21 @@ nix flake check
 
 Most dependencies come from nixpkgs itself. After a `nix flake update`, simply
 apply the profile — the updated nixpkgs revision provides the latest versions.
+
+### Binary cache
+
+The flake declares Numtide's cache for the `llm-agents.nix` packages and the
+NixOS module persists it for the local login user. On a standalone macOS or
+Linux Home Manager install, the Nix daemon may need the same cache configured
+once in `/etc/nix/nix.conf`; if Nix reports that the user is not trusted, add
+the cache and the login user there before applying again. The relevant values
+are:
+
+```ini
+trusted-users = root astahmer
+extra-substituters = https://cache.numtide.com
+extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
+```
 
 ## Conventions
 
