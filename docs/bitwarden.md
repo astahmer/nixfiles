@@ -24,17 +24,25 @@ never committed. Inspect configured aliases without touching the vault:
 ```sh
 secret list
 secret status
+secret doctor
+secret recent
+secret history
 ```
 
 `secret status` prints the current auth state and the exact next command to
 run: `bw login` when unauthenticated, `bw unlock` when locked, or the next
-`secret` step when ready.
+`secret` step when ready. `secret doctor` validates configs, Bitwarden state,
+and every alias without printing values. `secret recent` and `secret history`
+show recently used aliases and recent commands from a value-free local log.
 
 Retrieve exactly one configured value:
 
 ```sh
 secret get github-token
+secret get github-token --copy
 ```
+
+`--copy` puts the value on the clipboard instead of stdout.
 
 ## Writing secrets
 
@@ -47,9 +55,10 @@ secret set STRIPE_KEY --generate
 
 `secret set` prompts on the terminal with echo disabled (or reads a piped
 value), never prints the value, and creates the vault item when it does not
-exist yet. Values are accepted only from the prompt, stdin, or `--generate`;
-never pass one as an argument. Prefer item IDs over names in configs when two
-vault items could share a name.
+exist yet. Overwriting an existing item asks for confirmation (showing its
+creation date); pass `--force`/`-f` to skip. Values are accepted only from the
+prompt, stdin, or `--generate`; never pass one as an argument. Prefer item IDs
+over names in configs when two vault items could share a name.
 
 ## Project `.env` files
 
@@ -69,6 +78,31 @@ Then generate only those declared values:
 ```sh
 secret env --output .env
 ```
+
+Environments override the base (prod) mappings with per-env items:
+
+```json
+{
+  "secrets": {
+    "DATABASE_URL": { "item": "myapp/database-url", "field": "password" }
+  },
+  "environments": {
+    "dev": {
+      "secrets": {
+        "DATABASE_URL": { "item": "myapp/database-url-dev", "field": "password" }
+      }
+    }
+  }
+}
+```
+
+```sh
+secret env --env dev --output .env.dev
+secret env --required DATABASE_URL,STRIPE_KEY --output .env
+```
+
+`--env` defaults to `prod`; unknown environments are rejected. `--required`
+fails unless every listed alias is present in the selected project config.
 
 Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are

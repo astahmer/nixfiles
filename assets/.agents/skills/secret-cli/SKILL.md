@@ -13,23 +13,31 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 
 - `secret status` — auth state plus the exact next command (login, unlock, or start).
 - `secret list` — configured aliases from merged configs; never touches the vault.
-- `secret get <alias>` — print one configured value, only when a value is explicitly required.
-- `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password.
+- `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
+- `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.
 - `secret env --output .env` — generate a project dotenv atomically with mode 0600.
+- `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
+- `secret recent` / `secret history` — recently used aliases and recent commands from a value-free local log.
 
 ## Config
 
 - `~/.config/secret/defaults.json` — Nix-managed global aliases.
 - `~/.config/secret/config.json` — personal global aliases.
 - `./.secret.json` — project aliases; commit it because it is value-free.
+- `"environments"` in any config — per-env overrides selected with `--env` (default `prod`).
 
 Precedence: defaults, then user, then project. A project adds aliases with its
 own `.secret.json`; it needs no nixfiles change.
+
+Common flows: `secret env --env dev --output .env.dev` for a per-env dotenv,
+and `secret env --required A,B --output .env` to fail fast when a required
+alias is missing from the project config.
 
 ## Safety
 
 - Never print, log, or commit secret values or `BW_SESSION`.
 - Pass values to `set` only via the hidden prompt, stdin, or `--generate`; never as an argument.
+- Overwriting an existing item always confirms first unless `--force`/`-f` is passed.
 - Prefer Bitwarden item IDs over names in configs when names can collide.
 - When a task needs an app's secrets, generate its `.env` with
   `secret env --output .env` and keep `.env` gitignored.
