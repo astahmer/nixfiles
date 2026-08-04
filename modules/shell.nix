@@ -263,13 +263,66 @@ in
         _secret() {
           local -a aliases
           local line
-          for line in ''${(f)"$(_secret_alias_cache)"}; do
-            aliases+=("''${line%%$'\t'*}:''${line}")
-          done
-          _describe 'alias' aliases
+          if (( CURRENT == 2 )); then
+            _describe 'command' \
+              'status:check auth state' 'list:show aliases' 'get:read a value' \
+              'set:write a value' 'id:item id' 'totp:2FA code' 'sync:refresh vault' \
+              'pin:pin item id' 'rotate:rotate password' 'rm:delete item' \
+              'init:scaffold config' 'env:dotenv' 'print:show scope' \
+              'doctor:validate' 'recent:used aliases' 'history:recent commands' \
+              'st:status' 'ls:list' 'g:get' 's:set' 'i:id' 't:totp' 'sy:sync' \
+              'p:pin' 'r:rotate' 'in:init' 'e:env' 'pr:print' 'd:doctor' 're:recent' 'h:history'
+            return 0
+          fi
+          case "$words[CURRENT-1]" in
+            get|set|id|totp|pin|rotate|rm|g|s|i|t|p|r)
+              for line in ''${(f)"$(_secret_alias_cache)"}; do
+                aliases+=("''${line%%$'\t'*}:''${line}")
+              done
+              _describe 'alias' aliases
+              ;;
+          esac
         }
 
         compdef _secret secret
+      '';
+
+      # secret: bash twin of the zsh completion, same cache file. Registers one
+      # function at startup; the cache is touched only on TAB.
+      programs.bash.initExtra = lib.mkAfter ''
+        _secret_alias_cache() {
+          local cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/secret"
+          local cache="$cache_dir/aliases"
+          mkdir -p "$cache_dir"
+          local mtime
+          if [[ "$(uname -s)" == "Darwin" ]]; then
+            mtime="$(stat -f %m "$cache" 2>/dev/null || true)"
+          else
+            mtime="$(stat -c %Y "$cache" 2>/dev/null || true)"
+          fi
+          if [[ -z "$mtime" ]] || (( $(date +%s) - mtime > 60 )); then
+            secret list 2>/dev/null > "$cache"
+          fi
+          awk -F '\t' '{print $1}' "$cache" 2>/dev/null
+        }
+
+        _secret() {
+          local cur prev
+          COMPREPLY=()
+          cur="''${COMP_WORDS[COMP_CWORD]}"
+          if (( COMP_CWORD == 1 )); then
+            COMPREPLY=( $(compgen -W "status list get set id totp sync pin rotate rm init env print doctor recent history st ls g s i t sy p r in e pr d re h" -- "$cur") )
+            return 0
+          fi
+          prev="''${COMP_WORDS[COMP_CWORD-1]}"
+          case "$prev" in
+            get|set|id|totp|pin|rotate|rm|g|s|i|t|p|r)
+              COMPREPLY=( $(compgen -W "$(_secret_alias_cache)" -- "$cur") )
+              ;;
+          esac
+        }
+
+        complete -o default -F _secret secret
       '';
 
       home.sessionVariables = {
