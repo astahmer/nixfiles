@@ -65,6 +65,7 @@
         pkgs.discord
         pkgs."alt-tab-macos"
         pkgs.orbstack
+        pkgs.openusage
       ];
     };
 }
