@@ -1,10 +1,9 @@
 # nixfiles
 
-Personal Nix setup with three entry points:
+Personal Nix setup with two entry points:
 
 - a direct NixOS host in `hosts/`
 - a standalone Home Manager profile for macOS in `hosts/macbook`
-- a standalone Home Manager profile for Linux/Bazzite in `hosts/bazzite`
 
 The repo follows the same broad pattern as the reference configs: `flake-parts` for wiring, `import-tree` for auto-discovery, reusable modules under `modules/`, and thin host/profile files that pick what to enable.
 
@@ -17,8 +16,6 @@ git clone <url> ~/wherever/nixfiles
 cd ~/wherever/nixfiles
 ln -sfn "$(pwd)" ~/.config/nixfiles
 nh home switch . -c macbook -b hm-backup
-# or, on Linux
-nh home switch . -c bazzite -b hm-backup
 # or, if you're on a NixOS machine
 sudo nixos-rebuild switch --flake .#workstation
 ```
@@ -29,13 +26,12 @@ On a fresh machine, run `nixbootstrap` once to install the optional external too
 
 If Home Manager stops on an existing `*.backup` file from an older manual run, rerun the switch with `-b hm-backup`. That keeps the old files in `*.hm-backup` instead of trying to reuse the same backup suffix.
 
-To add a new module, create a `.nix` file under `modules/`, expose it under `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, then add it to `hosts/macbook/default.nix`, `hosts/bazzite/default.nix`, or `hosts/workstation/default.nix`. If one file needs both scopes, export both module attrs from that same file.
+To add a new module, create a `.nix` file under `modules/`, expose it under `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, then add it to `hosts/macbook/default.nix` or `hosts/workstation/default.nix`. If one file needs both scopes, export both module attrs from that same file.
 
 ## Layout
 
 - `modules/` holds reusable modules. Some files export both Home Manager and NixOS modules when a concern spans both scopes.
 - `hosts/macbook/default.nix` wires the standalone Home Manager profile for macOS.
-- `hosts/bazzite/default.nix` wires the standalone Home Manager profile for Linux/Bazzite.
 - `hosts/workstation/default.nix` wires the NixOS host.
 - `assets/.agents/` contains global Copilot skills and is linked into `~/.agents` by Home Manager.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.ts` seeds them idempotently after `nixbootstrap` or when the activation hash changes.
@@ -71,19 +67,6 @@ The default user is `astahmer`. Change `flake.username` in `modules/global-optio
 The global `secret` command, project-local `.secret.json` files, Bitwarden, and the explicit `.env` projection flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). Home Manager does not contact Bitwarden during activation.
 
 The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` point at the local Executor instance (`executor mcp`).
-
-## Linux setup
-
-The Linux profile is managed with standalone Home Manager and is meant to cover Bazzite-style setups without requiring NixOS.
-
-Run:
-
-```bash
-ln -sfn "$(pwd)" ~/.config/nixfiles   # if not already linked
-nh home switch . -c bazzite -b hm-backup
-```
-
-The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
 
 ## NixOS setup
 

@@ -238,18 +238,6 @@
         ]
       },
       {
-        "name": "Linux Home Manager evaluation",
-        "systems": [
-          "x86_64-linux"
-        ],
-        "command": [
-          "nix",
-          "eval",
-          ".#homeConfigurations.bazzite.activationPackage.drvPath",
-          "--raw"
-        ]
-      },
-      {
         "name": "NixOS evaluation",
         "systems": [
           "x86_64-linux"

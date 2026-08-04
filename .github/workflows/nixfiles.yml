@@ -25,7 +25,6 @@ jobs:
       - name: Run repository checks
         run: nix develop --command bash scripts/check.sh
 
-      - name: Evaluate Home Manager profiles
+      - name: Evaluate Home Manager profile
         run: |
           nix eval .#homeConfigurations.macbook.activationPackage.drvPath
-          nix eval .#homeConfigurations.bazzite.activationPackage.drvPath

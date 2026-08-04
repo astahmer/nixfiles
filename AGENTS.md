@@ -1,10 +1,9 @@
 # nixfiles — Agent Guidelines
 
-This repository is a Nix flake for a single user with three entry points:
+This repository is a Nix flake for a single user with two entry points:
 
 - a NixOS host in `hosts/workstation`
 - a standalone macOS Home Manager profile in `hosts/macbook`
-- a standalone Linux/Bazzite Home Manager profile in `hosts/bazzite`
 
 The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/` and `hosts/` are discovered automatically.
 
@@ -23,19 +22,16 @@ After that, `nixapply` works from any cwd (`NH_FLAKE` → `~/.config/nixfiles`).
 
 ```bash
 nh home switch -c macbook -b hm-backup   # alias: nixapply
-# or, on Linux
-nh home switch -c bazzite -b hm-backup
 # or, on NixOS
 sudo nixos-rebuild switch --flake .#workstation
 ```
 
-To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `hosts/macbook/default.nix`, `hosts/bazzite/default.nix`, or `hosts/workstation/default.nix`. If the concern spans both scopes, keep both outputs in the same file.
+To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `hosts/macbook/default.nix` or `hosts/workstation/default.nix`. If the concern spans both scopes, keep both outputs in the same file.
 
 ## Layout
 
 - `modules/` contains reusable modules. Some files export both Home Manager and NixOS modules when needed.
 - `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
-- `hosts/bazzite/default.nix` contains the standalone Linux/Bazzite Home Manager profile.
 - `hosts/workstation/default.nix` contains the NixOS host.
 - `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). ast-outline is installed globally via `uv tool install` by `nixbootstrap`. Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
 - Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies from the deployed `~/.agents`, not the clone.
