@@ -37,6 +37,23 @@ const projectConfigName = ".secret.json";
 const placeholderValues = new Set(["replace-me", "REPLACE-ME"]);
 const HISTORY_LIMIT = 100;
 
+const commandAliases: Record<string, string> = {
+  st: "status",
+  ls: "list",
+  g: "get",
+  s: "set",
+  i: "id",
+  in: "init",
+  t: "totp",
+  sy: "sync",
+  p: "pin",
+  e: "env",
+  d: "doctor",
+  pr: "print",
+  re: "recent",
+  h: "history",
+};
+
 type HistoryEntry = {
   at: string;
   cmd: string;
@@ -474,18 +491,18 @@ const printHelp = (): void => {
   console.log(`Usage: secret <status|list|get|set|id|totp|sync|pin|env|doctor|recent|history> [options]
 
 Commands:
-  status              Check Bitwarden auth state and print the next command to run
-  list                List configured aliases (never touches the vault)
-  get <alias>         Print exactly one configured value
-  set <alias>         Prompt (hidden) a value and write it to Bitwarden
-  id <alias>          Print the resolved Bitwarden item id (no value)
-  totp <alias>        Print the current TOTP code (--copy to clipboard)
-  sync                Refresh the Bitwarden vault cache (explicit)
-  pin <alias>         Replace the config item name with its resolved id
-  env                 Generate dotenv from the project config
-  doctor              Validate configs, Bitwarden state, and alias resolvability
-  recent              Show recently used aliases
-  history             Show recent secret commands
+  status (st)         Check Bitwarden auth state and print the next command to run
+  list (ls)           List configured aliases (never touches the vault)
+  get (g) <alias>     Print exactly one configured value
+  set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden
+  id (i) <alias>      Print the resolved Bitwarden item id (no value)
+  totp (t) <alias>    Print the current TOTP code (--copy to clipboard)
+  sync (sy)           Refresh the Bitwarden vault cache (explicit)
+  pin (p) <alias>     Replace the config item name with its resolved id
+  env (e)             Generate dotenv from the project config
+  doctor (d)          Validate configs, Bitwarden state, and alias resolvability
+  recent (re)         Show recently used aliases
+  history (h)         Show recent secret commands
 
 Options:
   --config FILE       Use FILE instead of ./.secret.json
@@ -508,6 +525,7 @@ Start with 'secret status', then 'secret list' to see aliases, and
 
 const main = async (): Promise<void> => {
   const options = parseOptions(Bun.argv.slice(2));
+  options.command = commandAliases[options.command] || options.command;
   const environment = options.envName || "prod";
   const loaded = loadDefinitions(options.configPath, environment);
 
