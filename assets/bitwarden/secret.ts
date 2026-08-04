@@ -68,10 +68,10 @@ type HistoryEntry = {
   env?: string;
 };
 
-const fail = (message: string, code = 1): never => {
+function fail(message: string, code = 1): never {
   console.error(`secret: ${message}`);
   process.exit(code);
-};
+}
 
 const readJson = (filePath: string): SecretConfig => {
   try {
@@ -133,6 +133,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    if (argument === undefined) continue;
     if (argument === "--config") {
       selectedConfig = argv[++index] || fail("--config requires a file path");
     } else if (argument === "--output") {
@@ -420,7 +421,7 @@ const SCOPE_ORDER: Record<string, number> = { project: 0, global: 1, nix: 2 };
 const sortRows = (rows: PrintRow[]): void => {
   rows.sort((a, b) =>
     a.alias === b.alias
-      ? SCOPE_ORDER[a.scope] - SCOPE_ORDER[b.scope] || (a.env < b.env ? -1 : 1)
+      ? SCOPE_ORDER[a.scope]! - SCOPE_ORDER[b.scope]! || (a.env < b.env ? -1 : 1)
       : a.alias < b.alias
         ? -1
         : 1,
@@ -1026,25 +1027,25 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "print") {
     if (options.all) {
-      printAllScopes(options.configPath, options.json);
+      printAllScopes(options.configPath, options.json ?? false);
       recordHistory({ at: new Date().toISOString(), cmd: "print", target: "all", env: environment });
     } else {
       const scope = options.positional[0] || "project";
-      printScope(scope, options.configPath, options.json);
+      printScope(scope, options.configPath, options.json ?? false);
       recordHistory({ at: new Date().toISOString(), cmd: "print", target: scope, env: environment });
     }
   } else if (options.command === "search") {
     const query = options.positional[0] || fail("search requires a term, e.g. secret search token (matches alias, item, env key)");
-    searchAliases(query, options.configPath, options.json);
+    searchAliases(query, options.configPath, options.json ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "search", target: query, env: environment });
   } else if (options.command === "lint") {
-    lint(options.configPath, options.json);
+    lint(options.configPath, options.json ?? false);
   } else if (options.command === "doctor") {
     doctor(loaded.definitions);
   } else if (options.command === "recent") {
-    printRecent(options.json);
+    printRecent(options.json ?? false);
   } else if (options.command === "history") {
-    printHistory(options.json);
+    printHistory(options.json ?? false);
   } else {
     fail(`unknown command: ${options.command}`);
   }
