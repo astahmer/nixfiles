@@ -62,6 +62,7 @@ list_term() {
   print_row "gh / ghui" "" "GitHub CLI + TUI"
   print_row "herdr / iris / opencode" "" "Agent multiplexer + command suggest + coding agent"
   print_row "cursor-agent" "" "Cursor Agent CLI for terminal and T3 Code"
+  print_row "codex" "" "OpenAI Codex CLI for terminal and T3 Code"
   print_row "plannotator / nub" "" "Plan review UI + agent utils"
 
   print_section "Languages & runtimes"

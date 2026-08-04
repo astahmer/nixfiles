@@ -20,6 +20,7 @@ in
         pkgs.gh
         pkgs."github-copilot-cli"
         cursorAgent
+        pkgs.codex
         plannotator
         pkgs.comma
         pkgs.delta
