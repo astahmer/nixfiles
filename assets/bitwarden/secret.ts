@@ -27,6 +27,8 @@ type ParsedOptions = {
   check?: boolean;
   generate?: boolean;
   force?: boolean;
+  export?: boolean;
+  json?: boolean;
 };
 
 const home = homedir();
@@ -122,6 +124,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let check = false;
   let generate = false;
   let force = false;
+  let exportOutput = false;
+  let json = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -144,6 +148,10 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       generate = true;
     } else if (argument === "--force" || argument === "-f") {
       force = true;
+    } else if (argument === "--export") {
+      exportOutput = true;
+    } else if (argument === "--json") {
+      json = true;
     } else if (argument.startsWith("--")) {
       fail(`unknown option: ${argument}`);
     } else {
@@ -162,6 +170,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     check,
     generate,
     force,
+    export: exportOutput,
+    json,
   };
 };
 
@@ -580,6 +590,8 @@ Options:
   --required a,b,c    With env: fail unless these aliases are in the project config
   --copy              With get: copy the value to the clipboard instead of stdout
   --check             With status: exit nonzero when not unlocked
+  --export            With env: print shell export lines instead of dotenv
+  --json              With list/print: machine-readable JSON on stdout
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
@@ -745,7 +757,9 @@ const main = async (): Promise<void> => {
     }
     const lines = loaded.selectedAliases.map((alias) => {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
-      return `${dotenvKey(alias, definition)}=${dotenvValue(getValue(alias, definition))}`;
+      const key = dotenvKey(alias, definition);
+      const value = dotenvValue(getValue(alias, definition));
+      return options.export ? `export ${key}=${value}` : `${key}=${value}`;
     });
     const output = `${lines.join("\n")}\n`;
     recordHistory({ at: new Date().toISOString(), cmd: "env", target: options.outputPath || "stdout", env: environment });
