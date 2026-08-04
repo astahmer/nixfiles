@@ -31,8 +31,17 @@ type ParsedOptions = {
 const home = homedir();
 const defaultsPath = process.env.SECRET_DEFAULTS_FILE || join(home, ".config", "secret", "defaults.json");
 const userConfigPath = join(home, ".config", "secret", "config.json");
+const historyPath = join(home, ".config", "secret", "history.json");
 const projectConfigName = ".secret.json";
 const placeholderValues = new Set(["replace-me", "REPLACE-ME"]);
+const HISTORY_LIMIT = 100;
+
+type HistoryEntry = {
+  at: string;
+  cmd: string;
+  target: string;
+  env?: string;
+};
 
 const fail = (message: string, code = 1): never => {
   console.error(`secret: ${message}`);
@@ -233,6 +242,55 @@ const writeAtomic = (filePath: string, contents: string): void => {
   renameSync(temporaryPath, filePath);
 };
 
+const readHistory = (): HistoryEntry[] => {
+  if (!existsSync(historyPath)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(historyPath, "utf8")) as unknown;
+    return Array.isArray(parsed) ? (parsed as HistoryEntry[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const recordHistory = (entry: HistoryEntry): void => {
+  const entries = readHistory();
+  entries.push(entry);
+  writeAtomic(historyPath, `${JSON.stringify(entries.slice(-HISTORY_LIMIT), null, 2)}\n`);
+};
+
+const printRecent = (): void => {
+  const byAlias = new Map<string, { last: string; count: number }>();
+  for (const entry of readHistory()) {
+    if (entry.cmd !== "get" && entry.cmd !== "set") continue;
+    const current = byAlias.get(entry.target);
+    if (current) {
+      current.count += 1;
+      if (entry.at > current.last) current.last = entry.at;
+    } else {
+      byAlias.set(entry.target, { last: entry.at, count: 1 });
+    }
+  }
+  const rows = [...byAlias.entries()].sort((a, b) => (a[1].last < b[1].last ? 1 : -1)).slice(0, 10);
+  if (!rows.length) {
+    console.error("secret recent: no aliases used yet — try secret get <alias> or secret set <alias>");
+    return;
+  }
+  for (const [alias, info] of rows) console.log(`${alias}\t${info.last}\t${info.count}`);
+  console.error(`secret recent: ${rows.length} aliases, most recent first`);
+};
+
+const printHistory = (): void => {
+  const entries = readHistory().slice(-20);
+  if (!entries.length) {
+    console.error("secret history: empty — run a secret command first");
+    return;
+  }
+  for (const entry of entries) {
+    console.log(`${entry.at}\t${entry.cmd}\t${entry.target}\t${entry.env || ""}`);
+  }
+  console.error(`secret history: last ${entries.length} commands (${readHistory().length} total)`);
+};
+
 const promptHidden = async (label: string): Promise<string> => {
   if (!process.stdin.isTTY) return readFileSync(0, "utf8").trim();
   spawnSync("stty", ["-echo"], { stdio: "inherit" });
@@ -384,7 +442,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|get|set|env|doctor> [options]
+  console.log(`Usage: secret <status|list|get|set|env|doctor|recent|history> [options]
 
 Commands:
   status              Check Bitwarden auth state and print the next command to run
@@ -393,6 +451,8 @@ Commands:
   set <alias>         Prompt (hidden) a value and write it to Bitwarden
   env                 Generate dotenv from the project config
   doctor              Validate configs, Bitwarden state, and alias resolvability
+  recent              Show recently used aliases
+  history             Show recent secret commands
 
 Options:
   --config FILE       Use FILE instead of ./.secret.json
@@ -438,6 +498,7 @@ const main = async (): Promise<void> => {
     const alias = options.positional[0] || fail("get requires an alias, e.g. secret get github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
     const value = getValue(alias, definition);
+    recordHistory({ at: new Date().toISOString(), cmd: "get", target: alias, env: environment });
     if (options.copy) {
       copyToClipboard(value);
       console.error(`secret: copied ${alias} to clipboard`);
@@ -452,6 +513,7 @@ const main = async (): Promise<void> => {
       : await promptHidden(`Enter value for ${alias}`);
     if (!value || placeholderValues.has(value)) fail(`refusing empty or placeholder value for ${alias}`);
     await setValue(alias, definition, value, options.force ?? false);
+    recordHistory({ at: new Date().toISOString(), cmd: "set", target: alias, env: environment });
     console.error(`secret: set ${alias} (${definition.item}, ${definition.field || "password"})`);
   } else if (options.command === "env") {
     if (!loaded.selectedAliases?.length) {
@@ -466,6 +528,7 @@ const main = async (): Promise<void> => {
       return `${dotenvKey(alias, definition)}=${dotenvValue(getValue(alias, definition))}`;
     });
     const output = `${lines.join("\n")}\n`;
+    recordHistory({ at: new Date().toISOString(), cmd: "env", target: options.outputPath || "stdout", env: environment });
     if (options.outputPath) {
       writeAtomic(options.outputPath, output);
       console.error(`secret: wrote ${lines.length} aliases (env ${environment}) to ${options.outputPath} (mode 0600)`);
@@ -474,6 +537,10 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "doctor") {
     doctor(loaded.definitions);
+  } else if (options.command === "recent") {
+    printRecent();
+  } else if (options.command === "history") {
+    printHistory();
   } else {
     fail(`unknown command: ${options.command}`);
   }
