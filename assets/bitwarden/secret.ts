@@ -375,38 +375,42 @@ const initProjectConfig = (force: boolean, aliases: string[]): void => {
   );
 };
 
-const printConfig = (scope: string, filePath: string): void => {
+const printConfig = (scope: string, filePath: string, json: boolean): void => {
   if (!existsSync(filePath)) fail(`no config file for ${scope} scope: ${filePath}`);
   const config = readJson(filePath);
-  const rows: Array<[string, string, string, string, string]> = [];
+  const rows: Array<{ alias: string; env: string; item: string; field: string; envKey: string }> = [];
   const addDefinitions = (definitions: Record<string, SecretDefinition> | undefined, envName: string): void => {
     for (const [alias, definition] of Object.entries(definitions || {})) {
       if (!definition || typeof definition.item !== "string" || !definition.item) {
         fail(`invalid definition for ${alias}`);
       }
-      rows.push([alias, envName, definition.item, definition.field || "password", dotenvKey(alias, definition)]);
+      rows.push({ alias, env: envName, item: definition.item, field: definition.field || "password", envKey: dotenvKey(alias, definition) });
     }
   };
   addDefinitions(config.secrets, "prod");
   for (const [envName, environment] of Object.entries(config.environments || {}).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     addDefinitions(environment.secrets, envName);
   }
-  rows.sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : 1) : a[0] < b[0] ? -1 : 1));
-  for (const row of rows) console.log(row.join("\t"));
+  rows.sort((a, b) => (a.alias === b.alias ? (a.env < b.env ? -1 : 1) : a.alias < b.alias ? -1 : 1));
+  if (json) {
+    console.log(JSON.stringify(rows));
+  } else {
+    for (const row of rows) console.log([row.alias, row.env, row.item, row.field, row.envKey].join("\t"));
+  }
   console.error(`secret print: ${rows.length} aliases in ${scope} scope (${filePath}). next: secret get <alias>, or secret env --output .env`);
 };
 
-const printScope = (scope: string, selectedConfig?: string): void => {
+const printScope = (scope: string, selectedConfig?: string, json = false): void => {
   if (scope === "project") {
     const projectPath = selectedConfig || findProjectConfig();
     if (!projectPath) {
       fail(`no ${projectConfigName} found (searched up to $HOME) — run 'secret init' to scaffold one, or pass --config FILE`);
     }
-    printConfig("project", projectPath);
+    printConfig("project", projectPath, json);
   } else if (scope === "global") {
-    printConfig("global", userConfigPath);
+    printConfig("global", userConfigPath, json);
   } else if (scope === "nix") {
-    printConfig("nix", defaultsPath);
+    printConfig("nix", defaultsPath, json);
   } else {
     fail(`unknown scope: ${scope} (available: project, global, nix)`);
   }
@@ -627,8 +631,21 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "list") {
     const entries = Object.entries(loaded.definitions);
-    for (const [alias, definition] of entries) {
-      console.log(`${alias}\t${definition.item}\t${definition.field || "password"}`);
+    if (options.json) {
+      console.log(
+        JSON.stringify(
+          entries.map(([alias, definition]) => ({
+            alias,
+            item: definition.item,
+            field: definition.field || "password",
+            envKey: dotenvKey(alias, definition),
+          })),
+        ),
+      );
+    } else {
+      for (const [alias, definition] of entries) {
+        console.log(`${alias}\t${definition.item}\t${definition.field || "password"}`);
+      }
     }
     console.error(`secret: ${entries.length} aliases configured. next: secret get <alias>, or secret env --output .env`);
   } else if (options.command === "get") {
@@ -771,7 +788,7 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "print") {
     const scope = options.positional[0] || "project";
-    printScope(scope, options.configPath);
+    printScope(scope, options.configPath, options.json);
     recordHistory({ at: new Date().toISOString(), cmd: "print", target: scope, env: environment });
   } else if (options.command === "doctor") {
     doctor(loaded.definitions);
