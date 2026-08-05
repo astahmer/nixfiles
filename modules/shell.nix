@@ -427,7 +427,7 @@ in
         git_metrics.disabled = true;
 
         cmd_duration = {
-          min_time = 1000;
+          min_time = 100;
           format = "took [$duration]($style) ";
         };
 
