@@ -281,26 +281,19 @@ in
         }
 
         _secret() {
-          local -a aliases
-          local line
+          local -a matches
           if (( CURRENT == 2 )); then
-            _describe 'command' \
-              'status:check auth state' 'list:show aliases' 'get:read a value' \
-              'unlock:unlock vault' 'lock:lock vault' \
-              'set:write a value' 'id:item id' 'totp:2FA code' 'pull:refresh local cache' \
-              'pin:pin item id' 'rotate:rotate password' 'rm:delete item' \
-              'init:scaffold config' 'env:dotenv' 'print:show scope' \
-              'doctor:validate' 'recent:used aliases' 'history:recent commands' \
-              'st:status' 'ls:list' 'g:get' 's:set' 'i:id' 't:totp' 'sy:pull' \
-              'p:pin' 'r:rotate' 'in:init' 'e:env' 'pr:print' 'd:doctor' 're:recent' 'h:history'
+            matches=(status list get unlock lock set id totp pull pin rotate rm init env run print lint doctor recent history st ls g s i t sy p r in e pr d re h)
+            compadd -X 'secret commands:' -- "''${matches[@]}"
             return 0
           fi
-          case "$words[CURRENT-1]" in
+          case "''${words[CURRENT-1]}" in
             get|set|id|totp|pin|rotate|rm|g|s|i|t|p|r)
-              for line in ''${(f)"$(_secret_alias_cache)"}; do
-                aliases+=("''${line%%$'\t'*}:''${line}")
-              done
-              _describe 'alias' aliases
+              local entry rest
+              while IFS=''$'\t' read -r entry rest; do
+                [[ -n "$entry" ]] && matches+=("$entry")
+              done < <(_secret_alias_cache)
+              compadd -X 'aliases:' -- "''${matches[@]}"
               ;;
           esac
         }
