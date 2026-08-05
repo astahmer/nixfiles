@@ -278,6 +278,27 @@ each.
   matters: the unix socket inside a 0700 directory is what keeps other local
   users out. Do not point it at a TCP hostname.
 
+## Limits and caveats
+
+- Every `bw` spawn costs 1-2s+ of Node CLI startup; the batching and the
+  daemon exist to avoid them. Mutations (`set`, `rotate`, `rm`, `totp`,
+  `pull`) still spawn `bw` — they are rare enough that it does not matter.
+- `bw serve` can start with an empty vault cache: `secret` syncs once after
+  starting the daemon and cross-checks an empty daemon item list against a
+  spawn before trusting it.
+- The daemon serves from memory; changes made outside `secret` (desktop app,
+  web vault, another machine) are not visible until `secret pull` (restarts
+  the daemon) or the next mutation.
+- If `bw status` says unlocked but `get`/`list` fail or return nothing, the
+  session/cache is stale: run `secret lock`, `secret unlock`, then
+  `secret pull`.
+- `SECRET_DAEMON=0` disables the daemon; batching still applies.
+- zsh/bash completions complete commands and aliases from a cache refreshed
+  on TAB (60s TTL). The completion deliberately uses `compadd` rather than
+  `_describe`, which trips zsh's colon-modifier parser in this shell config.
+- Values never leave the vault through logs or history; `secret history` and
+  `secret recent` record aliases only.
+
 ## Regression tests
 
 `assets/bitwarden/test-secret.sh` runs a self-contained fake-`bw` suite

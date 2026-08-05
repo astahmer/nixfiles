@@ -281,6 +281,9 @@ in
         }
 
         _secret() {
+          # compadd + read loop instead of _describe: _describe trips zsh's
+          # colon-modifier parser in this shell config ("unrecognized modifier"),
+          # while plain compadd works. Keep the cache refresh on TAB only.
           local -a matches
           if (( CURRENT == 2 )); then
             matches=(status list get unlock lock set id totp pull pin rotate rm init env run print lint doctor recent history st ls g s i t sy p r in e pr d re h)
