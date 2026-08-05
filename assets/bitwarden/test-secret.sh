@@ -48,7 +48,11 @@ case "$1" in
     if printf '%s' "$3" | rg -q "missing"; then echo "not found" >&2; exit 1; fi
     printf '{"id":"item-1","name":"%s","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}' "$3"
     ;;
-  create) printf "%s\n" "-- create --" >> "$FAKE_LOG"; cat >> "$FAKE_LOG" ;;
+  create)
+    printf "%s\n" "-- create --" >> "$FAKE_LOG"
+    if [ -n "$FAKE_CREATE_FAIL" ]; then echo "fake create exploded" >&2; exit 1; fi
+    base64 -d >> "$FAKE_LOG" 2>/dev/null
+    ;;
   edit) printf "%s\n" "-- edit --" >> "$FAKE_LOG"; base64 -d >> "$FAKE_LOG" ;;
   delete) printf "%s\n" "-- delete $3 --" >> "$FAKE_LOG" ;;
 esac
@@ -148,6 +152,11 @@ assert_eq "$(cat "$FAKE_CLIP")" "old-pass" "get --copy"
 assert_eq "$(printf "x" | secret set github-token 2>&1 || true)" "secret: item already exists; pass --force to overwrite" "set blocked without force"
 assert_ok bash -c 'printf "v2" | "$0" "$1" set github-token --force' "$bun_bin" "$script"
 assert_ok env FAKE_GET_MISSING=1 bash -c 'printf "v3" | "$0" "$1" set github-token' "$bun_bin" "$script"
+rg -q '"name":"nixfiles/github-token"' "$FAKE_LOG" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: create sends base64 item JSON (name missing from decoded log)" >&2
+}
+assert_eq "$(FAKE_GET_MISSING=1 FAKE_CREATE_FAIL=1 bash -c 'printf "v4" | "$0" "$1" set github-token' "$bun_bin" "$script" 2>&1 || true)" "secret: Bitwarden CLI request failed: fake create exploded" "create failures surface bw stderr"
 rm -f "$FAKE_CLIP"
 assert_ok secret set github-token --generate --force
 assert_eq "$(cat "$FAKE_CLIP")" "gen-pass-123" "set --generate delivers value to clipboard"
@@ -379,12 +388,13 @@ export SECRET_DAEMON=0 FAKE_SERVE=0
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
-if BW_SESSION=stale-token secret unlock >/dev/null 2>&1 && rg -q "unlock-env:EMPTY" "$FAKE_LOG"; then
-  pass=$((pass + 1))
-else
-  fail=$((fail + 1))
-  echo "FAIL: unlock strips a stale BW_SESSION from its environment" >&2
-fi
+: > "$FAKE_LOG"
+assert_eq "$(BW_SESSION=existing-token secret unlock)" "existing-token" "unlock reuses the env session without prompting"
+assert_eq "$(rg -c -- 'unlock-env:' "$FAKE_LOG" || echo 0)" "0" "unlock does not prompt when a session is present"
+: > "$FAKE_KEYCHAIN"
+BW_SESSION=existing-token secret unlock --store >/dev/null 2>&1
+assert_eq "$(cat "$FAKE_KEYCHAIN" 2>/dev/null || true)" "existing-token" "unlock --store persists the env session"
+assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' BW_SESSION=bad-token secret unlock --store 2>&1 || true)" "secret: refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'" "unlock refuses a rejected env session"
 assert_eq "$(FAKE_UNLOCK_EMPTY=1 secret unlock --store 2>&1 || true)" "secret: bw unlock returned no session token" "unlock refuses to store an empty token"
 if FAKE_BW_STATUS='{"status":"locked"}' secret unlock --store 2>&1 >/dev/null | rg -q "bw rejected the new session"; then
   pass=$((pass + 1))

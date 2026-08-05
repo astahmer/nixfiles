@@ -267,17 +267,24 @@ const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
   };
 };
 
+// bw's stderr names the real failure; never swallow it into a generic
+// "request failed" message.
+const bwError = (result: { stderr?: string | null; stdout?: string }): string =>
+  (result.stderr || "").trim().slice(0, 300) ||
+  (result.stdout || "").trim().slice(0, 300) ||
+  "no output";
+
 const runBw = (arguments_: string[]): string => {
   const result = spawnSync("bw", arguments_, { encoding: "utf8" });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
-  if (result.status !== 0) fail("Bitwarden CLI request failed");
+  if (result.status !== 0) fail(`Bitwarden CLI request failed: ${bwError(result)}`);
   return result.stdout.trim();
 };
 
 const runBwInput = (arguments_: string[], input: string): string => {
   const result = spawnSync("bw", arguments_, { encoding: "utf8", input });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
-  if (result.status !== 0) fail("Bitwarden CLI request failed");
+  if (result.status !== 0) fail(`Bitwarden CLI request failed: ${bwError(result)}`);
   return result.stdout.trim();
 };
 
@@ -298,7 +305,7 @@ const runBwUnlock = (): string => {
     env: withoutStaleSession(),
   });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
-  if (result.status !== 0) fail("Bitwarden unlock failed");
+  if (result.status !== 0) fail(`Bitwarden unlock failed: ${bwError(result)}`);
   return result.stdout.trim();
 };
 
@@ -1022,7 +1029,8 @@ const setValue = async (alias: string, definition: SecretDefinition, value: stri
   const field = definition.field || "password";
   const raw = tryGetItemRaw(definition.item);
   if (raw === undefined) {
-    runBwInput(["create", "item"], JSON.stringify(newItem(definition.item, field, value)));
+    // bw 2026.x expects base64-encoded item JSON on stdin for create/edit.
+    runBwInput(["create", "item"], Buffer.from(JSON.stringify(newItem(definition.item, field, value))).toString("base64"));
     daemonStop();
     console.error(`secret: created item ${definition.item}`);
   } else {
@@ -1200,7 +1208,11 @@ const main = async (): Promise<void> => {
       if (options.check) process.exit(1);
     }
   } else if (options.command === "unlock") {
-    const token = runBwUnlock();
+    // Reuse a session already present in the environment (e.g. right after
+    // `bw login` printed one) so the master password is typed only once.
+    // The wrapper deliberately does not inject the stored session here.
+    const fromEnv = Boolean(process.env.BW_SESSION);
+    const token = fromEnv ? process.env.BW_SESSION || "" : runBwUnlock();
     if (!token) fail("bw unlock returned no session token");
     // bw 2026.x couples the session key to a protected auto-unlock key; a
     // rejected session here means stale secure-storage state, not a bad token.
@@ -1212,6 +1224,11 @@ const main = async (): Promise<void> => {
       try {
         const data = JSON.parse(check.stdout) as { status?: string };
         if (data.status !== "unlocked") {
+          if (fromEnv) {
+            fail(
+              "refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'",
+            );
+          }
           console.error(
             "secret: warning: bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again",
           );

@@ -298,6 +298,10 @@ each.
 - `secret unlock` needs a real terminal (the master-password prompt) and
   refuses to store an empty token. `--store` persists to the macOS keychain
   (or `~/.config/secret/session` elsewhere); the wrapper reads both.
+- `secret unlock` reuses a session already present in the environment (for
+  example the one `bw login` prints), so the master password is typed once:
+  `export BW_SESSION="<login session>" && secret unlock --store`. A present
+  but rejected session is refused instead of stored.
 - bw 2026.x couples each session key to a protected auto-unlock key, and a
   stale `BW_SESSION` in the environment during `unlock` corrupts that state
   (bw warns about this itself). `secret` therefore strips `BW_SESSION` from
@@ -307,6 +311,9 @@ each.
 - An empty vault (`bw list items` → `[]`) means the configured items do not
   exist yet: create them with `secret set <alias>` (or check that `bw config`
   points at the right server/account).
+- bw 2026.x expects base64-encoded item JSON for `create`/`edit`; `secret`
+  encodes it automatically. Failed `bw` calls surface bw's own stderr (up to
+  300 chars) instead of a generic "request failed".
 - `SECRET_DAEMON=0` disables the daemon; batching still applies.
 - zsh/bash completions complete commands and aliases from a cache refreshed
   on TAB (60s TTL). The completion deliberately uses `compadd` rather than
