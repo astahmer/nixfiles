@@ -42,13 +42,16 @@ pre-commit checks.
 
 ## Config
 
-- `~/.config/secret/defaults.json` — Nix-managed global aliases.
-- `~/.config/secret/config.json` — personal global aliases.
+- `~/.config/secret/config.json` — personal global aliases (optional).
 - `./.secret.json` — project aliases (discovered from the current directory upward); commit it because it is value-free.
+- `./.secret.local.json` — machine-local overrides, gitignored, merged last.
+- A legacy `~/.config/secret/defaults.json` is still honored when present.
 - `"environments"` in any config — per-env overrides selected with `--env` (default `prod`).
 
-Precedence: defaults, then user, then project. A project adds aliases with its
-own `.secret.json`; it needs no nixfiles change.
+Precedence: legacy defaults, then user, then project, then local. The nixfiles
+repo itself declares its machine-wide aliases in its root `.secret.json`; a
+project adds aliases with its own `.secret.json` and local overrides with a
+gitignored `.secret.local.json`.
 
 Common flows: `secret env --env dev --output .env.dev` for a per-env dotenv,
 and `secret env --required A,B --output .env` to fail fast when a required

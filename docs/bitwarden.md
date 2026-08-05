@@ -16,9 +16,19 @@ export BW_SESSION="$(bw unlock --raw)"
 state in memory. `secret` uses the official `bw` CLI and the current
 `BW_SESSION`; it never stores or exports that session.
 
-## Nix defaults
+## Config layers
 
-Nix deploys public aliases to `~/.config/secret/defaults.json`. Values are
+Aliases come from three places, later wins:
+
+- `~/.config/secret/config.json` — personal global aliases (optional).
+- `./.secret.json` — project aliases, discovered from the current directory
+  upward; commit it because it is value-free. The nixfiles repo itself carries
+  one at its root for its machine-wide aliases.
+- `./.secret.local.json` — machine-local overrides, same shape, gitignored;
+  discovered upward like `.secret.json` and merged last.
+
+A legacy `~/.config/secret/defaults.json` (previously deployed by Nix) is
+still honored when present; delete it once nothing references it. Values are
 never committed. Inspect configured aliases without touching the vault:
 
 ```sh
@@ -68,7 +78,7 @@ Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
 in configs when two vault items could share a name. `secret pin` automates
 that: it replaces the item name with the resolved id in the project or user
 config (base mapping and environment overrides), atomically, and refuses the
-Nix-managed `defaults.json`. `secret rotate` generates a new password and
+legacy Nix-managed `defaults.json`. `secret rotate` generates a new password and
 overwrites the item (confirms first unless `--force`/`-f`), then copies the new
 value to the clipboard (or prints it when no clipboard tool exists). `secret
 rm` deletes the vault item (also confirms unless `--force`) and keeps the
@@ -114,10 +124,11 @@ See everything a scope resolves without touching the vault:
 ```sh
 secret print          # project scope (.secret.json found upward), incl. env overrides
 secret print global   # ~/.config/secret/config.json
-secret print nix      # Nix-managed defaults.json
+secret print nix      # legacy defaults.json (when present)
+secret print local    # .secret.local.json (local overrides)
 ```
 
-`secret print [project|global|nix]` prints one line per alias — alias, env
+`secret print [project|global|nix|local]` prints one line per alias — alias, env
 (`prod` for the base mapping, or the override name), item, field, and dotenv
 key — sorted for stable diffing. Values are never shown and no vault access
 happens, so it is safe anywhere. Missing files and unknown scopes explain the
@@ -127,11 +138,11 @@ next step.
 JSON rows on stdout (stderr keeps the human summary), for scripts and for
 feeding the completion cache.
 
-`secret print --all` merges project, global, and nix into one view with a scope
-column — useful for audits: find where an alias lives, spot duplicates after a
-`nixapply`, or diff your configs against the Nix-managed defaults. `secret
-search <term>` does the same across scopes, matching alias, item, and dotenv
-key case-insensitively, never values; `--json` works on both.
+`secret print --all` merges project, global, nix, and local into one view with
+a scope column — useful for audits: find where an alias lives or spot
+duplicates. `secret search <term>` does the same across scopes, matching
+alias, item, and dotenv key case-insensitively, never values; `--json` works
+on both.
 
 ## Writing secrets
 
@@ -162,7 +173,7 @@ secret mv DATABASE_URL DB_URL
 
 `unset` deletes the alias from the project or user config (base mapping and
 environment overrides); `mv` renames it in place, rejecting invalid or already
-taken names. Both refuse aliases that only exist in the Nix-managed
+taken names. Both refuse aliases that only exist in the legacy Nix-managed
 `defaults.json` — copy those into your own config first.
 
 ## Project `.env` files
@@ -177,6 +188,11 @@ Any app repository can add a value-free `.secret.json`:
   }
 }
 ```
+
+Machine-local overrides go in a gitignored `.secret.local.json` next to the
+project config — same shape, merged last. Override an item reference (for
+example a machine-specific test vault) or add aliases that only exist on this
+machine without touching the committed file.
 
 Then generate only those declared values:
 
@@ -229,7 +245,7 @@ typechecks `secret.ts` strictly (`bun run typecheck` from `assets/bitwarden`,
 after one `bun install`). `nixfiles-check` runs both when `bun` is on `PATH`;
 the typecheck is skipped with a hint until the dev deps are installed.
 
-The Nix-managed consumers use the same scoped model:
+The nixfiles repo declares the same scoped model in its root `.secret.json`:
 
 - `opencodex-opencode-go-api-key` maps to the OpenCodex dotenv variable.
 - `github-token` maps to the raw GitHub token projection consumed by Executor.

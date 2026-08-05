@@ -185,7 +185,7 @@ assert_eq "$(secret print)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATA
 assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "alias pr maps to print"
 assert_eq "$(secret print nix)" "github-token	prod	nixfiles/github-token	password	GITHUB_TOKEN" "print nix scope"
 assert_eq "$(secret print global 2>&1 || true)" "secret: no config file for global scope: $tmp/.config/secret/config.json" "print global missing config explains"
-assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, nix)" "print rejects unknown scope"
+assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, nix, local)" "print rejects unknown scope"
 assert_eq "$(secret print --all)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tnix\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print --all merges scopes"
 assert_eq "$(secret search database)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL')" "search matches alias and env key"
 assert_eq "$(secret search github --json)" "[{\"alias\":\"github-token\",\"scope\":\"nix\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "search --json rows"
@@ -257,6 +257,27 @@ assert_eq "$(secret init --force BAD-NAME 2>&1 || true)" "secret: invalid alias 
 assert_eq "$(secret mv API_TOKEN STRIPE_KEY 2>&1 || true)" "secret: alias STRIPE_KEY already exists in $(cd "$tmp/initdir" && pwd -P)/.secret.json" "mv refuses rename onto existing alias"
 cd "$tmp"
 assert_eq "$(secret print 2>&1 || true)" "secret: no .secret.json found (searched up to \$HOME) — run 'secret init' to scaffold one, or pass --config FILE" "print outside project suggests init"
+
+mkdir -p "$tmp/localdir"
+printf '%s' '{"secrets":{"BASE":{"item":"base/item"}}}' > "$tmp/localdir/.secret.json"
+printf '%s' '{"secrets":{"BASE":{"item":"local/item"},"EXTRA":{"item":"local/extra"}}}' > "$tmp/localdir/.secret.local.json"
+cd "$tmp/localdir"
+assert_eq "$(secret list)" "$(printf 'github-token\tnixfiles/github-token\tpassword\nBASE\tlocal/item\tpassword\nEXTRA\tlocal/extra\tpassword')" "local overrides project item and adds alias"
+assert_eq "$(secret env --export)" "$(printf 'export BASE='\''old-pass'\''\nexport EXTRA='\''old-pass'\''')" "env includes local aliases"
+assert_eq "$(secret print local | head -1)" "BASE	prod	local/item	password	BASE" "print local scope"
+assert_ok secret lint
+assert_ok secret pin EXTRA
+rg -q '"item": "item-1"' .secret.local.json && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: pin edits the local config" >&2
+}
+assert_ok secret unset EXTRA
+rg -q '"EXTRA"' .secret.local.json && {
+  fail=$((fail + 1))
+  echo "FAIL: unset removes from the local config" >&2
+} || pass=$((pass + 1))
+assert_eq "$(secret get BASE)" "old-pass" "local item wins"
+cd "$tmp"
 
 echo "secret tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
