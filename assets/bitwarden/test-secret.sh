@@ -255,6 +255,7 @@ cd "$tmp/proj"
 assert_fail secret rotate nope
 
 assert_ok secret doctor
+assert_eq "$(secret doctor | rg -o 'daemon\tdisabled' || true)" "daemon	disabled" "doctor reports daemon state"
 assert_fail FAKE_GET_MISSING=1 secret doctor
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret doctor 2>&1 | head -1)" 'bitwarden: locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "doctor locked hint"
 
@@ -293,6 +294,8 @@ if command -v script >/dev/null 2>&1; then
   {
     tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'ALIAS' &&
     tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'CREATED AT' &&
+    tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'SOURCE' &&
+    tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'https://example.com' &&
     tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q '2026-01-15 [0-9]{2}:[0-9]{2}'
   } && pass=$((pass + 1)) || {
     fail=$((fail + 1))
@@ -302,10 +305,11 @@ if command -v script >/dev/null 2>&1; then
 else
   pass=$((pass + 1))
 fi
-assert_eq "$(secret env --export)" "$(printf 'export DATABASE_URL='\''old-pass'\''\nexport GITHUB_TOKEN='\''old-pass'\''')" "env --export shell lines"
+assert_eq "$(secret env --export)" "$(printf 'export DATABASE_URL='\''old-pass'\''\n# source: https://example.com\nexport GITHUB_TOKEN='\''old-pass'\''')" "env --export shell lines with source comments"
 printf "DATABASE_URL='stale'\n" > .env
 assert_eq "$(secret env --diff --output .env)" "- DATABASE_URL='stale'
 + DATABASE_URL='old-pass'
++ # source: https://example.com
 + GITHUB_TOKEN='old-pass'" "env --diff shows changes without writing"
 assert_eq "$(secret env --dry --output .env)" "$(secret env --diff --output .env)" "env --dry aliases --diff"
 assert_eq "$(secret env --dry-run --output .env)" "$(secret env --diff --output .env)" "env --dry-run aliases --diff"
@@ -421,7 +425,7 @@ export FAKE_DAEMON_MISSING="$tmp/daemon-missing.txt"
 : > "$FAKE_LOG"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "daemon status output matches spawn mode"
 assert_eq "$(secret get github-token)" "old-pass" "daemon get via HTTP"
-assert_eq "$(secret env --export)" "$(printf 'export GITHUB_TOKEN='\''old-pass'\''')" "daemon env via HTTP"
+assert_eq "$(secret env --export)" "$(printf '# source: https://example.com\nexport GITHUB_TOKEN='\''old-pass'\''')" "daemon env via HTTP"
 assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon run via HTTP"
 assert_eq "$(rg -c -- '-- serve --' "$FAKE_LOG" || echo 0)" "1" "daemon spawned exactly once"
 assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "daemon mode never spawns bw get"

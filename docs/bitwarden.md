@@ -329,6 +329,15 @@ each.
   key derived as `ALIAS_NAME` — then creates the vault item. `secret rm`
   falls back to unsetting the alias when the vault is confirmed to not
   contain the item.
+- Aliases are curated like jj: main commands keep a short form (`st`, `ls`,
+  `g`, `s`, `e`, `d`, `pr`, `pu`, `so`), plus `add` = set and
+  `delete`/`remove` = rm. Everything else is spelled out.
+- The global scope (`~/.config/secret/config.json`) is merged into every
+  project. `secret set --global/-g <alias>`, `secret unset --global <alias>`,
+  and `secret global` (same as `secret print global`) manage it.
+- `secret env` emits a `# source: <url>` comment above any variable whose
+  vault item carries a source URL; `secret list` shows a SOURCE column on a
+  TTY; `secret doctor` reports the daemon state (`daemon up/down/disabled`).
 - bw 2026.x couples each session key to a protected auto-unlock key, and a
   stale `BW_SESSION` in the environment during `unlock` corrupts that state
   (bw warns about this itself). `secret` therefore strips `BW_SESSION` from

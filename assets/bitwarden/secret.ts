@@ -1212,6 +1212,11 @@ const doctor = async (definitions: Record<string, SecretDefinition>): Promise<vo
     process.exit(1);
   }
   console.log("bitwarden: unlocked");
+  if (process.env.SECRET_DAEMON === "0") {
+    console.log("daemon\tdisabled");
+  } else {
+    console.log((await daemonStatus()) === "unlocked" ? "daemon\tup" : "daemon\tdown");
+  }
 
   let problems = 0;
   const items = await vaultItems();
@@ -1538,13 +1543,21 @@ const main = async (): Promise<void> => {
         ),
       );
     } else if (process.stdout.isTTY) {
-      const header = ["ALIAS", "ITEM", "FIELD", "CREATED AT"];
+      const header = ["ALIAS", "ITEM", "FIELD", "CREATED AT", "SOURCE"];
       const items = await vaultItems();
       let hidden = 0;
       const rows = entries.map(([alias, definition]) => {
+        const entry = itemFor(items, definition.item);
         const created = itemCreationDate(items, definition.item);
         if (created === "-") hidden += 1;
-        return [alias, definition.item, definition.field || "password", created];
+        const source = entry ? itemField(entry, "custom:source") : undefined;
+        return [
+          alias,
+          definition.item,
+          definition.field || "password",
+          created,
+          typeof source === "string" && source ? source : "-",
+        ];
       });
       const widths = header.map((cell, column) => Math.max(cell.length, ...rows.map((row) => row[column]?.length ?? 0)));
       const pad = (value: string, width: number): string => value + " ".repeat(Math.max(0, width - value.length));
@@ -1786,11 +1799,15 @@ const main = async (): Promise<void> => {
           warn(`skipping ${alias} (optional, unresolved)`);
           continue;
         }
+        const source = resolveOptional(items, { item: definition.item, field: "custom:source" });
+        if (source) lines.push(`# source: ${source}`);
         const formatted = dotenvValue(value);
         lines.push(options.export ? `export ${key}=${formatted}` : `${key}=${formatted}`);
         continue;
       }
       const value = dotenvValue(await resolveRequired(items, alias, definition));
+      const source = resolveOptional(items, { item: definition.item, field: "custom:source" });
+      if (source) lines.push(`# source: ${source}`);
       lines.push(options.export ? `export ${key}=${value}` : `${key}=${value}`);
     }
     if (options.diff || options.dry || options.dryRun) {
