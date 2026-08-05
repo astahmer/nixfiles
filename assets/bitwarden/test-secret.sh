@@ -37,6 +37,7 @@ case "$1" in
   list)
     printf "%s\n" "-- list items --" >> "$FAKE_LOG"
     if [ -n "$FAKE_GET_MISSING" ]; then echo "not found" >&2; exit 1; fi
+    if [ -n "$FAKE_EMPTY_VAULT" ]; then printf '%s' '[]'; exit 0; fi
     printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"base/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/extra","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]'
     ;;
   get)
@@ -131,6 +132,8 @@ assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — un
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
 assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
+assert_eq "$(FAKE_EMPTY_VAULT=1 secret get github-token 2>&1 || true)" "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config
+secret: item not found for github-token: nixfiles/github-token" "empty vault hints before item not found"
 : > "$FAKE_LOG"
 secret get github-token >/dev/null
 assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "1" "get uses a single bw spawn (batched list)"
@@ -376,7 +379,19 @@ cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
 assert_eq "$(FAKE_UNLOCK_EMPTY=1 secret unlock --store 2>&1 || true)" "secret: bw unlock returned no session token" "unlock refuses to store an empty token"
+if FAKE_BW_STATUS='{"status":"locked"}' secret unlock --store 2>&1 >/dev/null | rg -q "bw rejected the new session"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: unlock warns when bw rejects the fresh session" >&2
+fi
 assert_eq "$(secret unlock --store 2>/dev/null)" "" "unlock --store keeps token off stdout"
+if BW_SESSION=x FAKE_BW_STATUS='{"status":"locked"}' secret status 2>&1 >/dev/null | rg -q "session token is present but bw rejects it"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: status hints when a present session is rejected" >&2
+fi
 if [ "$(uname -s)" = "Darwin" ]; then
   assert_eq "$(cat "$FAKE_KEYCHAIN")" "session-token-123" "unlock --store persists session in keychain"
 else

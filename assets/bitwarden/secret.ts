@@ -405,7 +405,14 @@ const resolveRequired = async (
     fail(`could not read vault items (bw list items failed)`);
   }
   const item = itemFor(items, definition.item);
-  if (item === undefined) fail(`item not found for ${alias}: ${definition.item}`);
+  if (item === undefined) {
+    if (items.length === 0) {
+      console.error(
+        "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config",
+      );
+    }
+    fail(`item not found for ${alias}: ${definition.item}`);
+  }
   const value = valueFor(item, definition);
   if (value === undefined) fail(`missing or invalid value for ${alias}`);
   return value;
@@ -1173,6 +1180,11 @@ const main = async (): Promise<void> => {
           ? 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"'
           : 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"',
       );
+      if (process.env.BW_SESSION) {
+        console.error(
+          "secret: a session token is present but bw rejects it — run 'bw logout && bw login' once to repair, then 'secret unlock --store'",
+        );
+      }
       if (readSession()) {
         console.error("secret: stored session is stale — refresh with 'secret unlock --store'");
       }
@@ -1181,6 +1193,24 @@ const main = async (): Promise<void> => {
   } else if (options.command === "unlock") {
     const token = runBwUnlock();
     if (!token) fail("bw unlock returned no session token");
+    // bw 2026.x couples the session key to a protected auto-unlock key; a
+    // rejected session here means stale secure-storage state, not a bad token.
+    const check = spawnSync("bw", ["status"], {
+      encoding: "utf8",
+      env: { ...process.env, BW_SESSION: token },
+    });
+    if (check.status === 0) {
+      try {
+        const data = JSON.parse(check.stdout) as { status?: string };
+        if (data.status !== "unlocked") {
+          console.error(
+            "secret: warning: bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again",
+          );
+        }
+      } catch {
+        // unparseable status: ignore
+      }
+    }
     daemonStop();
     if (options.store) {
       storeSession(token);

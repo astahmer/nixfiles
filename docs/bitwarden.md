@@ -298,6 +298,14 @@ each.
 - `secret unlock` needs a real terminal (the master-password prompt) and
   refuses to store an empty token. `--store` persists to the macOS keychain
   (or `~/.config/secret/session` elsewhere); the wrapper reads both.
+- bw 2026.x couples each session key to a protected auto-unlock key. If
+  `bw status` says locked despite a fresh `secret unlock --store`, the
+  secure-storage state is stale: repair once with `bw logout && bw login`,
+  then unlock again. `secret` prints this hint itself when it detects the
+  situation.
+- An empty vault (`bw list items` → `[]`) means the configured items do not
+  exist yet: create them with `secret set <alias>` (or check that `bw config`
+  points at the right server/account).
 - `SECRET_DAEMON=0` disables the daemon; batching still applies.
 - zsh/bash completions complete commands and aliases from a cache refreshed
   on TAB (60s TTL). The completion deliberately uses `compadd` rather than
