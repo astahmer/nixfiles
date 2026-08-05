@@ -9,7 +9,7 @@ type MdSection = {
   readonly level: number;
   readonly title: string;
   readonly line: number;
-  readonly bodyLines: ReadonlyArray<string>;
+  readonly bodyLines: string[];
 };
 
 type ParsedMd = {

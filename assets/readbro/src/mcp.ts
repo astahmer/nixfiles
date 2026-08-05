@@ -124,6 +124,7 @@ export const McpLayer = Layer.effectDiscard(
           force?: boolean;
           full?: boolean;
           max_lines?: number;
+          offset?: number;
           around_line?: number;
           context?: number;
           ranges?: ReadonlyArray<unknown>;

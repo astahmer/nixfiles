@@ -3,15 +3,15 @@
   "version": "0.3.0",
   "description": "IR-aware read cache MCP + CLI for coding agents",
   "type": "module",
-  "packageManager": "pnpm@11.6.0",
+  "packageManager": "pnpm@11.18.0",
   "bin": {
     "readbro": "./src/main.ts"
   },
   "dependencies": {
-    "@effect/ai": "0.36.0",
-    "@effect/cli": "0.75.2",
-    "@effect/platform-node": "0.96.1",
-    "effect": "3.21.3"
+    "@effect/ai": "0.37.0",
+    "@effect/cli": "0.77.0",
+    "@effect/platform-node": "0.108.1",
+    "effect": "3.22.1"
   },
   "scripts": {
     "build": "bun build ./src/main.ts --compile --minify --bytecode --outfile readbro",
@@ -21,8 +21,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "typescript": "^5.9.0"
+    "@types/node": "26.1.2",
+    "typescript": "7.0.2"
   },
   "engines": {
     "node": ">=24"
