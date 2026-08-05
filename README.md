@@ -66,6 +66,9 @@ The default user is `astahmer`. Change `nixfiles.username` in `modules/global-op
 
 The global `secret` command, project-local `.secret.json` files, Bitwarden, and the explicit `.env` projection flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). Home Manager does not contact Bitwarden during activation.
 
+The ModLens Gemini (AI Studio) key setup — get, store, project, rotate — is
+documented in [`docs/gemini-api-key.md`](docs/gemini-api-key.md).
+
 The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` point at the local Executor instance (`executor mcp`).
 
 ## NixOS setup
