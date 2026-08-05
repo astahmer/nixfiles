@@ -1,14 +1,14 @@
 { inputs, config, ... }:
 let
   hm = config.flake.modules.homeManager;
-  username = config.flake.username;
+  username = config.nixfiles.username;
 in
 {
-  config.flake.homeConfigurations.${config.flake.macHomeName} =
+  config.flake.homeConfigurations.${config.nixfiles.macHomeName} =
     inputs.home-manager.lib.homeManagerConfiguration
       {
         pkgs = import inputs.nixpkgs {
-          system = config.flake.macSystem;
+          system = config.nixfiles.macSystem;
           config.allowUnfree = true;
         };
 

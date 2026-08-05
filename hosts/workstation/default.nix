@@ -3,8 +3,8 @@ let
   nixos = config.flake.modules.nixos;
 in
 {
-  config.flake.nixosConfigurations.${config.flake.nixosHostName} = inputs.nixpkgs.lib.nixosSystem {
-    system = config.flake.nixosSystem;
+  config.flake.nixosConfigurations.${config.nixfiles.nixosHostName} = inputs.nixpkgs.lib.nixosSystem {
+    system = config.nixfiles.nixosSystem;
     specialArgs = { inherit inputs; };
 
     modules = [
@@ -17,7 +17,7 @@ in
       nixos.homeManager
 
       {
-        networking.hostName = config.flake.nixosHostName;
+        networking.hostName = config.nixfiles.nixosHostName;
         fileSystems."/" = {
           device = "/dev/disk/by-label/nixos";
           fsType = "ext4";

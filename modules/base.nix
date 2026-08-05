@@ -1,13 +1,13 @@
 { config, ... }:
 let
   flakeConfig = config;
-  username = flakeConfig.flake.username;
+  username = flakeConfig.nixfiles.username;
 in
 {
   config.flake.modules.homeManager.base =
     { config, ... }:
     {
-      home.stateVersion = flakeConfig.flake.homeStateVersion;
+      home.stateVersion = flakeConfig.nixfiles.homeStateVersion;
 
       home.sessionPath = [
         "${config.home.profileDirectory}/bin"
@@ -70,6 +70,6 @@ in
         ];
       };
 
-      system.stateVersion = flakeConfig.flake.nixosStateVersion;
+      system.stateVersion = flakeConfig.nixfiles.nixosStateVersion;
     };
 }

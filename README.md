@@ -60,7 +60,7 @@ nh home switch . -c macbook -b hm-backup
 
 After that, `nixapply` works from any directory (`NH_FLAKE=~/.config/nixfiles`).
 
-The default user is `astahmer`. Change `flake.username` in `modules/global-options.nix` if needed.
+The default user is `astahmer`. Change `nixfiles.username` in `modules/global-options.nix` if needed.
 
 ### Secrets and MCP credentials
 
