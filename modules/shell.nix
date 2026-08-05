@@ -248,7 +248,7 @@ in
         secret() {
           if [[ "$1" == "unlock" ]]; then
             local token
-            token="$(bw unlock --raw)" || return 1
+            token="$(env -u BW_SESSION bw unlock --raw)" || return 1
             export BW_SESSION="$token"
             if [[ "$*" == *"--store"* ]]; then
               local session_file="''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}"
@@ -275,7 +275,7 @@ in
         secret() {
           if [[ "$1" == "unlock" ]]; then
             local token
-            token="$(bw unlock --raw)" || return 1
+            token="$(env -u BW_SESSION bw unlock --raw)" || return 1
             export BW_SESSION="$token"
             if [[ "$*" == *"--store"* ]]; then
               local session_file="''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}"

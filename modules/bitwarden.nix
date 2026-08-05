@@ -15,7 +15,9 @@
           pkgs.coreutils
         ];
         text = ''
-          if [ -z "''${BW_SESSION:-}" ]; then
+          # Unlock must never inherit a (possibly stale) session: it would
+          # corrupt bw's protected auto-unlock key. The CLI also strips it.
+          if [ -z "''${BW_SESSION:-}" ] && [ "''${1:-}" != "unlock" ]; then
             stored=""
             if [ "$(uname -s)" = "Darwin" ]; then
               stored="$(security find-generic-password -a bitwarden-session -s secret-cli -w 2>/dev/null || true)"

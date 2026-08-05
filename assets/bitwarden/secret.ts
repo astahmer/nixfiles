@@ -281,12 +281,21 @@ const runBwInput = (arguments_: string[], input: string): string => {
   return result.stdout.trim();
 };
 
+// A stale BW_SESSION in the env corrupts bw's protected auto-unlock key
+// (bw warns about this itself), so unlock must run with a clean environment.
+const withoutStaleSession = (): NodeJS.ProcessEnv => {
+  const env = { ...process.env };
+  delete env.BW_SESSION;
+  return env;
+};
+
 // Unlock needs the real terminal: the master-password prompt is unusable when
 // stdin is a pipe. stderr stays inherited (the prompt), stdout is captured.
 const runBwUnlock = (): string => {
   const result = spawnSync("bw", ["unlock", "--raw"], {
     encoding: "utf8",
     stdio: ["inherit", "pipe", "inherit"],
+    env: withoutStaleSession(),
   });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
   if (result.status !== 0) fail("Bitwarden unlock failed");
@@ -1197,7 +1206,7 @@ const main = async (): Promise<void> => {
     // rejected session here means stale secure-storage state, not a bad token.
     const check = spawnSync("bw", ["status"], {
       encoding: "utf8",
-      env: { ...process.env, BW_SESSION: token },
+      env: { ...withoutStaleSession(), BW_SESSION: token },
     });
     if (check.status === 0) {
       try {

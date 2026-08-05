@@ -18,6 +18,7 @@ cat > "$tmp/bin/bw" <<'EOF'
 case "$1" in
   status) printf "%s" "$FAKE_BW_STATUS" ;;
   unlock)
+    printf "%s\n" "unlock-env:${BW_SESSION:-EMPTY}" >> "$FAKE_LOG"
     if [ -n "$FAKE_UNLOCK_EMPTY" ]; then
       printf ""
     else
@@ -378,6 +379,12 @@ export SECRET_DAEMON=0 FAKE_SERVE=0
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
+if BW_SESSION=stale-token secret unlock >/dev/null 2>&1 && rg -q "unlock-env:EMPTY" "$FAKE_LOG"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: unlock strips a stale BW_SESSION from its environment" >&2
+fi
 assert_eq "$(FAKE_UNLOCK_EMPTY=1 secret unlock --store 2>&1 || true)" "secret: bw unlock returned no session token" "unlock refuses to store an empty token"
 if FAKE_BW_STATUS='{"status":"locked"}' secret unlock --store 2>&1 >/dev/null | rg -q "bw rejected the new session"; then
   pass=$((pass + 1))

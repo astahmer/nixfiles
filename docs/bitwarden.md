@@ -298,11 +298,12 @@ each.
 - `secret unlock` needs a real terminal (the master-password prompt) and
   refuses to store an empty token. `--store` persists to the macOS keychain
   (or `~/.config/secret/session` elsewhere); the wrapper reads both.
-- bw 2026.x couples each session key to a protected auto-unlock key. If
-  `bw status` says locked despite a fresh `secret unlock --store`, the
-  secure-storage state is stale: repair once with `bw logout && bw login`,
-  then unlock again. `secret` prints this hint itself when it detects the
-  situation.
+- bw 2026.x couples each session key to a protected auto-unlock key, and a
+  stale `BW_SESSION` in the environment during `unlock` corrupts that state
+  (bw warns about this itself). `secret` therefore strips `BW_SESSION` from
+  every unlock, and the shell function runs `env -u BW_SESSION bw unlock`.
+  If the state is already corrupt, repair once with `bw logout && bw login`
+  in a shell without `BW_SESSION`, then `secret unlock --store` again.
 - An empty vault (`bw list items` → `[]`) means the configured items do not
   exist yet: create them with `secret set <alias>` (or check that `bw config`
   points at the right server/account).
