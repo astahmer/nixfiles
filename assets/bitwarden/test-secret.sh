@@ -39,6 +39,16 @@ cat > "$FAKE_CLIP"
 EOF
 chmod +x "$tmp/bin/pbcopy"
 
+cat > "$tmp/bin/security" <<'EOF'
+#!/bin/sh
+case "$1" in
+  add-generic-password) printf '%s' "${@: -1}" > "$FAKE_KEYCHAIN" ;;
+  find-generic-password) cat "$FAKE_KEYCHAIN" 2>/dev/null || exit 44 ;;
+  delete-generic-password) rm -f "$FAKE_KEYCHAIN" ;;
+esac
+EOF
+chmod +x "$tmp/bin/security"
+
 cat > "$tmp/proj/.secret.json" <<'EOF'
 {
   "secrets": {
@@ -59,6 +69,7 @@ export PATH="$tmp/bin:$PATH"
 export HOME="$tmp"
 export FAKE_LOG="$tmp/log.txt"
 export FAKE_CLIP="$tmp/clip.txt"
+export FAKE_KEYCHAIN="$tmp/keychain.txt"
 export FAKE_BW_STATUS='{"status":"unlocked"}'
 
 pass=0
@@ -97,7 +108,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
@@ -273,11 +284,27 @@ rg -q '"EXTRA"' .secret.local.json && {
   echo "FAIL: unset removes from the local config" >&2
 } || pass=$((pass + 1))
 assert_eq "$(secret get BASE)" "old-pass" "local item wins"
+assert_eq "$(secret run -- sh -c 'echo $BASE')" "old-pass" "run injects project env"
+secret run -- sh -c 'exit 3' 2>/dev/null && {
+  fail=$((fail + 1))
+  echo "FAIL: run propagates nonzero exit" >&2
+} || {
+  code=$?
+  [ "$code" -eq 3 ] && pass=$((pass + 1)) || {
+    fail=$((fail + 1))
+    echo "FAIL: run exit code was $code, expected 3" >&2
+  }
+}
+assert_fail secret run
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
 assert_eq "$(secret unlock --store 2>/dev/null)" "" "unlock --store keeps token off stdout"
-assert_eq "$(cat "$tmp/.config/secret/session")" "session-token-123" "unlock --store persists session"
+if [ "$(uname -s)" = "Darwin" ]; then
+  assert_eq "$(cat "$FAKE_KEYCHAIN")" "session-token-123" "unlock --store persists session in keychain"
+else
+  assert_eq "$(cat "$tmp/.config/secret/session")" "session-token-123" "unlock --store persists session file"
+fi
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status 2>/dev/null)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked stdout unchanged with stored session"
 FAKE_BW_STATUS='{"status":"locked"}' secret status 2>&1 >/dev/null | rg -q "stale" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
@@ -288,10 +315,17 @@ rg -q -- "-- lock --" "$FAKE_LOG" || {
   fail=$((fail + 1))
   echo "FAIL: lock calls bw lock" >&2
 }
-test ! -e "$tmp/.config/secret/session" && pass=$((pass + 1)) || {
-  fail=$((fail + 1))
-  echo "FAIL: lock clears stored session" >&2
-}
+if [ "$(uname -s)" = "Darwin" ]; then
+  test ! -e "$FAKE_KEYCHAIN" && pass=$((pass + 1)) || {
+    fail=$((fail + 1))
+    echo "FAIL: lock clears keychain session" >&2
+  }
+else
+  test ! -e "$tmp/.config/secret/session" && pass=$((pass + 1)) || {
+    fail=$((fail + 1))
+    echo "FAIL: lock clears stored session file" >&2
+  }
+fi
 
 echo "secret tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

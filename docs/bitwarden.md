@@ -16,10 +16,15 @@ export BW_SESSION="$(bw unlock --raw)"
 every shell. With the deployed shell integration, `secret unlock` does it for
 you once per shell (it exports `BW_SESSION` in the current shell). For a
 Doppler-style persistent login, `secret unlock --store` saves the session token
-to `~/.config/secret/session` (mode 0600); every later `secret` command works
-without exporting until `secret lock` clears it. Treat the stored token like a
-credential — it grants full vault access while valid. `secret status` warns
-when a stored session is stale.
+in the macOS login keychain (or a `~/.config/secret/session` file, mode 0600,
+elsewhere); every later `secret` command works without exporting until
+`secret lock` clears it. Treat the stored token like a credential — it grants
+full vault access while valid. `secret status` warns when a stored session is
+stale.
+
+Passkeys: the Bitwarden web and desktop apps support passkey login, but the
+official `bw` CLI still requires the master password (plus 2FA when enabled).
+The stored session keeps that prompt rare.
 
 `rbw` is convenient for interactive lookups because its agent holds unlocked
 state in memory. `secret` uses the official `bw` CLI and the current
@@ -230,6 +235,7 @@ secret env --env dev --output .env.dev
 secret env --required DATABASE_URL,STRIPE_KEY --output .env
 secret env --export --output exports.sh
 secret env --diff --output .env
+secret run -- npm test
 ```
 
 `--env` defaults to `prod`; unknown environments are rejected. `--required`
@@ -237,7 +243,10 @@ fails unless every listed alias is present in the selected project config.
 `--export` prints `export KEY='value'` lines (or writes them atomically with
 `--output`) for sourcing instead of dotenv format. `--diff` resolves every
 value, prints `+`/`-` lines against the target (default `./.env`), and writes
-nothing — a dry run for rotation checklists.
+nothing — a dry run for rotation checklists. `secret run -- <command>` loads
+the project aliases into the command's environment and runs it, propagating
+its exit code — use `--` so the command's own flags are not parsed by
+`secret`.
 
 Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are
