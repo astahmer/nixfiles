@@ -17,10 +17,10 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
 - `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.
 - `secret id <alias>` — print the resolved Bitwarden item id without the value; use ids in configs when names can collide.
-- `secret pin <alias>` — replace the item name with the resolved id in the project/user config (never the Nix-managed defaults).
+- `secret pin <alias>` — replace the item name with the resolved id in the project/local/user config that owns it.
 - `secret rotate <alias>` — generate a new password and overwrite the item; confirm unless `--force`/`-f`; delivers the new value (clipboard, stdout fallback).
 - `secret rm <alias>` — delete the vault item; confirm unless `--force`/`-f`; the config entry stays.
-- `secret unset <alias>` — remove an alias from the project/user config (never the Nix-managed defaults).
+- `secret unset <alias>` — remove an alias from the project/local/user config that owns it.
 - `secret mv <alias> <new>` — rename an alias in the project/user config, base and env overrides.
 - `secret totp <alias>` — current 2FA code (`--copy` to the clipboard).
 - `secret pull` — refresh the local vault cache from the server explicitly; never automatic (`sync`/`sy` still work).
