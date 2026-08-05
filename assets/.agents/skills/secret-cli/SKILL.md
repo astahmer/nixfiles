@@ -23,7 +23,7 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret unset <alias>` — remove an alias from the project/user config (never the Nix-managed defaults).
 - `secret mv <alias> <new>` — rename an alias in the project/user config, base and env overrides.
 - `secret totp <alias>` — current 2FA code (`--copy` to the clipboard).
-- `secret sync` — refresh the cached vault explicitly; never automatic.
+- `secret pull` — refresh the local vault cache from the server explicitly; never automatic (`sync`/`sy` still work).
 - `secret init [alias...]` — scaffold a project `.secret.json` (directory name + kebab alias as item prefix); pass aliases to prefill; refuses to overwrite without `--force`.
 - `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); `--all` merges scopes with a scope column; never values, no vault access.
 - `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--export` prints `export KEY='value'` lines, `--diff` dry-runs without writing.

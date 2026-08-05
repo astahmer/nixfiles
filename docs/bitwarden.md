@@ -55,7 +55,7 @@ secret pin github-token
 secret rotate github-token
 secret rm github-token
 secret totp github-token --copy
-secret sync
+secret pull
 secret status --check
 ```
 
@@ -74,7 +74,8 @@ value to the clipboard (or prints it when no clipboard tool exists). `secret
 rm` deletes the vault item (also confirms unless `--force`) and keeps the
 config entry, so remove the alias from `.secret.json` by hand once the item is
 gone. `secret totp` prints the current 2FA code for an item that carries a TOTP
-seed. `secret sync` refreshes the cached vault explicitly — never automatic.
+seed. `secret pull` refreshes the local vault cache from the server explicitly
+— never automatic (`sync` and `sy` still work as aliases).
 `secret status --check` exits nonzero when the vault is not unlocked, for
 scripts.
 

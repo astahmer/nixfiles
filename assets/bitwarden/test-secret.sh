@@ -103,7 +103,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|search\|get\|set\|id\|totp\|sync\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|lint\|doctor\|recent\|history')" "status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|lint\|doctor\|recent\|history')" "status|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
@@ -123,6 +123,8 @@ assert_eq "$(secret totp github-token)" "123456" "totp code"
 rm -f "$FAKE_CLIP"
 secret totp github-token --copy
 assert_eq "$(cat "$FAKE_CLIP")" "123456" "totp --copy"
+assert_ok secret pull
+assert_ok secret sy
 assert_ok secret sync
 
 FAKE_BW_STATUS='{"status":"unlocked"}' secret status --check >/dev/null 2>&1 && pass=$((pass + 1)) || {
