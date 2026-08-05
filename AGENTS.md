@@ -9,30 +9,14 @@ The repo uses `flake-parts` plus `import-tree`, so `.nix` files under `modules/`
 
 ## Quick Start
 
-Clone anywhere, then point the stable symlink at the clone and apply:
-
-```bash
-git clone <url> ~/wherever/nixfiles
-cd ~/wherever/nixfiles
-ln -sfn "$(pwd)" ~/.config/nixfiles   # or: nixfiles-here (after first apply)
-nh home switch . -c macbook -b hm-backup
-```
-
-After that, `nixapply` works from any cwd (`NH_FLAKE` → `~/.config/nixfiles`). Same contract on every machine.
-
-```bash
-nh home switch -c macbook -b hm-backup   # alias: nixapply
-# or, on NixOS
-sudo nixos-rebuild switch --flake .#workstation
-```
+User-facing setup, layout, and update docs live in `README.md`; clone,
+symlink, and first-apply steps are described there. Day-to-day commands are
+summarized under Apply Commands below.
 
 To add a module, create a file under `modules/`, export it as `config.flake.modules.homeManager.<name>` or `config.flake.modules.nixos.<name>`, and wire it into `hosts/macbook/default.nix` or `hosts/workstation/default.nix`. If the concern spans both scopes, keep both outputs in the same file.
 
 ## Layout
 
-- `modules/` contains reusable modules. Some files export both Home Manager and NixOS modules when needed.
-- `hosts/macbook/default.nix` contains the standalone macOS Home Manager profile.
-- `hosts/workstation/default.nix` contains the NixOS host.
 - `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). ast-outline is installed globally via `uv tool install` by `nixbootstrap`. Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
 - Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies from the deployed `~/.agents`, not the clone.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently after `nixbootstrap` and when activation inputs change.
