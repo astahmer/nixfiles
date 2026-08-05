@@ -256,10 +256,27 @@ Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are
 written mode `0600`. `.secret.json` is discovered from the current directory
 upward to `$HOME`, so subdirectories of a project work too. `secret` never
-synchronizes the whole vault; multi-alias commands (`list`, `env`, `run`,
-`doctor`, `pin`) read the local vault cache once with `bw list items` and
-resolve every alias from that single snapshot, since each `bw` spawn costs
-1-2s+ of CLI startup.
+synchronizes the whole vault; reads go through the `bw serve` daemon when it
+is running (see Daemon mode below) and otherwise fall back to one `bw list
+items` spawn per command, since each `bw` spawn costs 1-2s+ of CLI startup.
+
+## Daemon mode (sub-second reads)
+
+Reads (`status`, `list`, `get`, `env`, `run`, `doctor`, `pin`) go through a
+persistent `bw serve` daemon when available: a local HTTP server over a unix
+socket in `~/.config/secret/daemon/` (directory mode 0700, state file mode
+0600), origin protection left on. The daemon is started on first use
+(~2s, one-time), then commands cost ~30-100ms instead of one 1-2s+ `bw` spawn
+each.
+
+- The daemon is restarted after any mutation (`set`, `rotate`, `rm`, `pull`,
+  `unlock`, `lock`), so it never serves items changed outside it.
+- `secret lock` kills the daemon; a stale daemon (dead process, expired
+  session) is detected on the next command and replaced automatically.
+- Disable it entirely with `SECRET_DAEMON=0`; nothing else changes.
+- `bw serve` in current Bitwarden CLI versions has no API token, so binding
+  matters: the unix socket inside a 0700 directory is what keeps other local
+  users out. Do not point it at a TCP hostname.
 
 ## Regression tests
 

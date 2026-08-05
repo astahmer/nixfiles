@@ -7,6 +7,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$root/assets/bitwarden/secret.ts"
 bun_bin="${BUN:-bun}"
+export FAKE_BUN_BIN="$bun_bin"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -20,6 +21,13 @@ case "$1" in
   lock) printf "%s\n" "-- lock --" >> "$FAKE_LOG" ;;
   generate) printf "%s" "gen-pass-123" ;;
   sync) printf "%s\n" "-- sync --" >> "$FAKE_LOG" ;;
+  serve)
+    printf "%s\n" "-- serve --" >> "$FAKE_LOG"
+    if [ -n "$FAKE_SERVE" ]; then
+      exec "$FAKE_BUN_BIN" "$FAKE_DAEMON_FIXTURE" "$3"
+    fi
+    exit 1
+    ;;
   list)
     printf "%s\n" "-- list items --" >> "$FAKE_LOG"
     if [ -n "$FAKE_GET_MISSING" ]; then echo "not found" >&2; exit 1; fi
@@ -77,6 +85,7 @@ export FAKE_LOG="$tmp/log.txt"
 export FAKE_CLIP="$tmp/clip.txt"
 export FAKE_KEYCHAIN="$tmp/keychain.txt"
 export FAKE_BW_STATUS='{"status":"unlocked"}'
+export SECRET_DAEMON=0
 
 pass=0
 fail=0
@@ -118,8 +127,8 @@ assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 : > "$FAKE_LOG"
 secret get github-token >/dev/null
-assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "1" "get uses a single bw spawn"
-assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "0" "get does not list the vault"
+assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "1" "get uses a single bw spawn (batched list)"
+assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "get never spawns bw get"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
 rm -f "$FAKE_CLIP"
@@ -322,6 +331,40 @@ cd "$tmp/optdir"
 assert_fail secret run -- sh -c 'echo hi'
 assert_eq "$(secret run --optional BROKEN -- sh -c 'echo $BASE')" "old-pass" "run --optional skips unresolved aliases"
 assert_eq "$(secret env --optional BROKEN --export)" "$(printf 'export BASE='\''old-pass'\''')" "env --optional skips unresolved aliases"
+cd "$tmp"
+
+# ---- daemon mode: bw serve over a unix socket ----
+cd "$tmp/proj"
+export SECRET_DAEMON=1 FAKE_SERVE=1 FAKE_DAEMON_FIXTURE="$root/assets/bitwarden/test-daemon.ts"
+printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]' > "$tmp/daemon-items.json"
+export FAKE_DAEMON_ITEMS="$tmp/daemon-items.json"
+export FAKE_DAEMON_LOG="$tmp/daemon-log.txt"
+export FAKE_DAEMON_MISSING="$tmp/daemon-missing.txt"
+: > "$FAKE_DAEMON_LOG"
+: > "$FAKE_LOG"
+assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "daemon status output matches spawn mode"
+assert_eq "$(secret get github-token)" "old-pass" "daemon get via HTTP"
+assert_eq "$(secret env --export)" "$(printf 'export GITHUB_TOKEN='\''old-pass'\''')" "daemon env via HTTP"
+assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon run via HTTP"
+assert_eq "$(rg -c -- '-- serve --' "$FAKE_LOG" || echo 0)" "1" "daemon spawned exactly once"
+assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "daemon mode never spawns bw get"
+assert_eq "$(rg -c 'GET /list/object/items' "$FAKE_DAEMON_LOG" || echo 0)" "3" "three item lists served over HTTP"
+touch "$FAKE_DAEMON_MISSING"
+assert_fail secret env --output x
+rm -f "$FAKE_DAEMON_MISSING"
+assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon recovers after denied requests"
+: > "$FAKE_LOG"
+assert_ok secret lock
+assert_eq "$(rg -c -- '-- lock --' "$FAKE_LOG" || echo 0)" "1" "lock still spawns bw lock"
+test ! -e "$tmp/.config/secret/daemon/bw.sock" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: lock removes the daemon socket" >&2
+}
+test ! -e "$tmp/.config/secret/daemon/daemon.json" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: lock removes the daemon state" >&2
+}
+export SECRET_DAEMON=0 FAKE_SERVE=0
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"

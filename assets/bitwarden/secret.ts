@@ -2,8 +2,9 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createInterface } from "node:readline";
+import http from "node:http";
 
 type SecretDefinition = {
   item: string;
@@ -39,6 +40,12 @@ const home = homedir();
 const userConfigPath = join(home, ".config", "secret", "config.json");
 const historyPath = join(home, ".config", "secret", "history.json");
 const sessionPath = process.env.SECRET_SESSION_FILE || join(home, ".config", "secret", "session");
+const daemonDir = join(home, ".config", "secret", "daemon");
+const daemonStatePath = join(daemonDir, "daemon.json");
+const daemonSocketPath = join(daemonDir, "bw.sock");
+const DAEMON_HOST = "localhost";
+const DAEMON_PORT = 8087;
+const daemonEnabled = (): boolean => process.env.SECRET_DAEMON !== "0";
 const KEYCHAIN_SERVICE = "secret-cli";
 const KEYCHAIN_ACCOUNT = "bitwarden-session";
 const projectConfigName = ".secret.json";
@@ -300,8 +307,8 @@ const status = (): { authenticated: boolean; unlocked: boolean } => {
   }
 };
 
-const requireUnlocked = (): void => {
-  const current = status();
+const requireUnlocked = async (): Promise<void> => {
+  const current = await currentAuthState();
   if (!current.authenticated) fail("Bitwarden is not authenticated; run bw login first");
   if (!current.unlocked) fail("Bitwarden is locked; run bw unlock --raw and export BW_SESSION");
 };
@@ -316,29 +323,15 @@ const itemField = (item: Record<string, any>, field: string): unknown => {
     : undefined;
 };
 
-const getValue = (alias: string, definition: SecretDefinition): string => {
-  const raw = tryGetItemRaw(definition.item);
-  if (raw === undefined) {
-    requireUnlocked();
-    fail(`item not found for ${alias}: ${definition.item}`);
-  }
-  let item: Record<string, any>;
-  try {
-    item = JSON.parse(raw) as Record<string, any>;
-  } catch {
-    fail(`Bitwarden returned invalid item data for ${alias}`);
-  }
-  const value = itemField(item, definition.field || "password");
-  if (typeof value !== "string" || !value || placeholderValues.has(value)) {
-    fail(`missing or invalid value for ${alias}`);
-  }
-  return value;
+const getValue = async (alias: string, definition: SecretDefinition): Promise<string> => {
+  const items = await vaultItems();
+  return resolveRequired(items, alias, definition);
 };
 
 // One `bw list items` call per command instead of one `bw get item` per
 // alias: every bw spawn costs 1-2s+ of Node startup (more with a live
 // session), so batching is what keeps multi-alias commands fast.
-const vaultItems = (): Record<string, any>[] | undefined => {
+const spawnVaultItems = (): Record<string, any>[] | undefined => {
   const result = spawnSync("bw", ["list", "items"], { encoding: "utf8" });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
   if (result.status !== 0) return undefined;
@@ -350,6 +343,19 @@ const vaultItems = (): Record<string, any>[] | undefined => {
   }
 };
 
+const vaultItems = async (): Promise<Record<string, any>[] | undefined> => {
+  if (!daemonEnabled()) return spawnVaultItems();
+  const viaDaemon = await daemonListItems();
+  if (viaDaemon?.kind === "ok") return viaDaemon.items;
+  if (viaDaemon?.kind === "denied") return undefined;
+  if (await ensureDaemon()) {
+    const retry = await daemonListItems();
+    if (retry?.kind === "ok") return retry.items;
+    if (retry?.kind === "denied") return undefined;
+  }
+  return spawnVaultItems();
+};
+
 const itemFor = (items: Record<string, any>[] | undefined, item: string): Record<string, any> | undefined =>
   items?.find((entry) => entry.id === item || entry.name === item);
 
@@ -359,13 +365,13 @@ const valueFor = (item: Record<string, any> | undefined, definition: SecretDefin
   return typeof value === "string" && value && !placeholderValues.has(value) ? value : undefined;
 };
 
-const resolveRequired = (
+const resolveRequired = async (
   items: Record<string, any>[] | undefined,
   alias: string,
   definition: SecretDefinition,
-): string => {
+): Promise<string> => {
   if (items === undefined) {
-    requireUnlocked();
+    await requireUnlocked();
     fail(`could not read vault items (bw list items failed)`);
   }
   const item = itemFor(items, definition.item);
@@ -391,6 +397,175 @@ const writeAtomic = (filePath: string, contents: string): void => {
   const temporaryPath = `${filePath}.tmp.${process.pid}`;
   writeFileSync(temporaryPath, contents, { mode: 0o600 });
   renameSync(temporaryPath, filePath);
+};
+
+// Persistent `bw serve` daemon over a unix socket (mode 0600 state file, 0700
+// directory). Reads are local HTTP calls instead of 1-2s+ Node CLI spawns;
+// the daemon is restarted after any mutation so it never serves stale items.
+type DaemonState = {
+  pid: number;
+  socket: string;
+};
+
+const readDaemonState = (): DaemonState | undefined => {
+  if (!existsSync(daemonStatePath)) return undefined;
+  try {
+    const parsed = JSON.parse(readFileSync(daemonStatePath, "utf8")) as DaemonState;
+    return typeof parsed.pid === "number" && typeof parsed.socket === "string" ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const writeDaemonState = (state: DaemonState): void => {
+  try {
+    mkdirSync(daemonDir, { recursive: true, mode: 0o700 });
+    writeAtomic(daemonStatePath, JSON.stringify(state));
+  } catch {
+    // The daemon still runs; the next command retries the state write.
+  }
+};
+
+const daemonRequest = (
+  socket: string,
+  method: string,
+  path: string,
+): Promise<{ status: number; body: string } | undefined> =>
+  new Promise((resolve) => {
+    const req = http.request(
+      {
+        socketPath: socket,
+        method,
+        path,
+        headers: { Host: `${DAEMON_HOST}:${DAEMON_PORT}` },
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk: Buffer) => {
+          body += chunk.toString("utf8");
+        });
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
+      },
+    );
+    req.setTimeout(5000, () => req.destroy());
+    req.on("error", () => resolve(undefined));
+    req.end();
+  });
+
+const parseDaemon = (
+  res: { status: number; body: string } | undefined,
+): { kind: "ok"; data: unknown } | { kind: "denied" } | undefined => {
+  if (res === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(res.body) as { success?: boolean; data?: unknown };
+    if (parsed.success && res.status === 200) return { kind: "ok", data: parsed.data };
+    if (parsed.success === false) return { kind: "denied" };
+    return undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const daemonStatus = async (): Promise<string | undefined> => {
+  const state = readDaemonState();
+  if (!state) return undefined;
+  const parsed = parseDaemon(await daemonRequest(state.socket, "GET", "/status"));
+  if (parsed?.kind !== "ok") return undefined;
+  const data = parsed.data as { status?: unknown };
+  return typeof data.status === "string" ? data.status : undefined;
+};
+
+const daemonListItems = async (): Promise<
+  { kind: "ok"; items: Record<string, any>[] } | { kind: "denied" } | undefined
+> => {
+  const state = readDaemonState();
+  if (!state) return undefined;
+  const parsed = parseDaemon(await daemonRequest(state.socket, "GET", "/list/object/items"));
+  if (parsed?.kind === "denied") return { kind: "denied" };
+  if (parsed?.kind !== "ok") return undefined;
+  return Array.isArray(parsed.data) ? { kind: "ok", items: parsed.data as Record<string, any>[] } : undefined;
+};
+
+const daemonStop = (): void => {
+  const state = readDaemonState();
+  if (!state) return;
+  try {
+    process.kill(state.pid, "SIGTERM");
+  } catch {
+    // already dead
+  }
+  try {
+    unlinkSync(state.socket);
+  } catch {
+    // already gone
+  }
+  try {
+    unlinkSync(daemonStatePath);
+  } catch {
+    // already gone
+  }
+};
+
+const daemonStart = async (): Promise<boolean> => {
+  try {
+    mkdirSync(daemonDir, { recursive: true, mode: 0o700 });
+  } catch {
+    return false;
+  }
+  try {
+    unlinkSync(daemonSocketPath);
+  } catch {
+    // fresh socket
+  }
+  const child = spawn(
+    "bw",
+    ["serve", "--hostname", `unix://${daemonSocketPath}`, "--port", String(DAEMON_PORT)],
+    { detached: true, stdio: "ignore" },
+  );
+  child.unref();
+  let exited = false;
+  child.on("exit", () => {
+    exited = true;
+  });
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    if (exited) return false;
+    const res = await daemonRequest(daemonSocketPath, "GET", "/status");
+    if (res && res.status === 200) {
+      if (child.pid !== undefined) writeDaemonState({ pid: child.pid, socket: daemonSocketPath });
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  try {
+    if (child.pid !== undefined) process.kill(child.pid, "SIGKILL");
+  } catch {
+    // already gone
+  }
+  return false;
+};
+
+const ensureDaemon = async (): Promise<boolean> => {
+  const state = readDaemonState();
+  if (state) {
+    const res = await daemonRequest(state.socket, "GET", "/status");
+    if (res && res.status === 200) return true;
+    daemonStop();
+  }
+  return daemonStart();
+};
+
+const currentAuthState = async (): Promise<{ authenticated: boolean; unlocked: boolean }> => {
+  if (daemonEnabled()) {
+    if (await ensureDaemon()) {
+      const daemon = await daemonStatus();
+      if (daemon !== undefined) {
+        return { authenticated: daemon !== "unauthenticated", unlocked: daemon === "unlocked" };
+      }
+      daemonStop();
+    }
+  }
+  return status();
 };
 
 const readSession = (): string | undefined => {
@@ -782,11 +957,12 @@ const newItem = (name: string, field: string, value: string): Record<string, any
 };
 
 const setValue = async (alias: string, definition: SecretDefinition, value: string, force: boolean): Promise<void> => {
-  requireUnlocked();
+  await requireUnlocked();
   const field = definition.field || "password";
   const raw = tryGetItemRaw(definition.item);
   if (raw === undefined) {
     runBwInput(["create", "item"], JSON.stringify(newItem(definition.item, field, value)));
+    daemonStop();
     console.error(`secret: created item ${definition.item}`);
   } else {
     let item: Record<string, any>;
@@ -804,6 +980,7 @@ const setValue = async (alias: string, definition: SecretDefinition, value: stri
     }
     setItemField(item, field, value);
     runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(item)).toString("base64"));
+    daemonStop();
     console.error(`secret: updated item ${definition.item}`);
   }
 };
@@ -840,8 +1017,8 @@ const deliverValue = (value: string, alias: string): void => {
   }
 };
 
-const doctor = (definitions: Record<string, SecretDefinition>): void => {
-  const current = status();
+const doctor = async (definitions: Record<string, SecretDefinition>): Promise<void> => {
+  const current = await currentAuthState();
   if (!current.authenticated) {
     console.log('bitwarden: unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"');
     process.exit(1);
@@ -853,7 +1030,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
   console.log("bitwarden: unlocked");
 
   let problems = 0;
-  const items = vaultItems();
+  const items = await vaultItems();
   for (const [alias, definition] of Object.entries(definitions)) {
     const field = definition.field || "password";
     const item = itemFor(items, definition.item);
@@ -942,7 +1119,7 @@ const main = async (): Promise<void> => {
   if (options.command === "help" || options.command === "--help" || options.command === "-h") {
     printHelp();
   } else if (options.command === "status") {
-    const current = status();
+    const current = await currentAuthState();
     if (current.unlocked) {
       console.log("unlocked — ready. next: secret list, or secret env --output .env");
     } else {
@@ -958,6 +1135,7 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "unlock") {
     const token = runBw(["unlock", "--raw"]);
+    daemonStop();
     if (options.store) {
       storeSession(token);
       console.error("secret: unlocked; session stored (clear with 'secret lock')");
@@ -966,6 +1144,7 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "lock") {
     runBw(["lock"]);
+    daemonStop();
     const hadSession = readSession() !== undefined;
     clearSession();
     console.error(hadSession ? "secret: vault locked; stored session cleared" : "secret: vault locked");
@@ -984,7 +1163,7 @@ const main = async (): Promise<void> => {
       );
     } else if (process.stdout.isTTY) {
       const header = ["ALIAS", "ITEM", "FIELD", "CREATED"];
-      const items = vaultItems();
+      const items = await vaultItems();
       let hidden = 0;
       const rows = entries.map(([alias, definition]) => {
         const created = itemCreationDate(items, definition.item);
@@ -1009,7 +1188,7 @@ const main = async (): Promise<void> => {
   } else if (options.command === "get") {
     const alias = options.positional[0] || fail("get requires an alias, e.g. secret get github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    const value = getValue(alias, definition);
+    const value = await getValue(alias, definition);
     recordHistory({ at: new Date().toISOString(), cmd: "get", target: alias, env: environment });
     if (options.copy) {
       copyToClipboard(value);
@@ -1038,16 +1217,11 @@ const main = async (): Promise<void> => {
   } else if (options.command === "id") {
     const alias = options.positional[0] || fail("id requires an alias, e.g. secret id github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    const raw = tryGetItemRaw(definition.item);
-    if (raw === undefined) {
-      requireUnlocked();
+    const items = await vaultItems();
+    const item = itemFor(items, definition.item);
+    if (item === undefined) {
+      await requireUnlocked();
       fail(`item not found for ${alias}: ${definition.item}`);
-    }
-    let item: Record<string, any>;
-    try {
-      item = JSON.parse(raw) as Record<string, any>;
-    } catch {
-      fail(`Bitwarden returned invalid item data for ${alias}`);
     }
     if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
     recordHistory({ at: new Date().toISOString(), cmd: "id", target: alias, env: environment });
@@ -1055,7 +1229,7 @@ const main = async (): Promise<void> => {
   } else if (options.command === "totp") {
     const alias = options.positional[0] || fail("totp requires an alias, e.g. secret totp github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    requireUnlocked();
+    await requireUnlocked();
     const code = runBw(["get", "totp", definition.item]);
     recordHistory({ at: new Date().toISOString(), cmd: "totp", target: alias, env: environment });
     if (options.copy) {
@@ -1065,8 +1239,9 @@ const main = async (): Promise<void> => {
       console.log(code);
     }
   } else if (options.command === "pull") {
-    requireUnlocked();
+    await requireUnlocked();
     runBw(["sync"]);
+    daemonStop();
     recordHistory({ at: new Date().toISOString(), cmd: "pull", target: "", env: environment });
     console.error("secret: vault cache pulled from server");
   } else if (options.command === "pin") {
@@ -1076,13 +1251,13 @@ const main = async (): Promise<void> => {
     if (!holder) {
       fail(`alias ${alias} is not in a project, local, or user config (see 'secret print --all')`);
     }
-    requireUnlocked();
+    await requireUnlocked();
     const itemNames = new Set<string>();
     if (holder.config.secrets?.[alias]?.item) itemNames.add(holder.config.secrets[alias].item);
     for (const environment of Object.values(holder.config.environments || {})) {
       if (environment.secrets?.[alias]?.item) itemNames.add(environment.secrets[alias].item);
     }
-    const items = vaultItems();
+    const items = await vaultItems();
     const ids = new Map<string, string>();
     for (const item of itemNames) {
       const entry = itemFor(items, item);
@@ -1114,16 +1289,11 @@ const main = async (): Promise<void> => {
   } else if (options.command === "rm") {
     const alias = options.positional[0] || fail("rm requires an alias, e.g. secret rm github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    const raw = tryGetItemRaw(definition.item);
-    if (raw === undefined) {
-      requireUnlocked();
+    const items = await vaultItems();
+    const item = itemFor(items, definition.item);
+    if (item === undefined) {
+      await requireUnlocked();
       fail(`item not found for ${alias}: ${definition.item}`);
-    }
-    let item: Record<string, any>;
-    try {
-      item = JSON.parse(raw) as Record<string, any>;
-    } catch {
-      fail(`Bitwarden returned invalid item data for ${alias}`);
     }
     const name = String(item.name || definition.item);
     if (!options.force) {
@@ -1132,6 +1302,7 @@ const main = async (): Promise<void> => {
       if (!confirmed) fail("aborted; use --force to delete without confirmation");
     }
     runBw(["delete", "item", definition.item]);
+    daemonStop();
     recordHistory({ at: new Date().toISOString(), cmd: "rm", target: alias, env: environment });
     console.error(`secret: deleted item ${definition.item} for ${alias} (config entry kept)`);
   } else if (options.command === "unset") {
@@ -1157,22 +1328,24 @@ const main = async (): Promise<void> => {
     for (const alias of optionalSet) {
       if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
     }
-    const items = vaultItems();
-    const lines = loaded.selectedAliases.flatMap((alias) => {
+    const items = await vaultItems();
+    const lines: string[] = [];
+    for (const alias of loaded.selectedAliases) {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
       const key = dotenvKey(alias, definition);
       if (optionalSet.has(alias)) {
         const value = resolveOptional(items, definition);
         if (value === undefined) {
           console.error(`secret: skipping ${alias} (optional, unresolved)`);
-          return [];
+          continue;
         }
         const formatted = dotenvValue(value);
-        return [options.export ? `export ${key}=${formatted}` : `${key}=${formatted}`];
+        lines.push(options.export ? `export ${key}=${formatted}` : `${key}=${formatted}`);
+        continue;
       }
-      const value = dotenvValue(resolveRequired(items, alias, definition));
-      return [options.export ? `export ${key}=${value}` : `${key}=${value}`];
-    });
+      const value = dotenvValue(await resolveRequired(items, alias, definition));
+      lines.push(options.export ? `export ${key}=${value}` : `${key}=${value}`);
+    }
     if (options.diff) {
       const target = options.outputPath || join(process.cwd(), ".env");
       const previous = existsSync(target) ? readFileSync(target, "utf8").split("\n").filter((line) => line !== "") : [];
@@ -1202,7 +1375,7 @@ const main = async (): Promise<void> => {
     for (const alias of optionalSet) {
       if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
     }
-    const items = vaultItems();
+    const items = await vaultItems();
     for (const alias of loaded.selectedAliases) {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
       const key = dotenvKey(alias, definition);
@@ -1215,7 +1388,7 @@ const main = async (): Promise<void> => {
         envVars[key] = value;
         continue;
       }
-      envVars[key] = resolveRequired(items, alias, definition);
+      envVars[key] = await resolveRequired(items, alias, definition);
     }
     recordHistory({ at: new Date().toISOString(), cmd: "run", target: command, env: environment });
     const result = spawnSync(command, options.positional.slice(1), {
@@ -1240,7 +1413,7 @@ const main = async (): Promise<void> => {
   } else if (options.command === "lint") {
     lint(options.configPath, options.json ?? false);
   } else if (options.command === "doctor") {
-    doctor(loaded.definitions);
+    await doctor(loaded.definitions);
   } else if (options.command === "recent") {
     printRecent(options.json ?? false);
   } else if (options.command === "history") {
