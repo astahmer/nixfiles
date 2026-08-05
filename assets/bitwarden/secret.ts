@@ -34,7 +34,6 @@ type ParsedOptions = {
 };
 
 const home = homedir();
-const defaultsPath = process.env.SECRET_DEFAULTS_FILE || join(home, ".config", "secret", "defaults.json");
 const userConfigPath = join(home, ".config", "secret", "config.json");
 const historyPath = join(home, ".config", "secret", "history.json");
 const projectConfigName = ".secret.json";
@@ -201,21 +200,19 @@ const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
   definitions: Record<string, SecretDefinition>;
   selectedAliases?: string[];
 } => {
-  const defaults = optionalConfig(defaultsPath);
   const user = optionalConfig(userConfigPath);
   const projectPath = selectedConfig || findProjectConfig();
   const project = projectPath ? readJson(projectPath) : {};
   const localPath = findProjectLocalConfig();
   const projectLocal = localPath ? readJson(localPath) : {};
   const definitions = {
-    ...(defaults.secrets || {}),
     ...(user.secrets || {}),
     ...(project.secrets || {}),
     ...(projectLocal.secrets || {}),
   };
 
   if (environment !== "prod") {
-    const sources = [defaults, user, project, projectLocal];
+    const sources = [user, project, projectLocal];
     if (!sources.some((source) => source.environments?.[environment])) {
       const available = ["prod", ...new Set(sources.flatMap((source) => Object.keys(source.environments || {})))];
       fail(`unknown environment: ${environment} (available: ${available.join(", ")})`);
@@ -264,6 +261,17 @@ const tryGetItemRaw = (item: string): string | undefined => {
   const result = spawnSync("bw", ["get", "item", item, "--raw"], { encoding: "utf8" });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
   return result.status === 0 ? result.stdout.trim() : undefined;
+};
+
+const itemCreationDate = (item: string): string => {
+  const raw = tryGetItemRaw(item);
+  if (raw === undefined) return "-";
+  try {
+    const parsed = JSON.parse(raw) as { creationDate?: string };
+    return parsed.creationDate ? String(parsed.creationDate).slice(0, 10) : "-";
+  } catch {
+    return "-";
+  }
 };
 
 const status = (): { authenticated: boolean; unlocked: boolean } => {
@@ -434,7 +442,7 @@ const configRows = (config: SecretConfig, scope: string): PrintRow[] => {
 const scopeRows = (scope: string, filePath: string | undefined): PrintRow[] =>
   filePath && existsSync(filePath) ? configRows(readJson(filePath), scope) : [];
 
-const SCOPE_ORDER: Record<string, number> = { project: 0, global: 1, nix: 2, local: 3 };
+const SCOPE_ORDER: Record<string, number> = { project: 0, global: 1, local: 2 };
 
 const sortRows = (rows: PrintRow[]): void => {
   rows.sort((a, b) =>
@@ -469,7 +477,6 @@ const mergedRows = (selectedConfig?: string): PrintRow[] => {
   const rows = [
     ...scopeRows("project", projectPath),
     ...scopeRows("global", userConfigPath),
-    ...scopeRows("nix", defaultsPath),
     ...scopeRows("local", findProjectLocalConfig()),
   ];
   sortRows(rows);
@@ -479,7 +486,7 @@ const mergedRows = (selectedConfig?: string): PrintRow[] => {
 const printAllScopes = (selectedConfig: string | undefined, json: boolean): void => {
   const rows = mergedRows(selectedConfig);
   emitRows(rows, json, true);
-  console.error(`secret print: ${rows.length} aliases across project, global, nix, and local scopes. next: secret get <alias>, or secret env --output .env`);
+  console.error(`secret print: ${rows.length} aliases across project, global, and local scopes. next: secret get <alias>, or secret env --output .env`);
 };
 
 const searchAliases = (query: string, selectedConfig: string | undefined, json: boolean): void => {
@@ -505,7 +512,6 @@ const lint = (selectedConfig: string | undefined, json: boolean): void => {
   const sources = [
     { scope: "project", filePath: projectPath },
     { scope: "global", filePath: userConfigPath },
-    { scope: "nix", filePath: defaultsPath },
     { scope: "local", filePath: findProjectLocalConfig() },
   ];
   const problems: LintProblem[] = [];
@@ -559,7 +565,7 @@ const lint = (selectedConfig: string | undefined, json: boolean): void => {
     console.error(`secret lint: ${problems.length} problem(s) across ${count} alias(es). next: fix the config, or run 'secret doctor' for vault checks`);
     process.exit(1);
   }
-  console.error(`secret lint: clean — ${count} alias(es) across project, global, nix, and local. next: secret doctor, or secret env --output .env`);
+  console.error(`secret lint: clean — ${count} alias(es) across project, global, and local. next: secret doctor, or secret env --output .env`);
 };
 
 const printScope = (scope: string, selectedConfig?: string, json = false): void => {
@@ -571,8 +577,6 @@ const printScope = (scope: string, selectedConfig?: string, json = false): void 
     printConfig("project", projectPath, json);
   } else if (scope === "global") {
     printConfig("global", userConfigPath, json);
-  } else if (scope === "nix") {
-    printConfig("nix", defaultsPath, json);
   } else if (scope === "local") {
     const localPath = findProjectLocalConfig();
     if (!localPath) {
@@ -580,14 +584,14 @@ const printScope = (scope: string, selectedConfig?: string, json = false): void 
     }
     printConfig("local", localPath, json);
   } else {
-    fail(`unknown scope: ${scope} (available: project, global, nix, local)`);
+    fail(`unknown scope: ${scope} (available: project, global, local)`);
   }
 };
 
 const unsetAlias = (alias: string, selectedConfig?: string): void => {
   const holder = configWithAlias(alias, selectedConfig || findProjectConfig(), findProjectLocalConfig());
   if (!holder) {
-    fail(`alias ${alias} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to remove it`);
+    fail(`alias ${alias} is not in a project, local, or user config (see 'secret print --all')`);
   }
   const updated = JSON.parse(JSON.stringify(holder.config)) as SecretConfig;
   delete updated.secrets?.[alias];
@@ -605,7 +609,7 @@ const moveAlias = (from: string, to: string, selectedConfig?: string): void => {
   if (from === to) fail(`alias is already named ${to}`);
   const holder = configWithAlias(from, selectedConfig || findProjectConfig(), findProjectLocalConfig());
   if (!holder) {
-    fail(`alias ${from} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to rename it`);
+    fail(`alias ${from} is not in a project, local, or user config (see 'secret print --all')`);
   }
   if (configContainsAlias(holder.config, to)) fail(`alias ${to} already exists in ${holder.filePath}`);
   const updated = JSON.parse(JSON.stringify(holder.config)) as SecretConfig;
@@ -807,7 +811,7 @@ Commands:
   mv <alias> <new>    Rename an alias in the project or user config
   init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
-  print (pr) [scope]  Show aliases in project (default), global, nix, or local; --all merges scopes
+  print (pr) [scope]  Show aliases in project (default), global, or local; --all merges scopes
   lint (l)            Validate configs offline: items, env keys, collisions (no vault)
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent (re)         Show recently used aliases
@@ -822,7 +826,7 @@ Options:
   --check             With status: exit nonzero when not unlocked
   --export            With env: print shell export lines instead of dotenv
   --json              With list/print/history/recent: machine-readable JSON on stdout
-  --all               With print: merge project, global, nix, and local scopes
+  --all               With print: merge project, global, and local scopes
   --diff              With env: show what --output would write without writing (default target ./.env)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
@@ -831,7 +835,6 @@ Config precedence (later wins):
   ~/.config/secret/config.json    personal global aliases
   ./.secret.json                  project aliases
   ./.secret.local.json            local overrides (gitignored)
-Legacy ~/.config/secret/defaults.json is still honored when present.
 
 Start with 'secret status', then 'secret list' to see aliases, and
 'secret env --output .env' to generate a project .env file.
@@ -875,13 +878,21 @@ const main = async (): Promise<void> => {
         ),
       );
     } else if (process.stdout.isTTY) {
-      const header = ["ALIAS", "ITEM", "FIELD"];
-      const rows = entries.map(([alias, definition]) => [alias, definition.item, definition.field || "password"]);
+      const header = ["ALIAS", "ITEM", "FIELD", "CREATED"];
+      let hidden = 0;
+      const rows = entries.map(([alias, definition]) => {
+        const created = itemCreationDate(definition.item);
+        if (created === "-") hidden += 1;
+        return [alias, definition.item, definition.field || "password", created];
+      });
       const widths = header.map((cell, column) => Math.max(cell.length, ...rows.map((row) => row[column]?.length ?? 0)));
       const pad = (value: string, width: number): string => value + " ".repeat(Math.max(0, width - value.length));
       console.log(header.map((cell, column) => pad(cell, widths[column] ?? 0)).join("  "));
       for (const row of rows) {
         console.log(row.map((cell, column) => pad(cell, widths[column] ?? 0)).join("  "));
+      }
+      if (hidden > 0) {
+        console.error(`secret: created date hidden for ${hidden} item(s) — unlock the vault to show dates`);
       }
     } else {
       for (const [alias, definition] of entries) {
@@ -955,7 +966,7 @@ const main = async (): Promise<void> => {
     if (!loaded.definitions[alias]) fail(`unknown alias: ${alias} (see 'secret list')`);
     const holder = configWithAlias(alias, options.configPath || findProjectConfig(), findProjectLocalConfig());
     if (!holder) {
-      fail(`alias ${alias} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to pin`);
+      fail(`alias ${alias} is not in a project, local, or user config (see 'secret print --all')`);
     }
     requireUnlocked();
     const itemNames = new Set<string>();

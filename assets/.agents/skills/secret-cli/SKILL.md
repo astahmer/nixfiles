@@ -12,7 +12,7 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 ## Commands
 
 - `secret status` — auth state plus the exact next command; `--check` exits nonzero when not unlocked.
-- `secret list` — configured aliases from merged configs; aligned table on a TTY, TSV when piped; never touches the vault.
+- `secret list` — configured aliases from merged configs; aligned table on a TTY with creation dates when unlocked, TSV when piped; never touches the vault when piped.
 - `secret search <term>` — find aliases by alias, item, or env key across scopes; no values, no vault access.
 - `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
 - `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.
@@ -45,13 +45,12 @@ pre-commit checks.
 - `~/.config/secret/config.json` — personal global aliases (optional).
 - `./.secret.json` — project aliases (discovered from the current directory upward); commit it because it is value-free.
 - `./.secret.local.json` — machine-local overrides, gitignored, merged last.
-- A legacy `~/.config/secret/defaults.json` is still honored when present.
 - `"environments"` in any config — per-env overrides selected with `--env` (default `prod`).
 
-Precedence: legacy defaults, then user, then project, then local. The nixfiles
-repo itself declares its machine-wide aliases in its root `.secret.json`; a
-project adds aliases with its own `.secret.json` and local overrides with a
-gitignored `.secret.local.json`.
+Precedence: user, then project, then local. The nixfiles repo itself declares
+its machine-wide aliases in its root `.secret.json`; a project adds aliases
+with its own `.secret.json` and local overrides with a gitignored
+`.secret.local.json`.
 
 Common flows: `secret env --env dev --output .env.dev` for a per-env dotenv,
 and `secret env --required A,B --output .env` to fail fast when a required

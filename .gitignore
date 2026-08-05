@@ -2,6 +2,7 @@
 result
 .direnv
 *.local.md
+.secret.local.json
 node_modules
 .opencodex-secrets.env
 assets/readbro/node_modules

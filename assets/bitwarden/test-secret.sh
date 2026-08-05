@@ -37,18 +37,11 @@ cat > "$FAKE_CLIP"
 EOF
 chmod +x "$tmp/bin/pbcopy"
 
-cat > "$tmp/config/secret/defaults.json" <<'EOF'
-{
-  "secrets": {
-    "github-token": { "item": "nixfiles/github-token", "field": "password", "env": "GITHUB_TOKEN" }
-  }
-}
-EOF
-
 cat > "$tmp/proj/.secret.json" <<'EOF'
 {
   "secrets": {
-    "DATABASE_URL": { "item": "myapp/database-url", "field": "password" }
+    "DATABASE_URL": { "item": "myapp/database-url", "field": "password" },
+    "github-token": { "item": "nixfiles/github-token", "field": "password", "env": "GITHUB_TOKEN" }
   },
   "environments": {
     "dev": {
@@ -61,7 +54,6 @@ cat > "$tmp/proj/.secret.json" <<'EOF'
 EOF
 
 export PATH="$tmp/bin:$PATH"
-export SECRET_DEFAULTS_FILE="$tmp/config/secret/defaults.json"
 export HOME="$tmp"
 export FAKE_LOG="$tmp/log.txt"
 export FAKE_CLIP="$tmp/clip.txt"
@@ -147,7 +139,6 @@ rg -q '"item": "item-1"' "$tmp/proj/.secret.json" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: pin rewrites item names to ids" >&2
 }
-assert_eq "$(secret pin github-token 2>&1 || true)" "secret: alias github-token is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to pin" "pin refuses Nix-managed defaults"
 assert_fail secret pin nope
 
 assert_eq "$(secret rotate github-token 2>&1 || true)" "secret: item already exists; pass --force to overwrite" "rotate blocked without force"
@@ -181,30 +172,33 @@ printf '%s' '{"secrets":{"X":{}}}' > "$tmp/missing.json"
 assert_fail secret lint --config "$tmp/missing.json"
 assert_eq "$(secret lint --config "$tmp/missing.json" --json)" '[{"scope":"project","alias":"X","message":"invalid definition (missing item)"}]' "lint --json rows"
 
-assert_eq "$(secret print)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "print project scope after pin"
-assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL')" "alias pr maps to print"
-assert_eq "$(secret print nix)" "github-token	prod	nixfiles/github-token	password	GITHUB_TOKEN" "print nix scope"
+assert_eq "$(secret print)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print project scope after pin"
+assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "alias pr maps to print"
 assert_eq "$(secret print global 2>&1 || true)" "secret: no config file for global scope: $tmp/.config/secret/config.json" "print global missing config explains"
-assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, nix, local)" "print rejects unknown scope"
-assert_eq "$(secret print --all)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tnix\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print --all merges scopes"
+assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, local)" "print rejects unknown scope"
+assert_eq "$(secret print --all)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tproject\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print --all merges scopes"
 assert_eq "$(secret search database)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL')" "search matches alias and env key"
-assert_eq "$(secret search github --json)" "[{\"alias\":\"github-token\",\"scope\":\"nix\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "search --json rows"
+assert_eq "$(secret search github --json)" "[{\"alias\":\"github-token\",\"scope\":\"project\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "search --json rows"
 assert_eq "$(secret search nope 2>&1 || true)" "secret search: no matches for 'nope'. next: try another term, or 'secret print --all'" "search no match exits nonzero"
-assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"DATABASE_URL\",\"env\":\"prod\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "print --json rows after pin"
-assert_eq "$(secret list --json)" "[{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"},{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "list --json merged aliases after pin"
+assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"DATABASE_URL\",\"env\":\"prod\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"github-token\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "print --json rows after pin"
+assert_eq "$(secret list --json)" "[{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "list --json merged aliases after pin"
 if command -v script >/dev/null 2>&1; then
   script -q "$tmp/list-tty.txt" "$bun_bin" "$script" list >/dev/null 2>&1 || true
-  tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'ALIAS' && pass=$((pass + 1)) || {
+  {
+    tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'ALIAS' &&
+    tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q '2026-01-15'
+  } && pass=$((pass + 1)) || {
     fail=$((fail + 1))
-    echo "FAIL: list prints a table on a TTY" >&2
+    echo "FAIL: list prints a table with created dates on a TTY" >&2
   }
 else
   pass=$((pass + 1))
 fi
-assert_eq "$(secret env --export)" "export DATABASE_URL='old-pass'" "env --export shell lines"
+assert_eq "$(secret env --export)" "$(printf 'export DATABASE_URL='\''old-pass'\''\nexport GITHUB_TOKEN='\''old-pass'\''')" "env --export shell lines"
 printf "DATABASE_URL='stale'\n" > .env
 assert_eq "$(secret env --diff --output .env)" "- DATABASE_URL='stale'
-+ DATABASE_URL='old-pass'" "env --diff shows changes without writing"
++ DATABASE_URL='old-pass'
++ GITHUB_TOKEN='old-pass'" "env --diff shows changes without writing"
 assert_eq "$(cat .env)" "DATABASE_URL='stale'" "env --diff leaves file untouched"
 cd "$tmp/proj/sub"
 assert_ok secret env --output .env
@@ -214,11 +208,11 @@ assert_ok secret mv DATABASE_URL DB_URL
 assert_eq "$(secret print | head -1)" "DB_URL	dev	item-1	password	DB_URL" "mv renames base and env overrides"
 assert_ok secret mv DB_URL DATABASE_URL
 assert_eq "$(secret mv DATABASE_URL BAD-NAME 2>&1 || true)" "secret: invalid alias name: BAD-NAME (letters, digits, underscore; must not start with a digit)" "mv rejects invalid alias name"
-assert_eq "$(secret mv github-token GH 2>&1 || true)" "secret: alias github-token is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to rename it" "mv refuses Nix-managed defaults"
+assert_eq "$(secret mv nope GH 2>&1 || true)" "secret: alias nope is not in a project, local, or user config (see 'secret print --all')" "mv refuses alias not in config"
 assert_ok secret u DATABASE_URL
 assert_fail secret get DATABASE_URL
-assert_eq "$(secret unset DATABASE_URL 2>&1 || true)" "secret: alias DATABASE_URL is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to remove it" "unset second time reports defaults-only"
-assert_eq "$(secret unset github-token 2>&1 || true)" "secret: alias github-token is only in the Nix-managed $tmp/config/secret/defaults.json; copy it to a project or user config to remove it" "unset refuses Nix-managed defaults"
+assert_eq "$(secret unset DATABASE_URL 2>&1 || true)" "secret: alias DATABASE_URL is not in a project, local, or user config (see 'secret print --all')" "unset second time reports not in config"
+assert_eq "$(secret unset nope 2>&1 || true)" "secret: alias nope is not in a project, local, or user config (see 'secret print --all')" "unset refuses alias not in config"
 
 secret get github-token >/dev/null
 secret history | rg -q "get.*github-token" || {
@@ -262,7 +256,7 @@ mkdir -p "$tmp/localdir"
 printf '%s' '{"secrets":{"BASE":{"item":"base/item"}}}' > "$tmp/localdir/.secret.json"
 printf '%s' '{"secrets":{"BASE":{"item":"local/item"},"EXTRA":{"item":"local/extra"}}}' > "$tmp/localdir/.secret.local.json"
 cd "$tmp/localdir"
-assert_eq "$(secret list)" "$(printf 'github-token\tnixfiles/github-token\tpassword\nBASE\tlocal/item\tpassword\nEXTRA\tlocal/extra\tpassword')" "local overrides project item and adds alias"
+assert_eq "$(secret list)" "$(printf 'BASE\tlocal/item\tpassword\nEXTRA\tlocal/extra\tpassword')" "local overrides project item and adds alias"
 assert_eq "$(secret env --export)" "$(printf 'export BASE='\''old-pass'\''\nexport EXTRA='\''old-pass'\''')" "env includes local aliases"
 assert_eq "$(secret print local | head -1)" "BASE	prod	local/item	password	BASE" "print local scope"
 assert_ok secret lint
