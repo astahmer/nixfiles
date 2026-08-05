@@ -16,6 +16,8 @@ cat > "$tmp/bin/bw" <<'EOF'
 #!/bin/sh
 case "$1" in
   status) printf "%s" "$FAKE_BW_STATUS" ;;
+  unlock) printf "%s" "session-token-123" ;;
+  lock) printf "%s\n" "-- lock --" >> "$FAKE_LOG" ;;
   generate) printf "%s" "gen-pass-123" ;;
   sync) printf "%s\n" "-- sync --" >> "$FAKE_LOG" ;;
   get)
@@ -95,7 +97,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|lint\|doctor\|recent\|history')" "status|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
@@ -272,6 +274,24 @@ rg -q '"EXTRA"' .secret.local.json && {
 } || pass=$((pass + 1))
 assert_eq "$(secret get BASE)" "old-pass" "local item wins"
 cd "$tmp"
+
+assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
+assert_eq "$(secret unlock --store 2>/dev/null)" "" "unlock --store keeps token off stdout"
+assert_eq "$(cat "$tmp/.config/secret/session")" "session-token-123" "unlock --store persists session"
+assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status 2>/dev/null)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked stdout unchanged with stored session"
+FAKE_BW_STATUS='{"status":"locked"}' secret status 2>&1 >/dev/null | rg -q "stale" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: status hints at stale stored session" >&2
+}
+assert_ok secret lock
+rg -q -- "-- lock --" "$FAKE_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: lock calls bw lock" >&2
+}
+test ! -e "$tmp/.config/secret/session" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: lock clears stored session" >&2
+}
 
 echo "secret tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

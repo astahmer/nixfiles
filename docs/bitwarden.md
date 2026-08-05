@@ -12,6 +12,15 @@ bw login
 export BW_SESSION="$(bw unlock --raw)"
 ```
 
+`bw` is stateless across processes, so a plain session needs that export in
+every shell. With the deployed shell integration, `secret unlock` does it for
+you once per shell (it exports `BW_SESSION` in the current shell). For a
+Doppler-style persistent login, `secret unlock --store` saves the session token
+to `~/.config/secret/session` (mode 0600); every later `secret` command works
+without exporting until `secret lock` clears it. Treat the stored token like a
+credential — it grants full vault access while valid. `secret status` warns
+when a stored session is stale.
+
 `rbw` is convenient for interactive lookups because its agent holds unlocked
 state in memory. `secret` uses the official `bw` CLI and the current
 `BW_SESSION`; it never stores or exports that session.

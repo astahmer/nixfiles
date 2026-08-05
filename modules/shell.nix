@@ -286,6 +286,7 @@ in
           if (( CURRENT == 2 )); then
             _describe 'command' \
               'status:check auth state' 'list:show aliases' 'get:read a value' \
+              'unlock:unlock vault' 'lock:lock vault' \
               'set:write a value' 'id:item id' 'totp:2FA code' 'pull:refresh local cache' \
               'pin:pin item id' 'rotate:rotate password' 'rm:delete item' \
               'init:scaffold config' 'env:dotenv' 'print:show scope' \
@@ -351,7 +352,7 @@ in
           COMPREPLY=()
           cur="''${COMP_WORDS[COMP_CWORD]}"
           if (( COMP_CWORD == 1 )); then
-            COMPREPLY=( $(compgen -W "status list get set id totp pull pin rotate rm init env print doctor recent history st ls g s i t sy pu p r in e pr d re h" -- "$cur") )
+            COMPREPLY=( $(compgen -W "status unlock lock list get set id totp pull pin rotate rm init env print doctor recent history st ls g s i t sy pu p r in e pr d re h" -- "$cur") )
             return 0
           fi
           prev="''${COMP_WORDS[COMP_CWORD-1]}"

@@ -12,6 +12,8 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 ## Commands
 
 - `secret status` — auth state plus the exact next command; `--check` exits nonzero when not unlocked.
+- `secret unlock` — unlock and print a session token; `--store` persists it to `~/.config/secret/session` (mode 0600); the shell function exports `BW_SESSION` for the current shell.
+- `secret lock` — lock the vault and clear any stored session.
 - `secret list` — configured aliases from merged configs; aligned table on a TTY with creation dates when unlocked, TSV when piped; never touches the vault when piped.
 - `secret search <term>` — find aliases by alias, item, or env key across scopes; no values, no vault access.
 - `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
@@ -63,6 +65,7 @@ cache; neither runs at shell startup.
 ## Safety
 
 - Never print, log, or commit secret values or `BW_SESSION`.
+- Treat the stored session file (`~/.config/secret/session`) like a credential; `secret lock` clears it.
 - Pass values to `set` only via the hidden prompt, stdin, or `--generate`; never as an argument.
 - Overwriting an existing item always confirms first unless `--force`/`-f` is passed.
 - Prefer Bitwarden item IDs over names in configs when names can collide.
