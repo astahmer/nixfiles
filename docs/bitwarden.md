@@ -236,6 +236,7 @@ secret env --required DATABASE_URL,STRIPE_KEY --output .env
 secret env --export --output exports.sh
 secret env --diff --output .env
 secret run -- npm test
+secret run --optional STRIPE_KEY -- npm test
 ```
 
 `--env` defaults to `prod`; unknown environments are rejected. `--required`
@@ -246,7 +247,10 @@ value, prints `+`/`-` lines against the target (default `./.env`), and writes
 nothing — a dry run for rotation checklists. `secret run -- <command>` loads
 the project aliases into the command's environment and runs it, propagating
 its exit code — use `--` so the command's own flags are not parsed by
-`secret`.
+`secret`. `run` is strict by default: every declared alias must resolve, or
+the command never runs. `--optional A,B` opts out — those aliases are skipped
+with a warning when undeclared or unresolvable. `env --optional A,B` does the
+same for dotenv generation.
 
 Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are

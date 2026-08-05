@@ -24,6 +24,7 @@ case "$1" in
     if [ "$2" = "totp" ]; then printf "%s" "123456"; exit 0; fi
     printf "%s\n" "-- get $3 --" >> "$FAKE_LOG"
     if [ -n "$FAKE_GET_MISSING" ]; then echo "not found" >&2; exit 1; fi
+    if printf '%s' "$3" | rg -q "missing"; then echo "not found" >&2; exit 1; fi
     printf '{"id":"item-1","name":"%s","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}' "$3"
     ;;
   create) printf "%s\n" "-- create --" >> "$FAKE_LOG"; cat >> "$FAKE_LOG" ;;
@@ -296,6 +297,14 @@ secret run -- sh -c 'exit 3' 2>/dev/null && {
   }
 }
 assert_fail secret run
+cd "$tmp"
+
+mkdir -p "$tmp/optdir"
+printf '%s' '{"secrets":{"BASE":{"item":"base/item"},"BROKEN":{"item":"base/missing"}}}' > "$tmp/optdir/.secret.json"
+cd "$tmp/optdir"
+assert_fail secret run -- sh -c 'echo hi'
+assert_eq "$(secret run --optional BROKEN -- sh -c 'echo $BASE')" "old-pass" "run --optional skips unresolved aliases"
+assert_eq "$(secret env --optional BROKEN --export)" "$(printf 'export BASE='\''old-pass'\''')" "env --optional skips unresolved aliases"
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"

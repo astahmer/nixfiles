@@ -29,7 +29,7 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret init [alias...]` — scaffold a project `.secret.json` (directory name + kebab alias as item prefix); pass aliases to prefill; refuses to overwrite without `--force`.
 - `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); `--all` merges scopes with a scope column; never values, no vault access.
 - `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--export` prints `export KEY='value'` lines, `--diff` dry-runs without writing.
-- `secret run -- <cmd>` — inject project aliases into a command's environment and run it, propagating its exit code.
+- `secret run -- <cmd>` — inject project aliases into a command's environment and run it, propagating its exit code; strict by default (any unresolvable alias aborts), `--optional A,B` opts out.
 - `secret lint` — validate configs offline (items, env keys, dotenv-key collisions); no vault access, works locked; `--json` supported.
 - `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
 - `secret recent` / `secret history` — recently used aliases and recent commands from a value-free local log.

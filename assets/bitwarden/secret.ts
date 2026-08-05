@@ -23,6 +23,7 @@ type ParsedOptions = {
   outputPath?: string;
   envName?: string;
   required?: string[];
+  optional?: string[];
   copy?: boolean;
   check?: boolean;
   generate?: boolean;
@@ -136,6 +137,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let outputPath: string | undefined;
   let selectedEnv: string | undefined;
   const required: string[] = [];
+  const optional: string[] = [];
   let copy = false;
   let check = false;
   let generate = false;
@@ -160,6 +162,9 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     } else if (argument === "--required") {
       const value = argv[++index] || fail("--required needs alias names");
       required.push(...value.split(",").map((item) => item.trim()).filter(Boolean));
+    } else if (argument === "--optional") {
+      const value = argv[++index] || fail("--optional needs alias names");
+      optional.push(...value.split(",").map((item) => item.trim()).filter(Boolean));
     } else if (argument === "--copy") {
       copy = true;
     } else if (argument === "--check") {
@@ -195,6 +200,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     outputPath: outputPath ? configPath(outputPath) : undefined,
     envName: selectedEnv,
     required,
+    optional,
     copy,
     check,
     generate,
@@ -330,6 +336,18 @@ const getValue = (alias: string, definition: SecretDefinition): string => {
     fail(`missing or invalid value for ${alias}`);
   }
   return value;
+};
+
+const tryGetValue = (alias: string, definition: SecretDefinition): string | undefined => {
+  const raw = tryGetItemRaw(definition.item);
+  if (raw === undefined) return undefined;
+  try {
+    const item = JSON.parse(raw) as Record<string, any>;
+    const value = itemField(item, definition.field || "password");
+    return typeof value === "string" && value && !placeholderValues.has(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 const dotenvKey = (alias: string, definition: SecretDefinition): string => {
@@ -870,6 +888,7 @@ Options:
   --output FILE       With env: atomically write dotenv to FILE (mode 0600)
   --env NAME          With env/list/get/set: environment overrides (default: prod)
   --required a,b,c    With env: fail unless these aliases are in the project config
+  --optional a,b,c    With env/run: warn and skip aliases that are undeclared or cannot resolve
   --copy              With get: copy the value to the clipboard instead of stdout
   --check             With status: exit nonzero when not unlocked
   --export            With env: print shell export lines instead of dotenv
@@ -1112,11 +1131,24 @@ const main = async (): Promise<void> => {
     if (missingRequired.length) {
       fail(`required alias(es) not in project config: ${missingRequired.join(", ")} (add them to .secret.json)`);
     }
-    const lines = loaded.selectedAliases.map((alias) => {
+    const optionalSet = new Set(options.optional || []);
+    for (const alias of optionalSet) {
+      if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
+    }
+    const lines = loaded.selectedAliases.flatMap((alias) => {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
       const key = dotenvKey(alias, definition);
+      if (optionalSet.has(alias)) {
+        const value = tryGetValue(alias, definition);
+        if (value === undefined) {
+          console.error(`secret: skipping ${alias} (optional, unresolved)`);
+          return [];
+        }
+        const formatted = dotenvValue(value);
+        return [options.export ? `export ${key}=${formatted}` : `${key}=${formatted}`];
+      }
       const value = dotenvValue(getValue(alias, definition));
-      return options.export ? `export ${key}=${value}` : `${key}=${value}`;
+      return [options.export ? `export ${key}=${value}` : `${key}=${value}`];
     });
     if (options.diff) {
       const target = options.outputPath || join(process.cwd(), ".env");
@@ -1143,9 +1175,23 @@ const main = async (): Promise<void> => {
     }
     const command = options.positional[0] || fail("run requires a command, e.g. secret run -- npm test");
     const envVars: Record<string, string> = {};
+    const optionalSet = new Set(options.optional || []);
+    for (const alias of optionalSet) {
+      if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
+    }
     for (const alias of loaded.selectedAliases) {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
-      envVars[dotenvKey(alias, definition)] = getValue(alias, definition);
+      const key = dotenvKey(alias, definition);
+      if (optionalSet.has(alias)) {
+        const value = tryGetValue(alias, definition);
+        if (value === undefined) {
+          console.error(`secret: skipping ${alias} (optional, unresolved)`);
+          continue;
+        }
+        envVars[key] = value;
+        continue;
+      }
+      envVars[key] = getValue(alias, definition);
     }
     recordHistory({ at: new Date().toISOString(), cmd: "run", target: command, env: environment });
     const result = spawnSync(command, options.positional.slice(1), {
