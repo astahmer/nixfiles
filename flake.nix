@@ -90,6 +90,7 @@
 
           packages = {
             codex = pkgs'.callPackage ./packages/codex { };
+            drydock = pkgs'.callPackage ./packages/drydock { };
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
             iris = pkgs'.callPackage ./packages/iris { };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };

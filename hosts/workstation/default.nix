@@ -12,6 +12,7 @@ in
       nixos.base
       nixos.coding
       nixos.ryu
+      nixos.drydock
       nixos.opencodex
       nixos.sunshine
       nixos.homeManager

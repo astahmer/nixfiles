@@ -23,6 +23,7 @@ in
           hm.git
           hm.jujutsu
           hm.ryu
+          hm.drydock
           hm.opencodex
           hm.t3code
           hm.coding
