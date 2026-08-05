@@ -264,44 +264,8 @@ in
           fi
         }
 
-        _secret_alias_cache() {
-          local cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/secret"
-          local cache="$cache_dir/aliases"
-          mkdir -p "$cache_dir"
-          local mtime
-          if [[ "$(uname -s)" == "Darwin" ]]; then
-            mtime="$(stat -f %m "$cache" 2>/dev/null || true)"
-          else
-            mtime="$(stat -c %Y "$cache" 2>/dev/null || true)"
-          fi
-          if [[ -z "$mtime" ]] || (( $(date +%s) - mtime > 60 )); then
-            secret list 2>/dev/null > "$cache"
-          fi
-          cat "$cache" 2>/dev/null
-        }
-
-        _secret() {
-          # compadd + read loop instead of _describe: _describe trips zsh's
-          # colon-modifier parser in this shell config ("unrecognized modifier"),
-          # while plain compadd works. Keep the cache refresh on TAB only.
-          local -a matches
-          if (( CURRENT == 2 )); then
-            matches=(status list get unlock lock set id totp pull pin rotate rm init env run print lint doctor recent history st ls g s i t sy p r in e pr d re h)
-            compadd -X 'secret commands:' -- "''${matches[@]}"
-            return 0
-          fi
-          case "''${words[CURRENT-1]}" in
-            get|set|id|totp|pin|rotate|rm|g|s|i|t|p|r)
-              local entry rest
-              while IFS=''$'\t' read -r entry rest; do
-                [[ -n "$entry" ]] && matches+=("$entry")
-              done < <(_secret_alias_cache)
-              compadd -X 'aliases:' -- "''${matches[@]}"
-              ;;
-          esac
-        }
-
-        compdef _secret secret
+        # secret completions live in a deployable, testable file.
+        source ~/.config/secret/secret-completion.zsh
       '';
 
       # secret: bash twin of the zsh completion, same cache file. Registers one
@@ -327,39 +291,8 @@ in
           fi
         }
 
-        _secret_alias_cache() {
-          local cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/secret"
-          local cache="$cache_dir/aliases"
-          mkdir -p "$cache_dir"
-          local mtime
-          if [[ "$(uname -s)" == "Darwin" ]]; then
-            mtime="$(stat -f %m "$cache" 2>/dev/null || true)"
-          else
-            mtime="$(stat -c %Y "$cache" 2>/dev/null || true)"
-          fi
-          if [[ -z "$mtime" ]] || (( $(date +%s) - mtime > 60 )); then
-            secret list 2>/dev/null > "$cache"
-          fi
-          awk -F '\t' '{print $1}' "$cache" 2>/dev/null
-        }
-
-        _secret() {
-          local cur prev
-          COMPREPLY=()
-          cur="''${COMP_WORDS[COMP_CWORD]}"
-          if (( COMP_CWORD == 1 )); then
-            COMPREPLY=( $(compgen -W "status unlock lock list get set id totp pull pin rotate rm init env print doctor recent history st ls g s i t sy pu p r in e pr d re h" -- "$cur") )
-            return 0
-          fi
-          prev="''${COMP_WORDS[COMP_CWORD-1]}"
-          case "$prev" in
-            get|set|id|totp|pin|rotate|rm|g|s|i|t|p|r)
-              COMPREPLY=( $(compgen -W "$(_secret_alias_cache)" -- "$cur") )
-              ;;
-          esac
-        }
-
-        complete -o default -F _secret secret
+        # secret completions live in a deployable, testable file.
+        source ~/.config/secret/secret-completion.bash
       '';
 
       home.sessionVariables = {

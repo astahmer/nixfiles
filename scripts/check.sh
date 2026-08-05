@@ -22,6 +22,7 @@ fi
 git diff --check
 if command -v bun >/dev/null 2>&1; then
   assets/bitwarden/test-secret.sh
+  assets/bitwarden/test-completions.sh
   if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
     (cd assets/bitwarden && bun run typecheck)
   else

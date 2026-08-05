@@ -31,6 +31,10 @@
       };
     in
     {
+      home.file.".config/secret/secret-completion.zsh".source = ../assets/bitwarden/secret-completion.zsh;
+      home.file.".config/secret/secret-completion.bash".source =
+        ../assets/bitwarden/secret-completion.bash;
+
       home.packages = [
         pkgs.bitwarden-cli
         pkgs.bitwarden-desktop

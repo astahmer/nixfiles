@@ -296,6 +296,8 @@ each.
 - zsh/bash completions complete commands and aliases from a cache refreshed
   on TAB (60s TTL). The completion deliberately uses `compadd` rather than
   `_describe`, which trips zsh's colon-modifier parser in this shell config.
+  The functions live in `assets/bitwarden/secret-completion.{zsh,bash}` and are
+  covered by `assets/bitwarden/test-completions.sh`.
 - Values never leave the vault through logs or history; `secret history` and
   `secret recent` record aliases only.
 
