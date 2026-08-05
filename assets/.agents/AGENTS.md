@@ -28,6 +28,24 @@ Prefer these ephemeral paths for diagnostics. Keep profile changes and
 configuration edits deliberate, and report the exact Nix/comma failure when a
 tool genuinely cannot be resolved.
 
+## Machine-setup fixes go in Nix
+
+Any fix to this machine's setup — a missing CLI, a config change, a service
+misbehaving, new tooling — belongs in the Nix setup, not in one-off global
+installs (`npm i -g`, `pip install --user`, `brew install`, `cargo install`,
+`nix profile install`, ...). Global installs are non-deterministic and
+non-reproducible: the change lives only on this machine and won't survive a
+reapply or transfer to another machine.
+
+The Nix setup is this repository, reachable from any machine through the
+stable symlink `~/.config/nixfiles` (env `NH_FLAKE`). Make the change in
+`modules/` (shared behavior) or `hosts/` (per-machine wiring), then apply
+with `nixapply` (macOS) or `nixos-switch` (NixOS) so every machine gets it on
+the next apply.
+
+If the tool is only needed for a one-off session, use the ephemeral `comma` /
+`nix run` paths above instead of installing it globally.
+
 <!-- ast-outline:start -->
 ## Code exploration — prefer `ast-outline` over full reads
 
