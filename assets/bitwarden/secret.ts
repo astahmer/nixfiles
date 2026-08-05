@@ -38,6 +38,7 @@ const defaultsPath = process.env.SECRET_DEFAULTS_FILE || join(home, ".config", "
 const userConfigPath = join(home, ".config", "secret", "config.json");
 const historyPath = join(home, ".config", "secret", "history.json");
 const projectConfigName = ".secret.json";
+const localConfigName = ".secret.local.json";
 const placeholderValues = new Set(["replace-me", "REPLACE-ME"]);
 const HISTORY_LIMIT = 100;
 
@@ -91,10 +92,10 @@ const optionalConfig = (filePath: string): SecretConfig => (existsSync(filePath)
 
 const configPath = (value: string): string => (isAbsolute(value) ? value : resolve(process.cwd(), value));
 
-const findProjectConfig = (): string | undefined => {
+const findConfigUpward = (name: string): string | undefined => {
   let directory = process.cwd();
   for (;;) {
-    const candidate = join(directory, projectConfigName);
+    const candidate = join(directory, name);
     if (existsSync(candidate)) return candidate;
     const parent = dirname(directory);
     if (directory === home || parent === directory) return undefined;
@@ -102,12 +103,20 @@ const findProjectConfig = (): string | undefined => {
   }
 };
 
+const findProjectConfig = (): string | undefined => findConfigUpward(projectConfigName);
+
+const findProjectLocalConfig = (): string | undefined => findConfigUpward(localConfigName);
+
 const configContainsAlias = (config: SecretConfig, alias: string): boolean =>
   config.secrets?.[alias] !== undefined ||
   Object.values(config.environments || {}).some((environment) => environment.secrets?.[alias] !== undefined);
 
-const configWithAlias = (alias: string, projectPath?: string): { filePath: string; config: SecretConfig } | undefined => {
-  for (const filePath of projectPath ? [projectPath] : []) {
+const configWithAlias = (
+  alias: string,
+  projectPath?: string,
+  localPath?: string,
+): { filePath: string; config: SecretConfig } | undefined => {
+  for (const filePath of [localPath, projectPath].filter((path): path is string => path !== undefined)) {
     const config = readJson(filePath);
     if (configContainsAlias(config, alias)) return { filePath, config };
   }
@@ -196,14 +205,17 @@ const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
   const user = optionalConfig(userConfigPath);
   const projectPath = selectedConfig || findProjectConfig();
   const project = projectPath ? readJson(projectPath) : {};
+  const localPath = findProjectLocalConfig();
+  const projectLocal = localPath ? readJson(localPath) : {};
   const definitions = {
     ...(defaults.secrets || {}),
     ...(user.secrets || {}),
     ...(project.secrets || {}),
+    ...(projectLocal.secrets || {}),
   };
 
   if (environment !== "prod") {
-    const sources = [defaults, user, project];
+    const sources = [defaults, user, project, projectLocal];
     if (!sources.some((source) => source.environments?.[environment])) {
       const available = ["prod", ...new Set(sources.flatMap((source) => Object.keys(source.environments || {})))];
       fail(`unknown environment: ${environment} (available: ${available.join(", ")})`);
@@ -223,10 +235,14 @@ const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
   if (projectPath && environment !== "prod") {
     projectAliases.push(...Object.keys(project.environments?.[environment]?.secrets || {}));
   }
+  const localAliases = localPath ? Object.keys(projectLocal.secrets || {}) : [];
+  if (localPath && environment !== "prod") {
+    localAliases.push(...Object.keys(projectLocal.environments?.[environment]?.secrets || {}));
+  }
 
   return {
     definitions,
-    selectedAliases: projectPath ? [...new Set(projectAliases)] : undefined,
+    selectedAliases: projectPath || localPath ? [...new Set([...projectAliases, ...localAliases])] : undefined,
   };
 };
 
@@ -418,7 +434,7 @@ const configRows = (config: SecretConfig, scope: string): PrintRow[] => {
 const scopeRows = (scope: string, filePath: string | undefined): PrintRow[] =>
   filePath && existsSync(filePath) ? configRows(readJson(filePath), scope) : [];
 
-const SCOPE_ORDER: Record<string, number> = { project: 0, global: 1, nix: 2 };
+const SCOPE_ORDER: Record<string, number> = { project: 0, global: 1, nix: 2, local: 3 };
 
 const sortRows = (rows: PrintRow[]): void => {
   rows.sort((a, b) =>
@@ -454,6 +470,7 @@ const mergedRows = (selectedConfig?: string): PrintRow[] => {
     ...scopeRows("project", projectPath),
     ...scopeRows("global", userConfigPath),
     ...scopeRows("nix", defaultsPath),
+    ...scopeRows("local", findProjectLocalConfig()),
   ];
   sortRows(rows);
   return rows;
@@ -462,7 +479,7 @@ const mergedRows = (selectedConfig?: string): PrintRow[] => {
 const printAllScopes = (selectedConfig: string | undefined, json: boolean): void => {
   const rows = mergedRows(selectedConfig);
   emitRows(rows, json, true);
-  console.error(`secret print: ${rows.length} aliases across project, global, and nix scopes. next: secret get <alias>, or secret env --output .env`);
+  console.error(`secret print: ${rows.length} aliases across project, global, nix, and local scopes. next: secret get <alias>, or secret env --output .env`);
 };
 
 const searchAliases = (query: string, selectedConfig: string | undefined, json: boolean): void => {
@@ -489,6 +506,7 @@ const lint = (selectedConfig: string | undefined, json: boolean): void => {
     { scope: "project", filePath: projectPath },
     { scope: "global", filePath: userConfigPath },
     { scope: "nix", filePath: defaultsPath },
+    { scope: "local", filePath: findProjectLocalConfig() },
   ];
   const problems: LintProblem[] = [];
   const envKeys = new Map<string, { scope: string; alias: string }>();
@@ -541,7 +559,7 @@ const lint = (selectedConfig: string | undefined, json: boolean): void => {
     console.error(`secret lint: ${problems.length} problem(s) across ${count} alias(es). next: fix the config, or run 'secret doctor' for vault checks`);
     process.exit(1);
   }
-  console.error(`secret lint: clean — ${count} alias(es) across project, global, and nix. next: secret doctor, or secret env --output .env`);
+  console.error(`secret lint: clean — ${count} alias(es) across project, global, nix, and local. next: secret doctor, or secret env --output .env`);
 };
 
 const printScope = (scope: string, selectedConfig?: string, json = false): void => {
@@ -555,13 +573,19 @@ const printScope = (scope: string, selectedConfig?: string, json = false): void 
     printConfig("global", userConfigPath, json);
   } else if (scope === "nix") {
     printConfig("nix", defaultsPath, json);
+  } else if (scope === "local") {
+    const localPath = findProjectLocalConfig();
+    if (!localPath) {
+      fail(`no ${localConfigName} found (searched up to $HOME) — create one for machine-local overrides`);
+    }
+    printConfig("local", localPath, json);
   } else {
-    fail(`unknown scope: ${scope} (available: project, global, nix)`);
+    fail(`unknown scope: ${scope} (available: project, global, nix, local)`);
   }
 };
 
 const unsetAlias = (alias: string, selectedConfig?: string): void => {
-  const holder = configWithAlias(alias, selectedConfig || findProjectConfig());
+  const holder = configWithAlias(alias, selectedConfig || findProjectConfig(), findProjectLocalConfig());
   if (!holder) {
     fail(`alias ${alias} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to remove it`);
   }
@@ -579,7 +603,7 @@ const moveAlias = (from: string, to: string, selectedConfig?: string): void => {
     fail(`invalid alias name: ${to} (letters, digits, underscore; must not start with a digit)`);
   }
   if (from === to) fail(`alias is already named ${to}`);
-  const holder = configWithAlias(from, selectedConfig || findProjectConfig());
+  const holder = configWithAlias(from, selectedConfig || findProjectConfig(), findProjectLocalConfig());
   if (!holder) {
     fail(`alias ${from} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to rename it`);
   }
@@ -783,7 +807,7 @@ Commands:
   mv <alias> <new>    Rename an alias in the project or user config
   init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
-  print (pr) [scope]  Show aliases in project (default), global, or nix; --all merges scopes
+  print (pr) [scope]  Show aliases in project (default), global, nix, or local; --all merges scopes
   lint (l)            Validate configs offline: items, env keys, collisions (no vault)
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent (re)         Show recently used aliases
@@ -798,15 +822,16 @@ Options:
   --check             With status: exit nonzero when not unlocked
   --export            With env: print shell export lines instead of dotenv
   --json              With list/print/history/recent: machine-readable JSON on stdout
-  --all               With print: merge project, global, and nix scopes
+  --all               With print: merge project, global, nix, and local scopes
   --diff              With env: show what --output would write without writing (default target ./.env)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
 Config precedence (later wins):
-  ~/.config/secret/defaults.json  Nix-managed global aliases
   ~/.config/secret/config.json    personal global aliases
   ./.secret.json                  project aliases
+  ./.secret.local.json            local overrides (gitignored)
+Legacy ~/.config/secret/defaults.json is still honored when present.
 
 Start with 'secret status', then 'secret list' to see aliases, and
 'secret env --output .env' to generate a project .env file.
@@ -928,7 +953,7 @@ const main = async (): Promise<void> => {
   } else if (options.command === "pin") {
     const alias = options.positional[0] || fail("pin requires an alias, e.g. secret pin github-token (see 'secret list')");
     if (!loaded.definitions[alias]) fail(`unknown alias: ${alias} (see 'secret list')`);
-    const holder = configWithAlias(alias, options.configPath || findProjectConfig());
+    const holder = configWithAlias(alias, options.configPath || findProjectConfig(), findProjectLocalConfig());
     if (!holder) {
       fail(`alias ${alias} is only in the Nix-managed ${defaultsPath}; copy it to a project or user config to pin`);
     }
