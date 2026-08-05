@@ -65,7 +65,7 @@ list_term() {
   print_row "herdr / iris / opencode" "" "Agent multiplexer + command suggest + coding agent"
   print_row "cursor-agent" "" "Cursor Agent CLI for terminal and T3 Code"
   print_row "codex" "" "OpenAI Codex CLI for terminal and T3 Code"
-  print_row "modlens" "" "Image-to-structured-evidence CLI for text-only agents"
+  print_row "agy / modlens" "" "Antigravity CLI + image-to-structured-evidence for text-only agents"
   print_row "openusage" "" "AI usage and quota dashboard for the macOS menu bar"
   print_row "plannotator / nub" "" "Plan review UI + agent utils"
 

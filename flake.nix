@@ -89,6 +89,7 @@
           };
 
           packages = {
+            agy = pkgs'.callPackage ./packages/agy { };
             codex = pkgs'.callPackage ./packages/codex { };
             drydock = pkgs'.callPackage ./packages/drydock { };
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };

@@ -10,6 +10,7 @@ in
       nub = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
       cursorAgent = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."cursor-agent";
       ghui = packages.ghui;
+      agy = packages.agy;
       hunk = packages.hunk;
       lightjj = packages.lightjj;
       modlens = packages.modlens;
@@ -35,6 +36,7 @@ in
         pkgs.hyperfine
         pkgs.fresh-editor
         lightjj
+        agy
         modlens
         pkgs."jj-starship"
         pkgs.jq

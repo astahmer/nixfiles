@@ -28,13 +28,15 @@ refresh the other platform hashes before applying a cross-platform change.
 
 ## Manual package updates
 
-`hunk`, `opencodex`, `plannotator`, `ghui`, and `modlens` remain in the registry as
+`agy`, `hunk`, `opencodex`, `plannotator`, `ghui`, and `modlens` remain in the registry as
 disabled manual entries because their release version is coupled to an npm
 binary, Bun lockfile, recursive dependency hash, bundled skill, or several
 platform hashes. Update those values together, then run the package build and
 `--validate fast`. ModLens updates must verify both npm tarballs, the published
-CLI entry point, and the bundled `skills/modlens` references; provider setup
-remains a runtime concern.
+CLI entry point, and the bundled `skills/modlens` references. agy updates must
+refresh the Antigravity release-manifest URL plus both platform hashes; its
+built-in self-updater cannot write into the Nix store, so keep the package
+version current. Provider sign-in remains a runtime concern.
 
 ## Flake inputs
 
