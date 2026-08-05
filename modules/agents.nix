@@ -11,6 +11,7 @@
       executorDir = "${config.home.homeDirectory}/.executor";
       packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
       modlens = packages.modlens;
+      modsearch = packages.modsearch;
       executorScopeDir = executorDir;
 
       # Exclude deprecated readbro skill from the deployed .agents directory.
@@ -27,10 +28,11 @@
         filter = agentsFilter;
       };
 
-      agentsWithModlens = pkgs.runCommandLocal "agents-with-modlens" { } ''
+      agentsWithSkillOverlays = pkgs.runCommandLocal "agents-with-skill-overlays" { } ''
         mkdir -p "$out"
         cp -R --no-preserve=mode "${agentsSrc}/." "$out/"
         cp -R "${modlens}/share/modlens/skills/modlens" "$out/skills/"
+        cp -R "${modsearch}/share/modsearch/skills/modsearch" "$out/skills/"
       '';
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);
@@ -82,7 +84,7 @@
         } "cp $src $out; chmod +x $out";
     in
     {
-      home.file.".agents".source = agentsWithModlens;
+      home.file.".agents".source = agentsWithSkillOverlays;
       home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
       home.file.".cursor/rules".source = ../assets/.cursor/rules;
       home.file.".claude/settings.json".source = ../assets/.claude/settings.json;

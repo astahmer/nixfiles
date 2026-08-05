@@ -28,7 +28,7 @@ refresh the other platform hashes before applying a cross-platform change.
 
 ## Manual package updates
 
-`agy`, `hunk`, `opencodex`, `plannotator`, `ghui`, and `modlens` remain in the registry as
+`agy`, `hunk`, `opencodex`, `plannotator`, `ghui`, `modlens`, and `modsearch` remain in the registry as
 disabled manual entries because their release version is coupled to an npm
 binary, Bun lockfile, recursive dependency hash, bundled skill, or several
 platform hashes. Update those values together, then run the package build and
@@ -36,7 +36,10 @@ platform hashes. Update those values together, then run the package build and
 CLI entry point, and the bundled `skills/modlens` references. agy updates must
 refresh the Antigravity release-manifest URL plus both platform hashes; its
 built-in self-updater cannot write into the Nix store, so keep the package
-version current. Provider sign-in remains a runtime concern.
+version current. ModSearch updates must refresh the npm tarball hash, regenerate
+`assets/modsearch/package-lock.json` from the pinned tarball, rebuild for the new
+recursive output hash, and refresh the pinned upstream skill commit plus its
+archive hash. Provider sign-in remains a runtime concern.
 
 ## Flake inputs
 
@@ -54,5 +57,5 @@ OpenCode is consumed from that package set, so update it by updating the
 
 ```bash
 nix flake check --no-build --all-systems
-nix build .#codex .#iris .#modlens .#ryu --no-link
+nix build .#codex .#iris .#modlens .#modsearch .#ryu --no-link
 ```

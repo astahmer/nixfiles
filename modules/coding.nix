@@ -14,6 +14,7 @@ in
       hunk = packages.hunk;
       lightjj = packages.lightjj;
       modlens = packages.modlens;
+      modsearch = packages.modsearch;
       plannotator = packages.plannotator;
       codex = packages.codex;
       opencode = packages.opencode;
@@ -38,6 +39,7 @@ in
         lightjj
         agy
         modlens
+        modsearch
         pkgs."jj-starship"
         pkgs.jq
         pkgs.httpie

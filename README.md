@@ -98,7 +98,7 @@ Add your own hardware-specific config before treating it as a real machine profi
 - `modules/opencodex.nix` for `opencodex` (`ocx`) on both macOS and NixOS
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
-The coding profile also installs `modlens`, an image-to-structured-evidence CLI for text-only agents, and `agy`, the Google Antigravity CLI that ModLens uses as its no-key vision provider. ModLens's bundled skill is merged into the deployed `~/.agents/skills` tree. Provider sign-in stays a manual runtime step (run `agy` once and complete the browser flow); API keys and credentials stay out of the repository.
+The coding profile also installs `modlens`, an image-to-structured-evidence CLI for text-only agents, `modsearch`, its web-search/page-fetch sibling, and `agy`, the Google Antigravity CLI that both use as their no-key provider. Their skills are merged into the deployed `~/.agents/skills` tree. Provider sign-in stays a manual runtime step (run `agy` once and complete the browser flow); API keys and credentials stay out of the repository.
 
 ## Updating versions
 

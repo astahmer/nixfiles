@@ -229,6 +229,20 @@
       ]
     },
     {
+      "name": "modsearch",
+      "type": "manual",
+      "description": "ModSearch npm tarball, vendored npm lockfile/output hash, and pinned upstream skill commit move together",
+      "enabled": false,
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "modsearch"
+      ]
+    },
+    {
       "name": "agy",
       "type": "manual",
       "description": "Antigravity CLI flat native build; refresh the release-manifest URL and both platform hashes together",
