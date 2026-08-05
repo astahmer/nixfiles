@@ -38,6 +38,8 @@ const home = homedir();
 const userConfigPath = join(home, ".config", "secret", "config.json");
 const historyPath = join(home, ".config", "secret", "history.json");
 const sessionPath = process.env.SECRET_SESSION_FILE || join(home, ".config", "secret", "session");
+const KEYCHAIN_SERVICE = "secret-cli";
+const KEYCHAIN_ACCOUNT = "bitwarden-session";
 const projectConfigName = ".secret.json";
 const localConfigName = ".secret.local.json";
 const placeholderValues = new Set(["replace-me", "REPLACE-ME"]);
@@ -176,6 +178,9 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       diff = true;
     } else if (argument === "--store") {
       store = true;
+    } else if (argument === "--") {
+      positional.push(...argv.slice(index + 1));
+      break;
     } else if (argument.startsWith("--")) {
       fail(`unknown option: ${argument}`);
     } else {
@@ -340,6 +345,40 @@ const writeAtomic = (filePath: string, contents: string): void => {
   const temporaryPath = `${filePath}.tmp.${process.pid}`;
   writeFileSync(temporaryPath, contents, { mode: 0o600 });
   renameSync(temporaryPath, filePath);
+};
+
+const readSession = (): string | undefined => {
+  if (process.platform === "darwin") {
+    const result = spawnSync(
+      "security",
+      ["find-generic-password", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE, "-w"],
+      { encoding: "utf8" },
+    );
+    if (!result.error && result.status === 0 && result.stdout) return result.stdout.trim();
+  }
+  return existsSync(sessionPath) ? readFileSync(sessionPath, "utf8").trim() : undefined;
+};
+
+const storeSession = (token: string): void => {
+  if (process.platform === "darwin") {
+    const result = spawnSync(
+      "security",
+      ["add-generic-password", "-U", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE, "-w", token],
+      { encoding: "utf8" },
+    );
+    if (!result.error && result.status === 0) return;
+    console.error("secret: macOS keychain unavailable — falling back to a plaintext session file");
+  }
+  writeAtomic(sessionPath, token);
+};
+
+const clearSession = (): void => {
+  if (process.platform === "darwin") {
+    spawnSync("security", ["delete-generic-password", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE], {
+      encoding: "utf8",
+    });
+  }
+  if (existsSync(sessionPath)) unlinkSync(sessionPath);
 };
 
 const readHistory = (): HistoryEntry[] => {
@@ -799,7 +838,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -819,6 +858,7 @@ Commands:
   mv <alias> <new>    Rename an alias in the project or user config
   init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
+  run <cmd...>        Inject project aliases into a command's environment (secret run -- npm test)
   print (pr) [scope]  Show aliases in project (default), global, or local; --all merges scopes
   lint (l)            Validate configs offline: items, env keys, collisions (no vault)
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
@@ -871,23 +911,23 @@ const main = async (): Promise<void> => {
           ? 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"'
           : 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"',
       );
-      if (existsSync(sessionPath)) {
-        console.error(`secret: stored session at ${sessionPath} is stale — refresh with 'secret unlock --store'`);
+      if (readSession()) {
+        console.error("secret: stored session is stale — refresh with 'secret unlock --store'");
       }
       if (options.check) process.exit(1);
     }
   } else if (options.command === "unlock") {
     const token = runBw(["unlock", "--raw"]);
     if (options.store) {
-      writeAtomic(sessionPath, token);
-      console.error(`secret: unlocked; session stored at ${sessionPath} (clear with 'secret lock')`);
+      storeSession(token);
+      console.error("secret: unlocked; session stored (clear with 'secret lock')");
     } else {
       console.log(token);
     }
   } else if (options.command === "lock") {
     runBw(["lock"]);
-    const hadSession = existsSync(sessionPath);
-    if (hadSession) unlinkSync(sessionPath);
+    const hadSession = readSession() !== undefined;
+    clearSession();
     console.error(hadSession ? "secret: vault locked; stored session cleared" : "secret: vault locked");
   } else if (options.command === "list") {
     const entries = Object.entries(loaded.definitions);
@@ -1097,6 +1137,23 @@ const main = async (): Promise<void> => {
     } else {
       process.stdout.write(output);
     }
+  } else if (options.command === "run") {
+    if (!loaded.selectedAliases?.length) {
+      fail("run requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
+    }
+    const command = options.positional[0] || fail("run requires a command, e.g. secret run -- npm test");
+    const envVars: Record<string, string> = {};
+    for (const alias of loaded.selectedAliases) {
+      const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
+      envVars[dotenvKey(alias, definition)] = getValue(alias, definition);
+    }
+    recordHistory({ at: new Date().toISOString(), cmd: "run", target: command, env: environment });
+    const result = spawnSync(command, options.positional.slice(1), {
+      stdio: "inherit",
+      env: { ...process.env, ...envVars },
+    });
+    if (result.error) fail(`could not run ${command}: ${result.error.message}`);
+    process.exit(result.status ?? 1);
   } else if (options.command === "print") {
     if (options.all) {
       printAllScopes(options.configPath, options.json ?? false);
