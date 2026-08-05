@@ -274,6 +274,9 @@ each.
 - The daemon only runs while the vault is unlocked; a locked vault falls back
   to per-command `bw` spawns, so a stale locked daemon can never answer auth
   checks with outdated state.
+- Mutations ride the daemon too while it is up: `set`, `rotate`, `rm`, `pull`,
+  and `--generate` use the serve REST API and keep the daemon warm; spawns are
+  the fallback. `totp` always spawns (no serve route).
 - `secret lock` kills the daemon; a stale daemon (dead process, expired
   session) is detected on the next command and replaced automatically.
 - Disable it entirely with `SECRET_DAEMON=0`; nothing else changes.
@@ -302,6 +305,12 @@ each.
   example the one `bw login` prints), so the master password is typed once:
   `export BW_SESSION="<login session>" && secret unlock --store`. A present
   but rejected session is refused instead of stored.
+- Diagnostics go to stderr (so `secret get X | pbcopy` stays clean); terminals
+  often render stderr in red, which is a display choice, not the CLI's.
+- `secret list` shows local `CREATED AT` timestamps (date + hour:minute), and
+  overwrite prompts use the same format.
+- `-h`/`--help` after any command shows the global help; `env` dry runs are
+  `--diff` (aliases `--dry`, `--dry-run`).
 - bw 2026.x couples each session key to a protected auto-unlock key, and a
   stale `BW_SESSION` in the environment during `unlock` corrupts that state
   (bw warns about this itself). `secret` therefore strips `BW_SESSION` from

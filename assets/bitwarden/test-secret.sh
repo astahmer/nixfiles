@@ -136,6 +136,8 @@ assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret e
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
 assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]" "-h after a command shows global help"
+assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(FAKE_EMPTY_VAULT=1 secret get github-token 2>&1 || true)" "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config
 secret: item not found for github-token: nixfiles/github-token" "empty vault hints before item not found"
@@ -244,7 +246,8 @@ if command -v script >/dev/null 2>&1; then
   script -q "$tmp/list-tty.txt" "$bun_bin" "$script" list >/dev/null 2>&1 || true
   {
     tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'ALIAS' &&
-    tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q '2026-01-15'
+    tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'CREATED AT' &&
+    tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q '2026-01-15 [0-9]{2}:[0-9]{2}'
   } && pass=$((pass + 1)) || {
     fail=$((fail + 1))
     echo "FAIL: list prints a table with created dates on a TTY" >&2
@@ -258,6 +261,8 @@ printf "DATABASE_URL='stale'\n" > .env
 assert_eq "$(secret env --diff --output .env)" "- DATABASE_URL='stale'
 + DATABASE_URL='old-pass'
 + GITHUB_TOKEN='old-pass'" "env --diff shows changes without writing"
+assert_eq "$(secret env --dry --output .env)" "$(secret env --diff --output .env)" "env --dry aliases --diff"
+assert_eq "$(secret env --dry-run --output .env)" "$(secret env --diff --output .env)" "env --dry-run aliases --diff"
 assert_eq "$(cat .env)" "DATABASE_URL='stale'" "env --diff leaves file untouched"
 cd "$tmp/proj/sub"
 assert_ok secret env --output .env
@@ -373,6 +378,41 @@ assert_fail secret env --output x
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "locked daemon falls back to spawn status"
 rm -f "$FAKE_DAEMON_MISSING"
 assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon recovers after denied requests"
+# mutations ride the daemon while it is up
+: > "$FAKE_LOG"
+: > "$FAKE_DAEMON_LOG"
+assert_ok secret pull
+rg -q "POST /sync" "$FAKE_DAEMON_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: pull uses the daemon sync" >&2
+}
+assert_eq "$(rg -c -- '-- sync --' "$FAKE_LOG" || echo 0)" "0" "pull does not spawn bw sync"
+printf 'v9\n' | secret set github-token --force >/dev/null 2>&1
+rg -q "PUT /object/item/item-1" "$FAKE_DAEMON_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: set edits via the daemon" >&2
+}
+assert_eq "$(rg -c -- '-- edit --' "$FAKE_LOG" || echo 0)" "0" "set does not spawn bw edit"
+assert_ok secret rotate github-token --force
+rg -q "GET /generate" "$FAKE_DAEMON_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: rotate generates via the daemon" >&2
+}
+assert_ok secret rm github-token --force
+rg -q "DELETE /object/item/item-1" "$FAKE_DAEMON_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: rm deletes via the daemon" >&2
+}
+assert_eq "$(rg -c -- '-- delete ' "$FAKE_LOG" || echo 0)" "0" "rm does not spawn bw delete"
+mkdir -p "$tmp/daemon-set"
+printf '%s' '{"secrets":{"new-alias":{"item":"new/item"}}}' > "$tmp/daemon-set/.secret.json"
+cd "$tmp/daemon-set"
+printf 'v10\n' | secret set new-alias >/dev/null 2>&1
+rg -q "POST /object/item" "$FAKE_DAEMON_LOG" || {
+  fail=$((fail + 1))
+  echo "FAIL: set creates via the daemon" >&2
+}
+cd "$tmp/proj"
 : > "$FAKE_LOG"
 assert_ok secret lock
 assert_eq "$(rg -c -- '-- lock --' "$FAKE_LOG" || echo 0)" "1" "lock still spawns bw lock"

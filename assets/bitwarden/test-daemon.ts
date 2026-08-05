@@ -20,20 +20,36 @@ const log = (line: string): void => {
 
 Bun.serve({
   unix: socket,
-  fetch(req) {
+  async fetch(req) {
     const url = new URL(req.url);
     log(`${req.method} ${url.pathname}`);
-    // /status is never gated, exactly like the real bw serve.
+    if (url.pathname === "/object/item" && req.method === "POST") {
+      return Response.json({ success: true, data: { type: 1, name: "created", id: "item-new" } });
+    }
+    if (url.pathname.startsWith("/object/item/") && (req.method === "PUT" || req.method === "DELETE")) {
+      return Response.json({ success: true, data: req.method === "PUT" ? { id: "item-1" } : null });
+    }
+    if (url.pathname === "/generate" && req.method === "GET") {
+      return Response.json({ success: true, data: { object: "string", data: "gen-pass-123" } });
+    }
+    if (url.pathname === "/sync" && req.method === "POST") {
+      return Response.json({ success: true, data: null });
+    }
+    // Mirror the real bw serve response shapes: status is nested under
+    // data.template, lists under data.data.
     if (url.pathname === "/status") {
       const locked = missingFile && existsSync(missingFile);
       return Response.json({
         success: true,
         data: {
-          serverUrl: "https://vault.bitwarden.eu",
-          lastSync: "2026-01-15T10:00:00.000Z",
-          userEmail: "test@example.com",
-          userId: "user-1",
-          status: locked ? "locked" : "unlocked",
+          object: "template",
+          template: {
+            serverUrl: "https://vault.bitwarden.eu",
+            lastSync: "2026-01-15T10:00:00.000Z",
+            userEmail: "test@example.com",
+            userId: "user-1",
+            status: locked ? "locked" : "unlocked",
+          },
         },
       });
     }
@@ -45,7 +61,10 @@ Bun.serve({
     }
     if (url.pathname === "/list/object/items") {
       try {
-        return Response.json({ success: true, data: JSON.parse(readFileSync(itemsFile, "utf8")) });
+        return Response.json({
+          success: true,
+          data: { object: "list", data: JSON.parse(readFileSync(itemsFile, "utf8")) },
+        });
       } catch {
         return Response.json({ success: false, errorMessage: "no items file" }, { status: 500 });
       }

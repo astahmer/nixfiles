@@ -33,6 +33,8 @@ type ParsedOptions = {
   json?: boolean;
   all?: boolean;
   diff?: boolean;
+  dry?: boolean;
+  dryRun?: boolean;
   store?: boolean;
 };
 
@@ -153,6 +155,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let json = false;
   let all = false;
   let diff = false;
+  let dry = false;
+  let dryRun = false;
   let store = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -188,8 +192,14 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       all = true;
     } else if (argument === "--diff") {
       diff = true;
+    } else if (argument === "--dry") {
+      dry = true;
+    } else if (argument === "--dry-run") {
+      dryRun = true;
     } else if (argument === "--store") {
       store = true;
+    } else if (argument === "-h" || argument === "--help") {
+      positional.push(argument);
     } else if (argument === "--") {
       positional.push(...argv.slice(index + 1));
       break;
@@ -216,6 +226,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     json,
     all,
     diff,
+    dry,
+    dryRun,
     store,
   };
 };
@@ -315,10 +327,16 @@ const tryGetItemRaw = (item: string): string | undefined => {
   return result.status === 0 ? result.stdout.trim() : undefined;
 };
 
-const itemCreationDate = (items: Record<string, any>[] | undefined, item: string): string => {
-  const entry = items?.find((candidate) => candidate.id === item || candidate.name === item);
-  return entry?.creationDate ? String(entry.creationDate).slice(0, 10) : "-";
+const formatCreatedAt = (iso: string): string => {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+
+const itemCreationDate = (items: Record<string, any>[] | undefined, item: string): string =>
+  formatCreatedAt(String(itemFor(items, item)?.creationDate ?? ""));
 
 const status = (): { authenticated: boolean; unlocked: boolean } => {
   const result = spawnSync("bw", ["status"], { encoding: "utf8" });
@@ -483,6 +501,7 @@ const daemonRequest = (
   socket: string,
   method: string,
   path: string,
+  body?: string,
 ): Promise<{ status: number; body: string } | undefined> =>
   new Promise((resolve) => {
     const req = http.request(
@@ -490,7 +509,12 @@ const daemonRequest = (
         socketPath: socket,
         method,
         path,
-        headers: { Host: `${DAEMON_HOST}:${DAEMON_PORT}` },
+        headers: {
+          Host: `${DAEMON_HOST}:${DAEMON_PORT}`,
+          ...(body !== undefined
+            ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
+            : {}),
+        },
       },
       (res) => {
         let body = "";
@@ -502,6 +526,7 @@ const daemonRequest = (
     );
     req.setTimeout(5000, () => req.destroy());
     req.on("error", () => resolve(undefined));
+    if (body !== undefined) req.write(body);
     req.end();
   });
 
@@ -524,8 +549,10 @@ const daemonStatus = async (): Promise<string | undefined> => {
   if (!state) return undefined;
   const parsed = parseDaemon(await daemonRequest(state.socket, "GET", "/status"));
   if (parsed?.kind !== "ok") return undefined;
-  const data = parsed.data as { status?: unknown };
-  return typeof data.status === "string" ? data.status : undefined;
+  // bw serve wraps responses: { success, data: { object, template: { status } } }.
+  const data = parsed.data as { template?: { status?: unknown }; status?: unknown };
+  const status = data.template?.status ?? data.status;
+  return typeof status === "string" ? status : undefined;
 };
 
 const daemonListItems = async (): Promise<
@@ -536,7 +563,54 @@ const daemonListItems = async (): Promise<
   const parsed = parseDaemon(await daemonRequest(state.socket, "GET", "/list/object/items"));
   if (parsed?.kind === "denied") return { kind: "denied" };
   if (parsed?.kind !== "ok") return undefined;
-  return Array.isArray(parsed.data) ? { kind: "ok", items: parsed.data as Record<string, any>[] } : undefined;
+  // Real serve returns { success, data: { object: "list", data: [...] } }.
+  const data = parsed.data as { data?: unknown };
+  const items = Array.isArray(parsed.data) ? parsed.data : data.data;
+  return Array.isArray(items) ? { kind: "ok", items: items as Record<string, any>[] } : undefined;
+};
+
+// Run a mutation through the daemon when it is up; true means the daemon
+// handled it (and stays warm). False means fall back to a bw spawn.
+const daemonMutate = async (
+  method: string,
+  path: string,
+  payload?: Record<string, any>,
+): Promise<boolean> => {
+  if (!daemonEnabled()) return false;
+  const state = readDaemonState();
+  if (!state) return false;
+  const res = await daemonRequest(
+    state.socket,
+    method,
+    path,
+    payload === undefined ? undefined : JSON.stringify(payload),
+  );
+  const parsed = parseDaemon(res);
+  if (parsed?.kind === "ok") return true;
+  if (parsed?.kind === "denied") fail("Bitwarden is locked; run bw unlock --raw and export BW_SESSION");
+  daemonStop();
+  return false;
+};
+
+const generatePassword = async (): Promise<string> => {
+  if (daemonEnabled()) {
+    const state = readDaemonState();
+    if (state) {
+      const res = await daemonRequest(
+        state.socket,
+        "GET",
+        "/generate?length=32&uppercase=true&lowercase=true&number=true&special=true",
+      );
+      const parsed = parseDaemon(res);
+      if (parsed?.kind === "ok") {
+        const data = parsed.data as { data?: unknown };
+        if (typeof data.data === "string" && data.data) return data.data;
+      }
+      if (parsed?.kind === "denied") fail("Bitwarden is locked; run bw unlock --raw and export BW_SESSION");
+      daemonStop();
+    }
+  }
+  return runBw(["generate", "-ulns", "--length", "32"]);
 };
 
 const daemonStop = (): void => {
@@ -588,7 +662,9 @@ const daemonStart = async (): Promise<boolean> => {
       // Never keep a daemon that reports a locked/unauthenticated vault: it
       // would answer auth questions with a stale state for every later command.
       const parsed = parseDaemon(res);
-      if (parsed?.kind !== "ok" || (parsed.data as { status?: unknown }).status !== "unlocked") {
+      const data = parsed?.data as { template?: { status?: unknown }; status?: unknown } | undefined;
+      const status = data?.template?.status ?? data?.status;
+      if (parsed?.kind !== "ok" || status !== "unlocked") {
         try {
           if (child.pid !== undefined) process.kill(child.pid, "SIGKILL");
         } catch {
@@ -1027,31 +1103,32 @@ const newItem = (name: string, field: string, value: string): Record<string, any
 const setValue = async (alias: string, definition: SecretDefinition, value: string, force: boolean): Promise<void> => {
   await requireUnlocked();
   const field = definition.field || "password";
-  const raw = tryGetItemRaw(definition.item);
-  if (raw === undefined) {
-    // bw 2026.x expects base64-encoded item JSON on stdin for create/edit.
-    runBwInput(["create", "item"], Buffer.from(JSON.stringify(newItem(definition.item, field, value))).toString("base64"));
-    daemonStop();
+  const items = await vaultItems();
+  const item = itemFor(items, definition.item);
+  if (item === undefined) {
+    const payload = newItem(definition.item, field, value);
+    if (!(await daemonMutate("POST", "/object/item", payload))) {
+      // bw 2026.x expects base64-encoded item JSON on stdin for create/edit.
+      runBwInput(["create", "item"], Buffer.from(JSON.stringify(payload)).toString("base64"));
+      daemonStop();
+    }
     console.error(`secret: created item ${definition.item}`);
-  } else {
-    let item: Record<string, any>;
-    try {
-      item = JSON.parse(raw) as Record<string, any>;
-    } catch {
-      fail(`Bitwarden returned invalid item data for ${alias}`);
-    }
-    if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
-    if (!force) {
-      if (!process.stdin.isTTY) fail("item already exists; pass --force to overwrite");
-      const created = item.creationDate ? String(item.creationDate).slice(0, 10) : "unknown date";
-      const confirmed = await confirmPrompt(`Overwrite ${definition.item} (created ${created})?`);
-      if (!confirmed) fail("aborted; use --force to overwrite without confirmation");
-    }
-    setItemField(item, field, value);
-    runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(item)).toString("base64"));
-    daemonStop();
-    console.error(`secret: updated item ${definition.item}`);
+    return;
   }
+  if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
+  if (!force) {
+    if (!process.stdin.isTTY) fail("item already exists; pass --force to overwrite");
+    const created = formatCreatedAt(String(item.creationDate ?? ""));
+    const confirmed = await confirmPrompt(`Overwrite ${definition.item} (created at ${created})?`);
+    if (!confirmed) fail("aborted; use --force to overwrite without confirmation");
+  }
+  const payload = JSON.parse(JSON.stringify(item)) as Record<string, any>;
+  setItemField(payload, field, value);
+  if (!(await daemonMutate("PUT", `/object/item/${String(item.id)}`, payload))) {
+    runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(payload)).toString("base64"));
+    daemonStop();
+  }
+  console.error(`secret: updated item ${definition.item}`);
 };
 
 const clipboardCandidates = (): Array<{ command: string; args: string[] }> =>
@@ -1161,7 +1238,9 @@ Options:
   --export            With env: print shell export lines instead of dotenv
   --json              With list/print/history/recent: machine-readable JSON on stdout
   --all               With print: merge project, global, and local scopes
-  --diff              With env: show what --output would write without writing (default target ./.env)
+  --diff, --dry, --dry-run
+                      With env: show what --output would write without writing (default target ./.env)
+  -h, --help          Show this help; accepted after any command
   --store             With unlock: persist the session token to ~/.config/secret/session (mode 0600)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
@@ -1185,7 +1264,13 @@ const main = async (): Promise<void> => {
       ? { definitions: {} as Record<string, SecretDefinition>, selectedAliases: undefined }
       : loadDefinitions(options.configPath, environment);
 
-  if (options.command === "help" || options.command === "--help" || options.command === "-h") {
+  const wantsHelp =
+    options.command === "help" ||
+    options.command === "--help" ||
+    options.command === "-h" ||
+    options.positional.includes("-h") ||
+    options.positional.includes("--help");
+  if (wantsHelp) {
     printHelp();
   } else if (options.command === "status") {
     const current = await currentAuthState();
@@ -1264,7 +1349,7 @@ const main = async (): Promise<void> => {
         ),
       );
     } else if (process.stdout.isTTY) {
-      const header = ["ALIAS", "ITEM", "FIELD", "CREATED"];
+      const header = ["ALIAS", "ITEM", "FIELD", "CREATED AT"];
       const items = await vaultItems();
       let hidden = 0;
       const rows = entries.map(([alias, definition]) => {
@@ -1302,7 +1387,7 @@ const main = async (): Promise<void> => {
     const alias = options.positional[0] || fail("set requires an alias, e.g. secret set github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
     const value = options.generate
-      ? runBw(["generate", "-ulns", "--length", "32"])
+      ? await generatePassword()
       : await promptHidden(`Enter value for ${alias}`);
     if (!value || placeholderValues.has(value)) fail(`refusing empty or placeholder value for ${alias}`);
     await setValue(alias, definition, value, options.force ?? false);
@@ -1342,8 +1427,10 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "pull") {
     await requireUnlocked();
-    runBw(["sync"]);
-    daemonStop();
+    if (!(await daemonMutate("POST", "/sync"))) {
+      runBw(["sync"]);
+      daemonStop();
+    }
     recordHistory({ at: new Date().toISOString(), cmd: "pull", target: "", env: environment });
     console.error("secret: vault cache pulled from server");
   } else if (options.command === "pin") {
@@ -1378,7 +1465,7 @@ const main = async (): Promise<void> => {
   } else if (options.command === "rotate") {
     const alias = options.positional[0] || fail("rotate requires an alias, e.g. secret rotate github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    const value = runBw(["generate", "-ulns", "--length", "32"]);
+    const value = await generatePassword();
     await setValue(alias, definition, value, options.force ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "rotate", target: alias, env: environment });
     console.error(`secret: rotated ${alias} (${definition.item}, ${definition.field || "password"})`);
@@ -1403,8 +1490,10 @@ const main = async (): Promise<void> => {
       const confirmed = await confirmPrompt(`Delete item ${name}?`);
       if (!confirmed) fail("aborted; use --force to delete without confirmation");
     }
-    runBw(["delete", "item", definition.item]);
-    daemonStop();
+    if (!(await daemonMutate("DELETE", `/object/item/${String(item.id)}`))) {
+      runBw(["delete", "item", definition.item]);
+      daemonStop();
+    }
     recordHistory({ at: new Date().toISOString(), cmd: "rm", target: alias, env: environment });
     console.error(`secret: deleted item ${definition.item} for ${alias} (config entry kept)`);
   } else if (options.command === "unset") {
@@ -1448,7 +1537,7 @@ const main = async (): Promise<void> => {
       const value = dotenvValue(await resolveRequired(items, alias, definition));
       lines.push(options.export ? `export ${key}=${value}` : `${key}=${value}`);
     }
-    if (options.diff) {
+    if (options.diff || options.dry || options.dryRun) {
       const target = options.outputPath || join(process.cwd(), ".env");
       const previous = existsSync(target) ? readFileSync(target, "utf8").split("\n").filter((line) => line !== "") : [];
       const added = lines.filter((line) => !previous.includes(line));
