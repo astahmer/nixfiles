@@ -43,25 +43,15 @@ in
           hm.macosApps
 
           (
-            { pkgs, lib, ... }:
-            lib.mkMerge [
-              {
-                home.homeDirectory = "/Users/${username}";
-                home.username = username;
+            { ... }:
+            {
+              home.homeDirectory = "/Users/${username}";
+              home.username = username;
 
-                # Keep existing copied app bundles untouched. Updating them
-                # requires macOS App Management permission; CLI tools do not.
-                targets.darwin.copyApps.enable = false;
-              }
-
-              # Temporary: on Darwin, avoid evaluating any contributed
-              # `home.packages` from other modules so evaluation doesn't
-              # attempt to build Linux-only packages. Remove this once
-              # modules are properly guarded.
-              (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
-                home.packages = lib.mkDefault [ ];
-              })
-            ]
+              # Keep existing copied app bundles untouched. Updating them
+              # requires macOS App Management permission; CLI tools do not.
+              targets.darwin.copyApps.enable = false;
+            }
           )
         ];
       };
