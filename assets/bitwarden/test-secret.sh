@@ -16,8 +16,16 @@ mkdir -p "$tmp/bin" "$tmp/config/secret" "$tmp/proj/sub"
 cat > "$tmp/bin/bw" <<'EOF'
 #!/bin/sh
 case "$1" in
-  status) printf "%s" "$FAKE_BW_STATUS" ;;
+  status)
+    printf "%s\n" "status-env:${BW_SESSION:-EMPTY} reject=${FAKE_BW_REJECT_UNLOCK:-0}" >> "$FAKE_LOG"
+    if [ "$BW_SESSION" = "session-token-123" ] && [ -z "$FAKE_BW_REJECT_UNLOCK" ]; then
+      printf '%s' '{"status":"unlocked"}'
+    else
+      printf "%s" "$FAKE_BW_STATUS"
+    fi
+    ;;
   unlock)
+    read -r _ || true
     printf "%s\n" "unlock-env:${BW_SESSION:-EMPTY}" >> "$FAKE_LOG"
     if [ -n "$FAKE_UNLOCK_EMPTY" ]; then
       printf ""
@@ -514,6 +522,32 @@ export SECRET_DAEMON=0 FAKE_SERVE=0
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
+if command -v expect >/dev/null 2>&1; then
+  cat > "$tmp/reunlock.exp" <<EXP
+set timeout 30
+log_file -a $tmp/reunlock.txt
+spawn env FAKE_BW_STATUS={"status":"locked"} PATH=$tmp/bin:$PATH HOME=$tmp SECRET_DAEMON=0 $bun_bin $script rotate github-token --force
+send "mp\r"
+expect "rotated"
+EXP
+  : > "$FAKE_KEYCHAIN"
+  cd "$tmp/proj"
+  expect "$tmp/reunlock.exp" >/dev/null 2>&1
+  cd "$tmp"
+  rg -q "unlocked; session stored" "$tmp/reunlock.txt" && pass=$((pass + 1)) || {
+    fail=$((fail + 1))
+    echo "FAIL: graceful re-unlock prompts and stores a fresh session" >&2
+    sed 's/^/    /' "$tmp/reunlock.txt" >&2
+  }
+  rg -q "rotated" "$tmp/reunlock.txt" && pass=$((pass + 1)) || {
+    fail=$((fail + 1))
+    echo "FAIL: graceful re-unlock continues the command" >&2
+    sed 's/^/    /' "$tmp/reunlock.txt" >&2
+  }
+  assert_eq "$(cat "$FAKE_KEYCHAIN")" "session-token-123" "graceful re-unlock persists the session"
+else
+  echo "skipping graceful re-unlock tests (expect not on PATH)" >&2
+fi
 : > "$FAKE_LOG"
 assert_eq "$(BW_SESSION=existing-token secret unlock)" "existing-token" "unlock reuses the env session without prompting"
 assert_eq "$(rg -c -- 'unlock-env:' "$FAKE_LOG" || echo 0)" "0" "unlock does not prompt when a session is present"
@@ -522,7 +556,7 @@ BW_SESSION=existing-token secret unlock --store >/dev/null 2>&1
 assert_eq "$(cat "$FAKE_KEYCHAIN" 2>/dev/null || true)" "existing-token" "unlock --store persists the env session"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' BW_SESSION=bad-token secret unlock --store 2>&1 || true)" "secret: refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'" "unlock refuses a rejected env session"
 assert_eq "$(FAKE_UNLOCK_EMPTY=1 secret unlock --store 2>&1 || true)" "secret: bw unlock returned no session token" "unlock refuses to store an empty token"
-if FAKE_BW_STATUS='{"status":"locked"}' secret unlock --store 2>&1 >/dev/null | rg -q "bw rejected the new session"; then
+if FAKE_BW_REJECT_UNLOCK=1 FAKE_BW_STATUS='{"status":"locked"}' secret unlock --store 2>&1 >/dev/null | rg -q "bw rejected the new session"; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))

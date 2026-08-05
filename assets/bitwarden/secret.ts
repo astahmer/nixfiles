@@ -371,7 +371,36 @@ const status = (): { authenticated: boolean; unlocked: boolean } => {
 };
 
 const requireUnlocked = async (): Promise<void> => {
-  const current = await currentAuthState();
+  let current = await currentAuthState();
+  if (!current.unlocked) {
+    // Graceful re-unlock (varlock-style): when authenticated but locked and a
+    // terminal is available, prompt for the master password once and continue.
+    // Scripts can opt out with SECRET_NO_PROMPT=1.
+    if (current.authenticated && process.stdin.isTTY && !process.env.SECRET_NO_PROMPT) {
+      const token = runBwUnlock();
+      if (token) {
+        const check = spawnSync("bw", ["status"], {
+          encoding: "utf8",
+          env: { ...withoutStaleSession(), BW_SESSION: token },
+        });
+        if (check.status === 0) {
+          try {
+            const data = JSON.parse(check.stdout) as { status?: string };
+            if (data.status === "unlocked") {
+              process.env.BW_SESSION = token;
+              storeSession(token);
+              daemonStop();
+              success("unlocked; session stored");
+              return;
+            }
+          } catch {
+            // verification failed: fall through to the locked error
+          }
+        }
+      }
+    }
+    current = await currentAuthState();
+  }
   if (!current.authenticated) fail("Bitwarden is not authenticated; run bw login first");
   if (!current.unlocked) fail("Bitwarden is locked; run bw unlock --raw and export BW_SESSION");
 };

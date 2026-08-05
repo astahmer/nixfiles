@@ -129,6 +129,35 @@ in
         '';
       };
 
+      # Cache jj prompt output for 5s: consecutive prompts render instantly
+      # instead of paying jj diff (~50-150ms) on every prompt.
+      jjPromptCached = pkgs.writeShellApplication {
+        name = "jj-prompt-cached";
+        runtimeInputs = [
+          jjPrompt
+          pkgs.coreutils
+        ];
+        text = ''
+          cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/jj-prompt"
+          mkdir -p "$cache_dir"
+          cache="$cache_dir/prompt"
+          if [ -f "$cache" ]; then
+            if [ "$(uname -s)" = "Darwin" ]; then
+              mtime="$(stat -f %m "$cache")"
+            else
+              mtime="$(stat -c %Y "$cache")"
+            fi
+            if (( $(date +%s) - mtime < 5 )); then
+              cat "$cache"
+              exit 0
+            fi
+          fi
+          out="$(jj-prompt 2>/dev/null || true)"
+          printf '%s\n' "$out" > "$cache"
+          printf '%s\n' "$out"
+        '';
+      };
+
       nixfilesBootstrap = pkgs.writeShellApplication {
         name = "nixfiles-bootstrap";
         runtimeInputs = [
@@ -244,6 +273,26 @@ in
       # secret: lazy alias completion, cached 60s; no startup cost beyond
       # registering one widget. The cache is refreshed only when TAB is used.
       programs.zsh.initContent = ''
+        # took: precise sub-second command durations (starship only shows
+        # whole seconds). Replaces the starship cmd_duration module.
+        zmodload zsh/datetime 2>/dev/null || true
+        _secret_took_start=''''
+        _secret_preexec() {
+          _secret_took_start=$EPOCHREALTIME
+        }
+        _secret_precmd() {
+          if [[ -n "$_secret_took_start" ]]; then
+            local took=$(( EPOCHREALTIME - _secret_took_start ))
+            if (( took >= 0.1 )); then
+              printf 'took %.2fs\n' "$took"
+            fi
+          fi
+          _secret_took_start=$EPOCHREALTIME
+        }
+        autoload -Uz add-zsh-hook
+        add-zsh-hook preexec _secret_preexec
+        add-zsh-hook precmd _secret_precmd
+
         # secret: unlock exports BW_SESSION into this shell; --store persists it.
         secret() {
           if [[ "$1" == "unlock" ]]; then
@@ -426,14 +475,11 @@ in
         git_state.disabled = true;
         git_metrics.disabled = true;
 
-        cmd_duration = {
-          min_time = 100;
-          format = "took [$duration]($style) ";
-        };
+        cmd_duration.disabled = true;
 
         custom.jj = {
           format = "$output ";
-          command = lib.getExe jjPrompt;
+          command = lib.getExe jjPromptCached;
           detect_folders = [ ".jj" ];
           ignore_timeout = true;
         };
