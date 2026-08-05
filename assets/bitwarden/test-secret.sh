@@ -39,7 +39,7 @@ case "$1" in
     printf "%s\n" "-- list items --" >> "$FAKE_LOG"
     if [ -n "$FAKE_GET_MISSING" ]; then echo "not found" >&2; exit 1; fi
     if [ -n "$FAKE_EMPTY_VAULT" ]; then printf '%s' '[]'; exit 0; fi
-    printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"base/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/extra","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]'
+    printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[{"name":"source","value":"https://example.com","type":0}]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"base/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/extra","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]'
     ;;
   get)
     if [ "$2" = "totp" ]; then printf "%s" "123456"; exit 0; fi
@@ -135,11 +135,17 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "-h after a command shows that command's help"
 assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "secret help env shows env help"
-assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]" "--help is accepted"
+assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
+assert_eq "$(secret source github-token)" "https://example.com" "source prints the stored URL"
+printf 'v12\n' | secret set github-token --force --source https://keys.example.com/new >/dev/null 2>&1
+rg -q 'https://keys.example.com/new' "$FAKE_LOG" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: set --source stores the URL in the edited item" >&2
+}
 assert_eq "$(FAKE_EMPTY_VAULT=1 secret get github-token 2>&1 || true)" "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config
 secret: item not found for github-token: nixfiles/github-token" "empty vault hints before item not found"
 : > "$FAKE_LOG"
@@ -160,6 +166,20 @@ rg -q '"name":"nixfiles/github-token"' "$FAKE_LOG" && pass=$((pass + 1)) || {
   echo "FAIL: create sends base64 item JSON (name missing from decoded log)" >&2
 }
 assert_eq "$(FAKE_GET_MISSING=1 FAKE_CREATE_FAIL=1 bash -c 'printf "v4" | "$0" "$1" set github-token' "$bun_bin" "$script" 2>&1 || true)" "secret: Bitwarden CLI request failed: fake create exploded" "create failures surface bw stderr"
+mkdir -p "$tmp/setnew"
+printf '%s' '{"secrets":{"EXISTING":{"item":"setnew/existing"}}}' > "$tmp/setnew/.secret.json"
+cd "$tmp/setnew"
+: > "$FAKE_LOG"
+printf 's3cret\n' | secret set fresh-alias >/dev/null 2>&1
+rg -q '"fresh-alias"' .secret.json && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: set adds a new alias to the config" >&2
+}
+rg -q '"name":"setnew/fresh-alias"' "$FAKE_LOG" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: set creates the vault item for a new alias" >&2
+}
+cd "$tmp/proj"
 rm -f "$FAKE_CLIP"
 assert_ok secret set github-token --generate --force
 assert_eq "$(cat "$FAKE_CLIP")" "gen-pass-123" "set --generate delivers value to clipboard"
@@ -215,6 +235,15 @@ rg -q -- "-- delete nixfiles/github-token --" "$FAKE_LOG" || {
   echo "FAIL: rm deletes the vault item" >&2
 }
 assert_eq "$(FAKE_GET_MISSING=1 secret rm github-token --force 2>&1 || true)" "secret: item not found for github-token: nixfiles/github-token" "rm missing item"
+mkdir -p "$tmp/rmempty"
+printf '%s' '{"secrets":{"GH":{"item":"rm/gh"}}}' > "$tmp/rmempty/.secret.json"
+cd "$tmp/rmempty"
+assert_eq "$(FAKE_EMPTY_VAULT=1 secret rm GH --force 2>&1 || true)" "secret: item not found in vault — removed GH from config" "rm falls back to unset when the item is confirmed missing"
+rg -q '"GH"' .secret.json && {
+  fail=$((fail + 1))
+  echo "FAIL: rm-unset left the alias in the config" >&2
+} || pass=$((pass + 1))
+cd "$tmp/proj"
 assert_fail secret rotate nope
 
 assert_ok secret doctor
@@ -272,7 +301,7 @@ cd "$tmp/proj"
 assert_ok secret mv DATABASE_URL DB_URL
 assert_eq "$(secret print | head -1)" "DB_URL	dev	item-1	password	DB_URL" "mv renames base and env overrides"
 assert_ok secret mv DB_URL DATABASE_URL
-assert_eq "$(secret mv DATABASE_URL BAD-NAME 2>&1 || true)" "secret: invalid alias name: BAD-NAME (letters, digits, underscore; must not start with a digit)" "mv rejects invalid alias name"
+assert_eq "$(secret mv DATABASE_URL 9BAD 2>&1 || true)" "secret: invalid alias name: 9BAD (letters, digits, underscore, hyphen; must not start with a digit)" "mv rejects invalid alias name"
 assert_eq "$(secret mv nope GH 2>&1 || true)" "secret: alias nope is not in a project, local, or user config (see 'secret print --all')" "mv refuses alias not in config"
 assert_ok secret u DATABASE_URL
 assert_fail secret get DATABASE_URL
@@ -312,7 +341,7 @@ rg -q 'API_TOKEN' .secret.json && rg -q 'STRIPE_KEY' .secret.json && rg -q 'init
   fail=$((fail + 1))
   echo "FAIL: init prefills first alias" >&2
 }
-assert_eq "$(secret init --force BAD-NAME 2>&1 || true)" "secret: invalid alias name: BAD-NAME (letters, digits, underscore; must not start with a digit)" "init rejects invalid alias"
+assert_eq "$(secret init --force 9BAD 2>&1 || true)" "secret: invalid alias name: 9BAD (letters, digits, underscore, hyphen; must not start with a digit)" "init rejects invalid alias"
 assert_eq "$(secret mv API_TOKEN STRIPE_KEY 2>&1 || true)" "secret: alias STRIPE_KEY already exists in $(cd "$tmp/initdir" && pwd -P)/.secret.json" "mv refuses rename onto existing alias"
 cd "$tmp"
 assert_eq "$(secret print 2>&1 || true)" "secret: no .secret.json found (searched up to \$HOME) — run 'secret init' to scaffold one, or pass --config FILE" "print outside project suggests init"
@@ -358,10 +387,17 @@ assert_eq "$(secret run --optional BROKEN -- sh -c 'echo $BASE')" "old-pass" "ru
 assert_eq "$(secret env --optional BROKEN --export)" "$(printf 'export BASE='\''old-pass'\''')" "env --optional skips unresolved aliases"
 cd "$tmp"
 
+mkdir -p "$tmp/envmiss"
+printf '%s' '{"secrets":{"A":{"item":"x/a"},"B":{"item":"x/b"}}}' > "$tmp/envmiss/.secret.json"
+cd "$tmp/envmiss"
+assert_eq "$(secret env 2>&1 || true)" "secret: hint: pass --optional A,B to skip unresolved aliases
+secret: item not found for A: x/a" "env lists all missing aliases in the optional hint"
+cd "$tmp"
+
 # ---- daemon mode: bw serve over a unix socket ----
 cd "$tmp/proj"
 export SECRET_DAEMON=1 FAKE_SERVE=1 FAKE_DAEMON_FIXTURE="$root/assets/bitwarden/test-daemon.ts"
-printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]' > "$tmp/daemon-items.json"
+printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[{"name":"source","value":"https://example.com","type":0}]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]' > "$tmp/daemon-items.json"
 export FAKE_DAEMON_ITEMS="$tmp/daemon-items.json"
 export FAKE_DAEMON_LOG="$tmp/daemon-log.txt"
 export FAKE_DAEMON_MISSING="$tmp/daemon-missing.txt"

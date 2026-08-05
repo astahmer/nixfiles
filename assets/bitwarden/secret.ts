@@ -35,6 +35,7 @@ type ParsedOptions = {
   diff?: boolean;
   dry?: boolean;
   dryRun?: boolean;
+  source?: string;
   store?: boolean;
 };
 
@@ -76,6 +77,7 @@ const commandAliases: Record<string, string> = {
   i: "id",
   in: "init",
   t: "totp",
+  so: "source",
   sy: "pull",
   sync: "pull",
   pu: "pull",
@@ -170,6 +172,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let diff = false;
   let dry = false;
   let dryRun = false;
+  let source: string | undefined;
   let store = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -209,6 +212,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       dry = true;
     } else if (argument === "--dry-run") {
       dryRun = true;
+    } else if (argument === "--source") {
+      source = argv[++index] || fail("--source requires a URL");
     } else if (argument === "--store") {
       store = true;
     } else if (argument === "-h" || argument === "--help") {
@@ -241,6 +246,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     diff,
     dry,
     dryRun,
+    source,
     store,
   };
 };
@@ -446,7 +452,6 @@ const resolveRequired = async (
   items: Record<string, any>[] | undefined,
   alias: string,
   definition: SecretDefinition,
-  suggestOptional = false,
 ): Promise<string> => {
   if (items === undefined) {
     await requireUnlocked();
@@ -456,8 +461,6 @@ const resolveRequired = async (
   if (item === undefined) {
     if (items.length === 0) {
       warn("hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config");
-    } else if (suggestOptional) {
-      warn(`hint: pass --optional ${alias} to skip unresolved aliases`);
     }
     fail(`item not found for ${alias}: ${definition.item}`);
   }
@@ -829,7 +832,7 @@ const initProjectConfig = (force: boolean, aliases: string[]): void => {
   const secrets: Record<string, SecretDefinition> = {};
   for (const alias of aliases) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(alias)) {
-      fail(`invalid alias name: ${alias} (letters, digits, underscore; must not start with a digit)`);
+      fail(`invalid alias name: ${alias} (letters, digits, underscore, hyphen; must not start with a digit)`);
     }
     secrets[alias] = { item: `${prefix}/${alias.toLowerCase().replaceAll("_", "-")}`, field: "password" };
   }
@@ -1015,7 +1018,7 @@ const printScope = (scope: string, selectedConfig?: string, json = false): void 
   }
 };
 
-const unsetAlias = (alias: string, selectedConfig?: string): void => {
+const unsetAlias = (alias: string, selectedConfig?: string, quiet = false): void => {
   const holder = configWithAlias(alias, selectedConfig || findProjectConfig(), findProjectLocalConfig());
   if (!holder) {
     fail(`alias ${alias} is not in a project, local, or user config (see 'secret print --all')`);
@@ -1024,14 +1027,14 @@ const unsetAlias = (alias: string, selectedConfig?: string): void => {
   delete updated.secrets?.[alias];
   for (const environment of Object.values(updated.environments || {})) delete environment.secrets?.[alias];
   writeAtomic(holder.filePath, `${JSON.stringify(updated, null, 2)}\n`);
-  success(`removed ${alias} from ${holder.filePath}`);
+  if (!quiet) success(`removed ${alias} from ${holder.filePath}`);
 };
 
-const aliasNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const aliasNamePattern = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
 const moveAlias = (from: string, to: string, selectedConfig?: string): void => {
   if (!aliasNamePattern.test(to)) {
-    fail(`invalid alias name: ${to} (letters, digits, underscore; must not start with a digit)`);
+    fail(`invalid alias name: ${to} (letters, digits, underscore, hyphen; must not start with a digit)`);
   }
   if (from === to) fail(`alias is already named ${to}`);
   const holder = configWithAlias(from, selectedConfig || findProjectConfig(), findProjectLocalConfig());
@@ -1069,6 +1072,19 @@ const promptHidden = async (label: string): Promise<string> => {
   } finally {
     spawnSync("stty", ["echo"], { stdio: "inherit" });
   }
+};
+
+const promptLine = async (label: string): Promise<string> => {
+  process.stderr.write(`${label}: `);
+  const value = await new Promise<string>((resolve) => {
+    const rl = createInterface({ input: process.stdin, terminal: false });
+    rl.once("line", (line) => {
+      rl.close();
+      resolve(line);
+    });
+  });
+  process.stderr.write("\n");
+  return value.trim();
 };
 
 const confirmPrompt = async (label: string): Promise<boolean> => {
@@ -1117,13 +1133,20 @@ const newItem = (name: string, field: string, value: string): Record<string, any
   return item;
 };
 
-const setValue = async (alias: string, definition: SecretDefinition, value: string, force: boolean): Promise<void> => {
+const setValue = async (
+  alias: string,
+  definition: SecretDefinition,
+  value: string,
+  force: boolean,
+  source?: string,
+): Promise<void> => {
   await requireUnlocked();
   const field = definition.field || "password";
   const items = await vaultItems();
   const item = itemFor(items, definition.item);
   if (item === undefined) {
     const payload = newItem(definition.item, field, value);
+    if (source) setItemField(payload, "custom:source", source);
     if (!(await daemonMutate("POST", "/object/item", payload))) {
       // bw 2026.x expects base64-encoded item JSON on stdin for create/edit.
       runBwInput(["create", "item"], Buffer.from(JSON.stringify(payload)).toString("base64"));
@@ -1141,6 +1164,7 @@ const setValue = async (alias: string, definition: SecretDefinition, value: stri
   }
   const payload = JSON.parse(JSON.stringify(item)) as Record<string, any>;
   setItemField(payload, field, value);
+  if (source) setItemField(payload, "custom:source", source);
   if (!(await daemonMutate("PUT", `/object/item/${String(item.id)}`, payload))) {
     runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(payload)).toString("base64"));
     daemonStop();
@@ -1253,12 +1277,15 @@ Print exactly one configured value.
   --copy       Copy to the clipboard instead of stdout
   --env NAME   Environment override (default: prod)
 `,
-  set: `Usage: secret set <alias> [--generate] [--force]
+  set: `Usage: secret set [<alias>] [--generate] [--force] [--source URL]
 
-Prompt (hidden) for a value and write it to Bitwarden.
+Prompt (hidden) for a value and write it to Bitwarden. A missing alias is
+added to the project config and created in the vault; with no alias at all,
+you are prompted for one.
 
   --generate   Generate a random password instead of prompting
   --force, -f  Overwrite an existing item without confirmation
+  --source URL Attach a source URL (stored as a custom "source" field)
 `,
   id: `Usage: secret id <alias>
 
@@ -1267,6 +1294,11 @@ Print the resolved Bitwarden item id (no value).
   totp: `Usage: secret totp <alias> [--copy]
 
 Print the current TOTP code.
+`,
+  source: `Usage: secret source <alias> [url]
+
+Print the secret's source URL (a custom "source" field on the vault item),
+or set it when a url is given.
 `,
   pull: `Usage: secret pull
 
@@ -1337,7 +1369,7 @@ Show recent secret commands (aliases only, no values).
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -1349,6 +1381,8 @@ Commands:
   set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden; --generate delivers the new value
   id (i) <alias>      Print the resolved Bitwarden item id (no value)
   totp (t) <alias>    Print the current TOTP code (--copy to clipboard)
+  source (so) <alias> [url]
+                      Print the secret's source URL, or set it when a url is given
   pull (pu, sy)       Refresh the local vault cache from the server (bw sync)
   pin (p) <alias>     Replace the config item name with its resolved id
   rotate (r) <alias>  Generate a new password and overwrite the item (confirm unless --force); delivers the new value
@@ -1381,6 +1415,7 @@ Options:
   --store             With unlock: persist the session token to ~/.config/secret/session (mode 0600)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
+  --source URL        With set: attach a source URL (custom "source" field)
 
 Config precedence (later wins):
   ~/.config/secret/config.json    personal global aliases
@@ -1528,13 +1563,40 @@ const main = async (): Promise<void> => {
       console.log(value);
     }
   } else if (options.command === "set") {
-    const alias = options.positional[0] || fail("set requires an alias, e.g. secret set github-token (see 'secret list')");
-    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    let alias = options.positional[0];
+    if (!alias) {
+      if (!process.stdin.isTTY) fail("set requires an alias, e.g. secret set github-token (see 'secret list')");
+      alias = await promptLine("Alias name");
+      if (!alias || !aliasNamePattern.test(alias)) {
+        fail(`invalid alias name: ${alias} (letters, digits, underscore, hyphen; must not start with a digit)`);
+      }
+    }
+    let definition = loaded.definitions[alias];
+    if (!definition) {
+      // Unknown alias: add it to the project config, then create the item.
+      if (!aliasNamePattern.test(alias)) {
+        fail(`invalid alias name: ${alias} (letters, digits, underscore, hyphen; must not start with a digit)`);
+      }
+      const filePath = options.configPath || findProjectConfig() || join(process.cwd(), projectConfigName);
+      const prefix = basename(dirname(filePath));
+      const item = `${prefix}/${alias.toLowerCase().replaceAll("_", "-")}`;
+      const config = existsSync(filePath) ? (readJson(filePath) as SecretConfig) : {};
+      config.secrets = config.secrets || {};
+      config.secrets[alias] = { item, field: "password", env: alias.toUpperCase().replaceAll("-", "_") };
+      writeAtomic(filePath, `${JSON.stringify(config, null, 2)}\n`);
+      info(`added ${alias} (${item}) to ${filePath}`);
+      definition = { item, field: "password" };
+    }
     const value = options.generate
       ? await generatePassword()
       : await promptHidden(`Enter value for ${alias}`);
     if (!value || placeholderValues.has(value)) fail(`refusing empty or placeholder value for ${alias}`);
-    await setValue(alias, definition, value, options.force ?? false);
+    let source = options.source;
+    if (source === undefined && process.stdin.isTTY) {
+      const entered = await promptLine("Source URL (optional)");
+      if (entered) source = entered;
+    }
+    await setValue(alias, definition, value, options.force ?? false, source);
     recordHistory({ at: new Date().toISOString(), cmd: "set", target: alias, env: environment });
     success(`set ${alias} (${definition.item}, ${definition.field || "password"})`);
     if (options.generate) {
@@ -1568,6 +1630,28 @@ const main = async (): Promise<void> => {
       success(`copied ${alias} totp code to clipboard`);
     } else {
       console.log(code);
+    }
+  } else if (options.command === "source") {
+    const alias = options.positional[0] || fail("source requires an alias, e.g. secret source github-token");
+    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    const url = options.positional[1];
+    const items = await vaultItems();
+    const item = itemFor(items, definition.item);
+    if (item === undefined) {
+      await requireUnlocked();
+      fail(`item not found for ${alias}: ${definition.item}`);
+    }
+    if (url !== undefined) {
+      const payload = JSON.parse(JSON.stringify(item)) as Record<string, any>;
+      setItemField(payload, "custom:source", url);
+      if (!(await daemonMutate("PUT", `/object/item/${String(payload.id)}`, payload))) {
+        runBwInput(["edit", "item", String(payload.id)], Buffer.from(JSON.stringify(payload)).toString("base64"));
+        daemonStop();
+      }
+      success(`source set for ${alias}`);
+    } else {
+      const value = itemField(item, "custom:source");
+      console.log(typeof value === "string" && value ? value : "");
     }
   } else if (options.command === "pull") {
     await requireUnlocked();
@@ -1626,6 +1710,13 @@ const main = async (): Promise<void> => {
     const item = itemFor(items, definition.item);
     if (item === undefined) {
       await requireUnlocked();
+      if (items !== undefined) {
+        // The vault is confirmed to not contain the item: fall back to unset.
+        unsetAlias(alias, options.configPath, true);
+        info(`item not found in vault — removed ${alias} from config`);
+        recordHistory({ at: new Date().toISOString(), cmd: "rm", target: alias, env: environment });
+        return;
+      }
       fail(`item not found for ${alias}: ${definition.item}`);
     }
     const name = String(item.name || definition.item);
@@ -1664,6 +1755,15 @@ const main = async (): Promise<void> => {
       if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
     }
     const items = await vaultItems();
+    if (items !== undefined) {
+      const missing = loaded.selectedAliases.filter(
+        (candidate) =>
+          !optionalSet.has(candidate) && resolveOptional(items, loaded.definitions[candidate]!) === undefined,
+      );
+      if (missing.length > 0) {
+        warn(`hint: pass --optional ${missing.join(",")} to skip unresolved aliases`);
+      }
+    }
     const lines: string[] = [];
     for (const alias of loaded.selectedAliases) {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
@@ -1678,7 +1778,7 @@ const main = async (): Promise<void> => {
         lines.push(options.export ? `export ${key}=${formatted}` : `${key}=${formatted}`);
         continue;
       }
-      const value = dotenvValue(await resolveRequired(items, alias, definition, true));
+      const value = dotenvValue(await resolveRequired(items, alias, definition));
       lines.push(options.export ? `export ${key}=${value}` : `${key}=${value}`);
     }
     if (options.diff || options.dry || options.dryRun) {
@@ -1711,6 +1811,15 @@ const main = async (): Promise<void> => {
       if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
     }
     const items = await vaultItems();
+    if (items !== undefined) {
+      const missing = loaded.selectedAliases.filter(
+        (candidate) =>
+          !optionalSet.has(candidate) && resolveOptional(items, loaded.definitions[candidate]!) === undefined,
+      );
+      if (missing.length > 0) {
+        warn(`hint: pass --optional ${missing.join(",")} to skip unresolved aliases`);
+      }
+    }
     for (const alias of loaded.selectedAliases) {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
       const key = dotenvKey(alias, definition);
@@ -1723,7 +1832,7 @@ const main = async (): Promise<void> => {
         envVars[key] = value;
         continue;
       }
-      envVars[key] = await resolveRequired(items, alias, definition, true);
+      envVars[key] = await resolveRequired(items, alias, definition);
     }
     recordHistory({ at: new Date().toISOString(), cmd: "run", target: command, env: environment });
     const result = spawnSync(command, options.positional.slice(1), {

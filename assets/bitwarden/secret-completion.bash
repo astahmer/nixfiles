@@ -23,12 +23,12 @@ _secret() {
   COMPREPLY=()
   cur="${COMP_WORDS[COMP_CWORD]}"
   if (( COMP_CWORD == 1 )); then
-    COMPREPLY=( $(compgen -W "status unlock lock list get set id totp pull pin rotate rm init env print doctor recent history st ls g s i t sy pu p r in e pr d re h" -- "$cur") )
+    COMPREPLY=( $(compgen -W "status unlock lock list get set id totp source pull pin rotate rm init env print doctor recent history st ls g s i t so sy pu p r in e pr d re h" -- "$cur") )
     return 0
   fi
   prev="${COMP_WORDS[COMP_CWORD-1]}"
   case "$prev" in
-    get|set|id|totp|pin|rotate|rm|g|s|i|t|p|r)
+    get|set|id|totp|source|pin|rotate|rm|g|s|i|t|so|p|r)
       COMPREPLY=( $(compgen -W "$(_secret_alias_cache)" -- "$cur") )
       ;;
   esac

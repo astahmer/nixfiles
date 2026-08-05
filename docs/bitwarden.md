@@ -317,8 +317,18 @@ each.
 - `secret <command> -h` (or `secret help <command>`) shows that command's own
   usage and flags; bare `secret -h` shows the global help.
 - `env`/`run` are strict by default: unresolved aliases fail with a hint to
-  pass `--optional <alias>`. Skipping silently by default would drop secrets
-  from `.env` files without anyone noticing.
+  pass `--optional <alias1,alias2,...>` (all missing aliases are listed).
+  Skipping silently by default would drop secrets from `.env` files without
+  anyone noticing.
+- The `field` in a config entry can be `password` (default), `username`,
+  `notes`, or `custom:<name>` — for example `custom:source` for the URL a
+  secret came from. `secret source <alias>` prints it, `secret source <alias>
+  <url>` sets it, and `secret set --source URL` attaches it at creation.
+- `secret set` with an unknown alias (or no alias at all, on a TTY) adds the
+  alias to the project config — item named after the config directory, env
+  key derived as `ALIAS_NAME` — then creates the vault item. `secret rm`
+  falls back to unsetting the alias when the vault is confirmed to not
+  contain the item.
 - bw 2026.x couples each session key to a protected auto-unlock key, and a
   stale `BW_SESSION` in the environment during `unlock` corrupts that state
   (bw warns about this itself). `secret` therefore strips `BW_SESSION` from
