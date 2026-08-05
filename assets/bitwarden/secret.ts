@@ -49,7 +49,9 @@ const commandAliases: Record<string, string> = {
   i: "id",
   in: "init",
   t: "totp",
-  sy: "sync",
+  sy: "pull",
+  sync: "pull",
+  pu: "pull",
   p: "pin",
   r: "rotate",
   u: "unset",
@@ -763,7 +765,7 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|search|get|set|id|totp|sync|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -773,7 +775,7 @@ Commands:
   set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden; --generate delivers the new value
   id (i) <alias>      Print the resolved Bitwarden item id (no value)
   totp (t) <alias>    Print the current TOTP code (--copy to clipboard)
-  sync (sy)           Refresh the Bitwarden vault cache (explicit)
+  pull (pu, sy)       Refresh the local vault cache from the server (bw sync)
   pin (p) <alias>     Replace the config item name with its resolved id
   rotate (r) <alias>  Generate a new password and overwrite the item (confirm unless --force); delivers the new value
   rm <alias>          Delete the vault item (confirm unless --force); config entry kept
@@ -918,11 +920,11 @@ const main = async (): Promise<void> => {
     } else {
       console.log(code);
     }
-  } else if (options.command === "sync") {
+  } else if (options.command === "pull") {
     requireUnlocked();
     runBw(["sync"]);
-    recordHistory({ at: new Date().toISOString(), cmd: "sync", target: "", env: environment });
-    console.error("secret: vault synced");
+    recordHistory({ at: new Date().toISOString(), cmd: "pull", target: "", env: environment });
+    console.error("secret: vault cache pulled from server");
   } else if (options.command === "pin") {
     const alias = options.positional[0] || fail("pin requires an alias, e.g. secret pin github-token (see 'secret list')");
     if (!loaded.definitions[alias]) fail(`unknown alias: ${alias} (see 'secret list')`);
