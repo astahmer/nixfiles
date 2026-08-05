@@ -24,12 +24,12 @@ _secret() {
   # while plain compadd works. Keep the cache refresh on TAB only.
   local -a matches
   if (( CURRENT == 2 )); then
-    matches=(status list get unlock lock set id totp source pull pin rotate rm init env run print lint doctor recent history st ls g s i t so sy p r in e pr d re h)
+    matches=(status unlock lock list search get set add id totp source pull pin rotate rm delete remove unset mv init env run print global lint doctor recent history st ls g s e d pr pu so)
     compadd -X 'secret commands:' -- "${matches[@]}"
     return 0
   fi
   case "${words[CURRENT-1]}" in
-    get|set|id|totp|source|pin|rotate|rm|g|s|i|t|so|p|r)
+    get|set|add|id|totp|source|pin|rotate|rm|delete|remove|g|s|so)
       local entry rest
       while IFS=$'\t' read -r entry rest; do
         [[ -n "$entry" ]] && matches+=("$entry")

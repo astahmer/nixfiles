@@ -135,10 +135,16 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|global\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|lint|doctor|recent|history" "help lists all commands"
+if secret -h | rg -q 'set \(s, add\)' && secret -h | rg -q 'rm \(delete, remove\)' && secret -h | rg -q 'source \(so\)' && secret -h | rg -q 'pull \(pu\)' && secret -h | rg -q 'env \(e\)'; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: help shows the curated aliases" >&2
+fi
 assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "-h after a command shows that command's help"
 assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "secret help env shows env help"
-assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]" "--help is accepted"
+assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret source github-token)" "https://example.com" "source prints the stored URL"
 printf 'v12\n' | secret set github-token --force --source https://keys.example.com/new >/dev/null 2>&1
@@ -153,6 +159,7 @@ secret get github-token >/dev/null
 assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "1" "get uses a single bw spawn (batched list)"
 assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "get never spawns bw get"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
+assert_eq "$(printf "x" | secret add github-token 2>&1 || true)" "secret: item already exists; pass --force to overwrite" "add aliases set"
 
 rm -f "$FAKE_CLIP"
 secret get github-token --copy
@@ -190,8 +197,7 @@ rm -f "$FAKE_CLIP"
 secret totp github-token --copy
 assert_eq "$(cat "$FAKE_CLIP")" "123456" "totp --copy"
 assert_ok secret pull
-assert_ok secret sy
-assert_ok secret sync
+assert_ok secret pu
 
 FAKE_BW_STATUS='{"status":"unlocked"}' secret status --check >/dev/null 2>&1 && pass=$((pass + 1)) || {
   fail=$((fail + 1))
@@ -229,6 +235,8 @@ rg -q -- "-- edit --" "$FAKE_LOG" || {
 }
 assert_eq "$(cat "$FAKE_CLIP")" "gen-pass-123" "rotate delivers new value to clipboard"
 assert_eq "$(secret rm github-token 2>&1 || true)" "secret: refusing to delete nixfiles/github-token without confirmation; pass --force" "rm blocked without force"
+assert_eq "$(secret delete github-token 2>&1 || true)" "secret: refusing to delete nixfiles/github-token without confirmation; pass --force" "delete aliases rm"
+assert_eq "$(secret remove github-token 2>&1 || true)" "secret: refusing to delete nixfiles/github-token without confirmation; pass --force" "remove aliases rm"
 assert_ok secret rm github-token --force
 rg -q -- "-- delete nixfiles/github-token --" "$FAKE_LOG" || {
   fail=$((fail + 1))
@@ -264,6 +272,14 @@ assert_eq "$(secret lint --config "$tmp/missing.json" --json)" '[{"scope":"proje
 assert_eq "$(secret print)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print project scope after pin"
 assert_eq "$(secret pr)" "$(printf 'DATABASE_URL\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "alias pr maps to print"
 assert_eq "$(secret print global 2>&1 || true)" "secret: no config file for global scope: $tmp/.config/secret/config.json" "print global missing config explains"
+assert_eq "$(secret global 2>&1 || true)" "secret: no config file for global scope: $tmp/.config/secret/config.json" "global shows the user scope"
+printf 'gv\n' | secret set --global global-alias >/dev/null 2>&1
+rg -q '"global-alias"' "$tmp/.config/secret/config.json" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: set --global writes the user config" >&2
+}
+assert_eq "$(secret global | head -1 | cut -f1)" "global-alias" "global lists the new alias"
+secret unset --global global-alias >/dev/null 2>&1
 assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, local)" "print rejects unknown scope"
 assert_eq "$(secret print --all)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tproject\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print --all merges scopes"
 assert_eq "$(secret search database)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL')" "search matches alias and env key"
@@ -303,7 +319,7 @@ assert_eq "$(secret print | head -1)" "DB_URL	dev	item-1	password	DB_URL" "mv re
 assert_ok secret mv DB_URL DATABASE_URL
 assert_eq "$(secret mv DATABASE_URL 9BAD 2>&1 || true)" "secret: invalid alias name: 9BAD (letters, digits, underscore, hyphen; must not start with a digit)" "mv rejects invalid alias name"
 assert_eq "$(secret mv nope GH 2>&1 || true)" "secret: alias nope is not in a project, local, or user config (see 'secret print --all')" "mv refuses alias not in config"
-assert_ok secret u DATABASE_URL
+assert_ok secret unset DATABASE_URL
 assert_fail secret get DATABASE_URL
 assert_eq "$(secret unset DATABASE_URL 2>&1 || true)" "secret: alias DATABASE_URL is not in a project, local, or user config (see 'secret print --all')" "unset second time reports not in config"
 assert_eq "$(secret unset nope 2>&1 || true)" "secret: alias nope is not in a project, local, or user config (see 'secret print --all')" "unset refuses alias not in config"

@@ -36,6 +36,7 @@ type ParsedOptions = {
   dry?: boolean;
   dryRun?: boolean;
   source?: string;
+  global?: boolean;
   store?: boolean;
 };
 
@@ -74,22 +75,14 @@ const commandAliases: Record<string, string> = {
   ls: "list",
   g: "get",
   s: "set",
-  i: "id",
-  in: "init",
-  t: "totp",
+  add: "set",
+  delete: "rm",
+  remove: "rm",
   so: "source",
-  sy: "pull",
-  sync: "pull",
   pu: "pull",
-  p: "pin",
-  r: "rotate",
-  u: "unset",
-  l: "lint",
   e: "env",
   d: "doctor",
   pr: "print",
-  re: "recent",
-  h: "history",
 };
 
 type HistoryEntry = {
@@ -173,6 +166,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let dry = false;
   let dryRun = false;
   let source: string | undefined;
+  let global = false;
   let store = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -200,6 +194,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       generate = true;
     } else if (argument === "--force" || argument === "-f") {
       force = true;
+    } else if (argument === "--global" || argument === "-g") {
+      global = true;
     } else if (argument === "--export") {
       exportOutput = true;
     } else if (argument === "--json") {
@@ -247,6 +243,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     dry,
     dryRun,
     source,
+    global,
     store,
   };
 };
@@ -1277,7 +1274,7 @@ Print exactly one configured value.
   --copy       Copy to the clipboard instead of stdout
   --env NAME   Environment override (default: prod)
 `,
-  set: `Usage: secret set [<alias>] [--generate] [--force] [--source URL]
+  set: `Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--global]
 
 Prompt (hidden) for a value and write it to Bitwarden. A missing alias is
 added to the project config and created in the vault; with no alias at all,
@@ -1286,6 +1283,7 @@ you are prompted for one.
   --generate   Generate a random password instead of prompting
   --force, -f  Overwrite an existing item without confirmation
   --source URL Attach a source URL (stored as a custom "source" field)
+  --global, -g Add a new alias to the global config instead of the project one
 `,
   id: `Usage: secret id <alias>
 
@@ -1312,13 +1310,15 @@ Replace the config item name with its resolved id.
 
 Generate a new password and overwrite the item; delivers the new value.
 `,
-  rm: `Usage: secret rm <alias> [--force]
+  rm: `Usage: secret rm <alias> [--force] [--global]
 
-Delete the vault item (config entry kept).
+Delete the vault item (config entry kept). Falls back to unsetting the alias
+when the item does not exist in the vault. --global unsets from the global
+config instead of the project one.
 `,
-  unset: `Usage: secret unset <alias>
+  unset: `Usage: secret unset <alias> [--global]
 
-Remove an alias from the project or user config.
+Remove an alias from the project config (or the global config with --global).
 `,
   mv: `Usage: secret mv <alias> <new>
 
@@ -1350,6 +1350,10 @@ Inject project aliases into a command's environment. Strict by default;
 
 Show aliases without touching the vault.
 `,
+  global: `Usage: secret global [--json]
+
+Show the global (user) scope aliases (same as secret print global).
+`,
   lint: `Usage: secret lint [--config FILE] [--json]
 
 Validate configs offline: items, env keys, collisions (no vault).
@@ -1369,7 +1373,7 @@ Show recent secret commands (aliases only, no values).
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -1378,25 +1382,30 @@ Commands:
   list (ls)           List configured aliases (vault touched only for created dates on a TTY)
   search <term>       Find aliases by alias, item, or env key across scopes (no values)
   get (g) <alias>     Print exactly one configured value
-  set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden; --generate delivers the new value
-  id (i) <alias>      Print the resolved Bitwarden item id (no value)
-  totp (t) <alias>    Print the current TOTP code (--copy to clipboard)
+  set (s, add) [<alias>]
+                      Prompt (hidden) a value and write it to Bitwarden; a missing
+                      alias is added to the config and created in the vault
+  id <alias>          Print the resolved Bitwarden item id (no value)
+  totp <alias>        Print the current TOTP code (--copy to clipboard)
   source (so) <alias> [url]
                       Print the secret's source URL, or set it when a url is given
-  pull (pu, sy)       Refresh the local vault cache from the server (bw sync)
-  pin (p) <alias>     Replace the config item name with its resolved id
-  rotate (r) <alias>  Generate a new password and overwrite the item (confirm unless --force); delivers the new value
-  rm <alias>          Delete the vault item (confirm unless --force); config entry kept
-  unset (u) <alias>   Remove an alias from the project or user config
+  pull (pu)           Refresh the local vault cache from the server (bw sync)
+  pin <alias>         Replace the config item name with its resolved id
+  rotate <alias>      Generate a new password and overwrite the item (confirm unless --force); delivers the new value
+  rm (delete, remove) <alias>
+                      Delete the vault item (confirm unless --force); falls back
+                      to unset when the item does not exist in the vault
+  unset <alias>       Remove an alias from the project or user config
   mv <alias> <new>    Rename an alias in the project or user config
-  init (in) [alias..] Scaffold a .secret.json template; optional aliases to prefill
+  init [alias..]      Scaffold a .secret.json template; optional aliases to prefill
   env (e)             Generate dotenv from the project config
   run <cmd...>        Inject project aliases into a command's environment (secret run -- npm test)
   print (pr) [scope]  Show aliases in project (default), global, or local; --all merges scopes
-  lint (l)            Validate configs offline: items, env keys, collisions (no vault)
+  global              Show the global (user) scope aliases
+  lint                Validate configs offline: items, env keys, collisions (no vault)
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
-  recent (re)         Show recently used aliases
-  history (h)         Show recent secret commands
+  recent              Show recently used aliases
+  history             Show recent secret commands
 
 Options:
   --config FILE       Use FILE instead of ./.secret.json
@@ -1416,6 +1425,7 @@ Options:
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
   --source URL        With set: attach a source URL (custom "source" field)
+  --global, -g        With set/unset/rm: operate on the global config
 
 Config precedence (later wins):
   ~/.config/secret/config.json    personal global aliases
@@ -1577,8 +1587,10 @@ const main = async (): Promise<void> => {
       if (!aliasNamePattern.test(alias)) {
         fail(`invalid alias name: ${alias} (letters, digits, underscore, hyphen; must not start with a digit)`);
       }
-      const filePath = options.configPath || findProjectConfig() || join(process.cwd(), projectConfigName);
-      const prefix = basename(dirname(filePath));
+      const filePath = options.global
+        ? userConfigPath
+        : options.configPath || findProjectConfig() || join(process.cwd(), projectConfigName);
+      const prefix = options.global ? "global" : basename(dirname(filePath));
       const item = `${prefix}/${alias.toLowerCase().replaceAll("_", "-")}`;
       const config = existsSync(filePath) ? (readJson(filePath) as SecretConfig) : {};
       config.secrets = config.secrets || {};
@@ -1712,7 +1724,7 @@ const main = async (): Promise<void> => {
       await requireUnlocked();
       if (items !== undefined) {
         // The vault is confirmed to not contain the item: fall back to unset.
-        unsetAlias(alias, options.configPath, true);
+        unsetAlias(alias, options.global ? userConfigPath : options.configPath, true);
         info(`item not found in vault — removed ${alias} from config`);
         recordHistory({ at: new Date().toISOString(), cmd: "rm", target: alias, env: environment });
         return;
@@ -1733,7 +1745,7 @@ const main = async (): Promise<void> => {
     success(`deleted item ${definition.item} for ${alias} (config entry kept)`);
   } else if (options.command === "unset") {
     const alias = options.positional[0] || fail("unset requires an alias, e.g. secret unset github-token (see 'secret list')");
-    unsetAlias(alias, options.configPath);
+    unsetAlias(alias, options.global ? userConfigPath : options.configPath);
     recordHistory({ at: new Date().toISOString(), cmd: "unset", target: alias, env: environment });
   } else if (options.command === "mv") {
     const from = options.positional[0] || fail("mv requires an alias, e.g. secret mv github-token gh-token (see 'secret list')");
@@ -1850,6 +1862,9 @@ const main = async (): Promise<void> => {
       printScope(scope, options.configPath, options.json ?? false);
       recordHistory({ at: new Date().toISOString(), cmd: "print", target: scope, env: environment });
     }
+  } else if (options.command === "global") {
+    printScope("global", options.configPath, options.json ?? false);
+    recordHistory({ at: new Date().toISOString(), cmd: "global", target: "global", env: environment });
   } else if (options.command === "search") {
     const query = options.positional[0] || fail("search requires a term, e.g. secret search token (matches alias, item, env key)");
     searchAliases(query, options.configPath, options.json ?? false);
