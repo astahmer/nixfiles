@@ -136,7 +136,8 @@ assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret e
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
 assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
-assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]" "-h after a command shows global help"
+assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "-h after a command shows that command's help"
+assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "secret help env shows env help"
 assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(FAKE_EMPTY_VAULT=1 secret get github-token 2>&1 || true)" "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config

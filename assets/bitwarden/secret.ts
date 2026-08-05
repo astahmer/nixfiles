@@ -55,6 +55,19 @@ const localConfigName = ".secret.local.json";
 const placeholderValues = new Set(["replace-me", "REPLACE-ME"]);
 const HISTORY_LIMIT = 100;
 
+// Minimal ANSI coloring; no dependency. Colors only apply on a real terminal,
+// so pipes and the regression suite get plain text.
+const ansi =
+  (enabled: boolean) =>
+  (code: string) =>
+  (text: string): string =>
+    enabled ? `\x1b[${code}m${text}\x1b[0m` : text;
+const outColor = ansi(Boolean(process.stdout.isTTY));
+const errColor = ansi(Boolean(process.stderr.isTTY));
+const info = (text: string): void => console.error(errColor("2")(`secret: ${text}`));
+const success = (text: string): void => console.error(errColor("32")(`secret: ${text}`));
+const warn = (text: string): void => console.error(errColor("33")(`secret: ${text}`));
+
 const commandAliases: Record<string, string> = {
   st: "status",
   ls: "list",
@@ -85,7 +98,7 @@ type HistoryEntry = {
 };
 
 function fail(message: string, code = 1): never {
-  console.error(`secret: ${message}`);
+  console.error(errColor("31")(`secret: ${message}`));
   process.exit(code);
 }
 
@@ -433,6 +446,7 @@ const resolveRequired = async (
   items: Record<string, any>[] | undefined,
   alias: string,
   definition: SecretDefinition,
+  suggestOptional = false,
 ): Promise<string> => {
   if (items === undefined) {
     await requireUnlocked();
@@ -441,9 +455,9 @@ const resolveRequired = async (
   const item = itemFor(items, definition.item);
   if (item === undefined) {
     if (items.length === 0) {
-      console.error(
-        "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config",
-      );
+      warn("hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config");
+    } else if (suggestOptional) {
+      warn(`hint: pass --optional ${alias} to skip unresolved aliases`);
     }
     fail(`item not found for ${alias}: ${definition.item}`);
   }
@@ -662,8 +676,11 @@ const daemonStart = async (): Promise<boolean> => {
       // Never keep a daemon that reports a locked/unauthenticated vault: it
       // would answer auth questions with a stale state for every later command.
       const parsed = parseDaemon(res);
-      const data = parsed?.data as { template?: { status?: unknown }; status?: unknown } | undefined;
-      const status = data?.template?.status ?? data?.status;
+      let status: unknown;
+      if (parsed?.kind === "ok") {
+        const data = parsed.data as { template?: { status?: unknown }; status?: unknown };
+        status = data.template?.status ?? data.status;
+      }
       if (parsed?.kind !== "ok" || status !== "unlocked") {
         try {
           if (child.pid !== undefined) process.kill(child.pid, "SIGKILL");
@@ -732,7 +749,7 @@ const storeSession = (token: string): void => {
       { encoding: "utf8" },
     );
     if (!result.error && result.status === 0) return;
-    console.error("secret: macOS keychain unavailable — falling back to a plaintext session file");
+    warn("macOS keychain unavailable — falling back to a plaintext session file");
   }
   writeAtomic(sessionPath, token);
 };
@@ -1007,7 +1024,7 @@ const unsetAlias = (alias: string, selectedConfig?: string): void => {
   delete updated.secrets?.[alias];
   for (const environment of Object.values(updated.environments || {})) delete environment.secrets?.[alias];
   writeAtomic(holder.filePath, `${JSON.stringify(updated, null, 2)}\n`);
-  console.error(`secret: removed ${alias} from ${holder.filePath}`);
+  success(`removed ${alias} from ${holder.filePath}`);
 };
 
 const aliasNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -1032,7 +1049,7 @@ const moveAlias = (from: string, to: string, selectedConfig?: string): void => {
   rename(updated.secrets);
   for (const environment of Object.values(updated.environments || {})) rename(environment.secrets);
   writeAtomic(holder.filePath, `${JSON.stringify(updated, null, 2)}\n`);
-  console.error(`secret: renamed ${from} to ${to} in ${holder.filePath}`);
+  success(`renamed ${from} to ${to} in ${holder.filePath}`);
 };
 
 const promptHidden = async (label: string): Promise<string> => {
@@ -1112,7 +1129,7 @@ const setValue = async (alias: string, definition: SecretDefinition, value: stri
       runBwInput(["create", "item"], Buffer.from(JSON.stringify(payload)).toString("base64"));
       daemonStop();
     }
-    console.error(`secret: created item ${definition.item}`);
+    success(`created item ${definition.item}`);
     return;
   }
   if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
@@ -1128,7 +1145,7 @@ const setValue = async (alias: string, definition: SecretDefinition, value: stri
     runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(payload)).toString("base64"));
     daemonStop();
   }
-  console.error(`secret: updated item ${definition.item}`);
+  success(`updated item ${definition.item}`);
 };
 
 const clipboardCandidates = (): Array<{ command: string; args: string[] }> =>
@@ -1156,10 +1173,10 @@ const copyToClipboard = (value: string): void => {
 
 const deliverValue = (value: string, alias: string): void => {
   if (tryCopyToClipboard(value)) {
-    console.error(`secret: copied ${alias} to clipboard`);
+    success(`copied ${alias} to clipboard`);
   } else {
     console.log(value);
-    console.error(`secret: clipboard unavailable, printed ${alias} value above`);
+    warn(`clipboard unavailable, printed ${alias} value above`);
   }
 };
 
@@ -1195,8 +1212,128 @@ const doctor = async (definitions: Record<string, SecretDefinition>): Promise<vo
   }
 
   const total = Object.keys(definitions).length;
-  console.error(`secret doctor: ${total - problems}/${total} aliases ok, ${problems} problem(s)`);
+  const summary = `secret doctor: ${total - problems}/${total} aliases ok, ${problems} problem(s)`;
+  console.error(problems > 0 ? warn(summary) : success(summary));
   if (problems > 0) process.exit(1);
+};
+
+const commandHelpText: Record<string, string> = {
+  status: `Usage: secret status [--check]
+
+Check Bitwarden auth state and print the next command to run.
+
+  --check   Exit nonzero when not unlocked
+`,
+  unlock: `Usage: secret unlock [--store]
+
+Unlock and print a session token. A session already present in the
+environment (e.g. the one bw login prints) is reused without prompting.
+
+  --store   Persist the session (macOS keychain, or ~/.config/secret/session)
+`,
+  lock: `Usage: secret lock
+
+Lock the vault, clear any stored session, and stop the daemon.
+`,
+  list: `Usage: secret list [--env NAME] [--json]
+
+List configured aliases. Created dates are fetched only on a TTY.
+
+  --env NAME   Environment overrides (default: prod)
+  --json       Machine-readable rows on stdout
+`,
+  search: `Usage: secret search <term> [--json]
+
+Find aliases by alias, item, or env key across scopes (no values).
+`,
+  get: `Usage: secret get <alias> [--copy] [--env NAME]
+
+Print exactly one configured value.
+
+  --copy       Copy to the clipboard instead of stdout
+  --env NAME   Environment override (default: prod)
+`,
+  set: `Usage: secret set <alias> [--generate] [--force]
+
+Prompt (hidden) for a value and write it to Bitwarden.
+
+  --generate   Generate a random password instead of prompting
+  --force, -f  Overwrite an existing item without confirmation
+`,
+  id: `Usage: secret id <alias>
+
+Print the resolved Bitwarden item id (no value).
+`,
+  totp: `Usage: secret totp <alias> [--copy]
+
+Print the current TOTP code.
+`,
+  pull: `Usage: secret pull
+
+Refresh the local vault cache from the server (bw sync).
+`,
+  pin: `Usage: secret pin <alias>
+
+Replace the config item name with its resolved id.
+`,
+  rotate: `Usage: secret rotate <alias> [--force] [--copy]
+
+Generate a new password and overwrite the item; delivers the new value.
+`,
+  rm: `Usage: secret rm <alias> [--force]
+
+Delete the vault item (config entry kept).
+`,
+  unset: `Usage: secret unset <alias>
+
+Remove an alias from the project or user config.
+`,
+  mv: `Usage: secret mv <alias> <new>
+
+Rename an alias in the project or user config.
+`,
+  init: `Usage: secret init [--force] [alias..]
+
+Scaffold a .secret.json template; optional aliases to prefill.
+`,
+  env: `Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]
+
+Generate dotenv from the project config. Strict by default: every alias must
+resolve. Pass --optional to warn-and-skip unresolved aliases.
+
+  --output FILE     Atomically write the dotenv to FILE (mode 0600)
+  --env NAME        Environment overrides (default: prod)
+  --export          Print shell export lines instead of dotenv
+  --diff, --dry, --dry-run
+                    Show what --output would write without writing
+  --required a,b,c  Fail unless these aliases are in the config
+  --optional a,b,c  Warn and skip aliases that cannot resolve
+`,
+  run: `Usage: secret run [--optional a,b,c] -- <cmd...>
+
+Inject project aliases into a command's environment. Strict by default;
+--optional warns and skips unresolved aliases.
+`,
+  print: `Usage: secret print [project|global|local] [--all] [--json]
+
+Show aliases without touching the vault.
+`,
+  lint: `Usage: secret lint [--config FILE] [--json]
+
+Validate configs offline: items, env keys, collisions (no vault).
+`,
+  doctor: `Usage: secret doctor
+
+Validate configs, Bitwarden state, and alias resolvability.
+`,
+  recent: `Usage: secret recent [--json]
+
+Show recently used aliases.
+`,
+  history: `Usage: secret history [--json]
+
+Show recent secret commands (aliases only, no values).
+`,
 };
 
 const printHelp = (): void => {
@@ -1271,24 +1408,33 @@ const main = async (): Promise<void> => {
     options.positional.includes("-h") ||
     options.positional.includes("--help");
   if (wantsHelp) {
-    printHelp();
+    const requested = [options.command, ...options.positional]
+      .filter((item) => item !== "-h" && item !== "--help" && item !== "help")
+      .find((item) => commandHelpText[item]);
+    if (requested) {
+      console.log(commandHelpText[requested]);
+    } else {
+      printHelp();
+    }
   } else if (options.command === "status") {
     const current = await currentAuthState();
     if (current.unlocked) {
-      console.log("unlocked — ready. next: secret list, or secret env --output .env");
+      console.log(outColor("32")("unlocked — ready. next: secret list, or secret env --output .env"));
     } else {
       console.log(
-        current.authenticated
-          ? 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"'
-          : 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"',
+        outColor("33")(
+          current.authenticated
+            ? 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"'
+            : 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"',
+        ),
       );
       if (process.env.BW_SESSION) {
-        console.error(
-          "secret: a session token is present but bw rejects it — run 'bw logout && bw login' once to repair, then 'secret unlock --store'",
+        warn(
+          "a session token is present but bw rejects it — run 'bw logout && bw login' once to repair, then 'secret unlock --store'",
         );
       }
       if (readSession()) {
-        console.error("secret: stored session is stale — refresh with 'secret unlock --store'");
+        warn("stored session is stale — refresh with 'secret unlock --store'");
       }
       if (options.check) process.exit(1);
     }
@@ -1314,9 +1460,7 @@ const main = async (): Promise<void> => {
               "refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'",
             );
           }
-          console.error(
-            "secret: warning: bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again",
-          );
+          warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again");
         }
       } catch {
         // unparseable status: ignore
@@ -1325,7 +1469,7 @@ const main = async (): Promise<void> => {
     daemonStop();
     if (options.store) {
       storeSession(token);
-      console.error("secret: unlocked; session stored (clear with 'secret lock')");
+      success("unlocked; session stored (clear with 'secret lock')");
     } else {
       console.log(token);
     }
@@ -1359,12 +1503,12 @@ const main = async (): Promise<void> => {
       });
       const widths = header.map((cell, column) => Math.max(cell.length, ...rows.map((row) => row[column]?.length ?? 0)));
       const pad = (value: string, width: number): string => value + " ".repeat(Math.max(0, width - value.length));
-      console.log(header.map((cell, column) => pad(cell, widths[column] ?? 0)).join("  "));
+      console.log(outColor("1;36")(header.map((cell, column) => pad(cell, widths[column] ?? 0)).join("  ")));
       for (const row of rows) {
         console.log(row.map((cell, column) => pad(cell, widths[column] ?? 0)).join("  "));
       }
       if (hidden > 0) {
-        console.error(`secret: created date hidden for ${hidden} item(s) — unlock the vault to show dates`);
+        warn(`created date hidden for ${hidden} item(s) — unlock the vault to show dates`);
       }
     } else {
       for (const [alias, definition] of entries) {
@@ -1379,7 +1523,7 @@ const main = async (): Promise<void> => {
     recordHistory({ at: new Date().toISOString(), cmd: "get", target: alias, env: environment });
     if (options.copy) {
       copyToClipboard(value);
-      console.error(`secret: copied ${alias} to clipboard`);
+    success(`copied ${alias} to clipboard`);
     } else {
       console.log(value);
     }
@@ -1392,11 +1536,11 @@ const main = async (): Promise<void> => {
     if (!value || placeholderValues.has(value)) fail(`refusing empty or placeholder value for ${alias}`);
     await setValue(alias, definition, value, options.force ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "set", target: alias, env: environment });
-    console.error(`secret: set ${alias} (${definition.item}, ${definition.field || "password"})`);
+    success(`set ${alias} (${definition.item}, ${definition.field || "password"})`);
     if (options.generate) {
       if (options.copy) {
         copyToClipboard(value);
-        console.error(`secret: copied ${alias} to clipboard`);
+        success(`copied ${alias} to clipboard`);
       } else {
         deliverValue(value, alias);
       }
@@ -1421,7 +1565,7 @@ const main = async (): Promise<void> => {
     recordHistory({ at: new Date().toISOString(), cmd: "totp", target: alias, env: environment });
     if (options.copy) {
       copyToClipboard(code);
-      console.error(`secret: copied ${alias} totp code to clipboard`);
+      success(`copied ${alias} totp code to clipboard`);
     } else {
       console.log(code);
     }
@@ -1432,7 +1576,7 @@ const main = async (): Promise<void> => {
       daemonStop();
     }
     recordHistory({ at: new Date().toISOString(), cmd: "pull", target: "", env: environment });
-    console.error("secret: vault cache pulled from server");
+    success("vault cache pulled from server");
   } else if (options.command === "pin") {
     const alias = options.positional[0] || fail("pin requires an alias, e.g. secret pin github-token (see 'secret list')");
     if (!loaded.definitions[alias]) fail(`unknown alias: ${alias} (see 'secret list')`);
@@ -1468,10 +1612,10 @@ const main = async (): Promise<void> => {
     const value = await generatePassword();
     await setValue(alias, definition, value, options.force ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "rotate", target: alias, env: environment });
-    console.error(`secret: rotated ${alias} (${definition.item}, ${definition.field || "password"})`);
+    success(`rotated ${alias} (${definition.item}, ${definition.field || "password"})`);
     if (options.copy) {
       copyToClipboard(value);
-      console.error(`secret: copied ${alias} to clipboard`);
+      success(`copied ${alias} to clipboard`);
     } else {
       deliverValue(value, alias);
     }
@@ -1495,7 +1639,7 @@ const main = async (): Promise<void> => {
       daemonStop();
     }
     recordHistory({ at: new Date().toISOString(), cmd: "rm", target: alias, env: environment });
-    console.error(`secret: deleted item ${definition.item} for ${alias} (config entry kept)`);
+    success(`deleted item ${definition.item} for ${alias} (config entry kept)`);
   } else if (options.command === "unset") {
     const alias = options.positional[0] || fail("unset requires an alias, e.g. secret unset github-token (see 'secret list')");
     unsetAlias(alias, options.configPath);
@@ -1527,14 +1671,14 @@ const main = async (): Promise<void> => {
       if (optionalSet.has(alias)) {
         const value = resolveOptional(items, definition);
         if (value === undefined) {
-          console.error(`secret: skipping ${alias} (optional, unresolved)`);
+          warn(`skipping ${alias} (optional, unresolved)`);
           continue;
         }
         const formatted = dotenvValue(value);
         lines.push(options.export ? `export ${key}=${formatted}` : `${key}=${formatted}`);
         continue;
       }
-      const value = dotenvValue(await resolveRequired(items, alias, definition));
+      const value = dotenvValue(await resolveRequired(items, alias, definition, true));
       lines.push(options.export ? `export ${key}=${value}` : `${key}=${value}`);
     }
     if (options.diff || options.dry || options.dryRun) {
@@ -1542,17 +1686,17 @@ const main = async (): Promise<void> => {
       const previous = existsSync(target) ? readFileSync(target, "utf8").split("\n").filter((line) => line !== "") : [];
       const added = lines.filter((line) => !previous.includes(line));
       const removed = previous.filter((line) => !lines.includes(line));
-      for (const line of removed) console.log(`- ${line}`);
-      for (const line of added) console.log(`+ ${line}`);
+      for (const line of removed) console.log(outColor("31")(`- ${line}`));
+      for (const line of added) console.log(outColor("32")(`+ ${line}`));
       recordHistory({ at: new Date().toISOString(), cmd: "env", target: `${target} (diff)`, env: environment });
-      console.error(`secret env --diff: ${added.length} addition(s), ${removed.length} removal(s) for ${target}`);
+      info(`env --diff: ${added.length} addition(s), ${removed.length} removal(s) for ${target}`);
       return;
     }
     const output = `${lines.join("\n")}\n`;
     recordHistory({ at: new Date().toISOString(), cmd: "env", target: options.outputPath || "stdout", env: environment });
     if (options.outputPath) {
       writeAtomic(options.outputPath, output);
-      console.error(`secret: wrote ${lines.length} aliases (env ${environment}) to ${options.outputPath} (mode 0600)`);
+      success(`wrote ${lines.length} aliases (env ${environment}) to ${options.outputPath} (mode 0600)`);
     } else {
       process.stdout.write(output);
     }
@@ -1573,13 +1717,13 @@ const main = async (): Promise<void> => {
       if (optionalSet.has(alias)) {
         const value = resolveOptional(items, definition);
         if (value === undefined) {
-          console.error(`secret: skipping ${alias} (optional, unresolved)`);
+          warn(`skipping ${alias} (optional, unresolved)`);
           continue;
         }
         envVars[key] = value;
         continue;
       }
-      envVars[key] = await resolveRequired(items, alias, definition);
+      envVars[key] = await resolveRequired(items, alias, definition, true);
     }
     recordHistory({ at: new Date().toISOString(), cmd: "run", target: command, env: environment });
     const result = spawnSync(command, options.positional.slice(1), {
@@ -1615,6 +1759,6 @@ const main = async (): Promise<void> => {
 };
 
 main().catch((error) => {
-  console.error(`secret: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(errColor("31")(`secret: ${error instanceof Error ? error.message : String(error)}`));
   process.exit(1);
 });

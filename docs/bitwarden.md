@@ -307,10 +307,18 @@ each.
   but rejected session is refused instead of stored.
 - Diagnostics go to stderr (so `secret get X | pbcopy` stays clean); terminals
   often render stderr in red, which is a display choice, not the CLI's.
+- On a real terminal the CLI colors its own output with plain ANSI (no
+  dependency): info hints are dim, successes green, warnings yellow, errors
+  red, and the `list` header is bold cyan. Pipes and scripts get plain text.
 - `secret list` shows local `CREATED AT` timestamps (date + hour:minute), and
   overwrite prompts use the same format.
 - `-h`/`--help` after any command shows the global help; `env` dry runs are
   `--diff` (aliases `--dry`, `--dry-run`).
+- `secret <command> -h` (or `secret help <command>`) shows that command's own
+  usage and flags; bare `secret -h` shows the global help.
+- `env`/`run` are strict by default: unresolved aliases fail with a hint to
+  pass `--optional <alias>`. Skipping silently by default would drop secrets
+  from `.env` files without anyone noticing.
 - bw 2026.x couples each session key to a protected auto-unlock key, and a
   stale `BW_SESSION` in the environment during `unlock` corrupts that state
   (bw warns about this itself). `secret` therefore strips `BW_SESSION` from
