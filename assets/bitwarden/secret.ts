@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -31,11 +31,13 @@ type ParsedOptions = {
   json?: boolean;
   all?: boolean;
   diff?: boolean;
+  store?: boolean;
 };
 
 const home = homedir();
 const userConfigPath = join(home, ".config", "secret", "config.json");
 const historyPath = join(home, ".config", "secret", "history.json");
+const sessionPath = process.env.SECRET_SESSION_FILE || join(home, ".config", "secret", "session");
 const projectConfigName = ".secret.json";
 const localConfigName = ".secret.local.json";
 const placeholderValues = new Set(["replace-me", "REPLACE-ME"]);
@@ -140,6 +142,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let json = false;
   let all = false;
   let diff = false;
+  let store = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -171,6 +174,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       all = true;
     } else if (argument === "--diff") {
       diff = true;
+    } else if (argument === "--store") {
+      store = true;
     } else if (argument.startsWith("--")) {
       fail(`unknown option: ${argument}`);
     } else {
@@ -193,6 +198,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     json,
     all,
     diff,
+    store,
   };
 };
 
@@ -793,10 +799,12 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|print|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
+  unlock              Unlock and print a session token (--store persists it)
+  lock                Lock the vault and clear any stored session
   list (ls)           List configured aliases (never touches the vault)
   search <term>       Find aliases by alias, item, or env key across scopes (no values)
   get (g) <alias>     Print exactly one configured value
@@ -828,6 +836,7 @@ Options:
   --json              With list/print/history/recent: machine-readable JSON on stdout
   --all               With print: merge project, global, and local scopes
   --diff              With env: show what --output would write without writing (default target ./.env)
+  --store             With unlock: persist the session token to ~/.config/secret/session (mode 0600)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
 
@@ -862,8 +871,24 @@ const main = async (): Promise<void> => {
           ? 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"'
           : 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"',
       );
+      if (existsSync(sessionPath)) {
+        console.error(`secret: stored session at ${sessionPath} is stale — refresh with 'secret unlock --store'`);
+      }
       if (options.check) process.exit(1);
     }
+  } else if (options.command === "unlock") {
+    const token = runBw(["unlock", "--raw"]);
+    if (options.store) {
+      writeAtomic(sessionPath, token);
+      console.error(`secret: unlocked; session stored at ${sessionPath} (clear with 'secret lock')`);
+    } else {
+      console.log(token);
+    }
+  } else if (options.command === "lock") {
+    runBw(["lock"]);
+    const hadSession = existsSync(sessionPath);
+    if (hadSession) unlinkSync(sessionPath);
+    console.error(hadSession ? "secret: vault locked; stored session cleared" : "secret: vault locked");
   } else if (options.command === "list") {
     const entries = Object.entries(loaded.definitions);
     if (options.json) {
