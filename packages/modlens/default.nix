@@ -6,11 +6,11 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "modlens";
-  version = "2.7.1";
+  version = "2.7.4";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@liustack/modlens/-/modlens-${finalAttrs.version}.tgz";
-    hash = "sha256-u54iSquZ82dnmcGyJNMavMGCRprdOQnWWglUCRTr5y0=";
+    hash = "sha256-jM5OXAa2P4BvDQjYzn3JMbWZOppFYQSiYgSUiImagg0=";
   };
 
   commander = fetchurl {
