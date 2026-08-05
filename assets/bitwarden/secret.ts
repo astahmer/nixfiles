@@ -847,6 +847,15 @@ const main = async (): Promise<void> => {
           })),
         ),
       );
+    } else if (process.stdout.isTTY) {
+      const header = ["ALIAS", "ITEM", "FIELD"];
+      const rows = entries.map(([alias, definition]) => [alias, definition.item, definition.field || "password"]);
+      const widths = header.map((cell, column) => Math.max(cell.length, ...rows.map((row) => row[column]?.length ?? 0)));
+      const pad = (value: string, width: number): string => value + " ".repeat(Math.max(0, width - value.length));
+      console.log(header.map((cell, column) => pad(cell, widths[column] ?? 0)).join("  "));
+      for (const row of rows) {
+        console.log(row.map((cell, column) => pad(cell, widths[column] ?? 0)).join("  "));
+      }
     } else {
       for (const [alias, definition] of entries) {
         console.log(`${alias}\t${definition.item}\t${definition.field || "password"}`);
