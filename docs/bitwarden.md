@@ -331,13 +331,20 @@ each.
   contain the item.
 - Aliases are curated like jj: main commands keep a short form (`st`, `ls`,
   `g`, `s`, `e`, `d`, `pr`, `pu`, `so`), plus `add` = set and
-  `delete`/`remove` = rm. Everything else is spelled out.
+  `delete`/`remove` = rm, and `sync` = pull (matching `bw sync`).
 - The global scope (`~/.config/secret/config.json`) is merged into every
   project. `secret set --global/-g <alias>`, `secret unset --global <alias>`,
-  and `secret global` (same as `secret print global`) manage it.
+  `secret global` (same as `secret print global`), and the subcommands
+  `secret global add|unset <alias>` manage it.
 - `secret env` emits a `# source: <url>` comment above any variable whose
   vault item carries a source URL; `secret list` shows a SOURCE column on a
-  TTY; `secret doctor` reports the daemon state (`daemon up/down/disabled`).
+  TTY; `secret doctor` reports the daemon state (`daemon up/down/disabled`);
+  `secret status` appends `(daemon up)` when the daemon is serving.
+- `secret prune [--dry-run]` removes config aliases whose vault items no
+  longer exist; `--dry-run` only lists them.
+- A tiny detached keepalive pings the daemon every 10s so the first command
+  after idle does not pay bw serve's idle-wake cost (measured ~1.2-1.6s
+  without it, ~0.1-0.8s with it). It exits when the daemon dies.
 - bw 2026.x couples each session key to a protected auto-unlock key, and a
   stale `BW_SESSION` in the environment during `unlock` corrupts that state
   (bw warns about this itself). `secret` therefore strips `BW_SESSION` from

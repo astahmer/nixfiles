@@ -78,6 +78,7 @@ const commandAliases: Record<string, string> = {
   add: "set",
   delete: "rm",
   remove: "rm",
+  sync: "pull",
   so: "source",
   pu: "pull",
   e: "env",
@@ -664,6 +665,25 @@ const daemonStart = async (): Promise<boolean> => {
     { detached: true, stdio: "ignore" },
   );
   child.unref();
+  // bw serve slows down (App Nap / idle wake) when untouched; a tiny detached
+  // keepalive pings /status every 10s and exits when the daemon dies.
+  const keepalive = `
+const fs = require("node:fs");
+const http = require("node:http");
+const socket = process.argv[1];
+let seen = false;
+let failures = 0;
+const ping = () => {
+  if (seen && !fs.existsSync(socket)) process.exit(0);
+  if (fs.existsSync(socket)) seen = true;
+  const req = http.request({ socketPath: socket, path: "/status", headers: { Host: "localhost:8087" } }, (res) => { res.resume(); failures = 0; });
+  req.on("error", () => { failures += 1; if (failures >= 3) process.exit(0); });
+  req.setTimeout(2000, () => req.destroy());
+  req.end();
+};
+setInterval(ping, 10000);
+`;
+  spawn("bun", ["-e", keepalive, daemonSocketPath], { detached: true, stdio: "ignore" }).unref();
   let exited = false;
   child.on("exit", () => {
     exited = true;
@@ -1355,9 +1375,16 @@ Inject project aliases into a command's environment. Strict by default;
 
 Show aliases without touching the vault.
 `,
-  global: `Usage: secret global [--json]
+  global: `Usage: secret global [add|unset <alias>] [--json]
 
-Show the global (user) scope aliases (same as secret print global).
+Show the global (user) scope aliases (same as secret print global), or
+delegate: secret global add <alias> = secret set --global <alias>, and
+secret global unset <alias> = secret unset --global <alias>.
+`,
+  prune: `Usage: secret prune [--dry-run] [--global]
+
+Remove config aliases whose vault items no longer exist. --dry-run only lists
+them; --global prunes the user config instead of the project one.
 `,
   lint: `Usage: secret lint [--config FILE] [--json]
 
@@ -1378,7 +1405,7 @@ Show recent secret commands (aliases only, no values).
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -1394,7 +1421,7 @@ Commands:
   totp <alias>        Print the current TOTP code (--copy to clipboard)
   source (so) <alias> [url]
                       Print the secret's source URL, or set it when a url is given
-  pull (pu)           Refresh the local vault cache from the server (bw sync)
+  pull (pu, sync)     Refresh the local vault cache from the server (bw sync)
   pin <alias>         Replace the config item name with its resolved id
   rotate <alias>      Generate a new password and overwrite the item (confirm unless --force); delivers the new value
   rm (delete, remove) <alias>
@@ -1407,6 +1434,7 @@ Commands:
   run <cmd...>        Inject project aliases into a command's environment (secret run -- npm test)
   print (pr) [scope]  Show aliases in project (default), global, or local; --all merges scopes
   global              Show the global (user) scope aliases
+  prune [--dry-run]   Remove config aliases whose vault items no longer exist
   lint                Validate configs offline: items, env keys, collisions (no vault)
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent              Show recently used aliases
@@ -1445,6 +1473,16 @@ Use 'secret print' to inspect a single scope without vault access.`);
 const main = async (): Promise<void> => {
   const options = parseOptions(Bun.argv.slice(2));
   options.command = commandAliases[options.command] || options.command;
+  // `secret global add|unset <alias>` delegate to the --global forms.
+  if (options.command === "global" && options.positional[0] === "add") {
+    options.command = "set";
+    options.global = true;
+    options.positional = options.positional.slice(1);
+  } else if (options.command === "global" && options.positional[0] === "unset") {
+    options.command = "unset";
+    options.global = true;
+    options.positional = options.positional.slice(1);
+  }
   const environment = options.envName || "prod";
   const loaded =
     options.command === "lint"
@@ -1469,7 +1507,12 @@ const main = async (): Promise<void> => {
   } else if (options.command === "status") {
     const current = await currentAuthState();
     if (current.unlocked) {
-      console.log(outColor("32")("unlocked — ready. next: secret list, or secret env --output .env"));
+      const daemonUp = (await daemonStatus()) === "unlocked";
+      console.log(
+        outColor("32")(
+          `unlocked — ready. next: secret list, or secret env --output .env${daemonUp ? " (daemon up)" : ""}`,
+        ),
+      );
     } else {
       console.log(
         outColor("33")(
@@ -1882,6 +1925,35 @@ const main = async (): Promise<void> => {
   } else if (options.command === "global") {
     printScope("global", options.configPath, options.json ?? false);
     recordHistory({ at: new Date().toISOString(), cmd: "global", target: "global", env: environment });
+  } else if (options.command === "prune") {
+    if (!loaded.selectedAliases?.length) {
+      fail("prune requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md");
+    }
+    const items = await vaultItems();
+    if (items === undefined) {
+      await requireUnlocked();
+      fail("could not read vault items — cannot prune");
+    }
+    const missing = loaded.selectedAliases.filter(
+      (alias) => itemFor(items, loaded.definitions[alias]!.item) === undefined,
+    );
+    for (const alias of missing) {
+      const definition = loaded.definitions[alias]!;
+      if (options.dryRun) {
+        info(`would remove ${alias} (${definition.item})`);
+      } else {
+        unsetAlias(alias, options.global ? userConfigPath : options.configPath, true);
+      }
+    }
+    if (options.dryRun) {
+      if (missing.length > 0) warn(`prune: ${missing.length} alias(es) would be removed`);
+      else info("prune: no aliases missing from the vault");
+    } else if (missing.length > 0) {
+      success(`pruned ${missing.length} alias(es) from config`);
+    } else {
+      info("prune: no aliases missing from the vault");
+    }
+    recordHistory({ at: new Date().toISOString(), cmd: "prune", target: missing.join(","), env: environment });
   } else if (options.command === "search") {
     const query = options.positional[0] || fail("search requires a term, e.g. secret search token (matches alias, item, env key)");
     searchAliases(query, options.configPath, options.json ?? false);

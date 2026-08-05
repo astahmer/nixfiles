@@ -24,7 +24,7 @@ _secret() {
   # while plain compadd works. Keep the cache refresh on TAB only.
   local -a matches
   if (( CURRENT == 2 )); then
-    matches=(status unlock lock list search get set add id totp source pull pin rotate rm delete remove unset mv init env run print global lint doctor recent history st ls g s e d pr pu so)
+    matches=(status unlock lock list search get set add id totp source pull sync pin rotate rm delete remove unset mv init env run print global prune lint doctor recent history st ls g s e d pr pu so)
     compadd -X 'secret commands:' -- "${matches[@]}"
     return 0
   fi

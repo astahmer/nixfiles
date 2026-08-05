@@ -135,8 +135,8 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|global\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|lint|doctor|recent|history" "help lists all commands"
-if secret -h | rg -q 'set \(s, add\)' && secret -h | rg -q 'rm \(delete, remove\)' && secret -h | rg -q 'source \(so\)' && secret -h | rg -q 'pull \(pu\)' && secret -h | rg -q 'env \(e\)'; then
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|global\|prune\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history" "help lists all commands"
+if secret -h | rg -q 'set \(s, add\)' && secret -h | rg -q 'rm \(delete, remove\)' && secret -h | rg -q 'source \(so\)' && secret -h | rg -q 'pull \(pu, sync\)' && secret -h | rg -q 'env \(e\)'; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
@@ -144,7 +144,7 @@ else
 fi
 assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "-h after a command shows that command's help"
 assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "secret help env shows env help"
-assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|lint|doctor|recent|history> [options]" "--help is accepted"
+assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret source github-token)" "https://example.com" "source prints the stored URL"
 printf 'v12\n' | secret set github-token --force --source https://keys.example.com/new >/dev/null 2>&1
@@ -198,6 +198,7 @@ secret totp github-token --copy
 assert_eq "$(cat "$FAKE_CLIP")" "123456" "totp --copy"
 assert_ok secret pull
 assert_ok secret pu
+assert_ok secret sync
 
 FAKE_BW_STATUS='{"status":"unlocked"}' secret status --check >/dev/null 2>&1 && pass=$((pass + 1)) || {
   fail=$((fail + 1))
@@ -281,6 +282,34 @@ rg -q '"global-alias"' "$tmp/.config/secret/config.json" && pass=$((pass + 1)) |
 }
 assert_eq "$(secret global | head -1 | cut -f1)" "global-alias" "global lists the new alias"
 secret unset --global global-alias >/dev/null 2>&1
+printf 'gv\n' | secret global add ga2 >/dev/null 2>&1
+rg -q '"ga2"' "$tmp/.config/secret/config.json" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: secret global add writes the user config" >&2
+}
+secret global unset ga2 >/dev/null 2>&1
+rg -q '"ga2"' "$tmp/.config/secret/config.json" && {
+  fail=$((fail + 1))
+  echo "FAIL: secret global unset removes the alias" >&2
+} || pass=$((pass + 1))
+mkdir -p "$tmp/prunedir"
+printf '%s' '{"secrets":{"KEEP":{"item":"nixfiles/github-token"},"GONE":{"item":"nope/missing"}}}' > "$tmp/prunedir/.secret.json"
+cd "$tmp/prunedir"
+assert_ok secret prune --dry-run
+rg -q '"GONE"' .secret.json && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: prune --dry-run leaves the config untouched" >&2
+}
+assert_ok secret prune
+rg -q '"GONE"' .secret.json && {
+  fail=$((fail + 1))
+  echo "FAIL: prune removes the missing alias" >&2
+} || pass=$((pass + 1))
+rg -q '"KEEP"' .secret.json && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: prune keeps aliases present in the vault" >&2
+}
+cd "$tmp/proj"
 assert_eq "$(secret print bogus 2>&1 || true)" "secret: unknown scope: bogus (available: project, global, local)" "print rejects unknown scope"
 assert_eq "$(secret print --all)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL\ngithub-token\tproject\tprod\tnixfiles/github-token\tpassword\tGITHUB_TOKEN')" "print --all merges scopes"
 assert_eq "$(secret search database)" "$(printf 'DATABASE_URL\tproject\tdev\titem-1\tpassword\tDATABASE_URL\nDATABASE_URL\tproject\tprod\titem-1\tpassword\tDATABASE_URL')" "search matches alias and env key"
@@ -423,7 +452,7 @@ export FAKE_DAEMON_LOG="$tmp/daemon-log.txt"
 export FAKE_DAEMON_MISSING="$tmp/daemon-missing.txt"
 : > "$FAKE_DAEMON_LOG"
 : > "$FAKE_LOG"
-assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "daemon status output matches spawn mode"
+assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env (daemon up)" "daemon status reports the daemon"
 assert_eq "$(secret get github-token)" "old-pass" "daemon get via HTTP"
 assert_eq "$(secret env --export)" "$(printf '# source: https://example.com\nexport GITHUB_TOKEN='\''old-pass'\''')" "daemon env via HTTP"
 assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon run via HTTP"
