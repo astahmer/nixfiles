@@ -244,6 +244,26 @@ in
       # secret: lazy alias completion, cached 60s; no startup cost beyond
       # registering one widget. The cache is refreshed only when TAB is used.
       programs.zsh.initContent = ''
+        # secret: unlock exports BW_SESSION into this shell; --store persists it.
+        secret() {
+          if [[ "$1" == "unlock" ]]; then
+            local token
+            token="$(bw unlock --raw)" || return 1
+            export BW_SESSION="$token"
+            if [[ "$*" == *"--store"* ]]; then
+              local session_file="''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}"
+              printf '%s' "$token" > "$session_file"
+              chmod 600 "$session_file"
+            fi
+            echo "secret: unlocked for this shell"
+          elif [[ "$1" == "lock" ]]; then
+            unset BW_SESSION
+            command secret "$@"
+          else
+            command secret "$@"
+          fi
+        }
+
         _secret_alias_cache() {
           local cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/secret"
           local cache="$cache_dir/aliases"
@@ -290,6 +310,26 @@ in
       # secret: bash twin of the zsh completion, same cache file. Registers one
       # function at startup; the cache is touched only on TAB.
       programs.bash.initExtra = lib.mkAfter ''
+        # secret: unlock exports BW_SESSION into this shell; --store persists it.
+        secret() {
+          if [[ "$1" == "unlock" ]]; then
+            local token
+            token="$(bw unlock --raw)" || return 1
+            export BW_SESSION="$token"
+            if [[ "$*" == *"--store"* ]]; then
+              local session_file="''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}"
+              printf '%s' "$token" > "$session_file"
+              chmod 600 "$session_file"
+            fi
+            echo "secret: unlocked for this shell"
+          elif [[ "$1" == "lock" ]]; then
+            unset BW_SESSION
+            command secret "$@"
+          else
+            command secret "$@"
+          fi
+        }
+
         _secret_alias_cache() {
           local cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/secret"
           local cache="$cache_dir/aliases"

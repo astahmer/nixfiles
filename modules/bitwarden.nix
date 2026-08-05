@@ -15,6 +15,9 @@
           pkgs.coreutils
         ];
         text = ''
+          if [ -z "''${BW_SESSION:-}" ] && [ -r "''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}" ]; then
+            export BW_SESSION="$(cat "''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}")"
+          fi
           exec ${pkgs.bun}/bin/bun ${../assets/bitwarden/secret.ts} "$@"
         '';
       };
