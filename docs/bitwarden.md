@@ -305,6 +305,10 @@ each.
   example the one `bw login` prints), so the master password is typed once:
   `export BW_SESSION="<login session>" && secret unlock --store`. A present
   but rejected session is refused instead of stored.
+- Touch ID unlock (macOS): `secret-unlock-helper` caches the session behind a
+  biometric prompt. `secret unlock --store` writes it automatically;
+  `secret unlock --helper` reads it with Touch ID instead of asking for the
+  master password again.
 - Diagnostics go to stderr (so `secret get X | pbcopy` stays clean); terminals
   often render stderr in red, which is a display choice, not the CLI's.
 - On a real terminal the CLI colors its own output with plain ANSI (no

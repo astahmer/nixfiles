@@ -83,6 +83,12 @@ esac
 EOF
 chmod +x "$tmp/bin/security"
 
+cat > "$tmp/bin/secret-unlock-helper" <<'EOF'
+#!/bin/sh
+printf "%s" "session-token-123"
+EOF
+chmod +x "$tmp/bin/secret-unlock-helper"
+
 cat > "$tmp/proj/.secret.json" <<'EOF'
 {
   "secrets": {
@@ -522,6 +528,7 @@ export SECRET_DAEMON=0 FAKE_SERVE=0
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
+assert_eq "$(secret unlock --helper)" "session-token-123" "unlock --helper uses the Touch ID session"
 if command -v expect >/dev/null 2>&1; then
   cat > "$tmp/reunlock.exp" <<EXP
 set timeout 30

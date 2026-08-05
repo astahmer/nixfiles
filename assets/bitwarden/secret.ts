@@ -37,6 +37,7 @@ type ParsedOptions = {
   dryRun?: boolean;
   source?: string;
   global?: boolean;
+  helper?: boolean;
   store?: boolean;
 };
 
@@ -168,6 +169,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let dryRun = false;
   let source: string | undefined;
   let global = false;
+  let helper = false;
   let store = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -197,6 +199,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       force = true;
     } else if (argument === "--global" || argument === "-g") {
       global = true;
+    } else if (argument === "--helper") {
+      helper = true;
     } else if (argument === "--export") {
       exportOutput = true;
     } else if (argument === "--json") {
@@ -245,6 +249,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     dryRun,
     source,
     global,
+    helper,
     store,
   };
 };
@@ -335,6 +340,14 @@ const runBwUnlock = (): string => {
   });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
   if (result.status !== 0) fail(`Bitwarden unlock failed: ${bwError(result)}`);
+  return result.stdout.trim();
+};
+
+// Touch ID-gated unlock via the secret-unlock-helper binary (macOS).
+const runUnlockHelper = (): string => {
+  const result = spawnSync("secret-unlock-helper", [], { encoding: "utf8" });
+  if (result.error) fail(`could not run secret-unlock-helper (is it installed?): ${result.error.message}`);
+  if (result.status !== 0) fail(`secret-unlock-helper failed: ${bwError(result)}`);
   return result.stdout.trim();
 };
 
@@ -1305,6 +1318,7 @@ Unlock and print a session token. A session already present in the
 environment (e.g. the one bw login prints) is reused without prompting.
 
   --store   Persist the session (macOS keychain, or ~/.config/secret/session)
+  --helper  Get the session via Touch ID from secret-unlock-helper (macOS)
 `,
   lock: `Usage: secret lock
 
@@ -1484,6 +1498,7 @@ Options:
                       With env: show what --output would write without writing (default target ./.env)
   -h, --help          Show this help; accepted after any command
   --store             With unlock: persist the session token to ~/.config/secret/session (mode 0600)
+  --helper            With unlock: get the session via Touch ID (secret-unlock-helper)
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
   --source URL        With set: attach a source URL (custom "source" field)
@@ -1565,8 +1580,12 @@ const main = async (): Promise<void> => {
     // `bw login` printed one) so the master password is typed only once.
     // The wrapper deliberately does not inject the stored session here.
     const fromEnv = Boolean(process.env.BW_SESSION);
-    const token = fromEnv ? process.env.BW_SESSION || "" : runBwUnlock();
-    if (!token) fail("bw unlock returned no session token");
+    const token = fromEnv
+      ? process.env.BW_SESSION || ""
+      : options.helper
+        ? runUnlockHelper()
+        : runBwUnlock();
+    if (!token) fail(options.helper ? "secret-unlock-helper returned no session token" : "bw unlock returned no session token");
     // bw 2026.x couples the session key to a protected auto-unlock key; a
     // rejected session here means stale secure-storage state, not a bad token.
     const check = spawnSync("bw", ["status"], {
@@ -1591,6 +1610,11 @@ const main = async (): Promise<void> => {
     daemonStop();
     if (options.store) {
       storeSession(token);
+      // Best-effort: also cache the session for Touch ID unlocks.
+      spawnSync("secret-unlock-helper", ["store", token], {
+        encoding: "utf8",
+        stdio: ["ignore", "ignore", "inherit"],
+      });
       success("unlocked; session stored (clear with 'secret lock')");
     } else {
       console.log(token);

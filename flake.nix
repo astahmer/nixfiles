@@ -105,6 +105,9 @@
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
+          }
+          // pkgs.lib.optionalAttrs (pkgs.lib.elem system pkgs.lib.platforms.darwin) {
+            secret-unlock-helper = pkgs'.callPackage ./packages/secret-unlock-helper { };
           };
 
           apps.update-pins = mkBunApp "update-pins" ./scripts/update-pins.ts;

@@ -141,19 +141,18 @@ in
           cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/jj-prompt"
           mkdir -p "$cache_dir"
           cache="$cache_dir/prompt"
-          if [ -f "$cache" ]; then
-            if [ "$(uname -s)" = "Darwin" ]; then
-              mtime="$(stat -f %m "$cache")"
-            else
-              mtime="$(stat -c %Y "$cache")"
-            fi
-            if (( $(date +%s) - mtime < 5 )); then
+          ts="$cache_dir/ts"
+          now="$(date +%s 2>/dev/null || true)"
+          if [ -n "$now" ] && [ -f "$ts" ] && [ -f "$cache" ]; then
+            old="$(cat "$ts" 2>/dev/null || true)"
+            if [ -n "$old" ] && [ "$((now - old))" -lt 5 ]; then
               cat "$cache"
               exit 0
             fi
           fi
           out="$(jj-prompt 2>/dev/null || true)"
           printf '%s\n' "$out" > "$cache"
+          printf '%s\n' "$now" > "$ts"
           printf '%s\n' "$out"
         '';
       };
@@ -283,7 +282,7 @@ in
         _secret_precmd() {
           if [[ -n "$_secret_took_start" ]]; then
             local took=$(( EPOCHREALTIME - _secret_took_start ))
-            if (( took >= 0.1 )); then
+            if (( took >= 0.03 )); then
               printf 'took %.2fs\n' "$took"
             fi
           fi
