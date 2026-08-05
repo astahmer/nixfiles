@@ -12,7 +12,7 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 ## Commands
 
 - `secret status` — auth state plus the exact next command; `--check` exits nonzero when not unlocked.
-- `secret list` — configured aliases from merged configs; never touches the vault.
+- `secret list` — configured aliases from merged configs; aligned table on a TTY, TSV when piped; never touches the vault.
 - `secret search <term>` — find aliases by alias, item, or env key across scopes; no values, no vault access.
 - `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
 - `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.

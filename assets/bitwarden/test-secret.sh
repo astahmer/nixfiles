@@ -190,6 +190,15 @@ assert_eq "$(secret search github --json)" "[{\"alias\":\"github-token\",\"scope
 assert_eq "$(secret search nope 2>&1 || true)" "secret search: no matches for 'nope'. next: try another term, or 'secret print --all'" "search no match exits nonzero"
 assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"DATABASE_URL\",\"env\":\"prod\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "print --json rows after pin"
 assert_eq "$(secret list --json)" "[{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"},{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"}]" "list --json merged aliases after pin"
+if command -v script >/dev/null 2>&1; then
+  script -q "$tmp/list-tty.txt" "$bun_bin" "$script" list >/dev/null 2>&1 || true
+  tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'ALIAS' && pass=$((pass + 1)) || {
+    fail=$((fail + 1))
+    echo "FAIL: list prints a table on a TTY" >&2
+  }
+else
+  pass=$((pass + 1))
+fi
 assert_eq "$(secret env --export)" "export DATABASE_URL='old-pass'" "env --export shell lines"
 printf "DATABASE_URL='stale'\n" > .env
 assert_eq "$(secret env --diff --output .env)" "- DATABASE_URL='stale'

@@ -41,6 +41,10 @@ configs, Bitwarden state, and every alias against the vault without printing
 values. `secret recent` and `secret history` show recently used aliases and
 recent commands from a value-free local log.
 
+`secret list` prints an aligned table in a terminal; piped output stays
+tab-separated (alias, item, field) so scripts and the shell completion cache
+parse it unchanged.
+
 Retrieve exactly one configured value:
 
 ```sh
