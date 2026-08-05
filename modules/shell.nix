@@ -243,7 +243,7 @@ in
 
       # secret: lazy alias completion, cached 60s; no startup cost beyond
       # registering one widget. The cache is refreshed only when TAB is used.
-      programs.zsh.initExtra = ''
+      programs.zsh.initContent = ''
         _secret_alias_cache() {
           local cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/secret"
           local cache="$cache_dir/aliases"
