@@ -25,6 +25,7 @@ Bun.serve({
     log(`${req.method} ${url.pathname}`);
     // /status is never gated, exactly like the real bw serve.
     if (url.pathname === "/status") {
+      const locked = missingFile && existsSync(missingFile);
       return Response.json({
         success: true,
         data: {
@@ -32,7 +33,7 @@ Bun.serve({
           lastSync: "2026-01-15T10:00:00.000Z",
           userEmail: "test@example.com",
           userId: "user-1",
-          status: "unlocked",
+          status: locked ? "locked" : "unlocked",
         },
       });
     }

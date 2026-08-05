@@ -19,7 +19,8 @@
             stored=""
             if [ "$(uname -s)" = "Darwin" ]; then
               stored="$(security find-generic-password -a bitwarden-session -s secret-cli -w 2>/dev/null || true)"
-            elif [ -r "''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}" ]; then
+            fi
+            if [ -z "$stored" ] && [ -r "''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}" ]; then
               stored="$(cat "''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}")"
             fi
             if [ -n "$stored" ]; then

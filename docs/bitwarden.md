@@ -271,6 +271,9 @@ each.
 
 - The daemon is restarted after any mutation (`set`, `rotate`, `rm`, `pull`,
   `unlock`, `lock`), so it never serves items changed outside it.
+- The daemon only runs while the vault is unlocked; a locked vault falls back
+  to per-command `bw` spawns, so a stale locked daemon can never answer auth
+  checks with outdated state.
 - `secret lock` kills the daemon; a stale daemon (dead process, expired
   session) is detected on the next command and replaced automatically.
 - Disable it entirely with `SECRET_DAEMON=0`; nothing else changes.
@@ -292,6 +295,9 @@ each.
 - If `bw status` says unlocked but `get`/`list` fail or return nothing, the
   session/cache is stale: run `secret lock`, `secret unlock`, then
   `secret pull`.
+- `secret unlock` needs a real terminal (the master-password prompt) and
+  refuses to store an empty token. `--store` persists to the macOS keychain
+  (or `~/.config/secret/session` elsewhere); the wrapper reads both.
 - `SECRET_DAEMON=0` disables the daemon; batching still applies.
 - zsh/bash completions complete commands and aliases from a cache refreshed
   on TAB (60s TTL). The completion deliberately uses `compadd` rather than

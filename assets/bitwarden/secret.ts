@@ -281,6 +281,18 @@ const runBwInput = (arguments_: string[], input: string): string => {
   return result.stdout.trim();
 };
 
+// Unlock needs the real terminal: the master-password prompt is unusable when
+// stdin is a pipe. stderr stays inherited (the prompt), stdout is captured.
+const runBwUnlock = (): string => {
+  const result = spawnSync("bw", ["unlock", "--raw"], {
+    encoding: "utf8",
+    stdio: ["inherit", "pipe", "inherit"],
+  });
+  if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
+  if (result.status !== 0) fail("Bitwarden unlock failed");
+  return result.stdout.trim();
+};
+
 const tryGetItemRaw = (item: string): string | undefined => {
   const result = spawnSync("bw", ["get", "item", item, "--raw"], { encoding: "utf8" });
   if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
@@ -354,7 +366,18 @@ const vaultItems = async (): Promise<Record<string, any>[] | undefined> => {
     if (spawned && spawned.length > 0) return spawned;
     return viaDaemon.items;
   }
-  if (viaDaemon?.kind === "denied") return undefined;
+  if (viaDaemon?.kind === "denied") {
+    // The daemon lost its unlocked state; when we hold a session it is stale,
+    // so restart it once and retry before falling back to spawn hints.
+    if (process.env.BW_SESSION) {
+      daemonStop();
+      if (await daemonStart()) {
+        const retry = await daemonListItems();
+        if (retry?.kind === "ok") return retry.items;
+      }
+    }
+    return undefined;
+  }
   if (await ensureDaemon()) {
     const retry = await daemonListItems();
     if (retry?.kind === "ok") return retry.items;
@@ -539,6 +562,17 @@ const daemonStart = async (): Promise<boolean> => {
     if (exited) return false;
     const res = await daemonRequest(daemonSocketPath, "GET", "/status");
     if (res && res.status === 200) {
+      // Never keep a daemon that reports a locked/unauthenticated vault: it
+      // would answer auth questions with a stale state for every later command.
+      const parsed = parseDaemon(res);
+      if (parsed?.kind !== "ok" || (parsed.data as { status?: unknown }).status !== "unlocked") {
+        try {
+          if (child.pid !== undefined) process.kill(child.pid, "SIGKILL");
+        } catch {
+          // already gone
+        }
+        return false;
+      }
       if (child.pid !== undefined) writeDaemonState({ pid: child.pid, socket: daemonSocketPath });
       // bw serve can start with an empty vault cache; sync once so item reads
       // see the real vault (best-effort: a stale session makes this fail).
@@ -569,9 +603,9 @@ const currentAuthState = async (): Promise<{ authenticated: boolean; unlocked: b
   if (daemonEnabled()) {
     if (await ensureDaemon()) {
       const daemon = await daemonStatus();
-      if (daemon !== undefined) {
-        return { authenticated: daemon !== "unauthenticated", unlocked: daemon === "unlocked" };
-      }
+      if (daemon === "unlocked") return { authenticated: true, unlocked: true };
+      // A locked/unauthenticated daemon is stale or the vault is genuinely
+      // locked; never trust it — the spawn path reports the real state.
       daemonStop();
     }
   }
@@ -591,6 +625,7 @@ const readSession = (): string | undefined => {
 };
 
 const storeSession = (token: string): void => {
+  if (!token) fail("refusing to store an empty session token");
   if (process.platform === "darwin") {
     const result = spawnSync(
       "security",
@@ -1144,7 +1179,8 @@ const main = async (): Promise<void> => {
       if (options.check) process.exit(1);
     }
   } else if (options.command === "unlock") {
-    const token = runBw(["unlock", "--raw"]);
+    const token = runBwUnlock();
+    if (!token) fail("bw unlock returned no session token");
     daemonStop();
     if (options.store) {
       storeSession(token);

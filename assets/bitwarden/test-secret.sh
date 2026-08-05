@@ -17,7 +17,13 @@ cat > "$tmp/bin/bw" <<'EOF'
 #!/bin/sh
 case "$1" in
   status) printf "%s" "$FAKE_BW_STATUS" ;;
-  unlock) printf "%s" "session-token-123" ;;
+  unlock)
+    if [ -n "$FAKE_UNLOCK_EMPTY" ]; then
+      printf ""
+    else
+      printf "%s" "session-token-123"
+    fi
+    ;;
   lock) printf "%s\n" "-- lock --" >> "$FAKE_LOG" ;;
   generate) printf "%s" "gen-pass-123" ;;
   sync) printf "%s\n" "-- sync --" >> "$FAKE_LOG" ;;
@@ -351,6 +357,7 @@ assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "daemon mode never s
 assert_eq "$(rg -c 'GET /list/object/items' "$FAKE_DAEMON_LOG" || echo 0)" "3" "three item lists served over HTTP"
 touch "$FAKE_DAEMON_MISSING"
 assert_fail secret env --output x
+assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "locked daemon falls back to spawn status"
 rm -f "$FAKE_DAEMON_MISSING"
 assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon recovers after denied requests"
 : > "$FAKE_LOG"
@@ -368,6 +375,7 @@ export SECRET_DAEMON=0 FAKE_SERVE=0
 cd "$tmp"
 
 assert_eq "$(secret unlock)" "session-token-123" "unlock prints raw session token"
+assert_eq "$(FAKE_UNLOCK_EMPTY=1 secret unlock --store 2>&1 || true)" "secret: bw unlock returned no session token" "unlock refuses to store an empty token"
 assert_eq "$(secret unlock --store 2>/dev/null)" "" "unlock --store keeps token off stdout"
 if [ "$(uname -s)" = "Darwin" ]; then
   assert_eq "$(cat "$FAKE_KEYCHAIN")" "session-token-123" "unlock --store persists session in keychain"
