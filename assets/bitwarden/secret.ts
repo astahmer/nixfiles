@@ -346,7 +346,14 @@ const spawnVaultItems = (): Record<string, any>[] | undefined => {
 const vaultItems = async (): Promise<Record<string, any>[] | undefined> => {
   if (!daemonEnabled()) return spawnVaultItems();
   const viaDaemon = await daemonListItems();
-  if (viaDaemon?.kind === "ok") return viaDaemon.items;
+  if (viaDaemon?.kind === "ok") {
+    if (viaDaemon.items.length > 0) return viaDaemon.items;
+    // An empty list from the daemon is suspicious (bw serve can start with an
+    // unpopulated vault cache); cross-check once with a spawn before trusting it.
+    const spawned = spawnVaultItems();
+    if (spawned && spawned.length > 0) return spawned;
+    return viaDaemon.items;
+  }
   if (viaDaemon?.kind === "denied") return undefined;
   if (await ensureDaemon()) {
     const retry = await daemonListItems();
@@ -533,6 +540,9 @@ const daemonStart = async (): Promise<boolean> => {
     const res = await daemonRequest(daemonSocketPath, "GET", "/status");
     if (res && res.status === 200) {
       if (child.pid !== undefined) writeDaemonState({ pid: child.pid, socket: daemonSocketPath });
+      // bw serve can start with an empty vault cache; sync once so item reads
+      // see the real vault (best-effort: a stale session makes this fail).
+      await daemonRequest(daemonSocketPath, "POST", "/sync");
       return true;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));

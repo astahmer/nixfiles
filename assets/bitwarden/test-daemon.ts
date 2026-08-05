@@ -39,6 +39,9 @@ Bun.serve({
     if (missingFile && existsSync(missingFile)) {
       return Response.json({ success: false, errorMessage: "Vault is locked." }, { status: 400 });
     }
+    if (url.pathname === "/sync" && req.method === "POST") {
+      return Response.json({ success: true, data: null });
+    }
     if (url.pathname === "/list/object/items") {
       try {
         return Response.json({ success: true, data: JSON.parse(readFileSync(itemsFile, "utf8")) });
