@@ -20,6 +20,11 @@ case "$1" in
   lock) printf "%s\n" "-- lock --" >> "$FAKE_LOG" ;;
   generate) printf "%s" "gen-pass-123" ;;
   sync) printf "%s\n" "-- sync --" >> "$FAKE_LOG" ;;
+  list)
+    printf "%s\n" "-- list items --" >> "$FAKE_LOG"
+    if [ -n "$FAKE_GET_MISSING" ]; then echo "not found" >&2; exit 1; fi
+    printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"base/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/extra","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]'
+    ;;
   get)
     if [ "$2" = "totp" ]; then printf "%s" "123456"; exit 0; fi
     printf "%s\n" "-- get $3 --" >> "$FAKE_LOG"
@@ -111,6 +116,10 @@ assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — un
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
 assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|pull|pin|rotate|rm|unset|mv|init|env|run|print|lint|doctor|recent|history" "help lists all commands"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
+: > "$FAKE_LOG"
+secret get github-token >/dev/null
+assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "1" "get uses a single bw spawn"
+assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "0" "get does not list the vault"
 assert_eq "$(secret g github-token)" "old-pass" "alias g maps to get"
 
 rm -f "$FAKE_CLIP"
@@ -147,8 +156,14 @@ assert_eq "$(secret env --env staging --output x 2>&1 || true)" "secret: unknown
 assert_ok secret env --env dev --output .env.dev
 assert_eq "$(secret env --required DATABASE_URL,STRIPE_KEY --output x 2>&1 || true)" "secret: required alias(es) not in project config: STRIPE_KEY (add them to .secret.json)" "env --required fails on missing alias"
 assert_ok secret env --required DATABASE_URL --output .env
+: > "$FAKE_LOG"
+assert_ok secret env --output .env
+assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "1" "env batches all aliases into one bw list"
+assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "env never calls bw get per alias"
 
+: > "$FAKE_LOG"
 assert_ok secret pin DATABASE_URL
+assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "1" "pin resolves item ids from one bw list"
 rg -q '"item": "item-1"' "$tmp/proj/.secret.json" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: pin rewrites item names to ids" >&2
@@ -197,6 +212,7 @@ assert_eq "$(secret search nope 2>&1 || true)" "secret search: no matches for 'n
 assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"DATABASE_URL\",\"env\":\"prod\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"github-token\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "print --json rows after pin"
 assert_eq "$(secret list --json)" "[{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "list --json merged aliases after pin"
 if command -v script >/dev/null 2>&1; then
+  : > "$FAKE_LOG"
   script -q "$tmp/list-tty.txt" "$bun_bin" "$script" list >/dev/null 2>&1 || true
   {
     tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'ALIAS' &&
@@ -205,6 +221,7 @@ if command -v script >/dev/null 2>&1; then
     fail=$((fail + 1))
     echo "FAIL: list prints a table with created dates on a TTY" >&2
   }
+  assert_eq "$(rg -c -- '-- list items --' "$FAKE_LOG" || echo 0)" "1" "list fetches vault items once"
 else
   pass=$((pass + 1))
 fi

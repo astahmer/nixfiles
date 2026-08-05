@@ -280,15 +280,9 @@ const tryGetItemRaw = (item: string): string | undefined => {
   return result.status === 0 ? result.stdout.trim() : undefined;
 };
 
-const itemCreationDate = (item: string): string => {
-  const raw = tryGetItemRaw(item);
-  if (raw === undefined) return "-";
-  try {
-    const parsed = JSON.parse(raw) as { creationDate?: string };
-    return parsed.creationDate ? String(parsed.creationDate).slice(0, 10) : "-";
-  } catch {
-    return "-";
-  }
+const itemCreationDate = (items: Record<string, any>[] | undefined, item: string): string => {
+  const entry = items?.find((candidate) => candidate.id === item || candidate.name === item);
+  return entry?.creationDate ? String(entry.creationDate).slice(0, 10) : "-";
 };
 
 const status = (): { authenticated: boolean; unlocked: boolean } => {
@@ -323,8 +317,11 @@ const itemField = (item: Record<string, any>, field: string): unknown => {
 };
 
 const getValue = (alias: string, definition: SecretDefinition): string => {
-  requireUnlocked();
-  const raw = runBw(["get", "item", definition.item, "--raw"]);
+  const raw = tryGetItemRaw(definition.item);
+  if (raw === undefined) {
+    requireUnlocked();
+    fail(`item not found for ${alias}: ${definition.item}`);
+  }
   let item: Record<string, any>;
   try {
     item = JSON.parse(raw) as Record<string, any>;
@@ -338,17 +335,48 @@ const getValue = (alias: string, definition: SecretDefinition): string => {
   return value;
 };
 
-const tryGetValue = (alias: string, definition: SecretDefinition): string | undefined => {
-  const raw = tryGetItemRaw(definition.item);
-  if (raw === undefined) return undefined;
+// One `bw list items` call per command instead of one `bw get item` per
+// alias: every bw spawn costs 1-2s+ of Node startup (more with a live
+// session), so batching is what keeps multi-alias commands fast.
+const vaultItems = (): Record<string, any>[] | undefined => {
+  const result = spawnSync("bw", ["list", "items"], { encoding: "utf8" });
+  if (result.error) fail(`could not run Bitwarden CLI (is 'bw' installed?): ${result.error.message}`);
+  if (result.status !== 0) return undefined;
   try {
-    const item = JSON.parse(raw) as Record<string, any>;
-    const value = itemField(item, definition.field || "password");
-    return typeof value === "string" && value && !placeholderValues.has(value) ? value : undefined;
+    const parsed = JSON.parse(result.stdout) as unknown;
+    return Array.isArray(parsed) ? (parsed as Record<string, any>[]) : undefined;
   } catch {
     return undefined;
   }
 };
+
+const itemFor = (items: Record<string, any>[] | undefined, item: string): Record<string, any> | undefined =>
+  items?.find((entry) => entry.id === item || entry.name === item);
+
+const valueFor = (item: Record<string, any> | undefined, definition: SecretDefinition): string | undefined => {
+  if (item === undefined) return undefined;
+  const value = itemField(item, definition.field || "password");
+  return typeof value === "string" && value && !placeholderValues.has(value) ? value : undefined;
+};
+
+const resolveRequired = (
+  items: Record<string, any>[] | undefined,
+  alias: string,
+  definition: SecretDefinition,
+): string => {
+  if (items === undefined) {
+    requireUnlocked();
+    fail(`could not read vault items (bw list items failed)`);
+  }
+  const item = itemFor(items, definition.item);
+  if (item === undefined) fail(`item not found for ${alias}: ${definition.item}`);
+  const value = valueFor(item, definition);
+  if (value === undefined) fail(`missing or invalid value for ${alias}`);
+  return value;
+};
+
+const resolveOptional = (items: Record<string, any>[] | undefined, definition: SecretDefinition): string | undefined =>
+  valueFor(itemFor(items, definition.item), definition);
 
 const dotenvKey = (alias: string, definition: SecretDefinition): string => {
   const key = definition.env || alias;
@@ -825,19 +853,12 @@ const doctor = (definitions: Record<string, SecretDefinition>): void => {
   console.log("bitwarden: unlocked");
 
   let problems = 0;
+  const items = vaultItems();
   for (const [alias, definition] of Object.entries(definitions)) {
     const field = definition.field || "password";
-    const raw = tryGetItemRaw(definition.item);
-    if (raw === undefined) {
+    const item = itemFor(items, definition.item);
+    if (item === undefined) {
       console.log(`missing\t${alias}\t${definition.item}`);
-      problems += 1;
-      continue;
-    }
-    let item: Record<string, any>;
-    try {
-      item = JSON.parse(raw) as Record<string, any>;
-    } catch {
-      console.log(`invalid\t${alias}\t${definition.item}`);
       problems += 1;
       continue;
     }
@@ -862,7 +883,7 @@ Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
   unlock              Unlock and print a session token (--store persists it)
   lock                Lock the vault and clear any stored session
-  list (ls)           List configured aliases (never touches the vault)
+  list (ls)           List configured aliases (vault touched only for created dates on a TTY)
   search <term>       Find aliases by alias, item, or env key across scopes (no values)
   get (g) <alias>     Print exactly one configured value
   set (s) <alias>     Prompt (hidden) a value and write it to Bitwarden; --generate delivers the new value
@@ -963,9 +984,10 @@ const main = async (): Promise<void> => {
       );
     } else if (process.stdout.isTTY) {
       const header = ["ALIAS", "ITEM", "FIELD", "CREATED"];
+      const items = vaultItems();
       let hidden = 0;
       const rows = entries.map(([alias, definition]) => {
-        const created = itemCreationDate(definition.item);
+        const created = itemCreationDate(items, definition.item);
         if (created === "-") hidden += 1;
         return [alias, definition.item, definition.field || "password", created];
       });
@@ -1016,9 +1038,11 @@ const main = async (): Promise<void> => {
   } else if (options.command === "id") {
     const alias = options.positional[0] || fail("id requires an alias, e.g. secret id github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    requireUnlocked();
     const raw = tryGetItemRaw(definition.item);
-    if (raw === undefined) fail(`item not found for ${alias}: ${definition.item}`);
+    if (raw === undefined) {
+      requireUnlocked();
+      fail(`item not found for ${alias}: ${definition.item}`);
+    }
     let item: Record<string, any>;
     try {
       item = JSON.parse(raw) as Record<string, any>;
@@ -1058,17 +1082,13 @@ const main = async (): Promise<void> => {
     for (const environment of Object.values(holder.config.environments || {})) {
       if (environment.secrets?.[alias]?.item) itemNames.add(environment.secrets[alias].item);
     }
+    const items = vaultItems();
     const ids = new Map<string, string>();
     for (const item of itemNames) {
-      const raw = tryGetItemRaw(item);
-      if (raw === undefined) fail(`item not found for ${alias}: ${item}`);
-      try {
-        const parsed = JSON.parse(raw) as { id?: string };
-        if (!parsed.id) fail(`Bitwarden item has no id: ${item}`);
-        ids.set(item, parsed.id);
-      } catch {
-        fail(`Bitwarden returned invalid item data for ${alias}`);
-      }
+      const entry = itemFor(items, item);
+      if (entry === undefined) fail(`item not found for ${alias}: ${item}`);
+      if (!entry.id) fail(`Bitwarden item has no id: ${item}`);
+      ids.set(item, String(entry.id));
     }
     const updated = JSON.parse(JSON.stringify(holder.config)) as SecretConfig;
     if (updated.secrets?.[alias]?.item) updated.secrets[alias].item = ids.get(updated.secrets[alias].item)!;
@@ -1094,9 +1114,11 @@ const main = async (): Promise<void> => {
   } else if (options.command === "rm") {
     const alias = options.positional[0] || fail("rm requires an alias, e.g. secret rm github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
-    requireUnlocked();
     const raw = tryGetItemRaw(definition.item);
-    if (raw === undefined) fail(`item not found for ${alias}: ${definition.item}`);
+    if (raw === undefined) {
+      requireUnlocked();
+      fail(`item not found for ${alias}: ${definition.item}`);
+    }
     let item: Record<string, any>;
     try {
       item = JSON.parse(raw) as Record<string, any>;
@@ -1135,11 +1157,12 @@ const main = async (): Promise<void> => {
     for (const alias of optionalSet) {
       if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
     }
+    const items = vaultItems();
     const lines = loaded.selectedAliases.flatMap((alias) => {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
       const key = dotenvKey(alias, definition);
       if (optionalSet.has(alias)) {
-        const value = tryGetValue(alias, definition);
+        const value = resolveOptional(items, definition);
         if (value === undefined) {
           console.error(`secret: skipping ${alias} (optional, unresolved)`);
           return [];
@@ -1147,7 +1170,7 @@ const main = async (): Promise<void> => {
         const formatted = dotenvValue(value);
         return [options.export ? `export ${key}=${formatted}` : `${key}=${formatted}`];
       }
-      const value = dotenvValue(getValue(alias, definition));
+      const value = dotenvValue(resolveRequired(items, alias, definition));
       return [options.export ? `export ${key}=${value}` : `${key}=${value}`];
     });
     if (options.diff) {
@@ -1179,11 +1202,12 @@ const main = async (): Promise<void> => {
     for (const alias of optionalSet) {
       if (!loaded.definitions[alias]) console.error(`secret: ${alias} is not declared (optional, skipping)`);
     }
+    const items = vaultItems();
     for (const alias of loaded.selectedAliases) {
       const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias}`);
       const key = dotenvKey(alias, definition);
       if (optionalSet.has(alias)) {
-        const value = tryGetValue(alias, definition);
+        const value = resolveOptional(items, definition);
         if (value === undefined) {
           console.error(`secret: skipping ${alias} (optional, unresolved)`);
           continue;
@@ -1191,7 +1215,7 @@ const main = async (): Promise<void> => {
         envVars[key] = value;
         continue;
       }
-      envVars[key] = getValue(alias, definition);
+      envVars[key] = resolveRequired(items, alias, definition);
     }
     recordHistory({ at: new Date().toISOString(), cmd: "run", target: command, env: environment });
     const result = spawnSync(command, options.positional.slice(1), {

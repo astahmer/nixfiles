@@ -256,7 +256,10 @@ Use `--config path/to/secrets.json` for another config. Existing `.env` files
 are replaced atomically only after every requested value succeeds and are
 written mode `0600`. `.secret.json` is discovered from the current directory
 upward to `$HOME`, so subdirectories of a project work too. `secret` never
-enumerates or synchronizes the whole vault.
+synchronizes the whole vault; multi-alias commands (`list`, `env`, `run`,
+`doctor`, `pin`) read the local vault cache once with `bw list items` and
+resolve every alias from that single snapshot, since each `bw` spawn costs
+1-2s+ of CLI startup.
 
 ## Regression tests
 
