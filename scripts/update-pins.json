@@ -19,6 +19,24 @@
       ]
     },
     {
+      "name": "codexbar",
+      "type": "nix-update",
+      "description": "CodexBar macOS menu bar app release archive",
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "codexbar",
+        "--use-github-releases",
+        "--github-releases-limit",
+        "100",
+        "--version-regex",
+        "v(.*)"
+      ]
+    },
+    {
       "name": "drydock",
       "type": "nix-update",
       "description": "drydock prebuilt release binary",
