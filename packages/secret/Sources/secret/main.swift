@@ -30,6 +30,7 @@ struct Options {
     var dry = false
     var dryRun = false
     var source: String?
+    var openURL = false
     var global = false
     var helper = false
     var store = false
@@ -125,6 +126,8 @@ func parseOptions(_ argv: [String]) -> Options {
             index += 1
             guard index < argv.count else { fail("--source requires a URL") }
             options.source = argv[index]
+        } else if argument == "--open" {
+            options.openURL = true
         } else if argument == "--store" {
             options.store = true
         } else if argument == "-h" || argument == "--help" {
@@ -168,6 +171,10 @@ let commandHelpText: [String: String] = [
 
       --store   Persist the session (macOS keychain, or ~/.config/secret/session)
       --helper  Get the session via Touch ID from secret-unlock-helper (macOS)
+
+    Run 'secret unlock --store' once to cache the session; afterwards
+    'secret unlock --helper' unlocks with Touch ID instead of the master
+    password.
     """,
     "lock": """
     Usage: secret lock
@@ -218,10 +225,10 @@ let commandHelpText: [String: String] = [
     Print the current TOTP code.
     """,
     "source": """
-    Usage: secret source <alias> [url]
+    Usage: secret source <alias> [url] [--open]
 
     Print the secret's source URL (a custom "source" field on the vault item),
-    or set it when a url is given.
+    or set it when a url is given. --open opens the URL in the browser.
     """,
     "pull": """
     Usage: secret pull
@@ -376,6 +383,7 @@ func printHelp() {
       --generate          With set: generate a random password instead of prompting
       --force, -f         With set: overwrite an existing item without confirmation
       --source URL        With set: attach a source URL (custom "source" field)
+      --open              With source: open the source URL in the browser
       --global, -g        With set/unset/rm: operate on the global config
 
     Config precedence (later wins):
@@ -770,6 +778,18 @@ func copyToClipboardOrFail(_ value: String) {
     }
 }
 
+func openInBrowser(_ url: String) {
+    #if os(macOS)
+    let r = runCommand(pathTo("open") ?? "/usr/bin/open", [url])
+    #else
+    let r = runCommand(pathTo("xdg-open") ?? "xdg-open", [url])
+    #endif
+    if r.status != 0 {
+        fail("could not open \(url)")
+    }
+    success("opened \(url)")
+}
+
 func replacePairKey(_ key: String, _ value: J, in obj: J) -> J {
     let pairs = obj.pairs() ?? []
     return .obj(pairs.map { $0.0 == key ? (key, value) : $0 })
@@ -780,11 +800,11 @@ func replacePairKey(_ key: String, _ value: J, in obj: J) -> J {
 func doctor(_ definitions: [(alias: String, definition: SecretDefinition)]) async {
     let current = await currentAuthState()
     if !current.authenticated {
-        print("bitwarden: unauthenticated — run: bw login, then export BW_SESSION=\"$(bw unlock --raw)\"")
+        print("bitwarden: unauthenticated — run: bw login, then secret unlock --store")
         exit(1)
     }
     if !current.unlocked {
-        print("bitwarden: locked — unlock with: export BW_SESSION=\"$(bw unlock --raw)\"")
+        print("bitwarden: locked — unlock with: secret unlock --store")
         exit(1)
     }
     print("bitwarden: unlocked")
@@ -867,8 +887,8 @@ func run() async {
             print(outColor("32", "unlocked — ready. next: secret list, or secret env --output .env\(daemonUp ? " (daemon up)" : "")"))
         } else {
             print(outColor("33", current.authenticated
-                ? "locked — unlock with: export BW_SESSION=\"$(bw unlock --raw)\""
-                : "unauthenticated — run: bw login, then export BW_SESSION=\"$(bw unlock --raw)\""))
+                ? "locked — unlock with: secret unlock --store"
+                : "unauthenticated — run: bw login, then secret unlock --store"))
             if let session = env("BW_SESSION"), !session.isEmpty {
                 warn("a session token is present but bw rejects it — run 'bw logout && bw login' once to repair, then 'secret unlock --store'")
             }
@@ -1092,23 +1112,34 @@ func run() async {
             await requireUnlocked()
             fail("item not found for \(alias): \(definition.item)")
         }
-        if let url {
-            guard var payload = jsonObject(jsonString(item)) else { fail("Bitwarden item for \(alias) is invalid") }
-            setItemField(&payload, "custom:source", url)
+    if let url {
+        guard var payload = jsonObject(jsonString(item)) else { fail("Bitwarden item for \(alias) is invalid") }
+        setItemField(&payload, "custom:source", url)
             let id = payload["id"] as? String ?? ""
             if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
                 runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
-                daemonStop()
-            }
-            success("source set for \(alias)")
+            daemonStop()
+        }
+        if options.openURL {
+            openInBrowser(url)
         } else {
-            let value = itemField(item, "custom:source")
+            success("source set for \(alias)")
+        }
+    } else {
+        let value = itemField(item, "custom:source")
+        if options.openURL {
+            guard let value = value as? String, !value.isEmpty else {
+                fail("no source URL stored for \(alias) — set one with 'secret source \(alias) <url>'")
+            }
+            openInBrowser(value)
+        } else {
             if let value = value as? String, !value.isEmpty {
                 print(value)
             } else {
                 print("")
             }
         }
+    }
 
     case "pull":
         await requireUnlocked()

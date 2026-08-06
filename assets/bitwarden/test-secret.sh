@@ -84,6 +84,12 @@ cat > "$FAKE_CLIP"
 EOF
 chmod +x "$tmp/bin/pbcopy"
 
+cat > "$tmp/bin/open" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$1" > "$FAKE_OPEN"
+EOF
+chmod +x "$tmp/bin/open"
+
 cat > "$tmp/bin/security" <<'EOF'
 #!/bin/sh
 case "$1" in
@@ -120,6 +126,7 @@ export PATH="$tmp/bin:$PATH"
 export HOME="$tmp"
 export FAKE_LOG="$tmp/log.txt"
 export FAKE_CLIP="$tmp/clip.txt"
+export FAKE_OPEN="$tmp/open.txt"
 export FAKE_KEYCHAIN="$tmp/keychain.txt"
 export FAKE_BW_STATUS='{"status":"unlocked"}'
 export SECRET_DAEMON=0
@@ -162,8 +169,8 @@ fi
 cd "$tmp/proj"
 
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
-assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked"
-assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"' "status unauthenticated"
+assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" "locked — unlock with: secret unlock --store" "status locked"
+assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" "unauthenticated — run: bw login, then secret unlock --store" "status unauthenticated"
 assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|global\|prune\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history" "help lists all commands"
 if secret -h | rg -q 'set \(s, add\)' && secret -h | rg -q 'rm \(delete, remove\)' && secret -h | rg -q 'source \(so\)' && secret -h | rg -q 'pull \(pu, sync\)' && secret -h | rg -q 'env \(e\)'; then
   pass=$((pass + 1))
@@ -176,6 +183,16 @@ assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE]
 assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret source github-token)" "https://example.com" "source prints the stored URL"
+rm -f "$FAKE_OPEN"
+secret source github-token --open >/dev/null 2>&1
+assert_eq "$(cat "$FAKE_OPEN" 2>/dev/null || true)" "https://example.com" "source --open opens the stored URL"
+rm -f "$FAKE_OPEN"
+secret source github-token https://keys.example.com/rotated --open >/dev/null 2>&1
+assert_eq "$(cat "$FAKE_OPEN" 2>/dev/null || true)" "https://keys.example.com/rotated" "source --open with a new url sets and opens it"
+rg -q 'https://keys.example.com/rotated' "$FAKE_LOG" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: source --open with a new url sends the edit payload" >&2
+}
 printf 'v12\n' | secret set github-token --force --source https://keys.example.com/new >/dev/null 2>&1
 rg -q 'https://keys.example.com/new' "$FAKE_LOG" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
@@ -287,7 +304,7 @@ assert_fail secret rotate nope
 assert_ok secret doctor
 assert_eq "$(secret doctor | rg -o 'daemon\tdisabled' || true)" "daemon	disabled" "doctor reports daemon state"
 assert_fail FAKE_GET_MISSING=1 secret doctor
-assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret doctor 2>&1 | head -1)" 'bitwarden: locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "doctor locked hint"
+assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret doctor 2>&1 | head -1)" "bitwarden: locked — unlock with: secret unlock --store" "doctor locked hint"
 
 assert_ok secret lint
 printf '%s' '{"secrets":{"A":{"item":"x/a"},"B":{"item":"x/b","env":"A"}}}' > "$tmp/collide.json"
@@ -490,7 +507,7 @@ assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "daemon mode never s
 assert_eq "$(rg -c 'GET /list/object/items' "$FAKE_DAEMON_LOG" || echo 0)" "3" "three item lists served over HTTP"
 touch "$FAKE_DAEMON_MISSING"
 assert_fail secret env --output x
-assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "locked daemon falls back to spawn status"
+assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" "locked — unlock with: secret unlock --store" "locked daemon falls back to spawn status"
 rm -f "$FAKE_DAEMON_MISSING"
 assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon recovers after denied requests"
 # mutations ride the daemon while it is up
@@ -596,7 +613,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
 else
   assert_eq "$(cat "$tmp/.config/secret/session")" "session-token-123" "unlock --store persists session file"
 fi
-assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status 2>/dev/null)" 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"' "status locked stdout unchanged with stored session"
+assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status 2>/dev/null)" "locked — unlock with: secret unlock --store" "status locked stdout unchanged with stored session"
 FAKE_BW_STATUS='{"status":"locked"}' secret status 2>&1 >/dev/null | rg -q "stale" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: status hints at stale stored session" >&2
