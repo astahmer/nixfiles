@@ -93,6 +93,10 @@ struct Project: Identifiable, Hashable {
     let name: String
     let dir: String
     var id: String { dir }
+    var isGlobal: Bool { name == "global" }
+    var configPath: String {
+        isGlobal ? "\(dir)/.config/secret/config.json" : "\(dir)/.secret.json"
+    }
 }
 
 struct AliasEntry: Identifiable {
@@ -311,20 +315,14 @@ final class SecretBarModel: ObservableObject {
 
     func copy(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(["get", "--config", entry.configPath, entry.alias], cwd: entry.cwd)
+        // Let the CLI write directly to pbcopy so the menu-bar process never
+        // receives the secret value in stdout.
+        let result = runSecret(["get", "--copy", "--config", entry.configPath, entry.alias], cwd: entry.cwd)
         setBusy(false)
         guard result.status == 0 else {
             flashError("get \(entry.alias): \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
             return
         }
-        let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else {
-            flashError("get \(entry.alias) returned nothing")
-            return
-        }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(value, forType: .string)
         flash("copied \(entry.alias)")
     }
 
@@ -350,15 +348,102 @@ final class SecretBarModel: ObservableObject {
         }
     }
 
+    func create(
+        alias: String,
+        project: Project,
+        value: String,
+        itemName: String,
+        source: String,
+        notes: String
+    ) -> Bool {
+        let cleanAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanAlias.isEmpty else {
+            flashError("enter an alias")
+            return false
+        }
+        guard !cleanValue.isEmpty else {
+            flashError("enter a value")
+            return false
+        }
+        var args = ["set", cleanAlias]
+        if project.name == "global" {
+            args.append("--global")
+        } else {
+            args += ["--config", project.configPath]
+        }
+        if !itemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            args += ["--name", itemName]
+        }
+        if !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            args += ["--source", source]
+        }
+        if !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            args += ["--notes", notes]
+        }
+        setBusy(true)
+        let result = runSecret(args, cwd: project.dir, input: cleanValue, timeout: 60)
+        setBusy(false)
+        guard result.status == 0 else {
+            flashError("create \(cleanAlias): \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
+            return false
+        }
+        flash("created \(cleanAlias) in \(project.name == "global" ? "global" : project.name)")
+        refreshEverything()
+        return true
+    }
+
+    func edit(
+        _ entry: AliasEntry,
+        itemName: String,
+        value: String,
+        source: String?,
+        notes: String?,
+        clearSource: Bool,
+        clearNotes: Bool
+    ) -> Bool {
+        let cleanName = itemName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanSource = source?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanNotes = notes?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasChanges = !cleanName.isEmpty || !cleanValue.isEmpty || clearSource || cleanSource?.isEmpty == false || clearNotes || cleanNotes?.isEmpty == false
+        guard hasChanges else {
+            flashError("make a change first")
+            return false
+        }
+        var args = ["edit", entry.alias, "--config", entry.configPath, "--force"]
+        if !cleanName.isEmpty { args += ["--name", itemName] }
+        if !cleanValue.isEmpty { args += ["--field", "password", "--value-stdin"] }
+        if clearSource || cleanSource?.isEmpty == false { args += ["--source", clearSource ? "" : (source ?? "")] }
+        if clearNotes || cleanNotes?.isEmpty == false { args += ["--notes", clearNotes ? "" : (notes ?? "")] }
+        setBusy(true)
+        let result = runSecret(
+            args,
+            cwd: entry.cwd,
+            input: cleanValue.isEmpty ? nil : cleanValue,
+            timeout: 60
+        )
+        setBusy(false)
+        guard result.status == 0 else {
+            flashError("edit \(entry.alias): \(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
+            return false
+        }
+        flash("updated \(entry.alias)")
+        refreshEverything()
+        return true
+    }
+
     func unlockWithTouchID() {
         setBusy(true)
         let result = runSecret(["unlock", "--helper"], timeout: 60)
+        let verified = result.status == 0 && runSecret(["status", "--check"], timeout: 30).status == 0
         setBusy(false)
-        if result.status == 0 {
+        if verified {
             flash("unlocked with Touch ID")
             refreshEverything()
         } else {
-            flashError(result.stderr.trimmingCharacters(in: .whitespacesAndNewlines))
+            let detail = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            flashError(detail.isEmpty ? "Touch ID authenticated, but the vault is still locked" : detail)
         }
     }
 
@@ -368,8 +453,9 @@ final class SecretBarModel: ObservableObject {
         guard !secret.isEmpty else { return }
         setBusy(true)
         let result = runSecret(["unlock", "--store"], input: secret, timeout: 60)
+        let verified = result.status == 0 && runSecret(["status", "--check"], timeout: 30).status == 0
         setBusy(false)
-        if result.status == 0 {
+        if verified {
             flash("unlocked; session stored")
             refreshEverything()
         } else {
@@ -444,7 +530,7 @@ struct StatusIcon: View {
     }
 }
 
-struct SecretBarView: View {
+struct LegacySecretBarView: View {
     @EnvironmentObject var model: SecretBarModel
     @State private var query = ""
     @State private var rotating: AliasEntry?
@@ -646,6 +732,360 @@ struct SecretBarView: View {
             .font(.caption2)
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+        }
+    }
+}
+
+enum SecretBarTab: String, CaseIterable {
+    case create
+    case secrets
+    case settings
+
+    var title: String {
+        switch self {
+        case .create: return "Create"
+        case .secrets: return "My Secrets"
+        case .settings: return "Settings"
+        }
+    }
+}
+
+struct SecretEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: SecretBarModel
+    let entry: AliasEntry
+    @State private var itemName = ""
+    @State private var value = ""
+    @State private var source = ""
+    @State private var notes = ""
+    @State private var clearSource = false
+    @State private var clearNotes = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Edit \(entry.alias)")
+                .font(.headline)
+            Text("\(entry.project) · leave a field blank to keep it unchanged")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("Bitwarden item name", text: $itemName)
+                .textFieldStyle(.roundedBorder)
+            SecureField("New value (optional)", text: $value)
+                .textFieldStyle(.roundedBorder)
+            TextField("Source URL (optional)", text: $source)
+                .textFieldStyle(.roundedBorder)
+            Toggle("Clear source", isOn: $clearSource)
+                .toggleStyle(.checkbox)
+            TextEditor(text: $notes)
+                .font(.body)
+                .frame(minHeight: 64, maxHeight: 100)
+                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.25)))
+            Toggle("Clear notes", isOn: $clearNotes)
+                .toggleStyle(.checkbox)
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save changes") {
+                    let saved = model.edit(
+                        entry,
+                        itemName: itemName,
+                        value: value,
+                        source: source,
+                        notes: notes,
+                        clearSource: clearSource,
+                        clearNotes: clearNotes
+                    )
+                    if saved { dismiss() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.busy)
+            }
+        }
+        .padding(16)
+        .frame(width: 420, height: 420)
+    }
+}
+
+struct SecretBarView: View {
+    @EnvironmentObject var model: SecretBarModel
+    @State private var tab: SecretBarTab = .secrets
+    @State private var query = ""
+    @State private var rotating: AliasEntry?
+    @State private var editing: AliasEntry?
+    @State private var showPassword = false
+    @State private var selectedProjectID = ""
+    @State private var createAlias = ""
+    @State private var createItemName = ""
+    @State private var createValue = ""
+    @State private var createSource = ""
+    @State private var createNotes = ""
+
+    private var filtered: [AliasEntry] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return model.entries }
+        return model.entries.filter {
+            $0.alias.lowercased().contains(needle) || $0.project.lowercased().contains(needle)
+        }
+    }
+
+    private var selectedProject: Project? {
+        model.projects.first(where: { $0.id == selectedProjectID }) ?? model.projects.first(where: { $0.isGlobal })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            Divider()
+            Group {
+                switch tab {
+                case .create: createTab
+                case .secrets: secretsTab
+                case .settings: settingsTab
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            Picker("Section", selection: $tab) {
+                ForEach(SecretBarTab.allCases, id: \.self) { section in
+                    Text(section.title).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            footer
+        }
+        .padding(10)
+        .frame(width: 430, height: 610)
+        .onAppear {
+            model.start()
+            if selectedProjectID.isEmpty {
+                selectedProjectID = model.projects.first(where: { $0.isGlobal })?.id ?? model.projects.first?.id ?? ""
+            }
+        }
+        .sheet(item: $editing) { entry in
+            SecretEditSheet(model: model, entry: entry)
+        }
+        .confirmationDialog(
+            "Rotate \(rotating?.alias ?? "")?",
+            isPresented: Binding(get: { rotating != nil }, set: { if !$0 { rotating = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Rotate and copy new value", role: .destructive) {
+                if let rotating { model.rotate(rotating) }
+                rotating = nil
+            }
+            Button("Cancel", role: .cancel) { rotating = nil }
+        } message: {
+            Text("Generates a new password in Bitwarden and copies it to the clipboard.")
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            StatusDot(state: model.state)
+            Text(stateLabel).font(.headline)
+            Spacer()
+            if model.busy { ProgressView().controlSize(.small) }
+            Button {
+                model.refreshEverything()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
+            .help("Refresh secrets")
+            .disabled(model.busy)
+            if model.state == .unlocked {
+                Button { model.lock() } label: { Image(systemName: "lock") }
+                    .help("Lock the vault")
+                    .disabled(model.busy)
+            }
+        }
+    }
+
+    private var stateLabel: String {
+        switch model.state {
+        case .unknown: return "secret"
+        case .unlocked: return "unlocked"
+        case .locked: return "locked"
+        case .unauthenticated: return "not logged in"
+        case .error: return "error"
+        }
+    }
+
+    private var createTab: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Create a secret").font(.title3.weight(.semibold))
+            Text("Choose where its alias belongs; the value is sent through stdin and never put in the process arguments.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("Scope", selection: $selectedProjectID) {
+                ForEach(model.projects) { project in
+                    Text(project.isGlobal ? "Global" : project.name).tag(project.id)
+                }
+            }
+            TextField("Alias", text: $createAlias).textFieldStyle(.roundedBorder)
+            TextField("Bitwarden item name (optional)", text: $createItemName).textFieldStyle(.roundedBorder)
+            SecureField("Value", text: $createValue).textFieldStyle(.roundedBorder)
+            TextField("Source URL (optional)", text: $createSource).textFieldStyle(.roundedBorder)
+            TextEditor(text: $createNotes)
+                .font(.body)
+                .frame(minHeight: 72, maxHeight: 110)
+                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.25)))
+            HStack {
+                Text("Notes (optional)").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Create") {
+                    guard let project = selectedProject else {
+                        model.flashError("no project scope available")
+                        return
+                    }
+                    if model.create(
+                        alias: createAlias,
+                        project: project,
+                        value: createValue,
+                        itemName: createItemName,
+                        source: createSource,
+                        notes: createNotes
+                    ) {
+                        createAlias = ""
+                        createItemName = ""
+                        createValue = ""
+                        createSource = ""
+                        createNotes = ""
+                        tab = .secrets
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.busy || model.state != .unlocked)
+            }
+            if model.state != .unlocked { unlockControls }
+        }
+    }
+
+    private var secretsTab: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if model.state != .unlocked { unlockControls }
+            TextField("Search aliases across projects…", text: $query)
+                .textFieldStyle(.roundedBorder)
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !model.recent.isEmpty {
+                Text("RECENT").font(.caption2).foregroundStyle(.secondary)
+                ForEach(model.recent) { entryRow($0) }
+                Divider()
+            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    if filtered.isEmpty {
+                        Text(model.entries.isEmpty ? "No .secret.json projects found in ~/dev" : "No matches")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 20)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        ForEach(filtered) { entry in entryRow(entry) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func entryRow(_ entry: AliasEntry) -> some View {
+        HStack(spacing: 8) {
+            Button { model.copy(entry) } label: {
+                HStack {
+                    Text(entry.alias)
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(1)
+                    Spacer()
+                    Text(entry.project).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Image(systemName: "doc.on.doc").foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(model.busy || model.state != .unlocked)
+            .contextMenu {
+                Button("Edit…") { editing = entry }
+                Button("Open source URL") { model.openSource(entry) }
+                Button("Rotate and copy new value") { rotating = entry }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var settingsTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Settings").font(.title3.weight(.semibold))
+            Text("SecretBar uses the same native secret CLI, Bitwarden session, and Touch ID flow as the terminal command.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Text("Status")
+                Spacer()
+                StatusDot(state: model.state)
+                Text(stateLabel).foregroundStyle(.secondary)
+            }
+            if let sessionCreated = model.sessionCreated {
+                Text("Stored session from \(sessionCreated)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text("Global aliases: ~/.config/secret/config.json")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("Projects: ~/dev/*/.secret.json")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if model.state != .unlocked { unlockControls }
+            else {
+                Button("Lock vault") { model.lock() }
+                    .disabled(model.busy)
+            }
+            Spacer()
+        }
+    }
+
+    private var unlockControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !showPassword {
+                HStack {
+                    Button { model.unlockWithTouchID() } label: {
+                        Label("Unlock with Touch ID", systemImage: "touchid")
+                    }
+                    .disabled(model.busy)
+                    Button("Master password…") { showPassword = true }
+                }
+            } else {
+                HStack {
+                    SecureField("Master password", text: $model.password)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { model.unlockWithPassword() }
+                    Button("Unlock") { model.unlockWithPassword() }
+                        .disabled(model.busy || model.password.isEmpty)
+                }
+            }
+        }
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            let health = model.problems.filter { $0.value > 0 }
+            if !health.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+                    Text(health.map { "\($0.key) (\($0.value))" }.joined(separator: ", "))
+                        .font(.caption2)
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                }
+            }
+            if let flash = model.flash {
+                Text(flash)
+                    .font(.caption)
+                    .foregroundStyle(model.lastError == flash ? Color.red : Color.secondary)
+                    .lineLimit(2)
+            }
+            Button("Quit SecretBar") { NSApplication.shared.terminate(nil) }
+                .font(.caption2)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
         }
     }
 }
