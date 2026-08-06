@@ -2,7 +2,6 @@
   lib,
   stdenvNoCC,
   fetchurl,
-  makeWrapper,
   unzip,
 }:
 
@@ -18,16 +17,15 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   sourceRoot = ".";
 
   nativeBuildInputs = [
-    makeWrapper
     unzip
   ];
 
   installPhase = ''
     runHook preInstall
 
-    mkdir -p "$out/Applications"
+    mkdir -p "$out/Applications" "$out/bin"
     cp -R CodexBar.app "$out/Applications/"
-    makeWrapper "$out/Applications/CodexBar.app/Contents/MacOS/CodexBar" "$out/bin/codexbar"
+    ln -s "$out/Applications/CodexBar.app/Contents/Helpers/CodexBarCLI" "$out/bin/codexbar"
 
     runHook postInstall
   '';

@@ -56,6 +56,11 @@
         fi
       '';
 
+      # App linking (targets.darwin.linkApps/copyApps) is disabled at
+      # stateVersion 25.11, so link the menu bar app into ~/Applications
+      # explicitly instead of relying on home.packages app discovery.
+      home.file."Applications/CodexBar.app".source = "${codexbar}/Applications/CodexBar.app";
+
       home.packages = [
         pkgs.spotify
         pkgs.slack
