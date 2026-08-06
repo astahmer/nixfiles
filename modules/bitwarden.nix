@@ -40,6 +40,7 @@
       home.file.".config/secret/secret-completion.zsh".source = ../assets/bitwarden/secret-completion.zsh;
       home.file.".config/secret/secret-completion.bash".source =
         ../assets/bitwarden/secret-completion.bash;
+      home.file.".config/secret/secret-shell.zsh".source = ../assets/bitwarden/secret-shell.zsh;
 
       home.packages = [
         pkgs.bitwarden-cli

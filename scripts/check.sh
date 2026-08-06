@@ -23,6 +23,7 @@ git diff --check
 if command -v swift >/dev/null 2>&1 && command -v bun >/dev/null 2>&1; then
   assets/bitwarden/test-secret.sh
   assets/bitwarden/test-completions.sh
+  assets/bitwarden/test-shell.sh
   if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
     (cd assets/bitwarden && bun run typecheck)
   else
@@ -31,6 +32,7 @@ if command -v swift >/dev/null 2>&1 && command -v bun >/dev/null 2>&1; then
 elif command -v bun >/dev/null 2>&1; then
   SECRET_IMPL=ts assets/bitwarden/test-secret.sh
   assets/bitwarden/test-completions.sh
+  assets/bitwarden/test-shell.sh
   if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
     (cd assets/bitwarden && bun run typecheck)
   else

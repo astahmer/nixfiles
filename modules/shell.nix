@@ -275,7 +275,10 @@ in
         # took: precise sub-second command durations (starship only shows
         # whole seconds). Replaces the starship cmd_duration module.
         zmodload zsh/datetime 2>/dev/null || true
-        _secret_took_start=''''
+        # In an indented string a doubled quote is an escape, so exactly
+        # three quotes here render as an empty string. Four would leave an
+        # unterminated quote that swallows the rest of this block.
+        _secret_took_start='''
         _secret_preexec() {
           _secret_took_start=$EPOCHREALTIME
         }
@@ -292,25 +295,9 @@ in
         add-zsh-hook preexec _secret_preexec
         add-zsh-hook precmd _secret_precmd
 
-        # secret: unlock exports BW_SESSION into this shell; --store persists it.
-        secret() {
-          if [[ "$1" == "unlock" ]]; then
-            local token
-            token="$(env -u BW_SESSION bw unlock --raw)" || return 1
-            export BW_SESSION="$token"
-            if [[ "$*" == *"--store"* ]]; then
-              local session_file="''${SECRET_SESSION_FILE:-$HOME/.config/secret/session}"
-              printf '%s' "$token" > "$session_file"
-              chmod 600 "$session_file"
-            fi
-            echo "secret: unlocked for this shell"
-          elif [[ "$1" == "lock" ]]; then
-            unset BW_SESSION
-            command secret "$@"
-          else
-            command secret "$@"
-          fi
-        }
+        # secret: unlock exports BW_SESSION into this shell; flag variants
+        # and help go through the CLI (Touch ID, keychain, -h).
+        source ~/.config/secret/secret-shell.zsh
 
         # secret completions live in a deployable, testable file.
         source ~/.config/secret/secret-completion.zsh
