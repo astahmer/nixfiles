@@ -8,16 +8,15 @@ Bitwarden Password Manager remains the source of truth. The profile installs
 dependencies beyond `bw` itself. It replaces the original bun/TypeScript
 runner (`assets/bitwarden/secret.ts`, still the reference spec and runnable
 with `SECRET_IMPL=ts` in the test suite). macOS biometric unlock goes through
-the bundled `secret-unlock-helper` (Touch ID-gated keychain read); a future
-passkey unlock can be built on the Bitwarden SDK's C FFI without changing the
-CLI surface.
+the built-in Touch ID keychain read (no extra binary); a future passkey
+unlock can be built on the Bitwarden SDK's C FFI without changing the CLI
+surface.
 
 Packaging quirk: nixpkgs' swift-on-darwin links a few stdlib dylibs (notably
 `libswift_StringProcessing`) from its own corelibs store runtime, which the
 kernel SIGKILLs at dyld load when mixed with the system runtime. The
-derivation repoints those to `/usr/lib/swift` (the dyld-cache runtime, which
-is ABI-compatible — `secret-unlock-helper` links it and runs), keeping the
-binary free of the nix swift runtime.
+derivation repoints those to `/usr/lib/swift` (the dyld-cache runtime), keeping
+the binary free of the nix swift runtime.
 
 ## Login
 
@@ -323,10 +322,11 @@ each.
   example the one `bw login` prints), so the master password is typed once:
   `export BW_SESSION="<login session>" && secret unlock --store`. A present
   but rejected session is refused instead of stored.
-- Touch ID unlock (macOS): `secret-unlock-helper` caches the session behind a
-  biometric prompt. `secret unlock --store` writes it automatically;
-  `secret unlock --helper` reads it with Touch ID instead of asking for the
-  master password again.
+- Touch ID unlock (macOS, built in): `secret unlock --store` caches the
+  session in the keychain; `secret unlock --helper` reads it with a Touch ID
+  prompt instead of asking for the master password again. `rm` and `rotate`
+  confirm with Touch ID when available (`SECRET_NO_BIOMETRICS=1` falls back
+  to `[y/N]`).
 - Diagnostics go to stderr (so `secret get X | pbcopy` stays clean); terminals
   often render stderr in red, which is a display choice, not the CLI's.
 - On a real terminal the CLI colors its own output with plain ANSI (no

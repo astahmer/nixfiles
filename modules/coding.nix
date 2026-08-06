@@ -15,7 +15,6 @@ in
       lightjj = packages.lightjj;
       modlens = packages.modlens;
       modsearch = packages.modsearch;
-      secret-unlock-helper = packages.secret-unlock-helper;
       plannotator = packages.plannotator;
       codex = packages.codex;
       opencode = packages.opencode;
@@ -68,7 +67,6 @@ in
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
         pkgs.bun
         ghui
-        secret-unlock-helper
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
         pkgs.docker

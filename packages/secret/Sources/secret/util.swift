@@ -344,17 +344,6 @@ func runBwUnlock() -> String {
     return r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-func runUnlockHelper() -> String {
-    guard let helper = pathTo("secret-unlock-helper") else {
-        fail("could not run secret-unlock-helper (is it installed?)")
-    }
-    let r = runCommand(helper, [])
-    if r.status != 0 {
-        fail("secret-unlock-helper failed: \(r.stderr.trimmingCharacters(in: .whitespacesAndNewlines))")
-    }
-    return r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-}
-
 // MARK: - Config model
 
 struct SecretDefinition {

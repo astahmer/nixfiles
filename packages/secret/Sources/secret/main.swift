@@ -170,7 +170,7 @@ let commandHelpText: [String: String] = [
     environment (e.g. the one bw login prints) is reused without prompting.
 
       --store   Persist the session (macOS keychain, or ~/.config/secret/session)
-      --helper  Get the session via Touch ID from secret-unlock-helper (macOS)
+      --helper  Get the session via Touch ID (macOS; built in, no extra binary)
 
     Run 'secret unlock --store' once to cache the session; afterwards
     'secret unlock --helper' unlocks with Touch ID instead of the master
@@ -379,7 +379,7 @@ func printHelp() {
                           With env: show what --output would write without writing (default target ./.env)
       -h, --help          Show this help; accepted after any command
       --store             With unlock: persist the session token to ~/.config/secret/session (mode 0600)
-      --helper            With unlock: get the session via Touch ID (secret-unlock-helper)
+      --helper            With unlock: get the session via Touch ID (macOS)
       --generate          With set: generate a random password instead of prompting
       --force, -f         With set: overwrite an existing item without confirmation
       --source URL        With set: attach a source URL (custom "source" field)
@@ -726,7 +726,14 @@ func getValue(_ alias: String, _ definition: SecretDefinition) async -> String {
     return await resolveRequired(items, alias, definition)
 }
 
-func setValue(_ alias: String, _ definition: SecretDefinition, _ value: String, _ force: Bool, _ source: String?) async {
+func setValue(
+    _ alias: String,
+    _ definition: SecretDefinition,
+    _ value: String,
+    _ force: Bool,
+    _ source: String?,
+    biometricConfirm: Bool = false
+) async {
     await requireUnlocked()
     let field = definition.field ?? "password"
     let items = await vaultItems()
@@ -745,7 +752,9 @@ func setValue(_ alias: String, _ definition: SecretDefinition, _ value: String, 
     if !force {
         if isatty(0) != 1 { fail("item already exists; pass --force to overwrite") }
         let created = formatCreatedAt(item?["creationDate"] as? String ?? "")
-        let confirmed = confirmPrompt("Overwrite \(definition.item) (created at \(created))?")
+        let confirmed = biometricConfirm
+            ? confirmDangerous("Overwrite \(definition.item) (created at \(created))?", reason: "Overwrite \(definition.item) in Bitwarden")
+            : confirmPrompt("Overwrite \(definition.item) (created at \(created))?")
         if !confirmed { fail("aborted; use --force to overwrite without confirmation") }
     }
     var payload = jsonObject(jsonString(item!)) ?? [:]
@@ -776,6 +785,13 @@ func copyToClipboardOrFail(_ value: String) {
         #endif
         fail("no clipboard tool available (tried \(candidates.joined(separator: ", ")))")
     }
+}
+
+func confirmDangerous(_ label: String, reason: String) -> Bool {
+    if touchIDAvailable() {
+        return confirmTouchID(reason: reason)
+    }
+    return confirmPrompt(label)
 }
 
 func openInBrowser(_ url: String) {
@@ -904,13 +920,16 @@ func run() async {
         if fromEnv {
             token = env("BW_SESSION") ?? ""
         } else if options.helper {
-            token = runUnlockHelper()
+            guard let helperToken = helperSessionRead() else {
+                fail("Touch ID unlock unavailable — run 'secret unlock --store' once to cache the session, or use 'secret unlock'")
+            }
+            token = helperToken
         } else {
             token = runBwUnlock()
         }
         if token.isEmpty {
             fail(options.helper
-                ? "secret-unlock-helper returned no session token"
+                ? "Touch ID unlock returned no session token"
                 : "bw unlock returned no session token")
         }
         let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
@@ -923,9 +942,7 @@ func run() async {
         daemonStop()
         if options.store {
             storeSession(token)
-            if let helper = pathTo("secret-unlock-helper") {
-                _ = runCommand(helper, ["store", token])
-            }
+            _ = helperSessionStore(token)
             success("unlocked; session stored (clear with 'secret lock')")
         } else {
             print(token)
@@ -1220,7 +1237,7 @@ func run() async {
         }
         guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
         let value = await generatePassword()
-        await setValue(alias, definition, value, options.force, nil)
+        await setValue(alias, definition, value, options.force, nil, biometricConfirm: true)
         recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "rotate", target: alias, env: environment))
         success("rotated \(alias) (\(definition.item), \(definition.field ?? "password"))")
         if options.copy {
@@ -1249,7 +1266,7 @@ func run() async {
         let name = (item["name"] as? String) ?? definition.item
         if !options.force {
             if isatty(0) != 1 { fail("refusing to delete \(name) without confirmation; pass --force") }
-            let confirmed = confirmPrompt("Delete item \(name)?")
+            let confirmed = confirmDangerous("Delete item \(name)?", reason: "Delete \(name) from Bitwarden")
             if !confirmed { fail("aborted; use --force to delete without confirmation") }
         }
         guard let id = item["id"] as? String else { fail("Bitwarden item for \(alias) has no id") }

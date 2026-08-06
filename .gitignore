@@ -8,5 +8,4 @@ node_modules
 assets/readbro/node_modules
 .readbro
 .composto
-packages/secret-unlock-helper/.build
 packages/secret/.build
