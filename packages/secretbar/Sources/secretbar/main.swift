@@ -113,6 +113,8 @@ enum VaultState {
 
 @MainActor
 final class SecretBarModel: ObservableObject {
+    static let shared = SecretBarModel()
+
     @Published var state: VaultState = .unknown
     @Published var projects: [Project] = []
     @Published var entries: [AliasEntry] = []
@@ -130,6 +132,7 @@ final class SecretBarModel: ObservableObject {
     private var flashTask: Task<Void, Never>?
 
     func start() {
+        guard statusTimer == nil else { return }
         refreshEverything()
         statusTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             guard let strongSelf = self else { return }
@@ -422,6 +425,25 @@ struct StatusDot: View {
     }
 }
 
+// Menu bar label: SF Symbols render reliably as template images (a plain
+// shape can show up empty), and the shape itself conveys the state.
+struct StatusIcon: View {
+    let state: VaultState
+
+    var symbol: String {
+        switch state {
+        case .unlocked: return "lock.open.fill"
+        case .locked: return "lock.fill"
+        case .unauthenticated: return "exclamationmark.triangle.fill"
+        case .error, .unknown: return "circle.dashed"
+        }
+    }
+
+    var body: some View {
+        Image(systemName: symbol)
+    }
+}
+
 struct SecretBarView: View {
     @EnvironmentObject var model: SecretBarModel
     @State private var query = ""
@@ -618,20 +640,34 @@ struct SecretBarView: View {
                     .foregroundStyle(model.lastError == flash ? Color.red : Color.secondary)
                     .lineLimit(2)
             }
+            Button("Quit SecretBar") {
+                NSApplication.shared.terminate(nil)
+            }
+            .font(.caption2)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
         }
+    }
+}
+
+@MainActor
+final class SecretBarAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        SecretBarModel.shared.start()
     }
 }
 
 @main
 struct SecretBarApp: App {
-    @StateObject private var model = SecretBarModel()
+    @NSApplicationDelegateAdaptor(SecretBarAppDelegate.self) private var appDelegate
+    @StateObject private var model = SecretBarModel.shared
 
     var body: some Scene {
         MenuBarExtra {
             SecretBarView()
                 .environmentObject(model)
         } label: {
-            StatusDot(state: model.state)
+            StatusIcon(state: model.state)
         }
         .menuBarExtraStyle(.window)
     }

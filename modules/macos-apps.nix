@@ -1,7 +1,12 @@
 { inputs, ... }:
 {
   config.flake.modules.homeManager.macosApps =
-    { pkgs, lib, ... }:
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     let
       codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
@@ -61,6 +66,22 @@
       # stateVersion 25.11, so link the menu bar app into ~/Applications
       # explicitly instead of relying on home.packages app discovery.
       home.file."Applications/CodexBar.app".source = "${codexbar}/Applications/CodexBar.app";
+      home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
+
+      launchd.agents.secretbar = {
+        enable = true;
+        config = {
+          # Launch through LaunchServices (open), not the raw binary:
+          # macOS 26 registers menu bar items only for properly launched .app
+          # bundles, and the item needs "Allow in the Menu Bar" enabled in
+          # System Settings (relaunch after toggling).
+          ProgramArguments = [
+            "/usr/bin/open"
+            "${config.home.homeDirectory}/Applications/SecretBar.app"
+          ];
+          RunAtLoad = true;
+        };
+      };
 
       home.packages = [
         pkgs.spotify
