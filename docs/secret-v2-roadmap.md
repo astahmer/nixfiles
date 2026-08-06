@@ -6,18 +6,21 @@ marked *landed* are done; the rest are planned, not implemented.
 
 ## Approved (next batch)
 
-1. **Fold `secret-unlock-helper` into the main binary** — talk to Keychain
-   Services directly (`SecItem`) instead of spawning `security`, and store
-   the session behind a biometric ACL (Touch ID-gated *storage*, not just
-   Touch ID-gated read — the varlock idea). `secret unlock --helper` becomes
-   in-process `LAContext`; the separate package, its wrapper, and the
-   PATH-based fake in the suite go away.
-2. **LAContext for dangerous mutations** — `secret rm` (and optionally
-   `rotate`) confirm with Touch ID on a terminal when a biometric session
-   exists, instead of a plain `[y/N]`.
-3. **Passkey unlock via the Bitwarden SDK C FFI** — the big one. In-process
-   vault access would make `bw` spawns and even the daemon obsolete for
-   reads. Evaluate SDK bindings first; keep the current CLI surface stable.
+1. **Fold `secret-unlock-helper` into the main binary** — *landed*: the
+   helper package is deleted; `secret unlock --helper` and `--store`'s cache
+   write now run in-process (`LAContext` + `SecItem`). A legacy helper binary
+   on PATH still wins (test fixtures/old installs). A biometric ACL on the
+   stored item remains future work (unsigned CLIs cannot create ACL items).
+2. **LAContext for dangerous mutations** — *landed*: `secret rm` and
+   `secret rotate` confirm with Touch ID on a terminal when biometrics are
+   available; `[y/N]` remains the fallback (`SECRET_NO_BIOMETRICS=1`).
+3. **Passkey unlock via the Bitwarden SDK C FFI** — *blocked upstream*
+   (checked 2026-08-06): the `bw` CLI still has no passkey unlock (open
+   community feature request), and the only public SDK is the Secrets
+   Manager SDK, which authenticates with machine accounts, not a personal
+   Password Manager vault. In-process vault access via the SDK would still
+   be a large project worth doing later; re-evaluate when Bitwarden ships
+   passkey/PIN unlock for the CLI or a Password Manager SDK.
 4. **`secret source --open`** — *landed*: opens the stored source URL with
    `open`/`xdg-open`, or sets then opens when a url is given.
 
