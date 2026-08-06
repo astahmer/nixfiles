@@ -61,7 +61,7 @@ list_term() {
   print_row "lazygit / lazydocker" "" "TUI for git and docker"
   print_row "drydock" "" "Live TUI for uncommitted/unpushed work across every repo"
   print_row "gh / ghui" "" "GitHub CLI + TUI"
-  print_row "secret / bw / rbw" "" "Scoped Bitwarden read/write + interactive clients"
+  print_row "secret / bw / rbw" "" "Native Swift Bitwarden CLI (v2, daemon reads) + interactive clients"
   print_row "herdr / iris / opencode" "" "Agent multiplexer + command suggest + coding agent"
   print_row "cursor-agent" "" "Cursor Agent CLI for terminal and T3 Code"
   print_row "codex" "" "OpenAI Codex CLI for terminal and T3 Code"

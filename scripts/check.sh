@@ -20,8 +20,16 @@ if [ -n "$nix_files" ]; then
 fi
 
 git diff --check
-if command -v bun >/dev/null 2>&1; then
+if command -v swift >/dev/null 2>&1 && command -v bun >/dev/null 2>&1; then
   assets/bitwarden/test-secret.sh
+  assets/bitwarden/test-completions.sh
+  if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
+    (cd assets/bitwarden && bun run typecheck)
+  else
+    echo "nixfiles-check: skipping secret typecheck (run 'bun install' in assets/bitwarden first)" >&2
+  fi
+elif command -v bun >/dev/null 2>&1; then
+  SECRET_IMPL=ts assets/bitwarden/test-secret.sh
   assets/bitwarden/test-completions.sh
   if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
     (cd assets/bitwarden && bun run typecheck)

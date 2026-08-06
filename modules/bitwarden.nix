@@ -1,4 +1,7 @@
-{ ... }:
+{
+  inputs,
+  ...
+}:
 {
   config.flake.modules.homeManager.bitwarden =
     {
@@ -7,10 +10,10 @@
       ...
     }:
     let
+      secretBin = "${inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret}/bin/secret";
       secret = pkgs.writeShellApplication {
         name = "secret";
         runtimeInputs = [
-          pkgs.bun
           pkgs.bitwarden-cli
           pkgs.coreutils
         ];
@@ -29,7 +32,7 @@
               export BW_SESSION="$stored"
             fi
           fi
-          exec ${pkgs.bun}/bin/bun ${../assets/bitwarden/secret.ts} "$@"
+          exec ${secretBin} "$@"
         '';
       };
     in

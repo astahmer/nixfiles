@@ -4,6 +4,14 @@ Bitwarden Password Manager remains the source of truth. The profile installs
 `bw`, Bitwarden Desktop, optional agent-backed `rbw`, and a small global
 `secret` command for scoped retrieval.
 
+`secret` is a native Swift binary (`packages/secret`, v2) — no runtime
+dependencies beyond `bw` itself. It replaces the original bun/TypeScript
+runner (`assets/bitwarden/secret.ts`, still the reference spec and runnable
+with `SECRET_IMPL=ts` in the test suite). macOS biometric unlock goes through
+the bundled `secret-unlock-helper` (Touch ID-gated keychain read); a future
+passkey unlock can be built on the Bitwarden SDK's C FFI without changing the
+CLI surface.
+
 ## Login
 
 ```sh
@@ -84,9 +92,10 @@ secret pull
 secret status --check
 ```
 
-Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
-`in`, `e`, `pr`, `d`, `re`, `h`), so `secret g github-token` is the same as
-`secret get github-token`.
+Aliases are curated like jj: main commands keep a short form (`st`, `ls`,
+`g`, `s`, `e`, `d`, `pr`, `pu`, `so`), plus `add` = set and
+`delete`/`remove` = rm, and `sync` = pull (matching `bw sync`). So
+`secret g github-token` is the same as `secret get github-token`.
 
 `--copy` puts the value on the clipboard instead of stdout.
 `secret id` prints the resolved Bitwarden item id without the value; use ids
@@ -286,9 +295,11 @@ each.
 
 ## Limits and caveats
 
-- Every `bw` spawn costs 1-2s+ of Node CLI startup; the batching and the
-  daemon exist to avoid them. Mutations (`set`, `rotate`, `rm`, `totp`,
-  `pull`) still spawn `bw` — they are rare enough that it does not matter.
+- The native binary starts in ~10ms; every `bw` spawn still costs 0.3-2s of
+  CLI startup, so batching (one `bw list items` per command) and the daemon
+  exist to avoid them. Mutations (`set`, `rotate`, `rm`, `totp`, `pull`)
+  still spawn `bw` or ride the daemon — they are rare enough that it does
+  not matter.
 - `bw serve` can start with an empty vault cache: `secret` syncs once after
   starting the daemon and cross-checks an empty daemon item list against a
   spawn before trusting it.
@@ -346,9 +357,10 @@ each.
   `secret status` appends `(daemon up)` when the daemon is serving.
 - `secret prune [--dry-run]` removes config aliases whose vault items no
   longer exist; `--dry-run` only lists them.
-- A tiny detached keepalive pings the daemon every 10s so the first command
-  after idle does not pay bw serve's idle-wake cost (measured ~1.2-1.6s
-  without it, ~0.1-0.8s with it). It exits when the daemon dies.
+- A tiny detached keepalive (the binary re-spawning itself) pings the daemon
+  every 10s so the first command after idle does not pay bw serve's idle-wake
+  cost (measured ~1.2-1.6s without it, ~0.1-0.8s with it). It exits when the
+  daemon dies.
 - bw 2026.x couples each session key to a protected auto-unlock key, and a
   stale `BW_SESSION` in the environment during `unlock` corrupts that state
   (bw warns about this itself). `secret` therefore strips `BW_SESSION` from
@@ -373,10 +385,15 @@ each.
 ## Regression tests
 
 `assets/bitwarden/test-secret.sh` runs a self-contained fake-`bw` suite
-(temp HOME, fake vault, no network). `assets/bitwarden/tsconfig.json`
-typechecks `secret.ts` strictly (`bun run typecheck` from `assets/bitwarden`,
-after one `bun install`). `nixfiles-check` runs both when `bun` is on `PATH`;
-the typecheck is skipped with a hint until the dev deps are installed.
+(temp HOME, fake vault, no network, 169 assertions) against the Swift binary
+by default; `SECRET_IMPL=ts bash assets/bitwarden/test-secret.sh` runs the
+same suite against the TypeScript reference implementation. The daemon-mode
+assertions use a real unix-socket HTTP fixture (`test-daemon.ts`). The suite
+builds `packages/secret` with `swift build -c release` on first run.
+`assets/bitwarden/tsconfig.json` typechecks `secret.ts` strictly (`bun run
+typecheck` from `assets/bitwarden`, after one `bun install`).
+`nixfiles-check` runs the suites when `bun`/`swift` are on `PATH`; the
+typecheck is skipped with a hint until the dev deps are installed.
 
 The nixfiles repo declares the same scoped model in its root `.secret.json`:
 
