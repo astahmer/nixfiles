@@ -1,8 +1,9 @@
-{ ... }:
+{ inputs, ... }:
 {
   config.flake.modules.homeManager.macosApps =
     { pkgs, lib, ... }:
     let
+      codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
       cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
@@ -66,6 +67,7 @@
         pkgs."alt-tab-macos"
         pkgs.orbstack
         pkgs.openusage
+        codexbar
       ];
     };
 }
