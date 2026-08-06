@@ -12,6 +12,7 @@
       crisp = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.crisp;
       ice = pkgs."ice-bar";
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
+      tidyports = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tidyports;
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
       cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
@@ -71,6 +72,7 @@
       home.file."Applications/Crisp.app".source = "${crisp}/Applications/Crisp.app";
       home.file."Applications/Ice.app".source = "${ice}/Applications/Ice.app";
       home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
+      home.file."Applications/Tidy Ports.app".source = "${tidyports}/Applications/Tidy Ports.app";
 
       launchd.agents.secretbar = {
         enable = true;
@@ -82,6 +84,17 @@
           ProgramArguments = [
             "/usr/bin/open"
             "${config.home.homeDirectory}/Applications/SecretBar.app"
+          ];
+          RunAtLoad = true;
+        };
+      };
+
+      launchd.agents.tidyports = {
+        enable = true;
+        config = {
+          ProgramArguments = [
+            "/usr/bin/open"
+            "${config.home.homeDirectory}/Applications/Tidy Ports.app"
           ];
           RunAtLoad = true;
         };
@@ -101,6 +114,7 @@
         crisp
         ice
         secretbar
+        tidyports
       ];
     };
 }

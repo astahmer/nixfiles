@@ -109,6 +109,7 @@
             crisp = pkgs'.callPackage ./packages/crisp { };
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
             secretbar = pkgs'.callPackage ./packages/secretbar { };
+            tidyports = pkgs'.callPackage ./packages/tidyports { };
           };
           apps.update-pins = mkBunApp "update-pins" ./scripts/update-pins.ts;
         };

@@ -173,6 +173,24 @@ duplicates. `secret search <term>` does the same across scopes, matching
 alias, item, and dotenv key case-insensitively, never values; `--json` works
 on both.
 
+## SSH key materialization
+
+The nixfiles root declares a value-free `ssh-private-key` alias whose vault
+field is `notes` (private keys are multiline). To seed it from the existing
+key without putting the key in the command line or repository:
+
+```sh
+secret set --config /Users/astahmer/dev/nixfiles/.secret.json \
+  --field notes ssh-private-key < ~/.ssh/id_ed25519
+```
+
+Home Manager then reads that alias during activation, validates it with
+`ssh-keygen`, refreshes `~/.ssh/id_ed25519` and its public key, and keeps the
+existing files if the vault is locked or the item is missing. `~/.ssh/config`
+is managed too, preserving OrbStack's include and selecting this identity for
+SSH hosts. The key is never committed; only the alias and item reference live
+in `.secret.json`.
+
 ## Writing secrets
 
 Write or rotate a configured value without exposing it in the shell:
@@ -192,6 +210,20 @@ over names in configs when two vault items could share a name.
 `secret set --generate` creates a random password and delivers it like
 `secret rotate`: copied to the clipboard, or printed when no clipboard tool
 exists.
+
+Edit item metadata without replacing the configured value:
+
+```sh
+secret edit github-token                         # prompts: name/value/source/notes/custom field
+secret edit github-token --source https://example.com --force
+secret edit github-token --name "GitHub token" --notes "owner: platform" --force
+printf '%s\n' 'new-value' | secret edit github-token --field password --value-stdin --force
+```
+
+`secret source <alias> <url>` remains the short source-only form. `secret edit`
+changes the Bitwarden item, not the alias key in `.secret.json`; use `secret mv`
+when the alias itself should be renamed. Metadata flags are explicit while
+values stay on the hidden prompt or stdin.
 
 Remove or rename an alias in your own configs without hand-editing JSON:
 
@@ -324,9 +356,10 @@ each.
   but rejected session is refused instead of stored.
 - Touch ID unlock (macOS, built in): `secret unlock --store` caches the
   session in the keychain; `secret unlock --helper` reads it with a Touch ID
-  prompt instead of asking for the master password again. `rm` and `rotate`
-  confirm with Touch ID when available (`SECRET_NO_BIOMETRICS=1` falls back
-  to `[y/N]`).
+  prompt and hands the validated token to the persistent `bw serve` daemon, so
+  later menu-bar/CLI processes can actually reuse the unlock. `rm` and
+  `rotate` confirm with Touch ID when available (`SECRET_NO_BIOMETRICS=1`
+  falls back to `[y/N]`).
 - Diagnostics go to stderr (so `secret get X | pbcopy` stays clean); terminals
   often render stderr in red, which is a display choice, not the CLI's.
 - On a real terminal the CLI colors its own output with plain ANSI (no
@@ -362,6 +395,11 @@ each.
   vault item carries a source URL; `secret list` shows a SOURCE column on a
   TTY; `secret doctor` reports the daemon state (`daemon up/down/disabled`);
   `secret status` appends `(daemon up)` when the daemon is serving.
+- SecretBar is installed as a native menu-bar companion. Its Create tab can
+  add a global or discovered `~/dev/*/.secret.json` alias, My Secrets copies
+  or edits an existing item, and Settings owns refresh, lock, password unlock,
+  and Touch ID unlock. Copy uses the CLI clipboard path so the UI does not
+  receive the value in stdout; rotate has an explicit confirmation dialog.
 - `secret prune [--dry-run]` removes config aliases whose vault items no
   longer exist; `--dry-run` only lists them.
 - A tiny detached keepalive (the binary re-spawning itself) pings the daemon
@@ -408,6 +446,8 @@ The nixfiles repo declares the same scoped model in its root `.secret.json`:
 - `opencodex-opencode-go-api-key` maps to the OpenCodex dotenv variable.
 - `github-token` maps to the raw GitHub token projection consumed by Executor.
 - `gemini-api-key` maps to the `GEMINI_API_KEY` env var read by ModLens.
+- `ssh-private-key` maps to the multiline SSH private key stored in the
+  Bitwarden notes field; Home Manager materializes it only during activation.
 
 ## Why not `sdk-sm`/`bws`?
 
