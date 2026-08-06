@@ -1,0 +1,1437 @@
+import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
+
+// Like Node, do not die when a downstream pipe (e.g. `secret ... | head`)
+// closes early: writes then just fail silently.
+signal(SIGPIPE, SIG_IGN)
+
+// MARK: - Options
+
+struct Options {
+    var command: String = "help"
+    var positional: [String] = []
+    var configPath: String?
+    var outputPath: String?
+    var envName: String?
+    var required: [String] = []
+    var optional: [String] = []
+    var copy = false
+    var check = false
+    var generate = false
+    var force = false
+    var export = false
+    var json = false
+    var all = false
+    var diff = false
+    var dry = false
+    var dryRun = false
+    var source: String?
+    var global = false
+    var helper = false
+    var store = false
+}
+
+let commandAliases: [String: String] = [
+    "st": "status",
+    "ls": "list",
+    "g": "get",
+    "s": "set",
+    "add": "set",
+    "delete": "rm",
+    "remove": "rm",
+    "sync": "pull",
+    "so": "source",
+    "pu": "pull",
+    "e": "env",
+    "d": "doctor",
+    "pr": "print",
+]
+
+func configPathValue(_ value: String) -> String {
+    if value.hasPrefix("/") { return value }
+    return URL(fileURLWithPath: value, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
+        .standardizedFileURL.path
+}
+
+func parseOptions(_ argv: [String]) -> Options {
+    var options = Options()
+    var positional: [String] = []
+    var selectedConfig: String?
+    var outputPath: String?
+    var selectedEnv: String?
+    var required: [String] = []
+    var optional: [String] = []
+
+    var index = 0
+    while index < argv.count {
+        let argument = argv[index]
+        if argument == "--config" {
+            index += 1
+            guard index < argv.count else { fail("--config requires a file path") }
+            selectedConfig = configPathValue(argv[index])
+        } else if argument == "--output" {
+            index += 1
+            guard index < argv.count else { fail("--output requires a file path") }
+            outputPath = configPathValue(argv[index])
+        } else if argument == "--env" {
+            index += 1
+            guard index < argv.count else { fail("--env requires a name") }
+            let value = argv[index]
+            if value.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) == nil {
+                fail("invalid environment name: \(value)")
+            }
+            selectedEnv = value
+        } else if argument == "--required" {
+            index += 1
+            guard index < argv.count else { fail("--required needs alias names") }
+            required += argv[index].split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespaces)
+            }.filter { !$0.isEmpty }
+        } else if argument == "--optional" {
+            index += 1
+            guard index < argv.count else { fail("--optional needs alias names") }
+            optional += argv[index].split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespaces)
+            }.filter { !$0.isEmpty }
+        } else if argument == "--copy" {
+            options.copy = true
+        } else if argument == "--check" {
+            options.check = true
+        } else if argument == "--generate" {
+            options.generate = true
+        } else if argument == "--force" || argument == "-f" {
+            options.force = true
+        } else if argument == "--global" || argument == "-g" {
+            options.global = true
+        } else if argument == "--helper" {
+            options.helper = true
+        } else if argument == "--export" {
+            options.export = true
+        } else if argument == "--json" {
+            options.json = true
+        } else if argument == "--all" {
+            options.all = true
+        } else if argument == "--diff" {
+            options.diff = true
+        } else if argument == "--dry" {
+            options.dry = true
+        } else if argument == "--dry-run" {
+            options.dryRun = true
+        } else if argument == "--source" {
+            index += 1
+            guard index < argv.count else { fail("--source requires a URL") }
+            options.source = argv[index]
+        } else if argument == "--store" {
+            options.store = true
+        } else if argument == "-h" || argument == "--help" {
+            positional.append(argument)
+        } else if argument == "--" {
+            positional += argv[(index + 1)...]
+            break
+        } else if argument.hasPrefix("--") {
+            fail("unknown option: \(argument)")
+        } else {
+            positional.append(argument)
+        }
+        index += 1
+    }
+
+    options.command = positional.first ?? "help"
+    options.positional = Array(positional.dropFirst())
+    options.configPath = selectedConfig
+    options.outputPath = outputPath
+    options.envName = selectedEnv
+    options.required = required
+    options.optional = optional
+    return options
+}
+
+// MARK: - Help
+
+let commandHelpText: [String: String] = [
+    "status": """
+    Usage: secret status [--check]
+
+    Check Bitwarden auth state and print the next command to run.
+
+      --check   Exit nonzero when not unlocked
+    """,
+    "unlock": """
+    Usage: secret unlock [--store]
+
+    Unlock and print a session token. A session already present in the
+    environment (e.g. the one bw login prints) is reused without prompting.
+
+      --store   Persist the session (macOS keychain, or ~/.config/secret/session)
+      --helper  Get the session via Touch ID from secret-unlock-helper (macOS)
+    """,
+    "lock": """
+    Usage: secret lock
+
+    Lock the vault, clear any stored session, and stop the daemon.
+    """,
+    "list": """
+    Usage: secret list [--env NAME] [--json]
+
+    List configured aliases. Created dates are fetched only on a TTY.
+
+      --env NAME   Environment overrides (default: prod)
+      --json       Machine-readable rows on stdout
+    """,
+    "search": """
+    Usage: secret search <term> [--json]
+
+    Find aliases by alias, item, or env key across scopes (no values).
+    """,
+    "get": """
+    Usage: secret get <alias> [--copy] [--env NAME]
+
+    Print exactly one configured value.
+
+      --copy       Copy to the clipboard instead of stdout
+      --env NAME   Environment override (default: prod)
+    """,
+    "set": """
+    Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--global]
+
+    Prompt (hidden) for a value and write it to Bitwarden. A missing alias is
+    added to the project config and created in the vault; with no alias at all,
+    you are prompted for one.
+
+      --generate   Generate a random password instead of prompting
+      --force, -f  Overwrite an existing item without confirmation
+      --source URL Attach a source URL (stored as a custom "source" field)
+      --global, -g Add a new alias to the global config instead of the project one
+    """,
+    "id": """
+    Usage: secret id <alias>
+
+    Print the resolved Bitwarden item id (no value).
+    """,
+    "totp": """
+    Usage: secret totp <alias> [--copy]
+
+    Print the current TOTP code.
+    """,
+    "source": """
+    Usage: secret source <alias> [url]
+
+    Print the secret's source URL (a custom "source" field on the vault item),
+    or set it when a url is given.
+    """,
+    "pull": """
+    Usage: secret pull
+
+    Refresh the local vault cache from the server (bw sync).
+    """,
+    "pin": """
+    Usage: secret pin <alias>
+
+    Replace the config item name with its resolved id.
+    """,
+    "rotate": """
+    Usage: secret rotate <alias> [--force] [--copy]
+
+    Generate a new password and overwrite the item; delivers the new value.
+    """,
+    "rm": """
+    Usage: secret rm <alias> [--force] [--global]
+
+    Delete the vault item (config entry kept). Falls back to unsetting the alias
+    when the item does not exist in the vault. --global unsets from the global
+    config instead of the project one.
+    """,
+    "unset": """
+    Usage: secret unset <alias> [--global]
+
+    Remove an alias from the project config (or the global config with --global).
+    """,
+    "mv": """
+    Usage: secret mv <alias> <new>
+
+    Rename an alias in the project or user config.
+    """,
+    "init": """
+    Usage: secret init [--force] [alias..]
+
+    Scaffold a .secret.json template; optional aliases to prefill.
+    """,
+    "env": """
+    Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]
+
+    Generate dotenv from the project config. Strict by default: every alias must
+    resolve. Pass --optional to warn-and-skip unresolved aliases.
+
+      --output FILE     Atomically write the dotenv to FILE (mode 0600)
+      --env NAME        Environment overrides (default: prod)
+      --export          Print shell export lines instead of dotenv
+      --diff, --dry, --dry-run
+                        Show what --output would write without writing
+      --required a,b,c  Fail unless these aliases are in the config
+      --optional a,b,c  Warn and skip aliases that cannot resolve
+    """,
+    "run": """
+    Usage: secret run [--optional a,b,c] -- <cmd...>
+
+    Inject project aliases into a command's environment. Strict by default;
+    --optional warns and skips unresolved aliases.
+    """,
+    "print": """
+    Usage: secret print [project|global|local] [--all] [--json]
+
+    Show aliases without touching the vault.
+    """,
+    "global": """
+    Usage: secret global [add|unset <alias>] [--json]
+
+    Show the global (user) scope aliases (same as secret print global), or
+    delegate: secret global add <alias> = secret set --global <alias>, and
+    secret global unset <alias> = secret unset --global <alias>.
+    """,
+    "prune": """
+    Usage: secret prune [--dry-run] [--global]
+
+    Remove config aliases whose vault items no longer exist. --dry-run only lists
+    them; --global prunes the user config instead of the project one.
+    """,
+    "lint": """
+    Usage: secret lint [--config FILE] [--json]
+
+    Validate configs offline: items, env keys, collisions (no vault).
+    """,
+    "doctor": """
+    Usage: secret doctor
+
+    Validate configs, Bitwarden state, and alias resolvability.
+    """,
+    "recent": """
+    Usage: secret recent [--json]
+
+    Show recently used aliases.
+    """,
+    "history": """
+    Usage: secret history [--json]
+
+    Show recent secret commands (aliases only, no values).
+    """,
+]
+
+func printHelp() {
+    print("""
+    Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]
+
+    Commands:
+      status (st)         Check Bitwarden auth state and print the next command to run
+      unlock              Unlock and print a session token (--store persists it)
+      lock                Lock the vault and clear any stored session
+      list (ls)           List configured aliases (vault touched only for created dates on a TTY)
+      search <term>       Find aliases by alias, item, or env key across scopes (no values)
+      get (g) <alias>     Print exactly one configured value
+      set (s, add) [<alias>]
+                          Prompt (hidden) a value and write it to Bitwarden; a missing
+                          alias is added to the config and created in the vault
+      id <alias>          Print the resolved Bitwarden item id (no value)
+      totp <alias>        Print the current TOTP code (--copy to clipboard)
+      source (so) <alias> [url]
+                          Print the secret's source URL, or set it when a url is given
+      pull (pu, sync)     Refresh the local vault cache from the server (bw sync)
+      pin <alias>         Replace the config item name with its resolved id
+      rotate <alias>      Generate a new password and overwrite the item (confirm unless --force); delivers the new value
+      rm (delete, remove) <alias>
+                          Delete the vault item (confirm unless --force); falls back
+                          to unset when the item does not exist in the vault
+      unset <alias>       Remove an alias from the project or user config
+      mv <alias> <new>    Rename an alias in the project or user config
+      init [alias..]      Scaffold a .secret.json template; optional aliases to prefill
+      env (e)             Generate dotenv from the project config
+      run <cmd...>        Inject project aliases into a command's environment (secret run -- npm test)
+      print (pr) [scope]  Show aliases in project (default), global, or local; --all merges scopes
+      global              Show the global (user) scope aliases
+      prune [--dry-run]   Remove config aliases whose vault items no longer exist
+      lint                Validate configs offline: items, env keys, collisions (no vault)
+      doctor (d)          Validate configs, Bitwarden state, and alias resolvability
+      recent              Show recently used aliases
+      history             Show recent secret commands
+
+    Options:
+      --config FILE       Use FILE instead of ./.secret.json
+      --output FILE       With env: atomically write dotenv to FILE (mode 0600)
+      --env NAME          With env/list/get/set: environment overrides (default: prod)
+      --required a,b,c    With env: fail unless these aliases are in the project config
+      --optional a,b,c    With env/run: warn and skip aliases that are undeclared or cannot resolve
+      --copy              With get: copy the value to the clipboard instead of stdout
+      --check             With status: exit nonzero when not unlocked
+      --export            With env: print shell export lines instead of dotenv
+      --json              With list/print/history/recent: machine-readable JSON on stdout
+      --all               With print: merge project, global, and local scopes
+      --diff, --dry, --dry-run
+                          With env: show what --output would write without writing (default target ./.env)
+      -h, --help          Show this help; accepted after any command
+      --store             With unlock: persist the session token to ~/.config/secret/session (mode 0600)
+      --helper            With unlock: get the session via Touch ID (secret-unlock-helper)
+      --generate          With set: generate a random password instead of prompting
+      --force, -f         With set: overwrite an existing item without confirmation
+      --source URL        With set: attach a source URL (custom "source" field)
+      --global, -g        With set/unset/rm: operate on the global config
+
+    Config precedence (later wins):
+      ~/.config/secret/config.json    personal global aliases
+      ./.secret.json                  project aliases
+      ./.secret.local.json            local overrides (gitignored)
+
+    Start with 'secret status', then 'secret list' to see aliases, and
+    'secret env --output .env' to generate a project .env file.
+    Use 'secret print' to inspect a single scope without vault access.
+    """)
+}
+
+// MARK: - Row helpers
+
+struct PrintRow {
+    var alias: String
+    var scope: String
+    var env: String
+    var item: String
+    var field: String
+    var envKey: String
+}
+
+func rowJSON(_ pairs: [(String, String)]) -> String {
+    "{" + pairs.map { "\"\(jsonEscape($0.0))\":\"\(jsonEscape($0.1))\"" }.joined(separator: ",") + "}"
+}
+
+let scopeOrder: [String: Int] = ["project": 0, "global": 1, "local": 2]
+
+func configRows(_ config: J, scope: String) -> [PrintRow] {
+    var rows: [PrintRow] = []
+    func addDefinitions(_ definitions: [(String, J)], envName: String) {
+        for (alias, value) in definitions {
+            var item = ""
+            var field: String?
+            var envKey: String?
+            for (key, val) in value.pairs() ?? [] {
+                switch key {
+                case "item": item = val.string() ?? ""
+                case "field": field = val.string()
+                case "env": envKey = val.string()
+                default: break
+                }
+            }
+            if item.isEmpty { fail("invalid definition for \(alias)") }
+            let definition = SecretDefinition(item: item, field: field, envKey: envKey)
+            rows.append(PrintRow(
+                alias: alias,
+                scope: scope,
+                env: envName,
+                item: item,
+                field: field ?? "password",
+                envKey: dotenvKey(alias, definition)
+            ))
+        }
+    }
+    addDefinitions(config.get("secrets")?.pairs() ?? [], envName: "prod")
+    let environments = (config.get("environments")?.pairs() ?? []).sorted { $0.0 < $1.0 }
+    for (envName, environment) in environments {
+        addDefinitions(environment.get("secrets")?.pairs() ?? [], envName: envName)
+    }
+    return rows
+}
+
+func scopeRows(_ scope: String, _ filePath: String?) -> [PrintRow] {
+    guard let filePath, exists(filePath) else { return [] }
+    return configRows(readConfig(filePath), scope: scope)
+}
+
+func sortRows(_ rows: inout [PrintRow]) {
+    rows.sort { a, b in
+        if a.alias != b.alias { return a.alias < b.alias }
+        let aScope = scopeOrder[a.scope] ?? 3
+        let bScope = scopeOrder[b.scope] ?? 3
+        if aScope != bScope { return aScope < bScope }
+        return a.env < b.env
+    }
+}
+
+func emitRows(_ rows: [PrintRow], json: Bool, includeScope: Bool) {
+    if json {
+        let items = rows.map { row -> String in
+            if includeScope {
+                return rowJSON([
+                    ("alias", row.alias),
+                    ("scope", row.scope),
+                    ("env", row.env),
+                    ("item", row.item),
+                    ("field", row.field),
+                    ("envKey", row.envKey),
+                ])
+            }
+            return rowJSON([
+                ("alias", row.alias),
+                ("env", row.env),
+                ("item", row.item),
+                ("field", row.field),
+                ("envKey", row.envKey),
+            ])
+        }
+        print("[" + items.joined(separator: ",") + "]")
+    } else if includeScope {
+        for row in rows {
+            print([row.alias, row.scope, row.env, row.item, row.field, row.envKey].joined(separator: "\t"))
+        }
+    } else {
+        for row in rows {
+            print([row.alias, row.env, row.item, row.field, row.envKey].joined(separator: "\t"))
+        }
+    }
+}
+
+func printConfig(scope: String, filePath: String, json: Bool) {
+    if !exists(filePath) { fail("no config file for \(scope) scope: \(filePath)") }
+    var rows = configRows(readConfig(filePath), scope: scope)
+    sortRows(&rows)
+    emitRows(rows, json: json, includeScope: false)
+    writeErr("secret print: \(rows.count) aliases in \(scope) scope (\(filePath)). next: secret get <alias>, or secret env --output .env\n")
+}
+
+func printScope(scope: String, selectedConfig: String?, json: Bool) {
+    if scope == "project" {
+        let projectPath = selectedConfig ?? findProjectConfig()
+        guard let projectPath else {
+            fail("no .secret.json found (searched up to $HOME) — run 'secret init' to scaffold one, or pass --config FILE")
+        }
+        printConfig(scope: "project", filePath: projectPath, json: json)
+    } else if scope == "global" {
+        printConfig(scope: "global", filePath: userConfigPath, json: json)
+    } else if scope == "local" {
+        guard let localPath = findProjectLocalConfig() else {
+            fail("no .secret.local.json found (searched up to $HOME) — create one for machine-local overrides")
+        }
+        printConfig(scope: "local", filePath: localPath, json: json)
+    } else {
+        fail("unknown scope: \(scope) (available: project, global, local)")
+    }
+}
+
+func mergedRows(_ selectedConfig: String?) -> [PrintRow] {
+    let projectPath = selectedConfig ?? findProjectConfig()
+    var rows = [
+        scopeRows("project", projectPath),
+        scopeRows("global", userConfigPath),
+        scopeRows("local", findProjectLocalConfig()),
+    ].flatMap { $0 }
+    sortRows(&rows)
+    return rows
+}
+
+func printAllScopes(_ selectedConfig: String?, json: Bool) {
+    let rows = mergedRows(selectedConfig)
+    emitRows(rows, json: json, includeScope: true)
+    writeErr("secret print: \(rows.count) aliases across project, global, and local scopes. next: secret get <alias>, or secret env --output .env\n")
+}
+
+func searchAliases(_ query: String, _ selectedConfig: String?, json: Bool) {
+    let needle = query.lowercased()
+    let rows = mergedRows(selectedConfig).filter { row in
+        row.alias.lowercased().contains(needle)
+            || row.item.lowercased().contains(needle)
+            || row.envKey.lowercased().contains(needle)
+    }
+    if rows.isEmpty {
+        writeErr("secret search: no matches for '\(query)'. next: try another term, or 'secret print --all'\n")
+        exit(1)
+    }
+    emitRows(rows, json: json, includeScope: true)
+    writeErr("secret search: \(rows.count) match(es) for '\(query)'. next: secret get <alias>\n")
+}
+
+// MARK: - lint
+
+struct LintProblem {
+    var scope: String
+    var alias: String
+    var message: String
+}
+
+func lint(_ selectedConfig: String?, json: Bool) {
+    let projectPath = selectedConfig ?? findProjectConfig()
+    let sources: [(scope: String, filePath: String?)] = [
+        ("project", projectPath),
+        ("global", userConfigPath),
+        ("local", findProjectLocalConfig()),
+    ]
+    var problems: [LintProblem] = []
+    var envKeys: [String: (scope: String, alias: String)] = [:]
+    var count = 0
+
+    for source in sources {
+        guard let filePath = source.filePath, exists(filePath) else { continue }
+        let config = readConfig(filePath)
+        func addDefinitions(_ definitions: [(String, J)], envName: String) {
+            for (alias, value) in definitions {
+                count += 1
+                var item = ""
+                var field: String?
+                var envKey: String?
+                for (key, val) in value.pairs() ?? [] {
+                    switch key {
+                    case "item": item = val.string() ?? ""
+                    case "field": field = val.string()
+                    case "env": envKey = val.string()
+                    default: break
+                    }
+                }
+                if item.isEmpty {
+                    problems.append(LintProblem(scope: source.scope, alias: alias, message: "invalid definition (missing item)"))
+                    continue
+                }
+                if envName != "prod" {
+                    if envName.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) == nil {
+                        problems.append(LintProblem(scope: source.scope, alias: alias, message: "invalid environment name: \(envName)"))
+                    }
+                }
+                let key = envKey ?? alias
+                if key.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) == nil {
+                    problems.append(LintProblem(
+                        scope: source.scope,
+                        alias: alias,
+                        message: "invalid dotenv key (add an explicit \"env\" field)"
+                    ))
+                    continue
+                }
+                if let previous = envKeys[key], previous.alias != alias {
+                    problems.append(LintProblem(
+                        scope: source.scope,
+                        alias: alias,
+                        message: "dotenv key \(key) collides with \(previous.scope):\(previous.alias) (last wins silently)"
+                    ))
+                } else {
+                    envKeys[key] = (source.scope, alias)
+                }
+                _ = field
+            }
+        }
+        addDefinitions(config.get("secrets")?.pairs() ?? [], envName: "prod")
+        let environments = (config.get("environments")?.pairs() ?? []).sorted { $0.0 < $1.0 }
+        for (envName, environment) in environments {
+            addDefinitions(environment.get("secrets")?.pairs() ?? [], envName: envName)
+        }
+    }
+
+    if json {
+        let items = problems.map { problem -> String in
+            rowJSON([
+                ("scope", problem.scope),
+                ("alias", problem.alias),
+                ("message", problem.message),
+            ])
+        }
+        print("[" + items.joined(separator: ",") + "]")
+    } else {
+        for problem in problems {
+            print("\(problem.scope)\t\(problem.alias)\t\(problem.message)")
+        }
+    }
+    if !problems.isEmpty {
+        fflush(stdout)
+        writeErr("secret lint: \(problems.count) problem(s) across \(count) alias(es). next: fix the config, or run 'secret doctor' for vault checks\n")
+        exit(1)
+    }
+    fflush(stdout)
+    writeErr("secret lint: clean — \(count) alias(es) across project, global, and local. next: secret doctor, or secret env --output .env\n")
+}
+
+// MARK: - init
+
+func initProjectConfig(force: Bool, aliases: [String]) {
+    let filePath = "\(FileManager.default.currentDirectoryPath)/\(projectConfigName)"
+    if exists(filePath) && !force {
+        fail(".secret.json already exists (use --force to overwrite): \(filePath)")
+    }
+    let prefix = (FileManager.default.currentDirectoryPath as NSString).lastPathComponent
+    var secrets: [(String, J)] = []
+    for alias in aliases {
+        if alias.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) == nil {
+            fail("invalid alias name: \(alias) (letters, digits, underscore, hyphen; must not start with a digit)")
+        }
+        secrets.append((alias, .obj([
+            ("item", .str("\(prefix)/\(kebab(alias))")),
+            ("field", .str("password")),
+        ])))
+    }
+    if aliases.isEmpty {
+        secrets.append(("EXAMPLE", .obj([
+            ("item", .str("\(prefix)/example")),
+            ("field", .str("password")),
+        ])))
+    }
+    writeAtomic(filePath, jStringify(.obj([("secrets", .obj(secrets))])) + "\n")
+    if aliases.isEmpty {
+        writeErr("secret: created \(filePath); replace EXAMPLE, then run 'secret env --output .env'\n")
+    } else {
+        writeErr("secret: created \(filePath) with \(aliases.count) alias(es); then run 'secret env --output .env'\n")
+    }
+}
+
+// MARK: - Value resolution and mutations
+
+func dotenvValue(_ value: String) -> String {
+    "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
+}
+
+func runBwInput(_ args: [String], input: String) -> String {
+    guard let bw = pathTo("bw") else { fail("could not run Bitwarden CLI (is 'bw' installed?)") }
+    let r = runCommand(bw, args, input: input)
+    if r.status != 0 {
+        let detail = r.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            : r.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        fail("Bitwarden CLI request failed: \(detail.isEmpty ? "no output" : String(detail.prefix(300)))")
+    }
+    return r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+func resolveRequired(_ items: [JSON]?, _ alias: String, _ definition: SecretDefinition) async -> String {
+    if items == nil {
+        await requireUnlocked()
+        fail("could not read vault items (bw list items failed)")
+    }
+    guard let item = itemFor(items, definition.item) else {
+        if items?.isEmpty == true {
+            warn("hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config")
+        }
+        fail("item not found for \(alias): \(definition.item)")
+    }
+    guard let value = valueFor(item, definition) else { fail("missing or invalid value for \(alias)") }
+    return value
+}
+
+func resolveOptional(_ items: [JSON]?, _ definition: SecretDefinition) -> String? {
+    valueFor(itemFor(items, definition.item), definition)
+}
+
+func getValue(_ alias: String, _ definition: SecretDefinition) async -> String {
+    let items = await vaultItems()
+    return await resolveRequired(items, alias, definition)
+}
+
+func setValue(_ alias: String, _ definition: SecretDefinition, _ value: String, _ force: Bool, _ source: String?) async {
+    await requireUnlocked()
+    let field = definition.field ?? "password"
+    let items = await vaultItems()
+    let item = itemFor(items, definition.item)
+    if item == nil {
+        var payload = newItem(name: definition.item, field: field, value: value)
+        if let source { setItemField(&payload, "custom:source", source) }
+        if !(await daemonMutate(method: "POST", path: "/object/item", payload: payload)) {
+            runBwInput(["create", "item"], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
+            daemonStop()
+        }
+        success("created item \(definition.item)")
+        return
+    }
+    guard let id = item!["id"] as? String else { fail("Bitwarden item for \(alias) has no id") }
+    if !force {
+        if isatty(0) != 1 { fail("item already exists; pass --force to overwrite") }
+        let created = formatCreatedAt(item?["creationDate"] as? String ?? "")
+        let confirmed = confirmPrompt("Overwrite \(definition.item) (created at \(created))?")
+        if !confirmed { fail("aborted; use --force to overwrite without confirmation") }
+    }
+    var payload = jsonObject(jsonString(item!)) ?? [:]
+    setItemField(&payload, field, value)
+    if let source { setItemField(&payload, "custom:source", source) }
+    if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
+        runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
+        daemonStop()
+    }
+    success("updated item \(definition.item)")
+}
+
+func deliverValue(_ value: String, _ alias: String) {
+    if copyToClipboard(value) {
+        success("copied \(alias) to clipboard")
+    } else {
+        print(value)
+        warn("clipboard unavailable, printed \(alias) value above")
+    }
+}
+
+func copyToClipboardOrFail(_ value: String) {
+    if !copyToClipboard(value) {
+        #if os(macOS)
+        let candidates = ["pbcopy"]
+        #else
+        let candidates = ["wl-copy", "xclip"]
+        #endif
+        fail("no clipboard tool available (tried \(candidates.joined(separator: ", ")))")
+    }
+}
+
+func replacePairKey(_ key: String, _ value: J, in obj: J) -> J {
+    let pairs = obj.pairs() ?? []
+    return .obj(pairs.map { $0.0 == key ? (key, value) : $0 })
+}
+
+// MARK: - doctor
+
+func doctor(_ definitions: [(alias: String, definition: SecretDefinition)]) async {
+    let current = await currentAuthState()
+    if !current.authenticated {
+        print("bitwarden: unauthenticated — run: bw login, then export BW_SESSION=\"$(bw unlock --raw)\"")
+        exit(1)
+    }
+    if !current.unlocked {
+        print("bitwarden: locked — unlock with: export BW_SESSION=\"$(bw unlock --raw)\"")
+        exit(1)
+    }
+    print("bitwarden: unlocked")
+    if env("SECRET_DAEMON") == "0" {
+        print("daemon\tdisabled")
+    } else {
+        print((await daemonStatus()) == "unlocked" ? "daemon\tup" : "daemon\tdown")
+    }
+
+    var problems = 0
+    let items = await vaultItems()
+    for (alias, definition) in definitions {
+        let field = definition.field ?? "password"
+        if let item = itemFor(items, definition.item) {
+            let value = itemField(item, field)
+            if let value = value as? String, !value.isEmpty, !placeholderValues.contains(value) {
+                print("ok\t\(alias)\t\(definition.item)\t\(field)")
+            } else {
+                print("invalid value\t\(alias)\t\(definition.item)\t\(field)")
+                problems += 1
+            }
+        } else {
+            print("missing\t\(alias)\t\(definition.item)")
+            problems += 1
+        }
+    }
+
+    let total = definitions.count
+    let summary = "secret doctor: \(total - problems)/\(total) aliases ok, \(problems) problem(s)"
+    if problems > 0 {
+        warn(summary)
+    } else {
+        success(summary)
+    }
+    if problems > 0 { exit(1) }
+}
+
+// MARK: - Dispatch
+
+func run() async {
+    var options = parseOptions(Array(CommandLine.arguments.dropFirst()))
+    options.command = commandAliases[options.command] ?? options.command
+    if options.command == "global" && options.positional.first == "add" {
+        options.command = "set"
+        options.global = true
+        options.positional = Array(options.positional.dropFirst())
+    } else if options.command == "global" && options.positional.first == "unset" {
+        options.command = "unset"
+        options.global = true
+        options.positional = Array(options.positional.dropFirst())
+    }
+    let environment = options.envName ?? "prod"
+    let loaded = options.command == "lint"
+        ? LoadedConfig(definitions: [:], ordered: [], selectedAliases: nil)
+        : loadDefinitions(configPath: options.configPath, environment: environment)
+
+    let wantsHelp =
+        options.command == "help"
+        || options.command == "--help"
+        || options.command == "-h"
+        || options.positional.contains("-h")
+        || options.positional.contains("--help")
+    if wantsHelp {
+        let requested = ([options.command] + options.positional)
+            .filter { $0 != "-h" && $0 != "--help" && $0 != "help" }
+            .first { commandHelpText[$0] != nil }
+        if let requested {
+            print(commandHelpText[requested] ?? "")
+        } else {
+            printHelp()
+        }
+        return
+    }
+
+    switch options.command {
+    case "status":
+        let current = await currentAuthState()
+        if current.unlocked {
+            let daemonUp = (await daemonStatus()) == "unlocked"
+            print(outColor("32", "unlocked — ready. next: secret list, or secret env --output .env\(daemonUp ? " (daemon up)" : "")"))
+        } else {
+            print(outColor("33", current.authenticated
+                ? "locked — unlock with: export BW_SESSION=\"$(bw unlock --raw)\""
+                : "unauthenticated — run: bw login, then export BW_SESSION=\"$(bw unlock --raw)\""))
+            if let session = env("BW_SESSION"), !session.isEmpty {
+                warn("a session token is present but bw rejects it — run 'bw logout && bw login' once to repair, then 'secret unlock --store'")
+            }
+            if readSession() != nil {
+                warn("stored session is stale — refresh with 'secret unlock --store'")
+            }
+            if options.check { exit(1) }
+        }
+
+    case "unlock":
+        let fromEnv = env("BW_SESSION").map { !$0.isEmpty } ?? false
+        let token: String
+        if fromEnv {
+            token = env("BW_SESSION") ?? ""
+        } else if options.helper {
+            token = runUnlockHelper()
+        } else {
+            token = runBwUnlock()
+        }
+        if token.isEmpty {
+            fail(options.helper
+                ? "secret-unlock-helper returned no session token"
+                : "bw unlock returned no session token")
+        }
+        let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
+        if check.status == 0, let data = jsonObject(check.stdout), (data["status"] as? String) != "unlocked" {
+            if fromEnv {
+                fail("refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'")
+            }
+            warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again")
+        }
+        daemonStop()
+        if options.store {
+            storeSession(token)
+            if let helper = pathTo("secret-unlock-helper") {
+                _ = runCommand(helper, ["store", token])
+            }
+            success("unlocked; session stored (clear with 'secret lock')")
+        } else {
+            print(token)
+        }
+
+    case "lock":
+        runBw(["lock"])
+        daemonStop()
+        let hadSession = readSession() != nil
+        clearSession()
+        writeErr(hadSession ? "secret: vault locked; stored session cleared\n" : "secret: vault locked\n")
+
+    case "list":
+        let entries = loaded.ordered
+        if options.json {
+            let items = entries.map { alias, definition -> String in
+                rowJSON([
+                    ("alias", alias),
+                    ("item", definition.item),
+                    ("field", definition.field ?? "password"),
+                    ("envKey", dotenvKey(alias, definition)),
+                ])
+            }
+            print("[" + items.joined(separator: ",") + "]")
+        } else if outIsTTY() {
+            let header = ["ALIAS", "ITEM", "FIELD", "CREATED AT", "SOURCE"]
+            let items = await vaultItems()
+            var hidden = 0
+            var rows: [[String]] = []
+            for (alias, definition) in entries {
+                let created = itemCreationDate(items, definition.item)
+                if created == "-" { hidden += 1 }
+                let entry = itemFor(items, definition.item)
+                let source = entry.flatMap { itemField($0, "custom:source") as? String }
+                rows.append([
+                    alias,
+                    definition.item,
+                    definition.field ?? "password",
+                    created,
+                    (source != nil && !source!.isEmpty) ? source! : "-",
+                ])
+            }
+            let widths = header.enumerated().map { column, cell -> Int in
+                max(cell.count, rows.map { $0[column].count }.max() ?? 0)
+            }
+            func pad(_ value: String, _ width: Int) -> String {
+                value + String(repeating: " ", count: max(0, width - value.count))
+            }
+            print(outColor("1;36", header.enumerated()
+                .map { pad($0.element, widths[$0.offset]) }
+                .joined(separator: "  ")))
+            for row in rows {
+                print(row.enumerated()
+                    .map { pad($0.element, widths[$0.offset]) }
+                    .joined(separator: "  "))
+            }
+            if hidden > 0 {
+                warn("created date hidden for \(hidden) item(s) — unlock the vault to show dates")
+            }
+        } else {
+            for (alias, definition) in entries {
+                print("\(alias)\t\(definition.item)\t\(definition.field ?? "password")")
+            }
+        }
+        writeErr("secret: \(entries.count) aliases configured. next: secret get <alias>, or secret env --output .env\n")
+
+    case "get":
+        guard let alias = options.positional.first else {
+            fail("get requires an alias, e.g. secret get github-token (see 'secret list')")
+        }
+        guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
+        let value = await getValue(alias, definition)
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "get", target: alias, env: environment))
+        if options.copy {
+            copyToClipboardOrFail(value)
+            success("copied \(alias) to clipboard")
+        } else {
+            print(value)
+        }
+
+    case "set":
+        var alias = options.positional.first
+        if alias == nil {
+            if isatty(0) != 1 { fail("set requires an alias, e.g. secret set github-token (see 'secret list')") }
+            let entered = promptLine("Alias name")
+            if entered.isEmpty || !validAlias(entered) {
+                fail("invalid alias name: \(entered) (letters, digits, underscore, hyphen; must not start with a digit)")
+            }
+            alias = entered
+        }
+        let aliasValue = alias!
+        var definition = loaded.definitions[aliasValue]
+        if definition == nil {
+            if !validAlias(aliasValue) {
+                fail("invalid alias name: \(aliasValue) (letters, digits, underscore, hyphen; must not start with a digit)")
+            }
+            let filePath = options.global
+                ? userConfigPath
+                : (options.configPath ?? findProjectConfig() ?? "\(FileManager.default.currentDirectoryPath)/\(projectConfigName)")
+            let prefix = options.global
+                ? "global"
+                : URL(fileURLWithPath: filePath).deletingLastPathComponent().lastPathComponent
+            let item = "\(prefix)/\(kebab(aliasValue))"
+            let newDefinition = J.obj([
+                ("item", .str(item)),
+                ("field", .str("password")),
+                ("env", .str(scream(aliasValue))),
+            ])
+            if exists(filePath) {
+                let parsed = readConfig(filePath)
+                var secrets = parsed.get("secrets")?.pairs() ?? []
+                secrets.append((aliasValue, newDefinition))
+                let rootPairs = parsed.pairs() ?? []
+                let updated = rootPairs.map { key, value in
+                    key == "secrets" ? (key, J.obj(secrets)) : (key, value)
+                }
+                writeAtomic(filePath, jStringify(.obj(updated)) + "\n")
+            } else {
+                writeAtomic(filePath, jStringify(.obj([("secrets", .obj([(aliasValue, newDefinition)]))])) + "\n")
+            }
+            info("added \(aliasValue) (\(item)) to \(filePath)")
+            definition = SecretDefinition(item: item, field: "password")
+        }
+        let value = options.generate
+            ? await generatePassword()
+            : promptHidden("Enter value for \(aliasValue)")
+        if value.isEmpty || placeholderValues.contains(value) {
+            fail("refusing empty or placeholder value for \(aliasValue)")
+        }
+        var source = options.source
+        if source == nil && isatty(0) == 1 {
+            let entered = promptLine("Source URL (optional)")
+            if !entered.isEmpty { source = entered }
+        }
+        await setValue(aliasValue, definition!, value, options.force, source)
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "set", target: aliasValue, env: environment))
+        success("set \(aliasValue) (\(definition!.item), \(definition!.field ?? "password"))")
+        if options.generate {
+            if options.copy {
+                copyToClipboardOrFail(value)
+                success("copied \(aliasValue) to clipboard")
+            } else {
+                deliverValue(value, aliasValue)
+            }
+        }
+
+    case "id":
+        guard let alias = options.positional.first else {
+            fail("id requires an alias, e.g. secret id github-token (see 'secret list')")
+        }
+        guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
+        let items = await vaultItems()
+        guard let item = itemFor(items, definition.item) else {
+            await requireUnlocked()
+            fail("item not found for \(alias): \(definition.item)")
+        }
+        guard let id = item["id"] as? String else { fail("Bitwarden item for \(alias) has no id") }
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "id", target: alias, env: environment))
+        print(id)
+
+    case "totp":
+        guard let alias = options.positional.first else {
+            fail("totp requires an alias, e.g. secret totp github-token (see 'secret list')")
+        }
+        guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
+        await requireUnlocked()
+        let code = runBw(["get", "totp", definition.item])
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "totp", target: alias, env: environment))
+        if options.copy {
+            copyToClipboardOrFail(code)
+            success("copied \(alias) totp code to clipboard")
+        } else {
+            print(code)
+        }
+
+    case "source":
+        guard let alias = options.positional.first else {
+            fail("source requires an alias, e.g. secret source github-token")
+        }
+        guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
+        let url = options.positional.count > 1 ? options.positional[1] : nil
+        let items = await vaultItems()
+        guard let item = itemFor(items, definition.item) else {
+            await requireUnlocked()
+            fail("item not found for \(alias): \(definition.item)")
+        }
+        if let url {
+            guard var payload = jsonObject(jsonString(item)) else { fail("Bitwarden item for \(alias) is invalid") }
+            setItemField(&payload, "custom:source", url)
+            let id = payload["id"] as? String ?? ""
+            if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
+                runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
+                daemonStop()
+            }
+            success("source set for \(alias)")
+        } else {
+            let value = itemField(item, "custom:source")
+            if let value = value as? String, !value.isEmpty {
+                print(value)
+            } else {
+                print("")
+            }
+        }
+
+    case "pull":
+        await requireUnlocked()
+        if !(await daemonMutate(method: "POST", path: "/sync")) {
+            runBw(["sync"])
+            daemonStop()
+        }
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "pull", target: "", env: environment))
+        success("vault cache pulled from server")
+
+    case "pin":
+        guard let alias = options.positional.first else {
+            fail("pin requires an alias, e.g. secret pin github-token (see 'secret list')")
+        }
+        if loaded.definitions[alias] == nil { fail("unknown alias: \(alias) (see 'secret list')") }
+        guard let holder = configWithAlias(
+            alias,
+            projectPath: options.configPath ?? findProjectConfig(),
+            localPath: findProjectLocalConfig()
+        ) else {
+            fail("alias \(alias) is not in a project, local, or user config (see 'secret print --all')")
+        }
+        await requireUnlocked()
+        var itemNames: [String] = []
+        if let item = holder.config.get("secrets")?.get(alias)?.get("item")?.string() {
+            itemNames.append(item)
+        }
+        for (_, environmentValue) in holder.config.get("environments")?.pairs() ?? [] {
+            if let item = environmentValue.get("secrets")?.get(alias)?.get("item")?.string() {
+                itemNames.append(item)
+            }
+        }
+        let items = await vaultItems()
+        var ids: [String: String] = [:]
+        for item in itemNames {
+            guard let entry = itemFor(items, item) else { fail("item not found for \(alias): \(item)") }
+            guard let id = entry["id"] as? String else { fail("Bitwarden item has no id: \(item)") }
+            ids[item] = id
+        }
+        var rootPairs = holder.config.pairs() ?? []
+        rootPairs = rootPairs.map { key, value in
+            switch key {
+            case "secrets":
+                var pairs = value.pairs() ?? []
+                pairs = pairs.map { name, definition in
+                    if name == alias, let old = definition.get("item")?.string(), let new = ids[old] {
+                        return (name, replacePairKey("item", .str(new), in: definition))
+                    }
+                    return (name, definition)
+                }
+                return (key, J.obj(pairs))
+            case "environments":
+                let envPairs = value.pairs()?.map { envName, envValue -> (String, J) in
+                    var secrets = envValue.get("secrets")?.pairs() ?? []
+                    secrets = secrets.map { name, definition in
+                        if name == alias, let old = definition.get("item")?.string(), let new = ids[old] {
+                            return (name, replacePairKey("item", .str(new), in: definition))
+                        }
+                        return (name, definition)
+                    }
+                    let updated = envValue.pairs()?.map { k, v in
+                        k == "secrets" ? ("secrets", J.obj(secrets)) : (k, v)
+                    } ?? []
+                    return (envName, J.obj(updated))
+                }
+                return (key, J.obj(envPairs ?? []))
+            default:
+                return (key, value)
+            }
+        }
+        writeAtomic(holder.filePath, jStringify(.obj(rootPairs)) + "\n")
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "pin", target: alias, env: environment))
+        writeErr("secret: pinned \(alias) in \(holder.filePath)\n")
+
+    case "rotate":
+        guard let alias = options.positional.first else {
+            fail("rotate requires an alias, e.g. secret rotate github-token (see 'secret list')")
+        }
+        guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
+        let value = await generatePassword()
+        await setValue(alias, definition, value, options.force, nil)
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "rotate", target: alias, env: environment))
+        success("rotated \(alias) (\(definition.item), \(definition.field ?? "password"))")
+        if options.copy {
+            copyToClipboardOrFail(value)
+            success("copied \(alias) to clipboard")
+        } else {
+            deliverValue(value, alias)
+        }
+
+    case "rm":
+        guard let alias = options.positional.first else {
+            fail("rm requires an alias, e.g. secret rm github-token (see 'secret list')")
+        }
+        guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
+        let items = await vaultItems()
+        guard let item = itemFor(items, definition.item) else {
+            await requireUnlocked()
+            if items != nil {
+                unsetAlias(alias, options.global ? userConfigPath : options.configPath, quiet: true)
+                info("item not found in vault — removed \(alias) from config")
+                recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "rm", target: alias, env: environment))
+                return
+            }
+            fail("item not found for \(alias): \(definition.item)")
+        }
+        let name = (item["name"] as? String) ?? definition.item
+        if !options.force {
+            if isatty(0) != 1 { fail("refusing to delete \(name) without confirmation; pass --force") }
+            let confirmed = confirmPrompt("Delete item \(name)?")
+            if !confirmed { fail("aborted; use --force to delete without confirmation") }
+        }
+        guard let id = item["id"] as? String else { fail("Bitwarden item for \(alias) has no id") }
+        if !(await daemonMutate(method: "DELETE", path: "/object/item/\(id)")) {
+            runBw(["delete", "item", definition.item])
+            daemonStop()
+        }
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "rm", target: alias, env: environment))
+        success("deleted item \(definition.item) for \(alias) (config entry kept)")
+
+    case "unset":
+        guard let alias = options.positional.first else {
+            fail("unset requires an alias, e.g. secret unset github-token (see 'secret list')")
+        }
+        unsetAlias(alias, options.global ? userConfigPath : options.configPath)
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "unset", target: alias, env: environment))
+
+    case "mv":
+        guard let from = options.positional.first else {
+            fail("mv requires an alias, e.g. secret mv github-token gh-token (see 'secret list')")
+        }
+        guard options.positional.count > 1 else {
+            fail("mv requires the new alias name, e.g. secret mv github-token gh-token")
+        }
+        let to = options.positional[1]
+        moveAlias(from, to, options.configPath)
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "mv", target: "\(from) -> \(to)", env: environment))
+
+    case "init":
+        initProjectConfig(force: options.force, aliases: options.positional)
+
+    case "env":
+        guard let selected = loaded.selectedAliases, !selected.isEmpty else {
+            fail("env requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md")
+        }
+        let missingRequired = options.required.filter { !selected.contains($0) }
+        if !missingRequired.isEmpty {
+            fail("required alias(es) not in project config: \(missingRequired.joined(separator: ", ")) (add them to .secret.json)")
+        }
+        let optionalSet = Set(options.optional)
+        for alias in optionalSet where loaded.definitions[alias] == nil {
+            writeErr("secret: \(alias) is not declared (optional, skipping)\n")
+        }
+        let items = await vaultItems()
+        if items != nil {
+            let missing = selected.filter { candidate in
+                guard let definition = loaded.definitions[candidate] else { return false }
+                return !optionalSet.contains(candidate) && resolveOptional(items, definition) == nil
+            }
+            if !missing.isEmpty {
+                warn("hint: pass --optional \(missing.joined(separator: ",")) to skip unresolved aliases")
+            }
+        }
+        var lines: [String] = []
+        for alias in selected {
+            guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias)") }
+            let key = dotenvKey(alias, definition)
+            if optionalSet.contains(alias) {
+                guard let value = resolveOptional(items, definition) else {
+                    warn("skipping \(alias) (optional, unresolved)")
+                    continue
+                }
+                if let source = resolveOptional(items, SecretDefinition(item: definition.item, field: "custom:source")) {
+                    lines.append("# source: \(source)")
+                }
+                let formatted = dotenvValue(value)
+                lines.append(options.export ? "export \(key)=\(formatted)" : "\(key)=\(formatted)")
+                continue
+            }
+            let value = dotenvValue(await resolveRequired(items, alias, definition))
+            if let source = resolveOptional(items, SecretDefinition(item: definition.item, field: "custom:source")) {
+                lines.append("# source: \(source)")
+            }
+            lines.append(options.export ? "export \(key)=\(value)" : "\(key)=\(value)")
+        }
+        if options.diff || options.dry || options.dryRun {
+            let target = options.outputPath ?? "\(FileManager.default.currentDirectoryPath)/.env"
+            let previous = (readFile(target) ?? "").split(separator: "\n").filter { $0 != "" }.map(String.init)
+            let added = lines.filter { !previous.contains($0) }
+            let removed = previous.filter { !lines.contains($0) }
+            for line in removed { print(outColor("31", "- \(line)")) }
+            for line in added { print(outColor("32", "+ \(line)")) }
+            recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "env", target: "\(target) (diff)", env: environment))
+            info("env --diff: \(added.count) addition(s), \(removed.count) removal(s) for \(target)")
+            return
+        }
+        let output = lines.joined(separator: "\n") + "\n"
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "env", target: options.outputPath ?? "stdout", env: environment))
+        if let outputPath = options.outputPath {
+            writeAtomic(outputPath, output)
+            success("wrote \(lines.count) aliases (env \(environment)) to \(outputPath) (mode 0600)")
+        } else {
+            print(output, terminator: "")
+        }
+
+    case "run":
+        guard let selected = loaded.selectedAliases, !selected.isEmpty else {
+            fail("run requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md")
+        }
+        guard let command = options.positional.first else {
+            fail("run requires a command, e.g. secret run -- npm test")
+        }
+        let args = Array(options.positional.dropFirst())
+        var envVars: [String: String] = [:]
+        let optionalSet = Set(options.optional)
+        for alias in optionalSet where loaded.definitions[alias] == nil {
+            writeErr("secret: \(alias) is not declared (optional, skipping)\n")
+        }
+        let items = await vaultItems()
+        if items != nil {
+            let missing = selected.filter { candidate in
+                guard let definition = loaded.definitions[candidate] else { return false }
+                return !optionalSet.contains(candidate) && resolveOptional(items, definition) == nil
+            }
+            if !missing.isEmpty {
+                warn("hint: pass --optional \(missing.joined(separator: ",")) to skip unresolved aliases")
+            }
+        }
+        for alias in selected {
+            guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias)") }
+            let key = dotenvKey(alias, definition)
+            if optionalSet.contains(alias) {
+                guard let value = resolveOptional(items, definition) else {
+                    warn("skipping \(alias) (optional, unresolved)")
+                    continue
+                }
+                envVars[key] = value
+                continue
+            }
+            envVars[key] = await resolveRequired(items, alias, definition)
+        }
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "run", target: command, env: environment))
+        var mergedEnv = ProcessInfo.processInfo.environment
+        for (key, value) in envVars { mergedEnv[key] = value }
+        let commandPath = command.contains("/") ? command : (pathTo(command) ?? command)
+        let status = runCommandPassthrough(commandPath, args, env: mergedEnv)
+        exit(status == 0 ? 0 : status)
+
+    case "print":
+        if options.all {
+            printAllScopes(options.configPath, json: options.json)
+            recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "print", target: "all", env: environment))
+        } else {
+            let scope = options.positional.first ?? "project"
+            printScope(scope: scope, selectedConfig: options.configPath, json: options.json)
+            recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "print", target: scope, env: environment))
+        }
+
+    case "global":
+        printScope(scope: "global", selectedConfig: options.configPath, json: options.json)
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "global", target: "global", env: environment))
+
+    case "prune":
+        guard let selected = loaded.selectedAliases, !selected.isEmpty else {
+            fail("prune requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md")
+        }
+        let items = await vaultItems()
+        if items == nil {
+            await requireUnlocked()
+            fail("could not read vault items — cannot prune")
+        }
+        let missing = selected.filter { alias in
+            itemFor(items, loaded.definitions[alias]?.item ?? "") == nil
+        }
+        for alias in missing {
+            let definition = loaded.definitions[alias]!
+            if options.dryRun {
+                info("would remove \(alias) (\(definition.item))")
+            } else {
+                unsetAlias(alias, options.global ? userConfigPath : options.configPath, quiet: true)
+            }
+        }
+        if options.dryRun {
+            if missing.count > 0 {
+                warn("prune: \(missing.count) alias(es) would be removed")
+            } else {
+                info("prune: no aliases missing from the vault")
+            }
+        } else if missing.count > 0 {
+            success("pruned \(missing.count) alias(es) from config")
+        } else {
+            info("prune: no aliases missing from the vault")
+        }
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "prune", target: missing.joined(separator: ","), env: environment))
+
+    case "search":
+        guard let query = options.positional.first else {
+            fail("search requires a term, e.g. secret search token (matches alias, item, env key)")
+        }
+        searchAliases(query, options.configPath, json: options.json)
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "search", target: query, env: environment))
+
+    case "lint":
+        lint(options.configPath, json: options.json)
+
+    case "doctor":
+        await doctor(loaded.ordered)
+
+    case "recent":
+        printRecent(json: options.json)
+
+    case "history":
+        printHistory(json: options.json)
+
+    default:
+        fail("unknown command: \(options.command)")
+    }
+}
+
+var rawArgs = CommandLine.arguments
+rawArgs.removeFirst()
+if rawArgs.first == "__secret-keepalive", rawArgs.count >= 2 {
+    keepaliveLoop(socket: rawArgs[1])
+}
+
+await run()

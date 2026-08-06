@@ -102,6 +102,7 @@
             opencodex = pkgs'.callPackage ./packages/opencodex { pkgs = pkgs'; };
             plannotator = pkgs'.callPackage ./packages/plannotator { pkgs = pkgs'; };
             ryu = pkgs'.callPackage ./packages/ryu { };
+            secret = pkgs'.callPackage ./packages/secret { };
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };

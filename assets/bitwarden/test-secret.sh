@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fake-bw regression suite for assets/bitwarden/secret.ts.
+# Fake-bw regression suite for the secret CLI (Swift port by default, TS
+# reference implementation with SECRET_IMPL=ts).
 # Self-contained: builds a fake bw/pbcopy, a temp HOME, and asserts behavior
 # without touching a real vault or the network.
 set -euo pipefail
@@ -8,6 +9,16 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$root/assets/bitwarden/secret.ts"
 bun_bin="${BUN:-bun}"
 export FAKE_BUN_BIN="$bun_bin"
+impl="${SECRET_IMPL:-swift}"
+if [ "$impl" = "swift" ]; then
+  swift build -c release --package-path "$root/packages/secret" >/dev/null
+  swift_bin="$root/packages/secret/.build/release/secret"
+  secret_bin0="$swift_bin"
+  secret_bin1=""
+else
+  secret_bin0="$bun_bin"
+  secret_bin1="$script"
+fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -142,7 +153,11 @@ assert_fail() {
   fi
 }
 
-secret() { "$bun_bin" "$script" "$@"; }
+if [ "$impl" = "swift" ]; then
+  secret() { "$swift_bin" "$@"; }
+else
+  secret() { "$bun_bin" "$script" "$@"; }
+fi
 
 cd "$tmp/proj"
 
@@ -180,13 +195,13 @@ secret get github-token --copy
 assert_eq "$(cat "$FAKE_CLIP")" "old-pass" "get --copy"
 
 assert_eq "$(printf "x" | secret set github-token 2>&1 || true)" "secret: item already exists; pass --force to overwrite" "set blocked without force"
-assert_ok bash -c 'printf "v2" | "$0" "$1" set github-token --force' "$bun_bin" "$script"
-assert_ok env FAKE_GET_MISSING=1 bash -c 'printf "v3" | "$0" "$1" set github-token' "$bun_bin" "$script"
+assert_ok bash -c 'printf "v2" | "$0" $1 set github-token --force' "$secret_bin0" "$secret_bin1"
+assert_ok env FAKE_GET_MISSING=1 bash -c 'printf "v3" | "$0" $1 set github-token' "$secret_bin0" "$secret_bin1"
 rg -q '"name":"nixfiles/github-token"' "$FAKE_LOG" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: create sends base64 item JSON (name missing from decoded log)" >&2
 }
-assert_eq "$(FAKE_GET_MISSING=1 FAKE_CREATE_FAIL=1 bash -c 'printf "v4" | "$0" "$1" set github-token' "$bun_bin" "$script" 2>&1 || true)" "secret: Bitwarden CLI request failed: fake create exploded" "create failures surface bw stderr"
+assert_eq "$(FAKE_GET_MISSING=1 FAKE_CREATE_FAIL=1 bash -c 'printf "v4" | "$0" $1 set github-token' "$secret_bin0" "$secret_bin1" 2>&1 || true)" "secret: Bitwarden CLI request failed: fake create exploded" "create failures surface bw stderr"
 mkdir -p "$tmp/setnew"
 printf '%s' '{"secrets":{"EXISTING":{"item":"setnew/existing"}}}' > "$tmp/setnew/.secret.json"
 cd "$tmp/setnew"
@@ -333,7 +348,7 @@ assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\"
 assert_eq "$(secret list --json)" "[{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "list --json merged aliases after pin"
 if command -v script >/dev/null 2>&1; then
   : > "$FAKE_LOG"
-  script -q "$tmp/list-tty.txt" "$bun_bin" "$script" list >/dev/null 2>&1 || true
+  script -q "$tmp/list-tty.txt" "$secret_bin0" $secret_bin1 list >/dev/null 2>&1 || true
   {
     tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'ALIAS' &&
     tr -d '\r\b' < "$tmp/list-tty.txt" | rg -q 'CREATED AT' &&
@@ -533,7 +548,7 @@ if command -v expect >/dev/null 2>&1; then
   cat > "$tmp/reunlock.exp" <<EXP
 set timeout 30
 log_file -a $tmp/reunlock.txt
-spawn env FAKE_BW_STATUS={"status":"locked"} PATH=$tmp/bin:$PATH HOME=$tmp SECRET_DAEMON=0 $bun_bin $script rotate github-token --force
+spawn env FAKE_BW_STATUS={"status":"locked"} PATH=$tmp/bin:$PATH HOME=$tmp SECRET_DAEMON=0 $secret_bin0 $secret_bin1 rotate github-token --force
 send "mp\r"
 expect "rotated"
 EXP
