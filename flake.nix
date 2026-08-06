@@ -107,6 +107,7 @@
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
             codexbar = pkgs'.callPackage ./packages/codexbar { };
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
+            secretbar = pkgs'.callPackage ./packages/secretbar { };
           };
           apps.update-pins = mkBunApp "update-pins" ./scripts/update-pins.ts;
         };

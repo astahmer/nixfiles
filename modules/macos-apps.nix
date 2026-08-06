@@ -4,6 +4,7 @@
     { pkgs, lib, ... }:
     let
       codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
+      secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
       cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
@@ -73,6 +74,7 @@
         pkgs.orbstack
         pkgs.openusage
         codexbar
+        secretbar
       ];
     };
 }
