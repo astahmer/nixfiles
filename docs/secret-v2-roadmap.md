@@ -50,7 +50,3 @@ in-app TTL copy chip was explicitly dropped (user decision).
 Core loop: menu bar dot (unlocked = green / locked = amber / health
 problems = red) → click → fuzzy search box → click an alias = copy →
 secondary actions. Touch ID unlock and lock are one click away, no terminal.
-
-Remaining polish: Spotlight index of alias names, global hotkey, an app
-icon, FSEvents-based index refresh. Still explicitly out of scope: a vault
-browser, editing configs, anything AI.

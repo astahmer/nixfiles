@@ -16,6 +16,7 @@
       ocx = "${opencodex}/bin/ocx";
       jq = "${pkgs.jq}/bin/jq";
       cmp = "${pkgs.diffutils}/bin/cmp";
+      gettext = "${pkgs.gettext}/bin";
     in
     {
       # `ocx` wrapper execs `bun` from PATH (same pattern as ghui).
@@ -37,7 +38,7 @@
         current_sorted="$config_file.current.sorted"
         candidate_sorted="$candidate_config.sorted"
 
-        export PATH="${pkgs.bun}/bin:${pkgs.coreutils}/bin:${pkgs.jq}/bin:/usr/bin:/bin"
+        export PATH="${pkgs.bun}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${gettext}:${pkgs.jq}/bin:/usr/bin:/bin"
         ${pkgs.coreutils}/bin/mkdir -p "$opencodex_home" "$secrets_dir"
 
         if [ ! -f "$secrets_file" ] && [ -f "$example_file" ]; then
