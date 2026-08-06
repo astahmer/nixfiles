@@ -358,6 +358,25 @@ struct LoadedConfig {
     var selectedAliases: [String]?
 }
 
+func definitionInConfig(_ config: J, _ alias: String, environment: String) -> SecretDefinition? {
+    let value = (environment == "prod" ? nil : config.get("environments")?.get(environment)?.get("secrets")?.get(alias))
+        ?? config.get("secrets")?.get(alias)
+    guard let value else { return nil }
+    var item = ""
+    var field: String?
+    var envKey: String?
+    for (key, child) in value.pairs() ?? [] {
+        switch key {
+        case "item": item = child.string() ?? ""
+        case "field": field = child.string()
+        case "env": envKey = child.string()
+        default: break
+        }
+    }
+    if item.isEmpty { fail("invalid definition for \(alias)") }
+    return SecretDefinition(item: item, field: field, envKey: envKey)
+}
+
 func dotenvKey(_ alias: String, _ definition: SecretDefinition) -> String {
     let key = definition.envKey ?? alias
     if key.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) == nil {

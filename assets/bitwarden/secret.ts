@@ -326,6 +326,14 @@ const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
   };
 };
 
+const definitionInConfig = (config: SecretConfig, alias: string, environment: string): SecretDefinition | undefined => {
+  const environmentDefinition = environment === "prod" ? undefined : config.environments?.[environment]?.secrets?.[alias];
+  const definition = environmentDefinition || config.secrets?.[alias];
+  if (definition === undefined) return undefined;
+  if (!definition || typeof definition.item !== "string" || !definition.item) fail(`invalid definition for ${alias}`);
+  return definition;
+};
+
 // bw's stderr names the real failure; never swallow it into a generic
 // "request failed" message.
 const bwError = (result: { stderr?: string | null; stdout?: string }): string =>
@@ -1770,15 +1778,16 @@ const main = async (): Promise<void> => {
         fail(`invalid alias name: ${alias} (letters, digits, underscore, hyphen; must not start with a digit)`);
       }
     }
-    let definition = loaded.definitions[alias];
+    const filePath = options.global
+      ? userConfigPath
+      : options.configPath || findProjectConfig() || join(process.cwd(), projectConfigName);
+    const targetConfig = existsSync(filePath) ? readJson(filePath) : {};
+    let definition = definitionInConfig(targetConfig, alias, environment);
     if (!definition) {
       // Unknown alias: add it to the project config, then create the item.
       if (!aliasNamePattern.test(alias)) {
         fail(`invalid alias name: ${alias} (letters, digits, underscore, hyphen; must not start with a digit)`);
       }
-      const filePath = options.global
-        ? userConfigPath
-        : options.configPath || findProjectConfig() || join(process.cwd(), projectConfigName);
       const prefix = options.global ? "global" : basename(dirname(filePath));
       const item = `${prefix}/${alias.toLowerCase().replaceAll("_", "-")}`;
       const config = existsSync(filePath) ? (readJson(filePath) as SecretConfig) : {};

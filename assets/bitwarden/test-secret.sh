@@ -357,6 +357,16 @@ rg -q '"ga2"' "$tmp/.config/secret/config.json" && {
   fail=$((fail + 1))
   echo "FAIL: secret global unset removes the alias" >&2
 } || pass=$((pass + 1))
+mkdir -p "$tmp/scope-project"
+printf '%s' '{"secrets":{}}' > "$tmp/scope-project/.secret.json"
+scope_config="$tmp/scope-project/.secret.json"
+printf 'scope-value\n' | secret set --config "$scope_config" shared-alias >/dev/null 2>&1
+if rg -q '"shared-alias"' "$scope_config" && rg -q '"name":"scope-project/shared-alias"' "$FAKE_LOG"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: set scopes a colliding alias to the selected repo config" >&2
+fi
 mkdir -p "$tmp/prunedir"
 printf '%s' '{"secrets":{"KEEP":{"item":"nixfiles/github-token"},"GONE":{"item":"nope/missing"}}}' > "$tmp/prunedir/.secret.json"
 cd "$tmp/prunedir"

@@ -1117,14 +1117,15 @@ func run() async {
             alias = entered
         }
         let aliasValue = alias!
-        var definition = loaded.definitions[aliasValue]
+        let filePath = options.global
+            ? userConfigPath
+            : (options.configPath ?? findProjectConfig() ?? "\(FileManager.default.currentDirectoryPath)/\(projectConfigName)")
+        let targetConfig = exists(filePath) ? readConfig(filePath) : nil
+        var definition = targetConfig.flatMap { definitionInConfig($0, aliasValue, environment: environment) }
         if definition == nil {
             if !validAlias(aliasValue) {
                 fail("invalid alias name: \(aliasValue) (letters, digits, underscore, hyphen; must not start with a digit)")
             }
-            let filePath = options.global
-                ? userConfigPath
-                : (options.configPath ?? findProjectConfig() ?? "\(FileManager.default.currentDirectoryPath)/\(projectConfigName)")
             let prefix = options.global
                 ? "global"
                 : URL(fileURLWithPath: filePath).deletingLastPathComponent().lastPathComponent
