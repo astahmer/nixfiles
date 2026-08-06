@@ -430,7 +430,7 @@ each.
 ## Regression tests
 
 `assets/bitwarden/test-secret.sh` runs a self-contained fake-`bw` suite
-(temp HOME, fake vault, no network, 169 assertions) against the Swift binary
+(temp HOME, fake vault, no network, 179 assertions) against the Swift binary
 by default; `SECRET_IMPL=ts bash assets/bitwarden/test-secret.sh` runs the
 same suite against the TypeScript reference implementation. The daemon-mode
 assertions use a real unix-socket HTTP fixture (`test-daemon.ts`). The suite

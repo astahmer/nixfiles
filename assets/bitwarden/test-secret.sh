@@ -575,6 +575,10 @@ test ! -e "$tmp/.config/secret/daemon/daemon.json" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: lock removes the daemon state" >&2
 }
+assert_eq "$(secret unlock --helper 2>/dev/null)" "" "Touch ID helper keeps its token out of stdout when the daemon starts"
+assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env (daemon up)" "Touch ID helper leaves a reusable unlocked daemon"
+assert_eq "$(secret get github-token)" "old-pass" "Touch ID helper daemon serves the next read"
+assert_ok secret lock
 export SECRET_DAEMON=0 FAKE_SERVE=0
 cd "$tmp"
 
