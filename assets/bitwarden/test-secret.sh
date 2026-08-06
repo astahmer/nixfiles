@@ -171,7 +171,7 @@ cd "$tmp/proj"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env" "status unlocked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" "locked — unlock with: secret unlock --store" "status locked"
 assert_eq "$(FAKE_BW_STATUS='{"status":"unauthenticated"}' secret status)" "unauthenticated — run: bw login, then secret unlock --store" "status unauthenticated"
-assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|global\|prune\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history" "help lists all commands"
+assert_eq "$(secret -h | tr '\n' ' ' | rg -o 'status\|unlock\|lock\|list\|search\|get\|set\|edit\|id\|totp\|source\|pull\|pin\|rotate\|rm\|unset\|mv\|init\|env\|run\|print\|global\|prune\|lint\|doctor\|recent\|history')" "status|unlock|lock|list|search|get|set|edit|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history" "help lists all commands"
 if secret -h | rg -q 'set \(s, add\)' && secret -h | rg -q 'rm \(delete, remove\)' && secret -h | rg -q 'source \(so\)' && secret -h | rg -q 'pull \(pu, sync\)' && secret -h | rg -q 'env \(e\)'; then
   pass=$((pass + 1))
 else
@@ -180,7 +180,7 @@ else
 fi
 assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "-h after a command shows that command's help"
 assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "secret help env shows env help"
-assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]" "--help is accepted"
+assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|edit|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret source github-token)" "https://example.com" "source prints the stored URL"
 rm -f "$FAKE_OPEN"
@@ -198,6 +198,18 @@ rg -q 'https://keys.example.com/new' "$FAKE_LOG" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: set --source stores the URL in the edited item" >&2
 }
+printf 'v13\n' | secret edit github-token --field password --value-stdin --force >/dev/null 2>&1
+rg -q 'v13' "$FAKE_LOG" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: edit --value-stdin updates only the configured value field" >&2
+}
+secret edit github-token --source https://keys.example.com/edit --name 'GitHub token' --notes 'rotated by test' --force >/dev/null 2>&1
+if rg -q 'https://keys.example.com/edit' "$FAKE_LOG" && rg -q 'rotated by test' "$FAKE_LOG" && rg -q 'GitHub token' "$FAKE_LOG"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: edit updates source, name, and notes without replacing the value" >&2
+fi
 assert_eq "$(FAKE_EMPTY_VAULT=1 secret get github-token 2>&1 || true)" "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config
 secret: item not found for github-token: nixfiles/github-token" "empty vault hints before item not found"
 : > "$FAKE_LOG"
@@ -228,6 +240,13 @@ rg -q '"fresh-alias"' .secret.json && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: set adds a new alias to the config" >&2
 }
+printf 's4cret\n' | secret set fresh-metadata --source https://keys.example.com/fresh --name 'Fresh metadata' --notes 'fresh note' >/dev/null 2>&1
+if rg -q 'https://keys.example.com/fresh' "$FAKE_LOG" && rg -q 'Fresh metadata' "$FAKE_LOG" && rg -q 'fresh note' "$FAKE_LOG"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: set creates source, name, and notes metadata" >&2
+fi
 rg -q '"name":"setnew/fresh-alias"' "$FAKE_LOG" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: set creates the vault item for a new alias" >&2

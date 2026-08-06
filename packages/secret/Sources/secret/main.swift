@@ -30,6 +30,10 @@ struct Options {
     var dry = false
     var dryRun = false
     var source: String?
+    var name: String?
+    var notes: String?
+    var field: String?
+    var valueStdin = false
     var openURL = false
     var global = false
     var helper = false
@@ -126,6 +130,20 @@ func parseOptions(_ argv: [String]) -> Options {
             index += 1
             guard index < argv.count else { fail("--source requires a URL") }
             options.source = argv[index]
+        } else if argument == "--name" {
+            index += 1
+            guard index < argv.count else { fail("--name requires an item name") }
+            options.name = argv[index]
+        } else if argument == "--notes" {
+            index += 1
+            guard index < argv.count else { fail("--notes requires text (use an empty string to clear notes)") }
+            options.notes = argv[index]
+        } else if argument == "--field" {
+            index += 1
+            guard index < argv.count else { fail("--field requires a field name") }
+            options.field = argv[index]
+        } else if argument == "--value-stdin" {
+            options.valueStdin = true
         } else if argument == "--open" {
             options.openURL = true
         } else if argument == "--store" {
@@ -203,7 +221,7 @@ let commandHelpText: [String: String] = [
       --env NAME   Environment override (default: prod)
     """,
     "set": """
-    Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--global]
+    Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--name NAME] [--notes TEXT] [--global]
 
     Prompt (hidden) for a value and write it to Bitwarden. A missing alias is
     added to the project config and created in the vault; with no alias at all,
@@ -213,6 +231,13 @@ let commandHelpText: [String: String] = [
       --force, -f  Overwrite an existing item without confirmation
       --source URL Attach a source URL (stored as a custom "source" field)
       --global, -g Add a new alias to the global config instead of the project one
+    """,
+    "edit": """
+    Usage: secret edit [<alias>] [--name NAME] [--field FIELD] [--source URL] [--notes TEXT] [--force]
+
+    Edit one or more Bitwarden item fields without changing the configured alias.
+    With no field flags, prompt for name, value, source, notes, or a custom field.
+    Use --value-stdin for a non-interactive value update.
     """,
     "id": """
     Usage: secret id <alias>
@@ -329,7 +354,7 @@ let commandHelpText: [String: String] = [
 
 func printHelp() {
     print("""
-    Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]
+    Usage: secret <status|unlock|lock|list|search|get|set|edit|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]
 
     Commands:
       status (st)         Check Bitwarden auth state and print the next command to run
@@ -341,6 +366,7 @@ func printHelp() {
       set (s, add) [<alias>]
                           Prompt (hidden) a value and write it to Bitwarden; a missing
                           alias is added to the config and created in the vault
+      edit <alias>         Edit the item name, configured value, source, notes, or a custom field
       id <alias>          Print the resolved Bitwarden item id (no value)
       totp <alias>        Print the current TOTP code (--copy to clipboard)
       source (so) <alias> [url]
@@ -383,6 +409,10 @@ func printHelp() {
       --generate          With set: generate a random password instead of prompting
       --force, -f         With set: overwrite an existing item without confirmation
       --source URL        With set: attach a source URL (custom "source" field)
+      --name NAME         With set/edit: change the Bitwarden item name
+      --notes TEXT        With set/edit: set or clear Bitwarden notes
+      --field FIELD       With set/edit: choose the value field (password, username, notes, custom:name)
+      --value-stdin       With edit: read the new value from stdin without putting it in argv
       --open              With source: open the source URL in the browser
       --global, -g        With set/unset/rm: operate on the global config
 
@@ -732,6 +762,8 @@ func setValue(
     _ value: String,
     _ force: Bool,
     _ source: String?,
+    name: String? = nil,
+    notes: String? = nil,
     biometricConfirm: Bool = false
 ) async {
     await requireUnlocked()
@@ -739,7 +771,8 @@ func setValue(
     let items = await vaultItems()
     let item = itemFor(items, definition.item)
     if item == nil {
-        var payload = newItem(name: definition.item, field: field, value: value)
+        var payload = newItem(name: name ?? definition.item, field: field, value: value)
+        if let notes, field != "notes" { setItemField(&payload, "notes", notes) }
         if let source { setItemField(&payload, "custom:source", source) }
         if !(await daemonMutate(method: "POST", path: "/object/item", payload: payload)) {
             runBwInput(["create", "item"], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
@@ -759,12 +792,51 @@ func setValue(
     }
     var payload = jsonObject(jsonString(item!)) ?? [:]
     setItemField(&payload, field, value)
+    if let name { payload["name"] = name }
+    if let notes { setItemField(&payload, "notes", notes) }
     if let source { setItemField(&payload, "custom:source", source) }
     if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
         runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
         daemonStop()
     }
     success("updated item \(definition.item)")
+}
+
+func editItem(
+    alias: String,
+    definition: SecretDefinition,
+    value: String?,
+    field: String?,
+    source: String?,
+    name: String?,
+    notes: String?,
+    force: Bool
+) async {
+    guard value != nil || source != nil || name != nil || notes != nil else {
+        fail("edit needs a field change (name, value, source, notes, or --field)")
+    }
+    await requireUnlocked()
+    let items = await vaultItems()
+    guard let item = itemFor(items, definition.item) else {
+        fail("item not found for \(alias): \(definition.item)")
+    }
+    guard let id = item["id"] as? String else { fail("Bitwarden item for \(alias) has no id") }
+    if !force {
+        if isatty(0) != 1 { fail("edit requires confirmation; pass --force from a non-interactive caller") }
+        let label = (item["name"] as? String) ?? definition.item
+        let confirmed = confirmDangerous("Edit \(label)?", reason: "Edit \(label) in Bitwarden")
+        if !confirmed { fail("aborted; pass --force to edit without confirmation") }
+    }
+    var payload = jsonObject(jsonString(item)) ?? [:]
+    if let value { setItemField(&payload, field ?? definition.field ?? "password", value) }
+    if let name { payload["name"] = name }
+    if let source { setItemField(&payload, "custom:source", source) }
+    if let notes { setItemField(&payload, "notes", notes) }
+    if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
+        runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
+        daemonStop()
+    }
+    success("edited \(alias)")
 }
 
 func deliverValue(_ value: String, _ alias: String) {
@@ -940,6 +1012,17 @@ func run() async {
             warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again")
         }
         daemonStop()
+        if options.helper {
+            // A helper token is valid only inside this process unless it is
+            // handed to the long-lived bw serve daemon. That was the reason
+            // SecretBar could report success and immediately see "locked" on
+            // its next status check.
+            setenv("BW_SESSION", token, 1)
+            if daemonEnabled(), await daemonStart() {
+                success("unlocked with Touch ID; secret daemon ready")
+                return
+            }
+        }
         if options.store {
             storeSession(token)
             _ = helperSessionStore(token)
@@ -1048,7 +1131,7 @@ func run() async {
             let item = "\(prefix)/\(kebab(aliasValue))"
             let newDefinition = J.obj([
                 ("item", .str(item)),
-                ("field", .str("password")),
+                ("field", .str(options.field ?? "password")),
                 ("env", .str(scream(aliasValue))),
             ])
             if exists(filePath) {
@@ -1064,7 +1147,7 @@ func run() async {
                 writeAtomic(filePath, jStringify(.obj([("secrets", .obj([(aliasValue, newDefinition)]))])) + "\n")
             }
             info("added \(aliasValue) (\(item)) to \(filePath)")
-            definition = SecretDefinition(item: item, field: "password")
+            definition = SecretDefinition(item: item, field: options.field ?? "password")
         }
         let value = options.generate
             ? await generatePassword()
@@ -1077,7 +1160,11 @@ func run() async {
             let entered = promptLine("Source URL (optional)")
             if !entered.isEmpty { source = entered }
         }
-        await setValue(aliasValue, definition!, value, options.force, source)
+        var notes = options.notes
+        if notes == nil && isatty(0) == 1 {
+            notes = promptLine("Notes (optional)")
+        }
+        await setValue(aliasValue, definition!, value, options.force, source, name: options.name, notes: notes)
         recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "set", target: aliasValue, env: environment))
         success("set \(aliasValue) (\(definition!.item), \(definition!.field ?? "password"))")
         if options.generate {
@@ -1088,6 +1175,55 @@ func run() async {
                 deliverValue(value, aliasValue)
             }
         }
+
+    case "edit":
+        var alias = options.positional.first
+        if alias == nil {
+            if isatty(0) != 1 { fail("edit requires an alias, e.g. secret edit github-token") }
+            alias = promptLine("Alias name")
+        }
+        let aliasValue = alias!
+        guard let definition = loaded.definitions[aliasValue] else {
+            fail("unknown alias: \(aliasValue) (see 'secret list')")
+        }
+        var field = options.field
+        var value: String?
+        var name = options.name
+        var source = options.source
+        var notes = options.notes
+        let hasExplicitChange = field != nil || name != nil || source != nil || notes != nil
+        if !hasExplicitChange {
+            if isatty(0) != 1 { fail("edit needs a field (use --name, --field, --source, or --notes)") }
+            let choice = promptLine("Edit (name/value/source/notes/custom:field)")
+            switch choice {
+            case "name": name = promptLine("Item name")
+            case "value":
+                field = definition.field ?? "password"
+                value = promptHidden("New \(field!) value")
+            case "source": source = promptLine("Source URL (empty clears it)")
+            case "notes": notes = promptLine("Notes (empty clears them)")
+            default:
+                if choice.hasPrefix("custom:") && choice.count > "custom:".count {
+                    field = choice
+                    value = promptHidden("New \(choice) value")
+                } else {
+                    fail("choose name, value, source, notes, or custom:<field>")
+                }
+            }
+        } else if field != nil {
+            value = options.valueStdin ? readStdinAll().trimmingCharacters(in: .whitespacesAndNewlines) : promptHidden("New \(field!) value")
+        }
+        await editItem(
+            alias: aliasValue,
+            definition: definition,
+            value: value,
+            field: field,
+            source: source,
+            name: name,
+            notes: notes,
+            force: options.force
+        )
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "edit", target: aliasValue, env: environment))
 
     case "id":
         guard let alias = options.positional.first else {

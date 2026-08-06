@@ -36,6 +36,11 @@ type ParsedOptions = {
   dry?: boolean;
   dryRun?: boolean;
   source?: string;
+  name?: string;
+  notes?: string;
+  field?: string;
+  valueStdin?: boolean;
+  openURL?: boolean;
   global?: boolean;
   helper?: boolean;
   store?: boolean;
@@ -168,6 +173,11 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let dry = false;
   let dryRun = false;
   let source: string | undefined;
+  let name: string | undefined;
+  let notes: string | undefined;
+  let field: string | undefined;
+  let valueStdin = false;
+  let openURL = false;
   let global = false;
   let helper = false;
   let store = false;
@@ -214,7 +224,17 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     } else if (argument === "--dry-run") {
       dryRun = true;
     } else if (argument === "--source") {
-      source = argv[++index] || fail("--source requires a URL");
+      source = argv[++index] ?? fail("--source requires a URL");
+    } else if (argument === "--name") {
+      name = argv[++index] ?? fail("--name requires an item name");
+    } else if (argument === "--notes") {
+      notes = argv[++index] ?? fail("--notes requires text (use an empty string to clear notes)");
+    } else if (argument === "--field") {
+      field = argv[++index] || fail("--field requires a field name");
+    } else if (argument === "--value-stdin") {
+      valueStdin = true;
+    } else if (argument === "--open") {
+      openURL = true;
     } else if (argument === "--store") {
       store = true;
     } else if (argument === "-h" || argument === "--help") {
@@ -248,6 +268,11 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     dry,
     dryRun,
     source,
+    name,
+    notes,
+    field,
+    valueStdin,
+    openURL,
     global,
     helper,
     store,
@@ -1180,7 +1205,7 @@ const setItemField = (item: Record<string, any>, field: string, value: string): 
   }
 };
 
-const newItem = (name: string, field: string, value: string): Record<string, any> => {
+const newItem = (name: string, field: string, value: string, notes?: string): Record<string, any> => {
   const item: Record<string, any> = { type: 1, name };
   if (field === "password" || field === "username") {
     item.login = { [field]: value };
@@ -1189,6 +1214,7 @@ const newItem = (name: string, field: string, value: string): Record<string, any
   } else {
     item.fields = [{ name: fieldName(field), value, type: 0 }];
   }
+  if (notes !== undefined && field !== "notes") item.notes = notes;
   return item;
 };
 
@@ -1197,15 +1223,15 @@ const setValue = async (
   definition: SecretDefinition,
   value: string,
   force: boolean,
-  source?: string,
+  changes: { source?: string; name?: string; notes?: string } = {},
 ): Promise<void> => {
   await requireUnlocked();
   const field = definition.field || "password";
   const items = await vaultItems();
   const item = itemFor(items, definition.item);
   if (item === undefined) {
-    const payload = newItem(definition.item, field, value);
-    if (source) setItemField(payload, "custom:source", source);
+    const payload = newItem(changes.name || definition.item, field, value, changes.notes);
+    if (changes.source !== undefined) setItemField(payload, "custom:source", changes.source);
     if (!(await daemonMutate("POST", "/object/item", payload))) {
       // bw 2026.x expects base64-encoded item JSON on stdin for create/edit.
       runBwInput(["create", "item"], Buffer.from(JSON.stringify(payload)).toString("base64"));
@@ -1223,12 +1249,43 @@ const setValue = async (
   }
   const payload = JSON.parse(JSON.stringify(item)) as Record<string, any>;
   setItemField(payload, field, value);
-  if (source) setItemField(payload, "custom:source", source);
+  if (changes.name !== undefined) payload.name = changes.name;
+  if (changes.notes !== undefined) setItemField(payload, "notes", changes.notes);
+  if (changes.source !== undefined) setItemField(payload, "custom:source", changes.source);
   if (!(await daemonMutate("PUT", `/object/item/${String(item.id)}`, payload))) {
     runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(payload)).toString("base64"));
     daemonStop();
   }
   success(`updated item ${definition.item}`);
+};
+
+const editItem = async (
+  alias: string,
+  definition: SecretDefinition,
+  changes: { value?: string; field?: string; source?: string; name?: string; notes?: string },
+  force: boolean,
+): Promise<void> => {
+  if (Object.keys(changes).length === 0) fail("edit needs a field change (name, value, source, notes, or --field)");
+  await requireUnlocked();
+  const items = await vaultItems();
+  const item = itemFor(items, definition.item);
+  if (item === undefined) fail(`item not found for ${alias}: ${definition.item}`);
+  if (!item.id) fail(`Bitwarden item for ${alias} has no id`);
+  if (!force) {
+    if (!process.stdin.isTTY) fail("edit requires confirmation; pass --force from a non-interactive caller");
+    const confirmed = await confirmPrompt(`Edit ${String(item.name || definition.item)}?`);
+    if (!confirmed) fail("aborted; pass --force to edit without confirmation");
+  }
+  const payload = JSON.parse(JSON.stringify(item)) as Record<string, any>;
+  if (changes.value !== undefined) setItemField(payload, changes.field || definition.field || "password", changes.value);
+  if (changes.name !== undefined) payload.name = changes.name;
+  if (changes.source !== undefined) setItemField(payload, "custom:source", changes.source);
+  if (changes.notes !== undefined) setItemField(payload, "notes", changes.notes);
+  if (!(await daemonMutate("PUT", `/object/item/${String(item.id)}`, payload))) {
+    runBwInput(["edit", "item", String(item.id)], Buffer.from(JSON.stringify(payload)).toString("base64"));
+    daemonStop();
+  }
+  success(`edited ${alias}`);
 };
 
 const clipboardCandidates = (): Array<{ command: string; args: string[] }> =>
@@ -1266,11 +1323,11 @@ const deliverValue = (value: string, alias: string): void => {
 const doctor = async (definitions: Record<string, SecretDefinition>): Promise<void> => {
   const current = await currentAuthState();
   if (!current.authenticated) {
-    console.log('bitwarden: unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"');
+    console.log("bitwarden: unauthenticated — run: bw login, then secret unlock --store");
     process.exit(1);
   }
   if (!current.unlocked) {
-    console.log('bitwarden: locked — unlock with: export BW_SESSION="$(bw unlock --raw)"');
+    console.log("bitwarden: locked — unlock with: secret unlock --store");
     process.exit(1);
   }
   console.log("bitwarden: unlocked");
@@ -1301,7 +1358,8 @@ const doctor = async (definitions: Record<string, SecretDefinition>): Promise<vo
 
   const total = Object.keys(definitions).length;
   const summary = `secret doctor: ${total - problems}/${total} aliases ok, ${problems} problem(s)`;
-  console.error(problems > 0 ? warn(summary) : success(summary));
+  if (problems > 0) warn(summary);
+  else success(summary);
   if (problems > 0) process.exit(1);
 };
 
@@ -1353,6 +1411,12 @@ you are prompted for one.
   --source URL Attach a source URL (stored as a custom "source" field)
   --global, -g Add a new alias to the global config instead of the project one
 `,
+  edit: `Usage: secret edit [<alias>] [--name NAME] [--field FIELD] [--source URL] [--notes TEXT] [--force]
+
+Edit one or more Bitwarden item fields without changing the configured alias.
+With no field flags, prompt for name, value, source, notes, or a custom field.
+Use --value-stdin for a non-interactive value update.
+`,
   id: `Usage: secret id <alias>
 
 Print the resolved Bitwarden item id (no value).
@@ -1361,7 +1425,7 @@ Print the resolved Bitwarden item id (no value).
 
 Print the current TOTP code.
 `,
-  source: `Usage: secret source <alias> [url]
+  source: `Usage: secret source <alias> [url] [--open]
 
 Print the secret's source URL (a custom "source" field on the vault item),
 or set it when a url is given.
@@ -1448,7 +1512,7 @@ Show recent secret commands (aliases only, no values).
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|edit|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -1460,6 +1524,7 @@ Commands:
   set (s, add) [<alias>]
                       Prompt (hidden) a value and write it to Bitwarden; a missing
                       alias is added to the config and created in the vault
+  edit <alias>         Edit the item name, configured value, source, notes, or a custom field
   id <alias>          Print the resolved Bitwarden item id (no value)
   totp <alias>        Print the current TOTP code (--copy to clipboard)
   source (so) <alias> [url]
@@ -1502,6 +1567,11 @@ Options:
   --generate          With set: generate a random password instead of prompting
   --force, -f         With set: overwrite an existing item without confirmation
   --source URL        With set: attach a source URL (custom "source" field)
+  --name NAME         With set/edit: change the Bitwarden item name
+  --notes TEXT        With set/edit: set or clear Bitwarden notes
+  --field FIELD       With set/edit: choose the value field (password, username, notes, custom:name)
+  --value-stdin       With edit: read the new value from stdin without putting it in argv
+  --open              With source: open the source URL in the browser
   --global, -g        With set/unset/rm: operate on the global config
 
 Config precedence (later wins):
@@ -1560,9 +1630,9 @@ const main = async (): Promise<void> => {
     } else {
       console.log(
         outColor("33")(
-          current.authenticated
-            ? 'locked — unlock with: export BW_SESSION="$(bw unlock --raw)"'
-            : 'unauthenticated — run: bw login, then export BW_SESSION="$(bw unlock --raw)"',
+            current.authenticated
+            ? "locked — unlock with: secret unlock --store"
+            : "unauthenticated — run: bw login, then secret unlock --store",
         ),
       );
       if (process.env.BW_SESSION) {
@@ -1608,6 +1678,16 @@ const main = async (): Promise<void> => {
       }
     }
     daemonStop();
+    if (options.helper) {
+      // Keep the helper token in the long-lived bw serve daemon. A short-lived
+      // `secret unlock --helper` process cannot pass its environment to the
+      // menu-bar app's next status/read command by itself.
+      process.env.BW_SESSION = token;
+      if (daemonEnabled() && (await daemonStart())) {
+        success("unlocked with Touch ID; secret daemon ready");
+        return;
+      }
+    }
     if (options.store) {
       storeSession(token);
       // Best-effort: also cache the session for Touch ID unlocks.
@@ -1703,10 +1783,14 @@ const main = async (): Promise<void> => {
       const item = `${prefix}/${alias.toLowerCase().replaceAll("_", "-")}`;
       const config = existsSync(filePath) ? (readJson(filePath) as SecretConfig) : {};
       config.secrets = config.secrets || {};
-      config.secrets[alias] = { item, field: "password", env: alias.toUpperCase().replaceAll("-", "_") };
+      config.secrets[alias] = {
+        item,
+        field: options.field || "password",
+        env: alias.toUpperCase().replaceAll("-", "_"),
+      };
       writeAtomic(filePath, `${JSON.stringify(config, null, 2)}\n`);
       info(`added ${alias} (${item}) to ${filePath}`);
-      definition = { item, field: "password" };
+      definition = { item, field: options.field || "password" };
     }
     const value = options.generate
       ? await generatePassword()
@@ -1717,7 +1801,15 @@ const main = async (): Promise<void> => {
       const entered = await promptLine("Source URL (optional)");
       if (entered) source = entered;
     }
-    await setValue(alias, definition, value, options.force ?? false, source);
+    let notes = options.notes;
+    if (notes === undefined && process.stdin.isTTY) {
+      notes = await promptLine("Notes (optional)");
+    }
+    await setValue(alias, definition, value, options.force ?? false, {
+      source,
+      name: options.name,
+      notes,
+    });
     recordHistory({ at: new Date().toISOString(), cmd: "set", target: alias, env: environment });
     success(`set ${alias} (${definition.item}, ${definition.field || "password"})`);
     if (options.generate) {
@@ -1728,6 +1820,39 @@ const main = async (): Promise<void> => {
         deliverValue(value, alias);
       }
     }
+  } else if (options.command === "edit") {
+    let alias = options.positional[0];
+    if (!alias) {
+      if (!process.stdin.isTTY) fail("edit requires an alias, e.g. secret edit github-token");
+      alias = await promptLine("Alias name");
+    }
+    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    let field = options.field;
+    let value: string | undefined;
+    let name = options.name;
+    let source = options.source;
+    let notes = options.notes;
+    const hasExplicitChange = field !== undefined || name !== undefined || source !== undefined || notes !== undefined;
+    if (!hasExplicitChange) {
+      if (!process.stdin.isTTY) fail("edit needs a field (use --name, --field, --source, or --notes)");
+      const choice = await promptLine("Edit (name/value/source/notes/custom:field)");
+      if (choice === "name") name = await promptLine("Item name");
+      else if (choice === "value") {
+        field = definition.field || "password";
+        value = await promptHidden(`New ${field} value`);
+      } else if (choice === "source") source = await promptLine("Source URL (empty clears it)");
+      else if (choice === "notes") notes = await promptLine("Notes (empty clears them)");
+      else if (choice.startsWith("custom:") && choice.length > "custom:".length) {
+        field = choice;
+        value = await promptHidden(`New ${choice} value`);
+      } else {
+        fail("choose name, value, source, notes, or custom:<field>");
+      }
+    } else if (field !== undefined) {
+      value = options.valueStdin ? readFileSync(0, "utf8").trim() : await promptHidden(`New ${field} value`);
+    }
+    await editItem(alias, definition, { value, field, source, name, notes }, options.force ?? false);
+    recordHistory({ at: new Date().toISOString(), cmd: "edit", target: alias, env: environment });
   } else if (options.command === "id") {
     const alias = options.positional[0] || fail("id requires an alias, e.g. secret id github-token (see 'secret list')");
     const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
@@ -1769,10 +1894,23 @@ const main = async (): Promise<void> => {
         runBwInput(["edit", "item", String(payload.id)], Buffer.from(JSON.stringify(payload)).toString("base64"));
         daemonStop();
       }
-      success(`source set for ${alias}`);
+      if (options.openURL) {
+        const opened = spawnSync("open", [url], { encoding: "utf8" });
+        if (opened.error || opened.status !== 0) fail(`could not open ${url}`);
+        success(`opened ${url}`);
+      } else {
+        success(`source set for ${alias}`);
+      }
     } else {
       const value = itemField(item, "custom:source");
-      console.log(typeof value === "string" && value ? value : "");
+      if (options.openURL) {
+        if (typeof value !== "string" || !value) fail(`no source URL stored for ${alias}`);
+        const opened = spawnSync("open", [value], { encoding: "utf8" });
+        if (opened.error || opened.status !== 0) fail(`could not open ${value}`);
+        success(`opened ${value}`);
+      } else {
+        console.log(typeof value === "string" && value ? value : "");
+      }
     }
   } else if (options.command === "pull") {
     await requireUnlocked();

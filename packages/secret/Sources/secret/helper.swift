@@ -22,18 +22,36 @@ func helperSessionStore(_ token: String) -> Bool {
         if r.status == 0 { return true }
     }
     #if os(macOS)
-    // The item is OS-encrypted in the login keychain; the Touch ID prompt on
-    // read is the gate (unsigned CLIs cannot attach a biometric ACL, and the
-    // wrapper still needs plaintext access for session injection).
-    let query: [String: Any] = [
+    // Keep the biometric cache separate from the normal session. The explicit
+    // access control makes the keychain enforce the biometric gate too; the
+    // manual LAContext evaluation below remains as a useful fallback on Macs
+    // where the existing item predates this ACL.
+    var query: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: helperService,
         kSecAttrAccount as String: helperAccount,
-        kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
         kSecValueData as String: Data(token.utf8),
         kSecAttrLabel as String: "secret-cli biometric session",
     ]
-    SecItemDelete(query as CFDictionary)
+    let identity: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: helperService,
+        kSecAttrAccount as String: helperAccount,
+    ]
+    SecItemDelete(identity as CFDictionary)
+    if let access = SecAccessControlCreateWithFlags(
+        nil,
+        kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        .biometryAny,
+        nil
+    ) {
+        query[kSecAttrAccessControl as String] = access
+        if SecItemAdd(query as CFDictionary, nil) == errSecSuccess { return true }
+        query.removeValue(forKey: kSecAttrAccessControl as String)
+    }
+    // A normal keychain item is still better than a plaintext file. Reads
+    // continue to require LAContext authentication even on this fallback.
+    query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
     return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     #else
     return false
