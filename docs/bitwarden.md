@@ -12,6 +12,13 @@ the bundled `secret-unlock-helper` (Touch ID-gated keychain read); a future
 passkey unlock can be built on the Bitwarden SDK's C FFI without changing the
 CLI surface.
 
+Packaging quirk: nixpkgs' swift-on-darwin links a few stdlib dylibs (notably
+`libswift_StringProcessing`) from its own corelibs store runtime, which the
+kernel SIGKILLs at dyld load when mixed with the system runtime. The
+derivation repoints those to `/usr/lib/swift` (the dyld-cache runtime, which
+is ABI-compatible — `secret-unlock-helper` links it and runs), keeping the
+binary free of the nix swift runtime.
+
 ## Login
 
 ```sh
