@@ -10,6 +10,7 @@
     let
       codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
       crisp = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.crisp;
+      ice = pkgs."ice-bar";
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
@@ -68,6 +69,7 @@
       # explicitly instead of relying on home.packages app discovery.
       home.file."Applications/CodexBar.app".source = "${codexbar}/Applications/CodexBar.app";
       home.file."Applications/Crisp.app".source = "${crisp}/Applications/Crisp.app";
+      home.file."Applications/Ice.app".source = "${ice}/Applications/Ice.app";
       home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
 
       launchd.agents.secretbar = {
@@ -91,13 +93,13 @@
         pkgs."whatsapp-for-mac"
         pkgs.shottr
         pkgs.raycast
-        crisp
         pkgs.discord
         pkgs."alt-tab-macos"
         pkgs.orbstack
         pkgs.openusage
         codexbar
         crisp
+        ice
         secretbar
       ];
     };
