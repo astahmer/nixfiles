@@ -9,6 +9,7 @@
     }:
     let
       codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
+      crisp = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.crisp;
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
@@ -66,6 +67,7 @@
       # stateVersion 25.11, so link the menu bar app into ~/Applications
       # explicitly instead of relying on home.packages app discovery.
       home.file."Applications/CodexBar.app".source = "${codexbar}/Applications/CodexBar.app";
+      home.file."Applications/Crisp.app".source = "${crisp}/Applications/Crisp.app";
       home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
 
       launchd.agents.secretbar = {
@@ -89,12 +91,13 @@
         pkgs."whatsapp-for-mac"
         pkgs.shottr
         pkgs.raycast
-        pkgs.monitorcontrol
+        crisp
         pkgs.discord
         pkgs."alt-tab-macos"
         pkgs.orbstack
         pkgs.openusage
         codexbar
+        crisp
         secretbar
       ];
     };

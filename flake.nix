@@ -106,6 +106,7 @@
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
             codexbar = pkgs'.callPackage ./packages/codexbar { };
+            crisp = pkgs'.callPackage ./packages/crisp { };
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
             secretbar = pkgs'.callPackage ./packages/secretbar { };
           };
