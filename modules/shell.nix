@@ -245,6 +245,7 @@ in
 
       home.packages = [
         pkgs.fd
+        pkgs.gettext
         pkgs.nh
         nixfilesBootstrap
         nixfilesCheck

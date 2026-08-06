@@ -15,6 +15,7 @@
       secretsEnv = "${config.home.homeDirectory}/.config/opencodex/secrets.env";
       ocx = "${opencodex}/bin/ocx";
       jq = "${pkgs.jq}/bin/jq";
+      cmp = "${pkgs.diffutils}/bin/cmp";
     in
     {
       # `ocx` wrapper execs `bun` from PATH (same pattern as ghui).
@@ -165,7 +166,7 @@
           config_changed=1
         else
           ${jq} -S . "$config_file" > "$current_sorted"
-          if ! ${pkgs.coreutils}/bin/cmp -s "$current_sorted" "$candidate_sorted"; then
+          if ! ${cmp} -s "$current_sorted" "$candidate_sorted"; then
             config_changed=1
           fi
         fi
