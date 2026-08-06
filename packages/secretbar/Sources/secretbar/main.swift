@@ -533,6 +533,7 @@ struct StatusIcon: View {
 struct LegacySecretBarView: View {
     @EnvironmentObject var model: SecretBarModel
     @State private var query = ""
+    @State private var copying: AliasEntry?
     @State private var rotating: AliasEntry?
     @State private var showPassword = false
 
@@ -577,6 +578,19 @@ struct LegacySecretBarView: View {
             Button("Cancel", role: .cancel) { rotating = nil }
         } message: {
             Text("Generates a new password in Bitwarden and copies it to the clipboard.")
+        }
+        .confirmationDialog(
+            "Copy \(copying?.alias ?? "")?",
+            isPresented: Binding(get: { copying != nil }, set: { if !$0 { copying = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Copy value") {
+                if let copying { model.copy(copying) }
+                copying = nil
+            }
+            Button("Cancel", role: .cancel) { copying = nil }
+        } message: {
+            Text("This puts the secret value on the clipboard. It may be available to other apps until the clipboard is replaced.")
         }
     }
 
@@ -677,7 +691,7 @@ struct LegacySecretBarView: View {
     private func entryRow(_ entry: AliasEntry) -> some View {
         HStack(spacing: 8) {
             Button {
-                model.copy(entry)
+                copying = entry
             } label: {
                 HStack {
                     Text(entry.alias)
@@ -810,6 +824,7 @@ struct SecretBarView: View {
     @EnvironmentObject var model: SecretBarModel
     @State private var tab: SecretBarTab = .secrets
     @State private var query = ""
+    @State private var copying: AliasEntry?
     @State private var rotating: AliasEntry?
     @State private var editing: AliasEntry?
     @State private var showPassword = false
@@ -876,6 +891,19 @@ struct SecretBarView: View {
             Button("Cancel", role: .cancel) { rotating = nil }
         } message: {
             Text("Generates a new password in Bitwarden and copies it to the clipboard.")
+        }
+        .confirmationDialog(
+            "Copy \(copying?.alias ?? "")?",
+            isPresented: Binding(get: { copying != nil }, set: { if !$0 { copying = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Copy value") {
+                if let copying { model.copy(copying) }
+                copying = nil
+            }
+            Button("Cancel", role: .cancel) { copying = nil }
+        } message: {
+            Text("This puts the secret value on the clipboard. It may be available to other apps until the clipboard is replaced.")
         }
     }
 
@@ -988,7 +1016,7 @@ struct SecretBarView: View {
 
     private func entryRow(_ entry: AliasEntry) -> some View {
         HStack(spacing: 8) {
-            Button { model.copy(entry) } label: {
+            Button { copying = entry } label: {
                 HStack {
                     Text(entry.alias)
                         .font(.system(.body, design: .monospaced))
