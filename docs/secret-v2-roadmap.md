@@ -32,24 +32,47 @@ marked *landed* are done; the rest are planned, not implemented.
   delay between screen lock and agent reaction plus accidental lockouts make
   it feel worse than the security it adds for a personal vault.
 
-## macOS menu bar interface (plan only)
+## macOS menu bar app (plan only)
 
-Concept, inspired by openusage.ai: a small SwiftUI `MenuBarExtra` app that
-bundles status providers, starting with:
+Purpose: a small SwiftUI `MenuBarExtra` for the secret manager itself.
+openusage.ai was design inspiration only (popover layout, status dot, cards)
+— no AI-usage features. The app is a launcher for the deployed `secret`
+binary (same session, keychain, daemon, configs, history) plus UI-native
+capabilities the CLI does not have.
 
-- **secret**: vault lock state (daemon health), alias list, get→copy,
-  Touch ID unlock, lock, `doctor`-style summary.
-- **openusage**: AI usage/quota display (either link out to the existing app
-  or embed its data later).
-- Room for more providers (executor/agents status) once the pattern exists.
+Core loop: menu bar dot (unlocked = green / locked = amber / health
+problems = red) → click → fuzzy search box → click an alias = copy →
+secondary actions. Touch ID unlock and lock are one click away, no terminal.
+
+UI-native capabilities (not CLI mirrors):
+
+- Cross-project search: index every `.secret.json` under ~/dev (and the
+  global config), so one query finds an alias in any repo — the CLI is
+  cwd-scoped and cannot do this.
+- Proactive health: run `doctor` in the background; the red badge flags
+  broken aliases / missing items / placeholders without being asked.
+- Recent re-copy: read the CLI's own `history.json` for a "recently used"
+  section with one-click re-copy.
+- Source-first rotation: an alias with a source URL shows "open source" and
+  "rotate + copy new" as adjacent actions.
+- In-app TTL copy: copy shows a "clears in 30s · keep" chip. Explicit
+  in-app semantics, unlike the CLI's blanket auto-clear (rejected earlier).
+- Session age: show when the stored session was created; warn before bw
+  rejects it as stale.
+- Optional later: Spotlight index of alias names, global hotkey to pop the
+  search.
+
+Explicitly not in scope: a vault browser, editing configs, anything AI.
 
 Open questions before building:
 
-- Separate app vs. plugin slot inside openusage (openusage is a standalone
-  macOS app; bundling into it means coordinating with its upstream).
-- The menu bar app should shell out to the deployed `secret` binary (same
-  session, keychain, daemon) rather than reimplementing vault logic.
-- Notarization/sandbox: a personal, self-signed dev build is fine initially.
+- Spawn `secret` per action vs. one long-lived helper process. Per-action
+  spawns are ~10ms and reuse everything — start there.
+- Menubar app lifecycle: plain `.app` (self-signed dev build is fine) vs.
+  LSUIElement-only. No notarization for personal use.
+- Search index refresh: watch for `.secret.json` changes (FSEvents) or
+  rebuild on popover open (cheap, ~100 configs).
 
-Next step when started: a throwaway prototype with only the secret provider
-(lock state + copy value + Touch ID unlock) to validate the UX.
+Next step when started: a throwaway prototype with the core loop only
+(status dot, fuzzy search, click-to-copy, Touch ID unlock/lock) to validate
+the UX before adding cross-project search and health badges.
