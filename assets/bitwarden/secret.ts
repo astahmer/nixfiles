@@ -10,6 +10,8 @@ type SecretDefinition = {
   item: string;
   field?: string;
   env?: string;
+  type?: string;
+  expiresAt?: string;
 };
 
 type SecretConfig = {
@@ -39,6 +41,8 @@ type ParsedOptions = {
   name?: string;
   notes?: string;
   field?: string;
+  itemType?: string;
+  expiresAt?: string;
   valueStdin?: boolean;
   openURL?: boolean;
   global?: boolean;
@@ -176,6 +180,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let name: string | undefined;
   let notes: string | undefined;
   let field: string | undefined;
+  let itemType: string | undefined;
+  let expiresAt: string | undefined;
   let valueStdin = false;
   let openURL = false;
   let global = false;
@@ -231,6 +237,10 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       notes = argv[++index] ?? fail("--notes requires text (use an empty string to clear notes)");
     } else if (argument === "--field") {
       field = argv[++index] || fail("--field requires a field name");
+    } else if (argument === "--type") {
+      itemType = argv[++index] || fail("--type requires login or secure-note");
+    } else if (argument === "--expires-at") {
+      expiresAt = argv[++index] || fail("--expires-at requires an ISO date");
     } else if (argument === "--value-stdin") {
       valueStdin = true;
     } else if (argument === "--open") {
@@ -271,6 +281,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     name,
     notes,
     field,
+    itemType,
+    expiresAt,
     valueStdin,
     openURL,
     global,
@@ -1213,8 +1225,23 @@ const setItemField = (item: Record<string, any>, field: string, value: string): 
   }
 };
 
-const newItem = (name: string, field: string, value: string, notes?: string): Record<string, any> => {
-  const item: Record<string, any> = { type: 1, name };
+const itemTypeCode = (itemType?: string): number => {
+  switch (itemType?.toLowerCase()) {
+    case undefined:
+    case "":
+    case "login":
+      return 1;
+    case "secure-note":
+    case "secure_note":
+    case "note":
+      return 2;
+    default:
+      fail(`invalid item type: ${itemType} (use login or secure-note)`);
+  }
+};
+
+const newItem = (name: string, field: string, value: string, notes?: string, itemType?: string): Record<string, any> => {
+  const item: Record<string, any> = { type: itemTypeCode(itemType), name };
   if (field === "password" || field === "username") {
     item.login = { [field]: value };
   } else if (field === "notes") {
@@ -1231,14 +1258,14 @@ const setValue = async (
   definition: SecretDefinition,
   value: string,
   force: boolean,
-  changes: { source?: string; name?: string; notes?: string } = {},
+  changes: { source?: string; name?: string; notes?: string; itemType?: string } = {},
 ): Promise<void> => {
   await requireUnlocked();
   const field = definition.field || "password";
   const items = await vaultItems();
   const item = itemFor(items, definition.item);
   if (item === undefined) {
-    const payload = newItem(changes.name || definition.item, field, value, changes.notes);
+    const payload = newItem(changes.name || definition.item, field, value, changes.notes, changes.itemType || definition.type);
     if (changes.source !== undefined) setItemField(payload, "custom:source", changes.source);
     if (!(await daemonMutate("POST", "/object/item", payload))) {
       // bw 2026.x expects base64-encoded item JSON on stdin for create/edit.
@@ -1258,6 +1285,7 @@ const setValue = async (
   const payload = JSON.parse(JSON.stringify(item)) as Record<string, any>;
   setItemField(payload, field, value);
   if (changes.name !== undefined) payload.name = changes.name;
+  if (changes.itemType !== undefined) payload.type = itemTypeCode(changes.itemType);
   if (changes.notes !== undefined) setItemField(payload, "notes", changes.notes);
   if (changes.source !== undefined) setItemField(payload, "custom:source", changes.source);
   if (!(await daemonMutate("PUT", `/object/item/${String(item.id)}`, payload))) {
@@ -1408,7 +1436,7 @@ Print exactly one configured value.
   --copy       Copy to the clipboard instead of stdout
   --env NAME   Environment override (default: prod)
 `,
-  set: `Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--global]
+  set: `Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--type login|secure-note] [--expires-at DATE] [--global]
 
 Prompt (hidden) for a value and write it to Bitwarden. A missing alias is
 added to the project config and created in the vault; with no alias at all,
@@ -1417,6 +1445,8 @@ you are prompted for one.
   --generate   Generate a random password instead of prompting
   --force, -f  Overwrite an existing item without confirmation
   --source URL Attach a source URL (stored as a custom "source" field)
+  --type TYPE  Create or update a Bitwarden Login or Secure Note item
+  --expires-at DATE  Store an ISO expiry date in the config for health warnings
   --global, -g Add a new alias to the global config instead of the project one
 `,
   edit: `Usage: secret edit [<alias>] [--name NAME] [--field FIELD] [--source URL] [--notes TEXT] [--force]
@@ -1578,6 +1608,8 @@ Options:
   --name NAME         With set/edit: change the Bitwarden item name
   --notes TEXT        With set/edit: set or clear Bitwarden notes
   --field FIELD       With set/edit: choose the value field (password, username, notes, custom:name)
+  --type TYPE         With set: choose login or secure-note item type
+  --expires-at DATE   With set: record an ISO expiry date in the config
   --value-stdin       With edit: read the new value from stdin without putting it in argv
   --open              With source: open the source URL in the browser
   --global, -g        With set/unset/rm: operate on the global config
@@ -1794,12 +1826,19 @@ const main = async (): Promise<void> => {
       config.secrets = config.secrets || {};
       config.secrets[alias] = {
         item,
-        field: options.field || "password",
+        field: options.field || (options.itemType === "secure-note" ? "notes" : "password"),
+        ...(options.itemType ? { type: options.itemType } : {}),
+        ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}),
         env: alias.toUpperCase().replaceAll("-", "_"),
       };
       writeAtomic(filePath, `${JSON.stringify(config, null, 2)}\n`);
       info(`added ${alias} (${item}) to ${filePath}`);
-      definition = { item, field: options.field || "password" };
+      definition = {
+        item,
+        field: options.field || (options.itemType === "secure-note" ? "notes" : "password"),
+        type: options.itemType,
+        expiresAt: options.expiresAt,
+      };
     }
     const value = options.generate
       ? await generatePassword()
@@ -1818,6 +1857,7 @@ const main = async (): Promise<void> => {
       source,
       name: options.name,
       notes,
+      itemType: options.itemType,
     });
     recordHistory({ at: new Date().toISOString(), cmd: "set", target: alias, env: environment });
     success(`set ${alias} (${definition.item}, ${definition.field || "password"})`);

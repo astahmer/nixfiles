@@ -350,6 +350,8 @@ struct SecretDefinition {
     var item: String
     var field: String?
     var envKey: String?
+    var itemType: String? = nil
+    var expiresAt: String? = nil
 }
 
 struct LoadedConfig {
@@ -365,16 +367,20 @@ func definitionInConfig(_ config: J, _ alias: String, environment: String) -> Se
     var item = ""
     var field: String?
     var envKey: String?
+    var itemType: String?
+    var expiresAt: String?
     for (key, child) in value.pairs() ?? [] {
         switch key {
         case "item": item = child.string() ?? ""
         case "field": field = child.string()
         case "env": envKey = child.string()
+        case "type": itemType = child.string()
+        case "expiresAt": expiresAt = child.string()
         default: break
         }
     }
     if item.isEmpty { fail("invalid definition for \(alias)") }
-    return SecretDefinition(item: item, field: field, envKey: envKey)
+    return SecretDefinition(item: item, field: field, envKey: envKey, itemType: itemType, expiresAt: expiresAt)
 }
 
 func dotenvKey(_ alias: String, _ definition: SecretDefinition) -> String {
@@ -405,15 +411,19 @@ func loadDefinitions(configPath: String? = nil, environment: String = "prod") ->
         var item = ""
         var field: String?
         var envKey: String?
+        var itemType: String?
+        var expiresAt: String?
         for (key, val) in value.pairs() ?? [] {
             switch key {
             case "item": item = val.string() ?? ""
             case "field": field = val.string()
             case "env": envKey = val.string()
+            case "type": itemType = val.string()
+            case "expiresAt": expiresAt = val.string()
             default: break
             }
         }
-        return SecretDefinition(item: item, field: field, envKey: envKey)
+        return SecretDefinition(item: item, field: field, envKey: envKey, itemType: itemType, expiresAt: expiresAt)
     }
 
     func baseSecrets(_ config: J?) -> [(String, J)] { config?.get("secrets")?.pairs() ?? [] }
@@ -664,8 +674,16 @@ func setItemField(_ item: inout JSON, _ field: String, _ value: String) {
     }
 }
 
-func newItem(name: String, field: String, value: String) -> JSON {
-    var item: JSON = ["type": 1, "name": name]
+func itemTypeCode(_ itemType: String?) -> Int {
+    switch itemType?.lowercased() {
+    case nil, "", "login": return 1
+    case "secure-note", "secure_note", "note": return 2
+    default: fail("invalid item type: \(itemType ?? "") (use login or secure-note)")
+    }
+}
+
+func newItem(name: String, field: String, value: String, itemType: String? = nil) -> JSON {
+    var item: JSON = ["type": itemTypeCode(itemType), "name": name]
     if field == "password" || field == "username" {
         item["login"] = [field: value]
     } else if field == "notes" {

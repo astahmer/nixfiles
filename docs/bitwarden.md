@@ -175,14 +175,20 @@ on both.
 
 ## SSH key materialization
 
-The nixfiles root declares a value-free `ssh-private-key` alias whose vault
-field is `notes` (private keys are multiline). To seed it from the existing
-key without putting the key in the command line or repository:
+The nixfiles root declares a value-free `ssh-private-key` alias as a Bitwarden
+Secure Note whose vault field is `notes` (private keys are multiline). To seed
+it from the existing key without putting the key in the command line or
+repository:
 
 ```sh
 secret set --config /Users/astahmer/dev/nixfiles/.secret.json \
-  --field notes ssh-private-key < ~/.ssh/id_ed25519
+  --type secure-note --field notes ssh-private-key < ~/.ssh/id_ed25519
 ```
+
+`field: "notes"` describes where the value is stored inside the encrypted
+item; `type: "secure-note"` controls the Bitwarden item category. Ordinary
+password aliases remain Login items, and their optional `notes` metadata stays
+separate from the secret value.
 
 Home Manager then reads that alias during activation, validates it with
 `ssh-keygen`, refreshes `~/.ssh/id_ed25519` and its public key, and keeps the

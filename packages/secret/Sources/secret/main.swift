@@ -33,6 +33,8 @@ struct Options {
     var name: String?
     var notes: String?
     var field: String?
+    var itemType: String?
+    var expiresAt: String?
     var valueStdin = false
     var openURL = false
     var global = false
@@ -142,6 +144,14 @@ func parseOptions(_ argv: [String]) -> Options {
             index += 1
             guard index < argv.count else { fail("--field requires a field name") }
             options.field = argv[index]
+        } else if argument == "--type" {
+            index += 1
+            guard index < argv.count else { fail("--type requires login or secure-note") }
+            options.itemType = argv[index]
+        } else if argument == "--expires-at" {
+            index += 1
+            guard index < argv.count else { fail("--expires-at requires an ISO date") }
+            options.expiresAt = argv[index]
         } else if argument == "--value-stdin" {
             options.valueStdin = true
         } else if argument == "--open" {
@@ -221,7 +231,7 @@ let commandHelpText: [String: String] = [
       --env NAME   Environment override (default: prod)
     """,
     "set": """
-    Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--name NAME] [--notes TEXT] [--global]
+    Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--name NAME] [--notes TEXT] [--type login|secure-note] [--expires-at DATE] [--global]
 
     Prompt (hidden) for a value and write it to Bitwarden. A missing alias is
     added to the project config and created in the vault; with no alias at all,
@@ -230,6 +240,8 @@ let commandHelpText: [String: String] = [
       --generate   Generate a random password instead of prompting
       --force, -f  Overwrite an existing item without confirmation
       --source URL Attach a source URL (stored as a custom "source" field)
+      --type TYPE  Create or update a Bitwarden Login or Secure Note item
+      --expires-at DATE  Store an ISO expiry date in the config for health warnings
       --global, -g Add a new alias to the global config instead of the project one
     """,
     "edit": """
@@ -412,6 +424,8 @@ func printHelp() {
       --name NAME         With set/edit: change the Bitwarden item name
       --notes TEXT        With set/edit: set or clear Bitwarden notes
       --field FIELD       With set/edit: choose the value field (password, username, notes, custom:name)
+      --type TYPE         With set: choose login or secure-note item type
+      --expires-at DATE   With set: record an ISO expiry date in the config
       --value-stdin       With edit: read the new value from stdin without putting it in argv
       --open              With source: open the source URL in the browser
       --global, -g        With set/unset/rm: operate on the global config
@@ -764,6 +778,7 @@ func setValue(
     _ source: String?,
     name: String? = nil,
     notes: String? = nil,
+    itemType: String? = nil,
     biometricConfirm: Bool = false
 ) async {
     await requireUnlocked()
@@ -771,7 +786,12 @@ func setValue(
     let items = await vaultItems()
     let item = itemFor(items, definition.item)
     if item == nil {
-        var payload = newItem(name: name ?? definition.item, field: field, value: value)
+        var payload = newItem(
+            name: name ?? definition.item,
+            field: field,
+            value: value,
+            itemType: itemType ?? definition.itemType
+        )
         if let notes, field != "notes" { setItemField(&payload, "notes", notes) }
         if let source { setItemField(&payload, "custom:source", source) }
         if !(await daemonMutate(method: "POST", path: "/object/item", payload: payload)) {
@@ -792,6 +812,7 @@ func setValue(
     }
     var payload = jsonObject(jsonString(item!)) ?? [:]
     setItemField(&payload, field, value)
+    if let itemType { payload["type"] = itemTypeCode(itemType) }
     if let name { payload["name"] = name }
     if let notes { setItemField(&payload, "notes", notes) }
     if let source { setItemField(&payload, "custom:source", source) }
@@ -1130,11 +1151,15 @@ func run() async {
                 ? "global"
                 : URL(fileURLWithPath: filePath).deletingLastPathComponent().lastPathComponent
             let item = "\(prefix)/\(kebab(aliasValue))"
-            let newDefinition = J.obj([
+            let newField = options.field ?? (options.itemType == "secure-note" ? "notes" : "password")
+            var definitionPairs: [(String, J)] = [
                 ("item", .str(item)),
-                ("field", .str(options.field ?? "password")),
+                ("field", .str(newField)),
                 ("env", .str(scream(aliasValue))),
-            ])
+            ]
+            if let itemType = options.itemType { definitionPairs.append(("type", .str(itemType))) }
+            if let expiresAt = options.expiresAt { definitionPairs.append(("expiresAt", .str(expiresAt))) }
+            let newDefinition = J.obj(definitionPairs)
             if exists(filePath) {
                 let parsed = readConfig(filePath)
                 var secrets = parsed.get("secrets")?.pairs() ?? []
@@ -1148,7 +1173,7 @@ func run() async {
                 writeAtomic(filePath, jStringify(.obj([("secrets", .obj([(aliasValue, newDefinition)]))])) + "\n")
             }
             info("added \(aliasValue) (\(item)) to \(filePath)")
-            definition = SecretDefinition(item: item, field: options.field ?? "password")
+            definition = SecretDefinition(item: item, field: newField, itemType: options.itemType, expiresAt: options.expiresAt)
         }
         let value = options.generate
             ? await generatePassword()
@@ -1165,7 +1190,16 @@ func run() async {
         if notes == nil && isatty(0) == 1 {
             notes = promptLine("Notes (optional)")
         }
-        await setValue(aliasValue, definition!, value, options.force, source, name: options.name, notes: notes)
+        await setValue(
+            aliasValue,
+            definition!,
+            value,
+            options.force,
+            source,
+            name: options.name,
+            notes: notes,
+            itemType: options.itemType
+        )
         recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "set", target: aliasValue, env: environment))
         success("set \(aliasValue) (\(definition!.item), \(definition!.field ?? "password"))")
         if options.generate {
