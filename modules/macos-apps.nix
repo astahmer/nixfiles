@@ -13,6 +13,11 @@
       ice = pkgs."ice-bar";
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
       tidyports = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tidyports;
+      secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
+        /usr/bin/pkill -TERM -f '/Applications/SecretBar.app/Contents/MacOS/secretbar' 2>/dev/null || true
+        /bin/sleep 1
+        exec /usr/bin/open "$HOME/Applications/SecretBar.app"
+      '';
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
       cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
@@ -77,14 +82,10 @@
       launchd.agents.secretbar = {
         enable = true;
         config = {
-          # Launch through LaunchServices (open), not the raw binary:
-          # macOS 26 registers menu bar items only for properly launched .app
-          # bundles, and the item needs "Allow in the Menu Bar" enabled in
-          # System Settings (relaunch after toggling).
-          ProgramArguments = [
-            "/usr/bin/open"
-            "${config.home.homeDirectory}/Applications/SecretBar.app"
-          ];
+          # Restart old store-path instances before launching through
+          # LaunchServices, otherwise a Nix switch can leave the old menu
+          # bar app alive and macOS will keep reusing it.
+          ProgramArguments = [ "${secretbarLauncher}" ];
           RunAtLoad = true;
         };
       };
