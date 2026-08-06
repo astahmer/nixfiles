@@ -8,6 +8,7 @@
   "websockets": false,
   "codexAutoStart": true,
   "codexShimAutoRestore": true,
+  "pausedCodexAccountIds": [],
   "providers": {
     "openai": {
       "adapter": "openai-responses",
@@ -15,7 +16,28 @@
       "codexAccountMode": "pool",
       "authMode": "forward"
     },
-    "opencode-go": {
+    "commandcode": {
+      "adapter": "openai-chat",
+      "baseUrl": "https://api.commandcode.ai/provider/v1",
+      "allowPrivateNetwork": false,
+      "apiKey": "$OPENCODEX_COMMANDCODE_API_KEY",
+      "liveModels": false,
+      "models": [
+        "deepseek/deepseek-v4-flash",
+        "gpt-5.3-codex",
+        "gpt-5.6-luna"
+      ],
+      "defaultModel": "gpt-5.6-luna",
+      "apiKeyPool": [
+        {
+          "id": "commandcode-primary",
+          "name": "CommandCode",
+          "key": "$OPENCODEX_COMMANDCODE_API_KEY"
+        }
+      ],
+      "authMode": "key"
+    },
+    "opencode": {
       "adapter": "openai-chat",
       "baseUrl": "https://opencode.ai/zen/go/v1",
       "authMode": "key",

@@ -404,6 +404,7 @@ typecheck is skipped with a hint until the dev deps are installed.
 
 The nixfiles repo declares the same scoped model in its root `.secret.json`:
 
+- `opencodex-commandcode-api-key` maps to the CommandCode dotenv variable.
 - `opencodex-opencode-go-api-key` maps to the OpenCodex dotenv variable.
 - `github-token` maps to the raw GitHub token projection consumed by Executor.
 - `gemini-api-key` maps to the `GEMINI_API_KEY` env var read by ModLens.
