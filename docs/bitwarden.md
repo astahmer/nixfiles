@@ -78,6 +78,11 @@ configs, Bitwarden state, and every alias against the vault without printing
 values. `secret recent` and `secret history` show recently used aliases and
 recent commands from a value-free local log.
 
+`secret doctor --json` emits value-free per-alias rows for machine consumers.
+Alongside the validation status it includes the remote item name, source URL,
+and whether a Login item has a TOTP seed; it exits nonzero when any alias is
+missing or invalid.
+
 `secret list` prints an aligned table in a terminal, including the vault item
 creation date when the vault is unlocked (`-` when locked or the item is
 missing). Bitwarden does not record which device or machine added an item, so
