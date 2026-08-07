@@ -161,6 +161,25 @@ const configWithAlias = (
   return undefined;
 };
 
+const updateAliasTags = (alias: string, tags: string[], configPath: string, environment: string): void => {
+  const config = readJson(configPath);
+  let updated = false;
+  const updateDefinitions = (definitions: Record<string, SecretDefinition> | undefined): void => {
+    const definition = definitions?.[alias];
+    if (!definition) return;
+    if (tags.length) definition.tags = tags;
+    else delete definition.tags;
+    updated = true;
+  };
+  if (environment !== "prod" && config.environments?.[environment]?.secrets?.[alias]) {
+    updateDefinitions(config.environments[environment].secrets);
+  } else {
+    updateDefinitions(config.secrets);
+  }
+  if (!updated) fail(`alias ${alias} not found in ${configPath}`);
+  writeAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`);
+};
+
 const parseOptions = (argv: string[]): ParsedOptions => {
   const positional: string[] = [];
   let selectedConfig: string | undefined;
@@ -1478,9 +1497,9 @@ you are prompted for one.
   --expires-at DATE  Store an ISO expiry date in the config for health warnings
   --global, -g Add a new alias to the global config instead of the project one
 `,
-  edit: `Usage: secret edit [<alias>] [--name NAME] [--field FIELD] [--source URL] [--notes TEXT] [--force]
+  edit: `Usage: secret edit [<alias>] [--name NAME] [--field FIELD] [--source URL] [--notes TEXT] [--tags TAGS] [--force]
 
-Edit one or more Bitwarden item fields without changing the configured alias.
+Edit one or more Bitwarden item fields or local alias tags without changing the configured alias.
 With no field flags, prompt for name, value, source, notes, or a custom field.
 Use --value-stdin for a non-interactive value update.
 `,
@@ -1922,26 +1941,38 @@ const main = async (): Promise<void> => {
     let name = options.name;
     let source = options.source;
     let notes = options.notes;
-    const hasExplicitChange = field !== undefined || name !== undefined || source !== undefined || notes !== undefined;
+    let tags = options.tags;
+    const hasItemChange = field !== undefined || name !== undefined || source !== undefined || notes !== undefined;
+    const hasExplicitChange = hasItemChange || tags !== undefined;
     if (!hasExplicitChange) {
-      if (!process.stdin.isTTY) fail("edit needs a field (use --name, --field, --source, or --notes)");
-      const choice = await promptLine("Edit (name/value/source/notes/custom:field)");
+      if (!process.stdin.isTTY) fail("edit needs a field (use --name, --field, --source, --notes, or --tags)");
+      const choice = await promptLine("Edit (name/value/source/notes/tags/custom:field)");
       if (choice === "name") name = await promptLine("Item name");
       else if (choice === "value") {
         field = definition.field || "password";
         value = await promptHidden(`New ${field} value`);
       } else if (choice === "source") source = await promptLine("Source URL (empty clears it)");
       else if (choice === "notes") notes = await promptLine("Notes (empty clears them)");
+      else if (choice === "tags") tags = await promptLine("Tags (comma-separated; empty clears them)");
       else if (choice.startsWith("custom:") && choice.length > "custom:".length) {
         field = choice;
         value = await promptHidden(`New ${choice} value`);
       } else {
-        fail("choose name, value, source, notes, or custom:<field>");
+        fail("choose name, value, source, notes, tags, or custom:<field>");
       }
     } else if (field !== undefined) {
       value = options.valueStdin ? readFileSync(0, "utf8").trim() : await promptHidden(`New ${field} value`);
     }
-    await editItem(alias, definition, { value, field, source, name, notes }, options.force ?? false);
+    if (hasItemChange || field !== undefined) {
+      await editItem(alias, definition, { value, field, source, name, notes }, options.force ?? false);
+    }
+    if (tags !== undefined) {
+      const configPath = options.configPath || findProjectConfig();
+      if (!configPath) fail("cannot edit tags without a project config");
+      const normalizedTags = tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+      updateAliasTags(alias, normalizedTags, configPath, environment);
+      success(`updated tags for ${alias}`);
+    }
     recordHistory({ at: new Date().toISOString(), cmd: "edit", target: alias, env: environment });
   } else if (options.command === "id") {
     const alias = options.positional[0] || fail("id requires an alias, e.g. secret id github-token (see 'secret list')");

@@ -517,6 +517,56 @@ func configWithAlias(
     return nil
 }
 
+func updateAliasTags(_ alias: String, _ tags: [String], configPath: String, environment: String) {
+    var config = readConfig(configPath)
+    var updated = false
+
+    func withTags(_ definition: J) -> J {
+        let pairs = (definition.pairs() ?? []).filter { $0.0 != "tags" }
+        guard !tags.isEmpty else { return .obj(pairs) }
+        return .obj(pairs + [("tags", .arr(tags.map { .str($0) }))])
+    }
+
+    func updateSecrets(_ value: J) -> J {
+        guard let secrets = value.pairs() else { return value }
+        return .obj(secrets.map { key, definition in
+            guard key == alias else { return (key, definition) }
+            updated = true
+            return (key, withTags(definition))
+        })
+    }
+
+    var rootPairs = config.pairs() ?? []
+    if environment == "prod" {
+        rootPairs = rootPairs.map { key, value in
+            key == "secrets" ? (key, updateSecrets(value)) : (key, value)
+        }
+    } else {
+        rootPairs = rootPairs.map { key, value in
+            guard key == "environments", let environments = value.pairs() else { return (key, value) }
+            let updatedEnvironments = environments.map { name, environmentValue in
+                guard name == environment,
+                      let environmentPairs = environmentValue.pairs()
+                else { return (name, environmentValue) }
+                let updatedEnvironment = J.obj(environmentPairs.map { childKey, childValue in
+                    childKey == "secrets" ? (childKey, updateSecrets(childValue)) : (childKey, childValue)
+                })
+                return (name, updatedEnvironment)
+            }
+            return (key, J.obj(updatedEnvironments))
+        }
+        if !updated {
+            rootPairs = rootPairs.map { key, value in
+                key == "secrets" ? (key, updateSecrets(value)) : (key, value)
+            }
+        }
+    }
+
+    guard updated else { fail("alias \(alias) not found in \(configPath)") }
+    config = .obj(rootPairs)
+    writeAtomic(configPath, jStringify(config) + "\n")
+}
+
 func unsetAlias(_ alias: String, _ selectedConfig: String?, quiet: Bool = false) {
     guard let holder = configWithAlias(
         alias,

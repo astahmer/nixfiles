@@ -251,9 +251,9 @@ let commandHelpText: [String: String] = [
       --global, -g Add a new alias to the global config instead of the project one
     """,
     "edit": """
-    Usage: secret edit [<alias>] [--name NAME] [--field FIELD] [--source URL] [--notes TEXT] [--force]
+    Usage: secret edit [<alias>] [--name NAME] [--field FIELD] [--source URL] [--notes TEXT] [--tags TAGS] [--force]
 
-    Edit one or more Bitwarden item fields without changing the configured alias.
+    Edit one or more Bitwarden item fields or local alias tags without changing the configured alias.
     With no field flags, prompt for name, value, source, notes, or a custom field.
     Use --value-stdin for a non-interactive value update.
     """,
@@ -433,7 +433,7 @@ func printHelp() {
       --field FIELD       With set/edit: choose the value field (password, username, notes, custom:name)
       --type TYPE         With set: choose login or secure-note item type
       --expires-at DATE   With set: record an ISO expiry date in the config
-      --tags TAGS         With set: record comma-separated app tags in the config
+      --tags TAGS         With set/edit: record comma-separated local alias tags
       --value-stdin       With edit: read the new value from stdin without putting it in argv
       --open              With source: open the source URL in the browser
       --global, -g        With set/unset/rm: operate on the global config
@@ -1263,10 +1263,12 @@ func run() async {
         var name = options.name
         var source = options.source
         var notes = options.notes
-        let hasExplicitChange = field != nil || name != nil || source != nil || notes != nil
+        var tags = options.tags
+        let hasItemChange = field != nil || name != nil || source != nil || notes != nil
+        let hasExplicitChange = hasItemChange || tags != nil
         if !hasExplicitChange {
-            if isatty(0) != 1 { fail("edit needs a field (use --name, --field, --source, or --notes)") }
-            let choice = promptLine("Edit (name/value/source/notes/custom:field)")
+            if isatty(0) != 1 { fail("edit needs a field (use --name, --field, --source, --notes, or --tags)") }
+            let choice = promptLine("Edit (name/value/source/notes/tags/custom:field)")
             switch choice {
             case "name": name = promptLine("Item name")
             case "value":
@@ -1274,27 +1276,38 @@ func run() async {
                 value = promptHidden("New \(field!) value")
             case "source": source = promptLine("Source URL (empty clears it)")
             case "notes": notes = promptLine("Notes (empty clears them)")
+            case "tags": tags = promptLine("Tags (comma-separated; empty clears them)")
             default:
                 if choice.hasPrefix("custom:") && choice.count > "custom:".count {
                     field = choice
                     value = promptHidden("New \(choice) value")
                 } else {
-                    fail("choose name, value, source, notes, or custom:<field>")
+                    fail("choose name, value, source, notes, tags, or custom:<field>")
                 }
             }
         } else if field != nil {
             value = options.valueStdin ? readStdinAll().trimmingCharacters(in: .whitespacesAndNewlines) : promptHidden("New \(field!) value")
         }
-        await editItem(
-            alias: aliasValue,
-            definition: definition,
-            value: value,
-            field: field,
-            source: source,
-            name: name,
-            notes: notes,
-            force: options.force
-        )
+        if hasItemChange || field != nil {
+            await editItem(
+                alias: aliasValue,
+                definition: definition,
+                value: value,
+                field: field,
+                source: source,
+                name: name,
+                notes: notes,
+                force: options.force
+            )
+        }
+        if let tags {
+            guard let configPath = options.configPath ?? findProjectConfig() else {
+                fail("cannot edit tags without a project config")
+            }
+            let normalizedTags = tags.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            updateAliasTags(aliasValue, normalizedTags, configPath: configPath, environment: environment)
+            success("updated tags for \(aliasValue)")
+        }
         recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "edit", target: aliasValue, env: environment))
 
     case "id":

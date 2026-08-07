@@ -210,6 +210,20 @@ else
   fail=$((fail + 1))
   echo "FAIL: edit updates source, name, and notes without replacing the value" >&2
 fi
+secret edit github-token --tags "infra,production" --force >/dev/null 2>&1
+if rg -q '"tags"' .secret.json && rg -q 'infra' .secret.json && rg -q 'production' .secret.json; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: edit --tags updates local alias labels" >&2
+fi
+secret edit github-token --tags "" --force >/dev/null 2>&1
+if ! rg -q '"tags"' .secret.json; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: edit --tags empty clears local alias labels" >&2
+fi
 assert_eq "$(FAKE_EMPTY_VAULT=1 secret get github-token 2>&1 || true)" "secret: hint: the vault is empty — create items with 'secret set <alias>', or check the account/server in bw config
 secret: item not found for github-token: nixfiles/github-token" "empty vault hints before item not found"
 : > "$FAKE_LOG"
