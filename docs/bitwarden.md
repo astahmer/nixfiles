@@ -401,11 +401,17 @@ each.
   vault item carries a source URL; `secret list` shows a SOURCE column on a
   TTY; `secret doctor` reports the daemon state (`daemon up/down/disabled`);
   `secret status` appends `(daemon up)` when the daemon is serving.
-- SecretBar is installed as a native menu-bar companion. Its Create tab can
-  add a global or discovered `~/dev/*/.secret.json` alias, My Secrets copies
-  or edits an existing item, and Settings owns refresh, lock, password unlock,
-  and Touch ID unlock. Copy uses the CLI clipboard path so the UI does not
-  receive the value in stdout; rotate has an explicit confirmation dialog.
+- SecretBar is installed as a native menu-bar companion. Its header owns lock,
+  Touch ID, and master-password unlock; errors stay in a selectable diagnostic
+  sheet with recovery-command and Bitwarden-session-reset actions. Create can
+  add Login or Secure Note items, global/project aliases, tags, environments,
+  expiry metadata, and previewed `.env` imports. My Secrets has pinned and
+  deduplicated Recent rows plus a CLI-like table of all aliases, with TOTP,
+  source, edit, rotate, and optional hold-to-reveal actions. Settings owns
+  clipboard auto-clear (disabled by default), shortcuts, repository detection,
+  health checks, and value-free usage history. Copy uses the CLI clipboard path
+  so the UI does not receive the value in stdout; rotate has an explicit
+  confirmation dialog.
 - `secret prune [--dry-run]` removes config aliases whose vault items no
   longer exist; `--dry-run` only lists them.
 - A tiny detached keepalive (the binary re-spawning itself) pings the daemon
@@ -436,7 +442,7 @@ each.
 ## Regression tests
 
 `assets/bitwarden/test-secret.sh` runs a self-contained fake-`bw` suite
-(temp HOME, fake vault, no network, 180 assertions) against the Swift binary
+(temp HOME, fake vault, no network, 182 assertions) against the Swift binary
 by default; `SECRET_IMPL=ts bash assets/bitwarden/test-secret.sh` runs the
 same suite against the TypeScript reference implementation. The daemon-mode
 assertions use a real unix-socket HTTP fixture (`test-daemon.ts`). The suite
@@ -452,8 +458,9 @@ The nixfiles repo declares the same scoped model in its root `.secret.json`:
 - `opencodex-opencode-go-api-key` maps to the OpenCodex dotenv variable.
 - `github-token` maps to the raw GitHub token projection consumed by Executor.
 - `gemini-api-key` maps to the `GEMINI_API_KEY` env var read by ModLens.
-- `ssh-private-key` maps to the multiline SSH private key stored in the
-  Bitwarden notes field; Home Manager materializes it only during activation.
+- `ssh-private-key` maps to the multiline SSH private key stored in a
+  Bitwarden Secure Note's notes field; Home Manager materializes it only during
+  activation.
 
 ## Why not `sdk-sm`/`bws`?
 
