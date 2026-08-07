@@ -264,7 +264,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     } else if (argument === "--expires-at") {
       expiresAt = argv[++index] || fail("--expires-at requires an ISO date");
     } else if (argument === "--tags") {
-      tags = argv[++index] || fail("--tags requires comma-separated names");
+      tags = argv[++index] ?? fail("--tags requires comma-separated names");
     } else if (argument === "--value-stdin") {
       valueStdin = true;
     } else if (argument === "--open") {

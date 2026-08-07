@@ -128,8 +128,8 @@ scripts.
 as JSON rows for scripts.
 
 `zsh` and `bash` complete a `secret` command word first, then aliases for
-`get`/`set`/`id`/`totp`/`pin`/`rotate`/`rm`. The completion is lazy and cached
-for 60 seconds, so shell startup is unaffected.
+`get`/`set`/`edit`/`source`/`id`/`totp`/`pin`/`rotate`/`rm`. The completion is
+lazy and cached for 60 seconds, so shell startup is unaffected.
 
 ## Project setup
 

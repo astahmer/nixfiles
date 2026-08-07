@@ -17,7 +17,9 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret list` — configured aliases from merged configs; aligned table on a TTY with creation dates when unlocked, TSV when piped; never touches the vault when piped.
 - `secret search <term>` — find aliases by alias, item, or env key across scopes; no values, no vault access.
 - `secret get <alias>` — print one configured value (or `--copy` to the clipboard), only when a value is explicitly required.
-- `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; confirm or `--force` before overwriting.
+- `secret set <alias>` — hidden prompt, then write the value; `--generate` creates a random password; `--name`, `--source`, `--tags`, `--type`, and `--field` set item metadata; confirm or `--force` before overwriting.
+- `secret edit <alias>` — update the Bitwarden item name, value, field, source, notes, custom fields, or local alias tags; `--tags ''` clears tags and `--force` skips overwrite confirmation.
+- `secret source <alias> [url]` — print or update the source URL attached to an item.
 - `secret id <alias>` — print the resolved Bitwarden item id without the value; use ids in configs when names can collide.
 - `secret pin <alias>` — replace the item name with the resolved id in the project/local/user config that owns it.
 - `secret rotate <alias>` — generate a new password and overwrite the item; confirm unless `--force`/`-f`; delivers the new value (clipboard, stdout fallback).
@@ -32,7 +34,9 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret run -- <cmd>` — inject project aliases into a command's environment and run it, propagating its exit code; strict by default (any unresolvable alias aborts), `--optional A,B` opts out.
 - `secret lint` — validate configs offline (items, env keys, dotenv-key collisions); no vault access, works locked; `--json` supported.
 - `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
+- `secret doctor --json` — emit value-free per-alias diagnostics and remote metadata for machine consumers such as SecretBar.
 - `secret recent` / `secret history` — recently used aliases and recent commands from a value-free local log.
+- `secret prune [--dry-run]` — list or remove configured aliases whose remote items no longer exist.
 
 Every command has a short alias (`st`, `ls`, `g`, `s`, `i`, `t`, `sy`, `p`,
 `r`, `in`, `e`, `pr`, `d`, `re`, `h`); `secret g github-token` equals `secret
@@ -59,9 +63,26 @@ Common flows: `secret env --env dev --output .env.dev` for a per-env dotenv,
 and `secret env --required A,B --output .env` to fail fast when a required
 alias is missing from the project config.
 
+For item modeling, use `type: "login"` for one-line credentials such as
+passwords, API keys, tokens, and usernames. Use `type: "secure-note"` with
+`field: "notes"` for multiline sensitive material such as SSH keys, recovery
+codes, certificates, or private documents. Login `notes` are optional item
+metadata; Secure Note `notes` are the encrypted secret value. `custom:<name>`
+is for a named Bitwarden custom field, not a replacement for the main value.
+Tags are value-free local labels used for filtering and organization; they are
+not Bitwarden item fields.
+
+SecretBar is the native macOS menu-bar client. It hides aliases whose remote
+items are missing, copies through the CLI clipboard path, supports Login and
+Secure Note creation/editing, tag autocomplete, source/TOTP actions, expiry
+health, pinned/recent filters, and keyboard-first navigation. Copy is the
+default one-click action; rotation and destructive actions remain confirmed.
+Its UI must never print or retain secret values except for an explicit,
+hold-to-reveal interaction.
+
 zsh and bash complete command words and then aliases for
-`get`/`set`/`id`/`totp`/`pin`/`rotate`/`rm` lazily with a shared 60-second
-cache; neither runs at shell startup.
+`get`/`set`/`edit`/`source`/`id`/`totp`/`pin`/`rotate`/`rm` lazily with a
+shared 60-second cache; neither runs at shell startup.
 
 ## Safety
 
