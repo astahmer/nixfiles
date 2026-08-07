@@ -79,6 +79,13 @@
       home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
       home.file."Applications/Tidy Ports.app".source = "${tidyports}/Applications/Tidy Ports.app";
 
+      # The plist may be unchanged when only the app store path changes. Run
+      # the same single-instance launcher during every activation so the live
+      # menu-bar process always matches the current Home Manager generation.
+      home.activation.restartSecretbar = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+        ${secretbarLauncher}
+      '';
+
       launchd.agents.secretbar = {
         enable = true;
         config = {
