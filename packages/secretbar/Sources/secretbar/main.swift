@@ -206,6 +206,15 @@ struct SecretDiagnostic: Identifiable {
     let canRepairBitwarden: Bool
 }
 
+struct RemoteEntryMetadata: Hashable {
+    let status: String
+    let itemName: String?
+    let source: String?
+    let hasTOTP: Bool
+
+    var isUsable: Bool { status == "ok" }
+}
+
 enum VaultState {
     case unknown
     case unlocked
@@ -262,6 +271,9 @@ final class SecretBarModel: ObservableObject {
     @Published var importCandidates: [ImportCandidate] = []
     @Published var importProject: Project?
     @Published var importEnvironment = "prod"
+    @Published var remoteMetadata: [String: RemoteEntryMetadata] = [:]
+    @Published var remoteValidationComplete = false
+    @Published var remoteValidationInProgress = false
 
     @Published var pinnedIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: PreferenceKey.pinnedIDs) ?? []) {
         didSet { UserDefaults.standard.set(Array(pinnedIDs).sorted(), forKey: PreferenceKey.pinnedIDs) }
@@ -303,8 +315,8 @@ final class SecretBarModel: ObservableObject {
     }
 
     func start() {
-        guard statusTimer == nil else { return }
         refreshEverything()
+        guard statusTimer == nil else { return }
         statusTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
@@ -403,6 +415,11 @@ final class SecretBarModel: ObservableObject {
             }
         }
         entries = indexed
+        let currentIDs = Set(indexed.map(\.id))
+        remoteMetadata = remoteMetadata.filter { currentIDs.contains($0.key) }
+        if state == .unlocked && !indexed.allSatisfy({ remoteMetadata[$0.id] != nil }) {
+            remoteValidationComplete = false
+        }
         refreshDetectedProject()
         refreshHistory()
     }
@@ -478,28 +495,64 @@ final class SecretBarModel: ObservableObject {
     }
 
     func refreshHealth() {
-        let projectsToCheck = projects
+        guard state == .unlocked else {
+            problems = [:]
+            problemDetails = [:]
+            remoteValidationInProgress = false
+            return
+        }
+
+        let entriesToCheck = entries
+        remoteValidationComplete = false
+        remoteValidationInProgress = true
         Task.detached(priority: .utility) {
             var counts: [String: Int] = [:]
             var details: [String: [String]] = [:]
-            for project in projectsToCheck {
-                let result = runSecret(["doctor", "--config", project.configPath], cwd: project.dir, timeout: 45)
-                let output = "\(result.stdout)\n\(result.stderr)"
-                if output.localizedCaseInsensitiveContains("locked") || output.localizedCaseInsensitiveContains("unauthenticated") {
-                    continue
+            var metadata: [String: RemoteEntryMetadata] = [:]
+            let groups = Dictionary(grouping: entriesToCheck) { entry in
+                "\(entry.configPath)\u{0}\(entry.environment)"
+            }
+
+            for groupedEntries in groups.values {
+                guard let first = groupedEntries.first else { continue }
+                var arguments = ["doctor", "--config", first.configPath, "--json"]
+                if first.environment != "prod" { arguments += ["--env", first.environment] }
+                let result = runSecret(arguments, cwd: first.cwd, timeout: 45)
+                guard let data = result.stdout.data(using: .utf8),
+                      let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+                else { continue }
+
+                for row in rows {
+                    guard let alias = row["alias"] as? String,
+                          let entry = groupedEntries.first(where: { $0.alias == alias })
+                    else { continue }
+                    let status = row["status"] as? String ?? "missing"
+                    let itemName = (row["itemName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    let source = (row["source"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    let hasTOTP = (row["hasTOTP"] as? String) == "true" || (row["hasTOTP"] as? Bool) == true
+                    metadata[entry.id] = RemoteEntryMetadata(
+                        status: status,
+                        itemName: itemName,
+                        source: source,
+                        hasTOTP: hasTOTP
+                    )
+                    if status != "ok" {
+                        counts[entry.project, default: 0] += 1
+                        details[entry.project, default: []].append(
+                            "\(status)\t\(entry.alias)\t\(entry.item)\t\(entry.field)"
+                        )
+                    }
                 }
-                let count = Self.parseProblems(output)
-                counts[project.name] = count
-                let lines = output.split(separator: "\n").map(String.init).filter {
-                    $0.hasPrefix("missing\t") || $0.hasPrefix("invalid value\t")
-                }
-                if !lines.isEmpty { details[project.name] = lines }
             }
             let snapshotCounts = counts
             let snapshotDetails = details
+            let snapshotMetadata = metadata
             await MainActor.run {
                 self.problems = snapshotCounts
                 self.problemDetails = snapshotDetails
+                self.remoteMetadata = snapshotMetadata
+                self.remoteValidationComplete = true
+                self.remoteValidationInProgress = false
             }
         }
     }
@@ -870,6 +923,14 @@ final class SecretBarModel: ObservableObject {
         return "OK"
     }
 
+    func hasTOTP(_ entry: AliasEntry) -> Bool {
+        remoteMetadata[entry.id]?.isUsable == true && remoteMetadata[entry.id]?.hasTOTP == true
+    }
+
+    func hasSource(_ entry: AliasEntry) -> Bool {
+        remoteMetadata[entry.id]?.source?.isEmpty == false
+    }
+
     func lastUsed(for entry: AliasEntry) -> String {
         guard let value = lastUsedByKey["\(entry.environment):\(entry.alias)"], let date = parseDate(value) else { return "Never" }
         return formatDate(date)
@@ -957,8 +1018,8 @@ struct StatusIcon: View {
 }
 
 struct MasterPasswordSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: SecretBarModel
+    let onDismiss: () -> Void
     @State private var password = ""
 
     var body: some View {
@@ -972,7 +1033,7 @@ struct MasterPasswordSheet: View {
                 .onSubmit { unlock() }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onDismiss() }
                 Button("Unlock") { unlock() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(model.busy || password.isEmpty)
@@ -985,15 +1046,15 @@ struct MasterPasswordSheet: View {
     private func unlock() {
         let value = password
         password = ""
-        dismiss()
+        onDismiss()
         model.unlockWithPassword(value)
     }
 }
 
 struct DiagnosticSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: SecretBarModel
     let diagnostic: SecretDiagnostic
+    let onDismiss: () -> Void
     @State private var confirmReset = false
 
     var body: some View {
@@ -1019,40 +1080,52 @@ struct DiagnosticSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 6))
             }
-            HStack {
-                if diagnostic.recoveryCommand != nil {
-                    Button("Copy command") { model.copyDiagnostic(diagnostic) }
-                    Button("Open Terminal") { openTerminal() }
+            if confirmReset {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Reset the Bitwarden CLI session?").font(.headline)
+                    Text("This logs Bitwarden out. You will need to complete bw login again.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Spacer()
+                        Button("Cancel") { confirmReset = false }
+                        Button("Log out and open Terminal", role: .destructive) {
+                            onDismiss()
+                            model.repairBitwardenSession()
+                        }
+                    }
                 }
-                if diagnostic.canRepairBitwarden {
-                    Button("Reset Bitwarden session", role: .destructive) { confirmReset = true }
+                .padding(10)
+                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 7))
+            } else {
+                HStack {
+                    if diagnostic.recoveryCommand != nil {
+                        Button("Copy command") {
+                            model.copyDiagnostic(diagnostic)
+                            onDismiss()
+                        }
+                        Button("Open Terminal") {
+                            onDismiss()
+                            openTerminal()
+                        }
+                    }
+                    if diagnostic.canRepairBitwarden {
+                        Button("Reset Bitwarden session", role: .destructive) { confirmReset = true }
+                    }
+                    Spacer()
+                    Button("Dismiss") { onDismiss() }
                 }
-                Spacer()
-                Button("Dismiss") { dismiss() }
             }
         }
         .padding(18)
         .frame(width: 560, height: 390)
-        .confirmationDialog(
-            "Reset the Bitwarden CLI session?",
-            isPresented: $confirmReset,
-            titleVisibility: .visible
-        ) {
-            Button("Log out and open Terminal", role: .destructive) {
-                dismiss()
-                model.repairBitwardenSession()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This logs the Bitwarden CLI out. You will need to complete bw login again.")
-        }
     }
 }
 
 struct SecretEditSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: SecretBarModel
     let entry: AliasEntry
+    let onDismiss: () -> Void
     @State private var itemName = ""
     @State private var value = ""
     @State private var source = ""
@@ -1060,10 +1133,18 @@ struct SecretEditSheet: View {
     @State private var clearSource = false
     @State private var clearNotes = false
 
+    init(model: SecretBarModel, entry: AliasEntry, onDismiss: @escaping () -> Void) {
+        self.model = model
+        self.entry = entry
+        self.onDismiss = onDismiss
+        _itemName = State(initialValue: model.remoteMetadata[entry.id]?.itemName ?? "")
+        _source = State(initialValue: model.remoteMetadata[entry.id]?.source ?? "")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Edit \(entry.alias)").font(.headline)
-            Text("\(entry.project) · leave a field blank to keep it unchanged")
+            Text("\(entry.project) · blank fields keep their current values")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             TextField("Bitwarden item name", text: $itemName).textFieldStyle(.roundedBorder)
@@ -1077,10 +1158,10 @@ struct SecretEditSheet: View {
             Toggle("Clear notes", isOn: $clearNotes).toggleStyle(.checkbox)
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { onDismiss() }
                 Button("Save changes") {
                     if model.edit(entry, itemName: itemName, value: value, source: source, notes: notes, clearSource: clearSource, clearNotes: clearNotes) {
-                        dismiss()
+                        onDismiss()
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -1093,8 +1174,8 @@ struct SecretEditSheet: View {
 }
 
 struct ImportPreviewSheet: View {
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: SecretBarModel
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1117,10 +1198,10 @@ struct ImportPreviewSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Cancel") { model.importCandidates = []; dismiss() }
+                Button("Cancel") { model.importCandidates = []; onDismiss() }
                 Button("Create missing secrets") {
                     model.confirmImport()
-                    dismiss()
+                    onDismiss()
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(model.busy)
@@ -1128,6 +1209,36 @@ struct ImportPreviewSheet: View {
         }
         .padding(18)
         .frame(width: 430, height: 430)
+    }
+}
+
+struct SecretBarConfirmation: View {
+    let title: String
+    let message: String
+    let confirmTitle: String
+    let destructive: Bool
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title).font(.title3.weight(.semibold))
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button("Cancel") { onCancel() }
+                if destructive {
+                    Button(confirmTitle, role: .destructive) { onConfirm() }
+                } else {
+                    Button(confirmTitle) { onConfirm() }
+                }
+            }
+        }
+        .padding(18)
+        .frame(width: 430)
     }
 }
 
@@ -1158,9 +1269,17 @@ struct SecretBarView: View {
     @State private var confirmClearHistory = false
 
     private var matchingEntries: [AliasEntry] {
+        let sourceEntries: [AliasEntry]
+        if model.state == .unlocked {
+            sourceEntries = model.remoteValidationComplete
+                ? model.entries.filter { model.remoteMetadata[$0.id]?.isUsable == true }
+                : []
+        } else {
+            sourceEntries = model.entries
+        }
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !needle.isEmpty else { return model.entries }
-        return model.entries.filter {
+        guard !needle.isEmpty else { return sourceEntries }
+        return sourceEntries.filter {
             $0.alias.lowercased().contains(needle) ||
             $0.project.lowercased().contains(needle) ||
             $0.item.lowercased().contains(needle) ||
@@ -1189,25 +1308,84 @@ struct SecretBarView: View {
         model.projects.first(where: { $0.id == selectedProjectID }) ?? model.projects.first(where: { $0.isGlobal })
     }
 
+    @ViewBuilder
+    private var modalOverlay: some View {
+        if let diagnostic = model.diagnostic {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            DiagnosticSheet(model: model, diagnostic: diagnostic) { model.diagnostic = nil }
+        } else if let entry = editing {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            SecretEditSheet(model: model, entry: entry) { editing = nil }
+        } else if showPasswordSheet {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            MasterPasswordSheet(model: model) { showPasswordSheet = false }
+        } else if showImportPreview {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            ImportPreviewSheet(model: model) { showImportPreview = false }
+        } else if let entry = copying {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            SecretBarConfirmation(
+                title: "Copy \(entry.alias)?",
+                message: "This puts the secret value on the clipboard. Other apps may read it until the clipboard is replaced.",
+                confirmTitle: "Copy value",
+                destructive: false,
+                onConfirm: {
+                    model.copy(entry)
+                    copying = nil
+                },
+                onCancel: { copying = nil }
+            )
+        } else if let entry = rotating {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            SecretBarConfirmation(
+                title: "Rotate \(entry.alias)?",
+                message: "Generates a new password in Bitwarden and copies it to the clipboard.",
+                confirmTitle: "Rotate and copy new value",
+                destructive: true,
+                onConfirm: {
+                    model.rotate(entry)
+                    rotating = nil
+                },
+                onCancel: { rotating = nil }
+            )
+        } else if confirmClearHistory {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            SecretBarConfirmation(
+                title: "Clear usage history?",
+                message: "History contains aliases, actions, timestamps, and environments only. It never contains values.",
+                confirmTitle: "Clear history",
+                destructive: true,
+                onConfirm: {
+                    model.clearHistory()
+                    confirmClearHistory = false
+                },
+                onCancel: { confirmClearHistory = false }
+            )
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            header
-            Divider()
-            Group {
-                switch tab {
-                case .create: createTab
-                case .secrets: secretsTab
-                case .settings: settingsTab
+        ZStack {
+            VStack(alignment: .leading, spacing: 8) {
+                header
+                Divider()
+                Group {
+                    switch tab {
+                    case .create: createTab
+                    case .secrets: secretsTab
+                    case .settings: settingsTab
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                tabBar
+                if let flash = model.flash {
+                    Text(flash)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            tabBar
-            if let flash = model.flash {
-                Text(flash)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
+            modalOverlay
         }
         .padding(10)
         .frame(width: 620, height: 700)
@@ -1216,12 +1394,6 @@ struct SecretBarView: View {
             selectDetectedProjectIfNeeded()
         }
         .onChange(of: model.detectedProjectID) { _, _ in selectDetectedProjectIfNeeded() }
-        .sheet(item: $editing) { entry in SecretEditSheet(model: model, entry: entry) }
-        .sheet(isPresented: $showPasswordSheet) { MasterPasswordSheet(model: model) }
-        .sheet(isPresented: $showImportPreview) { ImportPreviewSheet(model: model) }
-        .sheet(item: Binding(get: { model.diagnostic }, set: { model.diagnostic = $0 })) { diagnostic in
-            DiagnosticSheet(model: model, diagnostic: diagnostic)
-        }
         .fileImporter(
             isPresented: $showDotEnvImporter,
             allowedContentTypes: [.plainText, .data],
@@ -1230,42 +1402,6 @@ struct SecretBarView: View {
             guard case let .success(urls) = result, let url = urls.first, let project = selectedProject else { return }
             model.prepareImport(url: url, project: project, environment: createEnvironment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "prod" : createEnvironment)
             showImportPreview = !model.importCandidates.isEmpty
-        }
-        .confirmationDialog(
-            "Copy \(copying?.alias ?? "")?",
-            isPresented: Binding(get: { copying != nil }, set: { if !$0 { copying = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Copy value") {
-                if let copying { model.copy(copying) }
-                copying = nil
-            }
-            Button("Cancel", role: .cancel) { copying = nil }
-        } message: {
-            Text("This puts the secret value on the clipboard. Other apps may read it until the clipboard is replaced.")
-        }
-        .confirmationDialog(
-            "Rotate \(rotating?.alias ?? "")?",
-            isPresented: Binding(get: { rotating != nil }, set: { if !$0 { rotating = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Rotate and copy new value", role: .destructive) {
-                if let rotating { model.rotate(rotating) }
-                rotating = nil
-            }
-            Button("Cancel", role: .cancel) { rotating = nil }
-        } message: {
-            Text("Generates a new password in Bitwarden and copies it to the clipboard.")
-        }
-        .confirmationDialog(
-            "Clear usage history?",
-            isPresented: $confirmClearHistory,
-            titleVisibility: .visible
-        ) {
-            Button("Clear history", role: .destructive) { model.clearHistory() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("History contains aliases, actions, timestamps, and environments only. It never contains values.")
         }
     }
 
@@ -1407,7 +1543,13 @@ struct SecretBarView: View {
                 Text("\(allEntries.count)").font(.caption2).foregroundStyle(.secondary)
             }
             if allEntries.isEmpty {
-                Text(model.entries.isEmpty ? "No .secret.json projects found in ~/dev" : "No matches")
+                Text(
+                    model.state == .unlocked && !model.remoteValidationComplete
+                        ? "Checking remote secrets…"
+                        : model.entries.isEmpty
+                            ? "No .secret.json projects found in ~/dev"
+                            : "No remote secrets match"
+                )
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 20)
@@ -1430,7 +1572,13 @@ struct SecretBarView: View {
                     TableColumn("Actions") { entry in
                         HStack(spacing: 6) {
                             Button { copying = entry } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.borderless)
-                            Button { model.copyTOTP(entry) } label: { Image(systemName: "number") }.buttonStyle(.borderless)
+                                .disabled(model.busy || model.state != .unlocked)
+                            if model.hasTOTP(entry) {
+                                Button { model.copyTOTP(entry) } label: { Image(systemName: "number") }.buttonStyle(.borderless)
+                                    .disabled(model.busy)
+                            }
+                            Button { editing = entry } label: { Image(systemName: "pencil") }.buttonStyle(.borderless)
+                                .disabled(model.busy || model.state != .unlocked)
                             if model.pinsEnabled {
                                 Button { model.togglePin(entry) } label: {
                                     Image(systemName: model.pinnedIDs.contains(entry.id) ? "pin.fill" : "pin")
@@ -1581,6 +1729,14 @@ struct SecretBarView: View {
             Button { copying = entry } label: { Image(systemName: "doc.on.doc") }
                 .buttonStyle(.plain)
                 .disabled(model.busy || model.state != .unlocked)
+            if model.hasTOTP(entry) {
+                Button { model.copyTOTP(entry) } label: { Image(systemName: "number") }
+                    .buttonStyle(.plain)
+                    .disabled(model.busy)
+            }
+            Button { editing = entry } label: { Image(systemName: "pencil") }
+                .buttonStyle(.plain)
+                .disabled(model.busy || model.state != .unlocked)
             if model.pinsEnabled {
                 Button { model.togglePin(entry) } label: {
                     Image(systemName: model.pinnedIDs.contains(entry.id) ? "pin.fill" : "pin")
@@ -1602,8 +1758,8 @@ struct SecretBarView: View {
         .contextMenu {
             if model.pinsEnabled { Button(model.pinnedIDs.contains(entry.id) ? "Unpin" : "Pin") { model.togglePin(entry) } }
             Button("Edit…") { editing = entry }
-            Button("Open source URL") { model.openSource(entry) }
-            Button("Copy current TOTP") { model.copyTOTP(entry) }
+            if model.hasSource(entry) { Button("Open source URL") { model.openSource(entry) } }
+            if model.hasTOTP(entry) { Button("Copy current TOTP") { model.copyTOTP(entry) } }
             Button("Rotate and copy new value") { rotating = entry }
         }
         .padding(.vertical, 2)
@@ -1616,6 +1772,7 @@ struct SecretBarView: View {
             tabButton(.secrets, key: "2")
             tabButton(.settings, key: "3")
         }
+        .frame(maxWidth: .infinity)
         .background(Color.secondary.opacity(0.18), in: RoundedRectangle(cornerRadius: 9))
     }
 
@@ -1627,9 +1784,11 @@ struct SecretBarView: View {
             Text(section.title)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
+                .contentShape(Rectangle())
                 .background(tab == section ? Color.accentColor.opacity(0.55) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
         if model.shortcutsEnabled {
             button.keyboardShortcut(key, modifiers: [.command])
         } else {
