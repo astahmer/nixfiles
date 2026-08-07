@@ -164,6 +164,18 @@ When the user ends a task with an open-ended prompt like "next steps?", "anythin
 - Suggest **additional improvements, refactors, tests, docs, or edge cases** that are worth doing
 - Batch **all** suggestions in one message, not one-at-a-time
 
+## Response sections and feedback
+
+When proposing work, requesting feedback, or showcasing changes:
+
+- Use indexed items so the user can answer precisely: `1`, `2`, `3` for one
+  section; `A1`, `A2`, `B1` when there are multiple sections.
+- Put completed or proposed changes under a clearly labeled `SHOWCASE`
+  section when presenting them for review.
+- Add a clearly labeled `FEEDBACK NEEDED` section only when a real user
+  question or decision is needed. Put every question there, indexed, and keep
+  it separate from `SHOWCASE`; omit the section when there are no questions.
+
 When the user asks "any [other] questions?" or "need anything from me?" — collect all pending unknowns and ask them in a **single batched message**. If a question can be answered by exploring the codebase, do that instead. If you have nothing, say "Nothing else — all good."
 
 ## Node project toolchain requirements

@@ -412,6 +412,13 @@ each.
   health checks, and value-free usage history. Copy uses the CLI clipboard path
   so the UI does not receive the value in stdout; rotate has an explicit
   confirmation dialog.
+- Sharing is intentionally deferred. Keep one-off personal copy/paste as the
+  current workflow; before implementing sharing, design separate flows for a
+  single secret or secure note versus a selected project environment, with
+  preview/redaction, explicit confirmation, expiry or one-time access, and no
+  raw full-`.env` sharing by default. Prefer an existing audited sharing
+  mechanism over inventing a custom transport, and keep plaintext notes
+  explicitly distinct from encrypted secrets.
 - `secret prune [--dry-run]` removes config aliases whose vault items no
   longer exist; `--dry-run` only lists them.
 - A tiny detached keepalive (the binary re-spawning itself) pings the daemon
