@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 // SecretBar is a deliberately value-minimizing UI around the `secret` CLI.
 // Normal copy operations stay in the CLI process and write directly to the
@@ -172,13 +173,21 @@ struct AliasEntry: Identifiable, Hashable {
     let configPath: String
     let cwd: String
     let item: String
+    let environment: String
     let field: String
     let itemType: String
     let envKey: String
+    let tags: [String]
     let expiresAt: String?
 
-    var id: String { "\(project):\(alias)" }
+    var id: String { "\(project):\(environment):\(alias)" }
     var itemTypeTitle: String { itemType == SecretItemType.secureNote.rawValue ? "Secure Note" : "Login" }
+}
+
+struct ImportCandidate: Identifiable {
+    let alias: String
+    let value: String
+    var id: String { alias }
 }
 
 struct UsageEntry: Identifiable, Hashable {
@@ -250,6 +259,9 @@ final class SecretBarModel: ObservableObject {
     @Published var flash: String?
     @Published var lastError: String?
     @Published var diagnostic: SecretDiagnostic?
+    @Published var importCandidates: [ImportCandidate] = []
+    @Published var importProject: Project?
+    @Published var importEnvironment = "prod"
 
     @Published var pinnedIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: PreferenceKey.pinnedIDs) ?? []) {
         didSet { UserDefaults.standard.set(Array(pinnedIDs).sorted(), forKey: PreferenceKey.pinnedIDs) }
@@ -283,7 +295,7 @@ final class SecretBarModel: ObservableObject {
     private var healthTimer: Timer?
     private var flashTask: Task<Void, Never>?
     private var clipboardTask: Task<Void, Never>?
-    private var lastUsedByAlias: [String: String] = [:]
+    private var lastUsedByKey: [String: String] = [:]
 
     private static func preferenceBool(_ key: String, defaultValue: Bool) -> Bool {
         guard UserDefaults.standard.object(forKey: key) != nil else { return defaultValue }
@@ -351,24 +363,41 @@ final class SecretBarModel: ObservableObject {
         var indexed: [AliasEntry] = []
         for project in found {
             guard let data = try? Data(contentsOf: URL(fileURLWithPath: project.configPath)),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let secrets = json["secrets"] as? [String: Any]
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else { continue }
 
-            for alias in secrets.keys.sorted() {
-                guard let definition = secrets[alias] as? [String: Any],
-                      let item = definition["item"] as? String,
-                      !item.isEmpty
-                else { continue }
+            var definitions: [(String, [String: Any], String)] = []
+            if let secrets = json["secrets"] as? [String: Any] {
+                definitions += secrets.compactMap { alias, definition in
+                    guard let definition = definition as? [String: Any] else { return nil }
+                    return (alias, definition, "prod")
+                }
+            }
+            if let environments = json["environments"] as? [String: Any] {
+                for environment in environments.keys.sorted() {
+                    guard let environmentObject = environments[environment] as? [String: Any],
+                          let secrets = environmentObject["secrets"] as? [String: Any]
+                    else { continue }
+                    definitions += secrets.compactMap { alias, definition in
+                        guard let definition = definition as? [String: Any] else { return nil }
+                        return (alias, definition, environment)
+                    }
+                }
+            }
+
+            for (alias, definition, environment) in definitions.sorted(by: { $0.0 == $1.0 ? $0.2 < $1.2 : $0.0 < $1.0 }) {
+                guard let item = definition["item"] as? String, !item.isEmpty else { continue }
                 indexed.append(AliasEntry(
                     alias: alias,
                     project: project.name,
                     configPath: project.configPath,
                     cwd: project.dir,
                     item: item,
+                    environment: environment,
                     field: definition["field"] as? String ?? "password",
                     itemType: definition["type"] as? String ?? "login",
                     envKey: definition["env"] as? String ?? alias,
+                    tags: definition["tags"] as? [String] ?? [],
                     expiresAt: definition["expiresAt"] as? String
                 ))
             }
@@ -402,7 +431,7 @@ final class SecretBarModel: ObservableObject {
         else {
             history = []
             recent = []
-            lastUsedByAlias = [:]
+            lastUsedByKey = [:]
             return
         }
 
@@ -423,24 +452,29 @@ final class SecretBarModel: ObservableObject {
 
         var lastUsed: [String: String] = [:]
         for item in parsed where item.command == "get" || item.command == "set" || item.command == "rotate" {
-            if lastUsed[item.target] == nil { lastUsed[item.target] = item.at }
+            let key = "\(item.environment):\(item.target)"
+            if lastUsed[key] == nil { lastUsed[key] = item.at }
         }
-        lastUsedByAlias = lastUsed
+        lastUsedByKey = lastUsed
 
-        var recentAliases: [String] = []
+        var recentAliases: [(String, String)] = []
         for item in parsed where item.command == "get" || item.command == "set" || item.command == "rotate" {
-            if !recentAliases.contains(item.target) { recentAliases.append(item.target) }
+            let key = "\(item.environment):\(item.target)"
+            if !recentAliases.contains(where: { $0.0 == key }) { recentAliases.append((key, item.environment)) }
             if recentAliases.count == 8 { break }
         }
-        recent = recentAliases.compactMap { entryForAlias($0) }
+        recent = recentAliases.compactMap { key, environment in
+            let alias = key.split(separator: ":", maxSplits: 1).last.map(String.init) ?? key
+            return entryForAlias(alias, environment: environment)
+        }
     }
 
-    private func entryForAlias(_ alias: String) -> AliasEntry? {
+    private func entryForAlias(_ alias: String, environment: String = "prod") -> AliasEntry? {
         if let detectedProjectID,
-           let detected = entries.first(where: { $0.id == "\(detectedProjectID):\(alias)" }) {
+           let detected = entries.first(where: { $0.project == detectedProjectID && $0.alias == alias && $0.environment == environment }) {
             return detected
         }
-        return entries.first(where: { $0.alias == alias })
+        return entries.first(where: { $0.alias == alias && $0.environment == environment })
     }
 
     func refreshHealth() {
@@ -499,7 +533,7 @@ final class SecretBarModel: ObservableObject {
 
     func copy(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(["get", "--copy", "--config", entry.configPath, entry.alias], cwd: entry.cwd)
+        let result = runSecret(scoped(["get", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd)
         setBusy(false)
         guard result.status == 0 else {
             showError(title: "Could not copy \(entry.alias)", message: resultDetail(result, fallback: "secret get failed"))
@@ -512,7 +546,7 @@ final class SecretBarModel: ObservableObject {
 
     func reveal(_ entry: AliasEntry) -> String? {
         setBusy(true)
-        let result = runSecret(["get", "--config", entry.configPath, entry.alias], cwd: entry.cwd)
+        let result = runSecret(scoped(["get", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd)
         setBusy(false)
         guard result.status == 0 else {
             showError(title: "Could not reveal \(entry.alias)", message: resultDetail(result, fallback: "secret get failed"))
@@ -523,7 +557,7 @@ final class SecretBarModel: ObservableObject {
 
     func openSource(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(["source", "--config", entry.configPath, entry.alias, "--open"], cwd: entry.cwd)
+        let result = runSecret(scoped(["source", "--config", entry.configPath, entry.alias, "--open"], entry), cwd: entry.cwd)
         setBusy(false)
         if result.status == 0 {
             flash("opened source for \(entry.alias)")
@@ -534,7 +568,7 @@ final class SecretBarModel: ObservableObject {
 
     func rotate(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(["rotate", "--config", entry.configPath, entry.alias, "--force"], cwd: entry.cwd, timeout: 60)
+        let result = runSecret(scoped(["rotate", "--config", entry.configPath, entry.alias, "--force"], entry), cwd: entry.cwd, timeout: 60)
         setBusy(false)
         if result.status == 0 {
             scheduleClipboardClear()
@@ -553,7 +587,9 @@ final class SecretBarModel: ObservableObject {
         source: String,
         notes: String,
         itemType: SecretItemType,
-        expiresAt: String
+        expiresAt: String,
+        environment: String,
+        tags: String
     ) -> Bool {
         let cleanAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -566,6 +602,8 @@ final class SecretBarModel: ObservableObject {
             return false
         }
         var arguments = ["set", cleanAlias, "--type", itemType.rawValue]
+        let cleanEnvironment = environment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanEnvironment.isEmpty && cleanEnvironment != "prod" { arguments += ["--env", cleanEnvironment] }
         if project.isGlobal {
             arguments.append("--global")
         } else {
@@ -575,6 +613,7 @@ final class SecretBarModel: ObservableObject {
         if !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { arguments += ["--source", source] }
         if itemType == .login, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { arguments += ["--notes", notes] }
         if !expiresAt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { arguments += ["--expires-at", expiresAt] }
+        if !tags.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { arguments += ["--tags", tags] }
 
         setBusy(true)
         let result = runSecret(arguments, cwd: project.dir, input: cleanValue, timeout: 60)
@@ -586,6 +625,67 @@ final class SecretBarModel: ObservableObject {
         flash("created \(cleanAlias) in \(project.isGlobal ? "global" : project.name)")
         refreshEverything()
         return true
+    }
+
+    func prepareImport(url: URL, project: Project, environment: String) {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
+            showError(title: "Could not read dotenv file", message: "SecretBar could not read the selected file.")
+            return
+        }
+        let candidates = contents.split(separator: "\n", omittingEmptySubsequences: false).compactMap { raw -> ImportCandidate? in
+            var line = String(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, !line.hasPrefix("#") else { return nil }
+            if line.hasPrefix("export ") { line.removeFirst("export ".count) }
+            guard let separator = line.firstIndex(of: "=") else { return nil }
+            let key = String(line[..<separator])
+            guard key.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil else { return nil }
+            var value = String(line[line.index(after: separator)...]).trimmingCharacters(in: .whitespaces)
+            if value.count >= 2 {
+                let first = value.first
+                let last = value.last
+                if (first == "'" && last == "'") || (first == "\"" && last == "\"") {
+                    value.removeFirst()
+                    value.removeLast()
+                }
+            }
+            return ImportCandidate(alias: key.lowercased().replacingOccurrences(of: "_", with: "-"), value: value)
+        }
+        guard !candidates.isEmpty else {
+            showError(title: "No importable entries", message: "The selected file did not contain simple KEY=value entries.")
+            return
+        }
+        importCandidates = candidates
+        importProject = project
+        importEnvironment = environment
+    }
+
+    func confirmImport() {
+        guard let project = importProject else { return }
+        let candidates = importCandidates
+        let existing = Set(entries.filter { $0.project == project.name && $0.environment == importEnvironment }.map(\.alias))
+        let skipped = candidates.filter { existing.contains($0.alias) }.map(\.alias)
+        var failures: [String] = []
+        setBusy(true)
+        for candidate in candidates where !existing.contains(candidate.alias) {
+            var arguments = ["set", candidate.alias]
+            if project.isGlobal { arguments.append("--global") } else { arguments += ["--config", project.configPath] }
+            if importEnvironment != "prod" { arguments += ["--env", importEnvironment] }
+            let result = runSecret(arguments, cwd: project.dir, input: candidate.value, timeout: 60)
+            if result.status != 0 { failures.append("\(candidate.alias): \(resultDetail(result, fallback: "failed"))") }
+        }
+        setBusy(false)
+        importCandidates = []
+        importProject = nil
+        refreshEverything()
+        if !failures.isEmpty {
+            showError(title: "Import completed with errors", message: ((skipped.isEmpty ? [] : ["Skipped existing aliases: \(skipped.joined(separator: ", "))"]) + failures).joined(separator: "\n"))
+        } else if !skipped.isEmpty {
+            flash("imported new aliases; skipped existing: \(skipped.joined(separator: ", "))")
+        } else {
+            flash("imported \(candidates.count) aliases")
+        }
     }
 
     func edit(
@@ -606,7 +706,7 @@ final class SecretBarModel: ObservableObject {
             showError(title: "Nothing to save", message: "Enter a change first.")
             return false
         }
-        var arguments = ["edit", entry.alias, "--config", entry.configPath, "--force"]
+        var arguments = scoped(["edit", entry.alias, "--config", entry.configPath, "--force"], entry)
         if !cleanName.isEmpty { arguments += ["--name", itemName] }
         if !cleanValue.isEmpty { arguments += ["--field", entry.field, "--value-stdin"] }
         if clearSource || cleanSource?.isEmpty == false { arguments += ["--source", clearSource ? "" : source ?? ""] }
@@ -635,6 +735,19 @@ final class SecretBarModel: ObservableObject {
         } else {
             showError(title: "Touch ID unlock failed", message: resultDetail(result, fallback: "Touch ID authenticated, but Bitwarden is still locked."))
             refreshStatus()
+        }
+    }
+
+    func copyTOTP(_ entry: AliasEntry) {
+        setBusy(true)
+        let result = runSecret(scoped(["totp", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd)
+        setBusy(false)
+        if result.status == 0 {
+            scheduleClipboardClear()
+            flash("copied current TOTP for \(entry.alias)")
+            refreshHistory()
+        } else {
+            showError(title: "Could not copy TOTP", message: resultDetail(result, fallback: "secret totp failed"))
         }
     }
 
@@ -758,7 +871,7 @@ final class SecretBarModel: ObservableObject {
     }
 
     func lastUsed(for entry: AliasEntry) -> String {
-        guard let value = lastUsedByAlias[entry.alias], let date = parseDate(value) else { return "Never" }
+        guard let value = lastUsedByKey["\(entry.environment):\(entry.alias)"], let date = parseDate(value) else { return "Never" }
         return formatDate(date)
     }
 
@@ -777,6 +890,10 @@ final class SecretBarModel: ObservableObject {
 
     private func setBusy(_ value: Bool) {
         busy = value
+    }
+
+    private func scoped(_ arguments: [String], _ entry: AliasEntry) -> [String] {
+        entry.environment == "prod" ? arguments : arguments + ["--env", entry.environment]
     }
 
     private func resultDetail(_ result: RunResult, fallback: String) -> String {
@@ -975,6 +1092,45 @@ struct SecretEditSheet: View {
     }
 }
 
+struct ImportPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: SecretBarModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Import dotenv entries").font(.title3.weight(.semibold))
+            Text("Only aliases and values from the selected file are read. Existing aliases in the selected project/environment are skipped, never overwritten.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text("\(model.importCandidates.count) entries ready for \(model.importProject?.name ?? "project") / \(model.importEnvironment)")
+                .font(.headline)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    ForEach(model.importCandidates) { candidate in
+                        HStack {
+                            Text(candidate.alias).font(.system(.body, design: .monospaced))
+                            Spacer()
+                            Text("value hidden").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { model.importCandidates = []; dismiss() }
+                Button("Create missing secrets") {
+                    model.confirmImport()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(model.busy)
+            }
+        }
+        .padding(18)
+        .frame(width: 430, height: 430)
+    }
+}
+
 // MARK: - Main view
 
 struct SecretBarView: View {
@@ -995,6 +1151,10 @@ struct SecretBarView: View {
     @State private var createNotes = ""
     @State private var createType: SecretItemType = .login
     @State private var createExpiresAt = ""
+    @State private var createEnvironment = "prod"
+    @State private var createTags = ""
+    @State private var showDotEnvImporter = false
+    @State private var showImportPreview = false
     @State private var confirmClearHistory = false
 
     private var matchingEntries: [AliasEntry] {
@@ -1004,7 +1164,9 @@ struct SecretBarView: View {
             $0.alias.lowercased().contains(needle) ||
             $0.project.lowercased().contains(needle) ||
             $0.item.lowercased().contains(needle) ||
-            $0.field.lowercased().contains(needle)
+            $0.field.lowercased().contains(needle) ||
+            $0.environment.lowercased().contains(needle) ||
+            $0.tags.joined(separator: " ").lowercased().contains(needle)
         }
     }
 
@@ -1056,8 +1218,18 @@ struct SecretBarView: View {
         .onChange(of: model.detectedProjectID) { _, _ in selectDetectedProjectIfNeeded() }
         .sheet(item: $editing) { entry in SecretEditSheet(model: model, entry: entry) }
         .sheet(isPresented: $showPasswordSheet) { MasterPasswordSheet(model: model) }
+        .sheet(isPresented: $showImportPreview) { ImportPreviewSheet(model: model) }
         .sheet(item: Binding(get: { model.diagnostic }, set: { model.diagnostic = $0 })) { diagnostic in
             DiagnosticSheet(model: model, diagnostic: diagnostic)
+        }
+        .fileImporter(
+            isPresented: $showDotEnvImporter,
+            allowedContentTypes: [.plainText, .data],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case let .success(urls) = result, let url = urls.first, let project = selectedProject else { return }
+            model.prepareImport(url: url, project: project, environment: createEnvironment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "prod" : createEnvironment)
+            showImportPreview = !model.importCandidates.isEmpty
         }
         .confirmationDialog(
             "Copy \(copying?.alias ?? "")?",
@@ -1156,6 +1328,7 @@ struct SecretBarView: View {
                     ForEach(SecretItemType.allCases) { type in Text(type.title).tag(type) }
                 }
                 .pickerStyle(.segmented)
+                TextField("Environment (prod, dev, staging…)", text: $createEnvironment).textFieldStyle(.roundedBorder)
                 TextField("Alias", text: $createAlias).textFieldStyle(.roundedBorder)
                 TextField("Bitwarden item name (optional)", text: $createItemName).textFieldStyle(.roundedBorder)
                 if createType == .secureNote {
@@ -1178,20 +1351,24 @@ struct SecretBarView: View {
                 }
                 TextField("Source URL (optional)", text: $createSource).textFieldStyle(.roundedBorder)
                 TextField("Expires on YYYY-MM-DD (optional)", text: $createExpiresAt).textFieldStyle(.roundedBorder)
+                TextField("Tags (comma-separated, optional)", text: $createTags).textFieldStyle(.roundedBorder)
                 HStack {
+                    Button("Import .env…") { showDotEnvImporter = true }
                     Spacer()
                     Button("Create") {
                         guard let project = selectedProject else {
                             model.showError(title: "Cannot create secret", message: "No project scope is available.")
                             return
                         }
-                        if model.create(alias: createAlias, project: project, value: createValue, itemName: createItemName, source: createSource, notes: createNotes, itemType: createType, expiresAt: createExpiresAt) {
+                        if model.create(alias: createAlias, project: project, value: createValue, itemName: createItemName, source: createSource, notes: createNotes, itemType: createType, expiresAt: createExpiresAt, environment: createEnvironment, tags: createTags) {
                             createAlias = ""
                             createItemName = ""
                             createValue = ""
                             createSource = ""
                             createNotes = ""
                             createExpiresAt = ""
+                            createEnvironment = "prod"
+                            createTags = ""
                             createType = .login
                             tab = .secrets
                         }
@@ -1241,9 +1418,11 @@ struct SecretBarView: View {
                         Text(entry.alias).font(.system(.body, design: .monospaced)).lineLimit(1)
                     }
                     TableColumn("Project") { entry in Text(entry.project).lineLimit(1) }
+                    TableColumn("Env") { entry in Text(entry.environment).lineLimit(1) }
                     TableColumn("Item") { entry in Text(entry.item).lineLimit(1) }
                     TableColumn("Type") { entry in Text(entry.itemTypeTitle).lineLimit(1) }
                     TableColumn("Field") { entry in Text(entry.field).lineLimit(1) }
+                    TableColumn("Tags") { entry in Text(entry.tags.joined(separator: ", ")).lineLimit(1) }
                     TableColumn("Health") { entry in
                         Text(model.health(for: entry)).foregroundStyle(healthColor(model.health(for: entry)))
                     }
@@ -1251,6 +1430,7 @@ struct SecretBarView: View {
                     TableColumn("Actions") { entry in
                         HStack(spacing: 6) {
                             Button { copying = entry } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.borderless)
+                            Button { model.copyTOTP(entry) } label: { Image(systemName: "number") }.buttonStyle(.borderless)
                             if model.pinsEnabled {
                                 Button { model.togglePin(entry) } label: {
                                     Image(systemName: model.pinnedIDs.contains(entry.id) ? "pin.fill" : "pin")
@@ -1384,7 +1564,7 @@ struct SecretBarView: View {
                     Text(entry.alias).font(.system(.body, design: .monospaced)).lineLimit(1)
                     if model.pinsEnabled, model.pinnedIDs.contains(entry.id) { Image(systemName: "pin.fill").font(.caption2) }
                 }
-                Text("\(entry.project) · \(entry.itemTypeTitle) · \(entry.field)")
+                Text("\(entry.project) · \(entry.environment) · \(entry.itemTypeTitle) · \(entry.field)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1423,6 +1603,7 @@ struct SecretBarView: View {
             if model.pinsEnabled { Button(model.pinnedIDs.contains(entry.id) ? "Unpin" : "Pin") { model.togglePin(entry) } }
             Button("Edit…") { editing = entry }
             Button("Open source URL") { model.openSource(entry) }
+            Button("Copy current TOTP") { model.copyTOTP(entry) }
             Button("Rotate and copy new value") { rotating = entry }
         }
         .padding(.vertical, 2)

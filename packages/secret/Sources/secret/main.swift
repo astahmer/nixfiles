@@ -35,6 +35,7 @@ struct Options {
     var field: String?
     var itemType: String?
     var expiresAt: String?
+    var tags: String?
     var valueStdin = false
     var openURL = false
     var global = false
@@ -152,6 +153,10 @@ func parseOptions(_ argv: [String]) -> Options {
             index += 1
             guard index < argv.count else { fail("--expires-at requires an ISO date") }
             options.expiresAt = argv[index]
+        } else if argument == "--tags" {
+            index += 1
+            guard index < argv.count else { fail("--tags requires comma-separated names") }
+            options.tags = argv[index]
         } else if argument == "--value-stdin" {
             options.valueStdin = true
         } else if argument == "--open" {
@@ -231,7 +236,7 @@ let commandHelpText: [String: String] = [
       --env NAME   Environment override (default: prod)
     """,
     "set": """
-    Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--name NAME] [--notes TEXT] [--type login|secure-note] [--expires-at DATE] [--global]
+    Usage: secret set [<alias>] [--generate] [--force] [--source URL] [--name NAME] [--notes TEXT] [--type login|secure-note] [--expires-at DATE] [--tags TAGS] [--global]
 
     Prompt (hidden) for a value and write it to Bitwarden. A missing alias is
     added to the project config and created in the vault; with no alias at all,
@@ -242,6 +247,7 @@ let commandHelpText: [String: String] = [
       --source URL Attach a source URL (stored as a custom "source" field)
       --type TYPE  Create or update a Bitwarden Login or Secure Note item
       --expires-at DATE  Store an ISO expiry date in the config for health warnings
+      --tags TAGS  Store comma-separated app tags in the config
       --global, -g Add a new alias to the global config instead of the project one
     """,
     "edit": """
@@ -426,6 +432,7 @@ func printHelp() {
       --field FIELD       With set/edit: choose the value field (password, username, notes, custom:name)
       --type TYPE         With set: choose login or secure-note item type
       --expires-at DATE   With set: record an ISO expiry date in the config
+      --tags TAGS         With set: record comma-separated app tags in the config
       --value-stdin       With edit: read the new value from stdin without putting it in argv
       --open              With source: open the source URL in the browser
       --global, -g        With set/unset/rm: operate on the global config
@@ -1159,21 +1166,13 @@ func run() async {
             ]
             if let itemType = options.itemType { definitionPairs.append(("type", .str(itemType))) }
             if let expiresAt = options.expiresAt { definitionPairs.append(("expiresAt", .str(expiresAt))) }
+            let tags = options.tags?.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty } ?? []
+            if !tags.isEmpty { definitionPairs.append(("tags", .arr(tags.map { .str($0) }))) }
             let newDefinition = J.obj(definitionPairs)
-            if exists(filePath) {
-                let parsed = readConfig(filePath)
-                var secrets = parsed.get("secrets")?.pairs() ?? []
-                secrets.append((aliasValue, newDefinition))
-                let rootPairs = parsed.pairs() ?? []
-                let updated = rootPairs.map { key, value in
-                    key == "secrets" ? (key, J.obj(secrets)) : (key, value)
-                }
-                writeAtomic(filePath, jStringify(.obj(updated)) + "\n")
-            } else {
-                writeAtomic(filePath, jStringify(.obj([("secrets", .obj([(aliasValue, newDefinition)]))])) + "\n")
-            }
+            let updated = addDefinitionToConfig(exists(filePath) ? readConfig(filePath) : nil, alias: aliasValue, definition: newDefinition, environment: environment)
+            writeAtomic(filePath, jStringify(updated) + "\n")
             info("added \(aliasValue) (\(item)) to \(filePath)")
-            definition = SecretDefinition(item: item, field: newField, itemType: options.itemType, expiresAt: options.expiresAt)
+            definition = SecretDefinition(item: item, field: newField, itemType: options.itemType, expiresAt: options.expiresAt, tags: tags)
         }
         let value = options.generate
             ? await generatePassword()

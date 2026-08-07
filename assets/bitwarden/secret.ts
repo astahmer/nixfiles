@@ -12,6 +12,7 @@ type SecretDefinition = {
   env?: string;
   type?: string;
   expiresAt?: string;
+  tags?: string[];
 };
 
 type SecretConfig = {
@@ -43,6 +44,7 @@ type ParsedOptions = {
   field?: string;
   itemType?: string;
   expiresAt?: string;
+  tags?: string;
   valueStdin?: boolean;
   openURL?: boolean;
   global?: boolean;
@@ -182,6 +184,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   let field: string | undefined;
   let itemType: string | undefined;
   let expiresAt: string | undefined;
+  let tags: string | undefined;
   let valueStdin = false;
   let openURL = false;
   let global = false;
@@ -241,6 +244,8 @@ const parseOptions = (argv: string[]): ParsedOptions => {
       itemType = argv[++index] || fail("--type requires login or secure-note");
     } else if (argument === "--expires-at") {
       expiresAt = argv[++index] || fail("--expires-at requires an ISO date");
+    } else if (argument === "--tags") {
+      tags = argv[++index] || fail("--tags requires comma-separated names");
     } else if (argument === "--value-stdin") {
       valueStdin = true;
     } else if (argument === "--open") {
@@ -283,6 +288,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
     field,
     itemType,
     expiresAt,
+    tags,
     valueStdin,
     openURL,
     global,
@@ -1823,14 +1829,24 @@ const main = async (): Promise<void> => {
       const prefix = options.global ? "global" : basename(dirname(filePath));
       const item = `${prefix}/${alias.toLowerCase().replaceAll("_", "-")}`;
       const config = existsSync(filePath) ? (readJson(filePath) as SecretConfig) : {};
-      config.secrets = config.secrets || {};
-      config.secrets[alias] = {
+      const tags = (options.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean);
+      const newDefinition: SecretDefinition = {
         item,
         field: options.field || (options.itemType === "secure-note" ? "notes" : "password"),
         ...(options.itemType ? { type: options.itemType } : {}),
         ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}),
+        ...(tags.length > 0 ? { tags } : {}),
         env: alias.toUpperCase().replaceAll("-", "_"),
       };
+      if (environment === "prod") {
+        config.secrets = config.secrets || {};
+        config.secrets[alias] = newDefinition;
+      } else {
+        config.environments = config.environments || {};
+        config.environments[environment] = config.environments[environment] || {};
+        config.environments[environment].secrets = config.environments[environment].secrets || {};
+        config.environments[environment].secrets[alias] = newDefinition;
+      }
       writeAtomic(filePath, `${JSON.stringify(config, null, 2)}\n`);
       info(`added ${alias} (${item}) to ${filePath}`);
       definition = {
@@ -1838,6 +1854,7 @@ const main = async (): Promise<void> => {
         field: options.field || (options.itemType === "secure-note" ? "notes" : "password"),
         type: options.itemType,
         expiresAt: options.expiresAt,
+        tags,
       };
     }
     const value = options.generate

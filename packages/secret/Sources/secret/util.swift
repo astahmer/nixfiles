@@ -352,6 +352,7 @@ struct SecretDefinition {
     var envKey: String?
     var itemType: String? = nil
     var expiresAt: String? = nil
+    var tags: [String]? = nil
 }
 
 struct LoadedConfig {
@@ -369,6 +370,7 @@ func definitionInConfig(_ config: J, _ alias: String, environment: String) -> Se
     var envKey: String?
     var itemType: String?
     var expiresAt: String?
+    var tags: [String]?
     for (key, child) in value.pairs() ?? [] {
         switch key {
         case "item": item = child.string() ?? ""
@@ -376,11 +378,12 @@ func definitionInConfig(_ config: J, _ alias: String, environment: String) -> Se
         case "env": envKey = child.string()
         case "type": itemType = child.string()
         case "expiresAt": expiresAt = child.string()
+        case "tags": tags = child.items()?.compactMap { $0.string() }
         default: break
         }
     }
     if item.isEmpty { fail("invalid definition for \(alias)") }
-    return SecretDefinition(item: item, field: field, envKey: envKey, itemType: itemType, expiresAt: expiresAt)
+    return SecretDefinition(item: item, field: field, envKey: envKey, itemType: itemType, expiresAt: expiresAt, tags: tags)
 }
 
 func dotenvKey(_ alias: String, _ definition: SecretDefinition) -> String {
@@ -413,6 +416,7 @@ func loadDefinitions(configPath: String? = nil, environment: String = "prod") ->
         var envKey: String?
         var itemType: String?
         var expiresAt: String?
+        var tags: [String]?
         for (key, val) in value.pairs() ?? [] {
             switch key {
             case "item": item = val.string() ?? ""
@@ -420,10 +424,11 @@ func loadDefinitions(configPath: String? = nil, environment: String = "prod") ->
             case "env": envKey = val.string()
             case "type": itemType = val.string()
             case "expiresAt": expiresAt = val.string()
+            case "tags": tags = val.items()?.compactMap { $0.string() }
             default: break
             }
         }
-        return SecretDefinition(item: item, field: field, envKey: envKey, itemType: itemType, expiresAt: expiresAt)
+        return SecretDefinition(item: item, field: field, envKey: envKey, itemType: itemType, expiresAt: expiresAt, tags: tags)
     }
 
     func baseSecrets(_ config: J?) -> [(String, J)] { config?.get("secrets")?.pairs() ?? [] }
@@ -692,6 +697,35 @@ func newItem(name: String, field: String, value: String, itemType: String? = nil
         item["fields"] = [["name": fieldName(field), "value": value, "type": 0]]
     }
     return item
+}
+
+func addDefinitionToConfig(_ config: J?, alias: String, definition: J, environment: String) -> J {
+    var rootPairs = config?.pairs() ?? []
+    func replacing(_ pairs: [(String, J)], _ key: String, _ value: J) -> [(String, J)] {
+        var found = false
+        let updated = pairs.map { pair in
+            if pair.0 == key {
+                found = true
+                return (key, value)
+            }
+            return pair
+        }
+        return found ? updated : updated + [(key, value)]
+    }
+
+    if environment == "prod" {
+        let secrets = config?.get("secrets")?.pairs() ?? []
+        rootPairs = replacing(rootPairs, "secrets", .obj(secrets + [(alias, definition)]))
+        return .obj(rootPairs)
+    }
+
+    let environments = config?.get("environments")?.pairs() ?? []
+    let currentEnvironment = config?.get("environments")?.get(environment)
+    let secrets = currentEnvironment?.get("secrets")?.pairs() ?? []
+    let updatedEnvironment = J.obj(replacing(currentEnvironment?.pairs() ?? [], "secrets", .obj(secrets + [(alias, definition)])))
+    let updatedEnvironments = replacing(environments, environment, updatedEnvironment)
+    rootPairs = replacing(rootPairs, "environments", .obj(updatedEnvironments))
+    return .obj(rootPairs)
 }
 
 func itemFor(_ items: [JSON]?, _ item: String) -> JSON? {
