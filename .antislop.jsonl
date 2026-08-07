@@ -1,0 +1,1 @@
+{"kind":"rule","id":"as_mjf19n4n3v0z","ts":"2026-08-07T13:50:19.918Z","agent":"unknown","text":"Avoid native SwiftUI sheets and confirmation dialogs for modal actions inside MenuBarExtra .window; use explicit in-window overlay state so dismissals do not tear down the transient menu-bar window.","tags":["secretbar"],"severity":"major"}
