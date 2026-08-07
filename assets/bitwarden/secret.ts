@@ -1362,42 +1362,65 @@ const deliverValue = (value: string, alias: string): void => {
   }
 };
 
-const doctor = async (definitions: Record<string, SecretDefinition>): Promise<void> => {
+const doctor = async (definitions: Record<string, SecretDefinition>, json = false): Promise<void> => {
   const current = await currentAuthState();
   if (!current.authenticated) {
-    console.log("bitwarden: unauthenticated — run: bw login, then secret unlock --store");
+    if (json) console.log("[]");
+    else console.log("bitwarden: unauthenticated — run: bw login, then secret unlock --store");
     process.exit(1);
   }
   if (!current.unlocked) {
-    console.log("bitwarden: locked — unlock with: secret unlock --store");
+    if (json) console.log("[]");
+    else console.log("bitwarden: locked — unlock with: secret unlock --store");
     process.exit(1);
   }
-  console.log("bitwarden: unlocked");
-  if (process.env.SECRET_DAEMON === "0") {
-    console.log("daemon\tdisabled");
-  } else {
-    console.log((await daemonStatus()) === "unlocked" ? "daemon\tup" : "daemon\tdown");
+  if (!json) {
+    console.log("bitwarden: unlocked");
+    if (process.env.SECRET_DAEMON === "0") {
+      console.log("daemon\tdisabled");
+    } else {
+      console.log((await daemonStatus()) === "unlocked" ? "daemon\tup" : "daemon\tdown");
+    }
   }
 
   let problems = 0;
+  const rows: Array<Record<string, string>> = [];
   const items = await vaultItems();
   for (const [alias, definition] of Object.entries(definitions)) {
     const field = definition.field || "password";
     const item = itemFor(items, definition.item);
     if (item === undefined) {
-      console.log(`missing\t${alias}\t${definition.item}`);
+      if (json) {
+        rows.push({ alias, item: definition.item, field, status: "missing", itemName: "", source: "", hasTOTP: "false" });
+      } else {
+        console.log(`missing\t${alias}\t${definition.item}`);
+      }
       problems += 1;
       continue;
     }
     const value = itemField(item, field);
-    if (typeof value !== "string" || !value || placeholderValues.has(value)) {
+    const valid = typeof value === "string" && Boolean(value) && !placeholderValues.has(value);
+    const source = itemField(item, "custom:source");
+    const hasTOTP = typeof item.login?.totp === "string" && Boolean(item.login.totp);
+    if (json) {
+      rows.push({
+        alias,
+        item: definition.item,
+        field,
+        status: valid ? "ok" : "invalid",
+        itemName: typeof item.name === "string" ? item.name : definition.item,
+        source: typeof source === "string" ? source : "",
+        hasTOTP: hasTOTP ? "true" : "false",
+      });
+    } else if (valid) {
+      console.log(`ok\t${alias}\t${definition.item}\t${field}`);
+    } else {
       console.log(`invalid value\t${alias}\t${definition.item}\t${field}`);
-      problems += 1;
-      continue;
     }
-    console.log(`ok\t${alias}\t${definition.item}\t${field}`);
+    if (!valid) problems += 1;
   }
 
+  if (json) console.log(JSON.stringify(rows));
   const total = Object.keys(definitions).length;
   const summary = `secret doctor: ${total - problems}/${total} aliases ok, ${problems} problem(s)`;
   if (problems > 0) warn(summary);
@@ -1541,9 +1564,10 @@ them; --global prunes the user config instead of the project one.
 
 Validate configs offline: items, env keys, collisions (no vault).
 `,
-  doctor: `Usage: secret doctor
+  doctor: `Usage: secret doctor [--json]
 
-Validate configs, Bitwarden state, and alias resolvability.
+Validate configs, Bitwarden state, and alias resolvability. --json emits
+machine-readable rows with remote item metadata and TOTP availability.
 `,
   recent: `Usage: secret recent [--json]
 
@@ -2218,7 +2242,7 @@ const main = async (): Promise<void> => {
   } else if (options.command === "lint") {
     lint(options.configPath, options.json ?? false);
   } else if (options.command === "doctor") {
-    await doctor(loaded.definitions);
+    await doctor(loaded.definitions, options.json ?? false);
   } else if (options.command === "recent") {
     printRecent(options.json ?? false);
   } else if (options.command === "history") {
