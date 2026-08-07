@@ -58,7 +58,7 @@ case "$1" in
     printf "%s\n" "-- list items --" >> "$FAKE_LOG"
     if [ -n "$FAKE_GET_MISSING" ]; then echo "not found" >&2; exit 1; fi
     if [ -n "$FAKE_EMPTY_VAULT" ]; then printf '%s' '[]'; exit 0; fi
-    printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[{"name":"source","value":"https://example.com","type":0}]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"base/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/extra","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]'
+    printf '%s' '[{"id":"item-1","name":"myapp/database-url","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"nixfiles/github-token","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass","totp":"otpauth://totp/example"},"fields":[{"name":"source","value":"https://example.com","type":0}]},{"id":"item-1","name":"myapp/database-url-dev","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"base/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/item","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]},{"id":"item-1","name":"local/extra","creationDate":"2026-01-15T10:00:00.000Z","login":{"password":"old-pass"},"fields":[]}]'
     ;;
   get)
     if [ "$2" = "totp" ]; then printf "%s" "123456"; exit 0; fi
@@ -337,6 +337,22 @@ cd "$tmp/proj"
 assert_fail secret rotate nope
 
 assert_ok secret doctor
+remote_json="$(secret doctor --json --config "$tmp/proj/.secret.json" 2>/dev/null || true)"
+if printf '%s' "$remote_json" | rg -q '"alias":"github-token".*"status":"ok".*"itemName":"nixfiles/github-token".*"source":"https://example.com".*"hasTOTP":"true"' \
+  && ! printf '%s' "$remote_json" | rg -q 'old-pass|otpauth://'; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: doctor --json exposes value-free remote metadata and TOTP state" >&2
+fi
+printf '%s' '{"secrets":{"missing":{"item":"not/in-vault"}}}' > "$tmp/missing-remote.json"
+missing_json="$(secret doctor --json --config "$tmp/missing-remote.json" 2>/dev/null || true)"
+if printf '%s' "$missing_json" | rg -q '"alias":"missing".*"status":"missing"'; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: doctor --json reports missing remote items" >&2
+fi
 assert_eq "$(secret doctor | rg -o 'daemon\tdisabled' || true)" "daemon	disabled" "doctor reports daemon state"
 assert_fail FAKE_GET_MISSING=1 secret doctor
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret doctor 2>&1 | head -1)" "bitwarden: locked — unlock with: secret unlock --store" "doctor locked hint"
