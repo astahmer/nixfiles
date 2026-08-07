@@ -301,6 +301,19 @@ in
 
         # secret completions live in a deployable, testable file.
         source ~/.config/secret/secret-completion.zsh
+
+        # SecretBar project detection: publish only the current directory,
+        # never shell variables or secret values. SecretBar uses the longest
+        # matching ~/dev/*/.secret.json ancestor.
+        _secretbar_context() {
+          local context_dir="$HOME/.config/secretbar"
+          local context_file="$context_dir/context"
+          local context_tmp="$context_file.$$"
+          umask 077
+          mkdir -p "$context_dir"
+          printf '%s\n' "$PWD" > "$context_tmp" && mv -f "$context_tmp" "$context_file"
+        }
+        add-zsh-hook precmd _secretbar_context
       '';
 
       # secret: bash twin of the zsh completion, same cache file. Registers one
@@ -328,6 +341,18 @@ in
 
         # secret completions live in a deployable, testable file.
         source ~/.config/secret/secret-completion.bash
+
+        # SecretBar project detection: publish only the current directory,
+        # never shell variables or secret values.
+        _secretbar_context() {
+          local context_dir="$HOME/.config/secretbar"
+          local context_file="$context_dir/context"
+          local context_tmp="$context_file.$$"
+          umask 077
+          mkdir -p "$context_dir"
+          printf '%s\n' "$PWD" > "$context_tmp" && mv -f "$context_tmp" "$context_file"
+        }
+        PROMPT_COMMAND="_secretbar_context''${PROMPT_COMMAND:+;''${PROMPT_COMMAND}}"
       '';
 
       home.sessionVariables = {
