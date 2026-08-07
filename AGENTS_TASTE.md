@@ -8,3 +8,5 @@
 - Prefer explicit, opt-in activation for tools when always-on behavior interferes with normal workflows.
 - Prefer concise communication and focused changes without speculative abstractions.
 - Prefer iterative improvement passes when they are directly useful, especially for tooling and startup performance.
+- When a Nix activation fails, repair the source configuration and rerun the activation before handing off.
+- For repository investigations, report exact file paths and line numbers with enough context to verify each finding.
