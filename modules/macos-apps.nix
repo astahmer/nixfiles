@@ -10,7 +10,7 @@
     let
       codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
       crisp = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.crisp;
-      ice = pkgs."ice-bar";
+      thaw = pkgs.thaw;
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
       tidyports = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tidyports;
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
@@ -75,7 +75,7 @@
       # explicitly instead of relying on home.packages app discovery.
       home.file."Applications/CodexBar.app".source = "${codexbar}/Applications/CodexBar.app";
       home.file."Applications/Crisp.app".source = "${crisp}/Applications/Crisp.app";
-      home.file."Applications/Ice.app".source = "${ice}/Applications/Ice.app";
+      home.file."Applications/Thaw.app".source = "${thaw}/Applications/Thaw.app";
       home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
       home.file."Applications/Tidy Ports.app".source = "${tidyports}/Applications/Tidy Ports.app";
 
@@ -120,7 +120,7 @@
         pkgs.openusage
         codexbar
         crisp
-        ice
+        thaw
         secretbar
         tidyports
       ];
