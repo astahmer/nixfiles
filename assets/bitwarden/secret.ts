@@ -297,7 +297,7 @@ const parseOptions = (argv: string[]): ParsedOptions => {
   };
 };
 
-const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
+const loadDefinitions = (selectedConfig?: string, environment = "prod", allowUnknownEnvironment = false): {
   definitions: Record<string, SecretDefinition>;
   selectedAliases?: string[];
 } => {
@@ -314,7 +314,7 @@ const loadDefinitions = (selectedConfig?: string, environment = "prod"): {
 
   if (environment !== "prod") {
     const sources = [user, project, projectLocal];
-    if (!sources.some((source) => source.environments?.[environment])) {
+    if (!allowUnknownEnvironment && !sources.some((source) => source.environments?.[environment])) {
       const available = ["prod", ...new Set(sources.flatMap((source) => Object.keys(source.environments || {})))];
       fail(`unknown environment: ${environment} (available: ${available.join(", ")})`);
     }
@@ -1647,7 +1647,7 @@ const main = async (): Promise<void> => {
   const loaded =
     options.command === "lint"
       ? { definitions: {} as Record<string, SecretDefinition>, selectedAliases: undefined }
-      : loadDefinitions(options.configPath, environment);
+      : loadDefinitions(options.configPath, environment, options.command === "set");
 
   const wantsHelp =
     options.command === "help" ||

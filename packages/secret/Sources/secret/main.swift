@@ -975,7 +975,7 @@ func run() async {
     let environment = options.envName ?? "prod"
     let loaded = options.command == "lint"
         ? LoadedConfig(definitions: [:], ordered: [], selectedAliases: nil)
-        : loadDefinitions(configPath: options.configPath, environment: environment)
+        : loadDefinitions(configPath: options.configPath, environment: environment, allowUnknownEnvironment: options.command == "set")
 
     let wantsHelp =
         options.command == "help"

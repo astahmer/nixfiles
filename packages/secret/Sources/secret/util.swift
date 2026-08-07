@@ -397,7 +397,7 @@ func dotenvKey(_ alias: String, _ definition: SecretDefinition) -> String {
 // TS semantics: user config, project config, then local config; environment
 // overrides merge after the bases. Duplicate aliases keep their first-seen
 // position (JS object assignment does not reorder keys).
-func loadDefinitions(configPath: String? = nil, environment: String = "prod") -> LoadedConfig {
+func loadDefinitions(configPath: String? = nil, environment: String = "prod", allowUnknownEnvironment: Bool = false) -> LoadedConfig {
     var definitions: [String: SecretDefinition] = [:]
     var ordered: [(alias: String, definition: SecretDefinition)] = []
 
@@ -444,7 +444,7 @@ func loadDefinitions(configPath: String? = nil, environment: String = "prod") ->
 
     if environment != "prod" {
         let sources = [user, project, local]
-        if !sources.contains(where: { $0?.get("environments")?.get(environment) != nil }) {
+        if !allowUnknownEnvironment && !sources.contains(where: { $0?.get("environments")?.get(environment) != nil }) {
             var available = ["prod"]
             for source in sources {
                 for (name, _) in source?.get("environments")?.pairs() ?? [] where !available.contains(name) {

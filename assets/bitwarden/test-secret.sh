@@ -251,6 +251,22 @@ rg -q '"name":"setnew/fresh-alias"' "$FAKE_LOG" && pass=$((pass + 1)) || {
   fail=$((fail + 1))
   echo "FAIL: set creates the vault item for a new alias" >&2
 }
+mkdir -p "$tmp/typed"
+printf '%s' '{"secrets":{}}' > "$tmp/typed/.secret.json"
+FAKE_GET_MISSING=1 bash -c 'printf "ssh-private-key-content\n" | "$0" $1 set ssh-private-key --config "$2" --type secure-note --field notes --tags infra,ssh --expires-at 2030-01-01' "$secret_bin0" "$secret_bin1" "$tmp/typed/.secret.json" >/dev/null 2>&1
+if rg -q '"type": "secure-note"' "$tmp/typed/.secret.json" && rg -q '"expiresAt": "2030-01-01"' "$tmp/typed/.secret.json" && rg -q '"tags": \[' "$tmp/typed/.secret.json" && rg -q '"type":2' "$FAKE_LOG"; then
+  pass=$((pass + 1))
+else
+  fail=$((fail + 1))
+  echo "FAIL: secure-note creation stores type, expiry, tags, and Bitwarden type 2" >&2
+fi
+mkdir -p "$tmp/envtyped"
+printf '%s' '{"secrets":{}}' > "$tmp/envtyped/.secret.json"
+FAKE_GET_MISSING=1 bash -c 'printf "staging-value\n" | "$0" $1 set staging-only --config "$2" --env staging' "$secret_bin0" "$secret_bin1" "$tmp/envtyped/.secret.json" >/dev/null 2>&1
+rg -q '"environments"' "$tmp/envtyped/.secret.json" && rg -q '"staging-only"' "$tmp/envtyped/.secret.json" && pass=$((pass + 1)) || {
+  fail=$((fail + 1))
+  echo "FAIL: non-production set writes the alias under the selected environment" >&2
+}
 cd "$tmp/proj"
 rm -f "$FAKE_CLIP"
 assert_ok secret set github-token --generate --force
