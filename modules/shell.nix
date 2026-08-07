@@ -273,7 +273,8 @@ in
       # registering one widget. The cache is refreshed only when TAB is used.
       programs.zsh.initContent = ''
         # took: precise sub-second command durations (starship only shows
-        # whole seconds). Replaces the starship cmd_duration module.
+        # whole seconds). Pass the value to the Starship prompt so it stays
+        # on the same line as the working-copy metadata.
         zmodload zsh/datetime 2>/dev/null || true
         # In an indented string a doubled quote is an escape, so exactly
         # three quotes here render as an empty string. Four would leave an
@@ -283,10 +284,11 @@ in
           _secret_took_start=$EPOCHREALTIME
         }
         _secret_precmd() {
+          export STARSHIP_TOOK=""
           if [[ -n "$_secret_took_start" ]]; then
             local took=$(( EPOCHREALTIME - _secret_took_start ))
             if (( took >= 0.03 )); then
-              printf 'took %.2fs\n' "$took"
+              printf -v STARSHIP_TOOK 'took %.2fs' "$took"
             fi
           fi
           _secret_took_start=$EPOCHREALTIME
@@ -504,6 +506,14 @@ in
           ];
           format = "[$symbol]($style)";
           style = "bold blue";
+        };
+
+        custom.took = {
+          command = "printf '%s' \"$STARSHIP_TOOK\"";
+          when = "test -n \"$STARSHIP_TOOK\"";
+          format = " [$output]($style)";
+          style = "bold yellow";
+          ignore_timeout = true;
         };
 
         git_branch.disabled = true;
