@@ -305,6 +305,7 @@ final class SecretBarModel: ObservableObject {
     @Published var remoteMetadata: [String: RemoteEntryMetadata] = [:]
     @Published var remoteValidationComplete = false
     @Published var remoteValidationInProgress = false
+    @Published var healthCheckStatus: String?
 
     @Published var pinnedIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: PreferenceKey.pinnedIDs) ?? []) {
         didSet { UserDefaults.standard.set(Array(pinnedIDs).sorted(), forKey: PreferenceKey.pinnedIDs) }
@@ -532,12 +533,14 @@ final class SecretBarModel: ObservableObject {
             problems = [:]
             problemDetails = [:]
             remoteValidationInProgress = false
+            healthCheckStatus = "Unlock the vault before running a health check."
             return
         }
 
         let entriesToCheck = entries
         remoteValidationComplete = false
         remoteValidationInProgress = true
+        healthCheckStatus = "Checking \(entriesToCheck.count) configured item\(entriesToCheck.count == 1 ? "" : "s")…"
         Task.detached(priority: .utility) {
             var counts: [String: Int] = [:]
             var details: [String: [String]] = [:]
@@ -586,6 +589,10 @@ final class SecretBarModel: ObservableObject {
                 self.remoteMetadata = snapshotMetadata
                 self.remoteValidationComplete = true
                 self.remoteValidationInProgress = false
+                let issueCount = snapshotCounts.values.reduce(0, +)
+                self.healthCheckStatus = issueCount == 0
+                    ? "Health check complete — no issues found."
+                    : "Health check complete — \(issueCount) issue\(issueCount == 1 ? "" : "s") found."
             }
         }
     }
@@ -1055,33 +1062,60 @@ struct StatusIcon: View {
     }
 }
 
+struct SecretBarDialogSurface<Content: View>: View {
+    let content: Content
+    let width: CGFloat
+    let height: CGFloat?
+
+    init(width: CGFloat, height: CGFloat? = nil, @ViewBuilder content: () -> Content) {
+        self.width = width
+        self.height = height
+        self.content = content()
+    }
+
+    private var highContrast: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+    }
+
+    var body: some View {
+        content
+            .padding(18)
+            .frame(width: width, height: height, alignment: .topLeading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.primary.opacity(highContrast ? 0.38 : 0.18), lineWidth: highContrast ? 1.5 : 1)
+            }
+            .shadow(color: .black.opacity(0.38), radius: 18, y: 8)
+    }
+}
+
 struct MasterPasswordSheet: View {
     @ObservedObject var model: SecretBarModel
     let onDismiss: () -> Void
     @State private var password = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Unlock Bitwarden").font(.title3.weight(.semibold))
-            Text("Your password is sent to the native secret CLI and is not stored by SecretBar.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            SecureField("Master password", text: $password)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { unlock() }
-            HStack {
-                Spacer()
-                Button("Cancel") { onDismiss() }
-                Button("Unlock") { unlock() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(model.busy || password.isEmpty)
+        SecretBarDialogSurface(width: 380) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Unlock Bitwarden", systemImage: "lock.open")
+                    .font(.title3.weight(.semibold))
+                Text("Your password is sent to the native secret CLI and is not stored by SecretBar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                SecureField("Master password", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { unlock() }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { onDismiss() }
+                    Button("Unlock") { unlock() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(model.busy || password.isEmpty)
+                }
             }
         }
-        .padding(18)
-        .frame(width: 380)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.16)) }
-        .shadow(color: .black.opacity(0.45), radius: 22, y: 10)
     }
 
     private func unlock() {
@@ -1099,7 +1133,8 @@ struct DiagnosticSheet: View {
     @State private var confirmReset = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        SecretBarDialogSurface(width: 560, height: 390) {
+            VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
                 Text(diagnostic.title).font(.title3.weight(.semibold))
@@ -1119,7 +1154,7 @@ struct DiagnosticSheet: View {
                     .font(.system(.callout, design: .monospaced))
                     .padding(8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.black.opacity(0.2), in: RoundedRectangle(cornerRadius: 6))
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
             }
             if confirmReset {
                 VStack(alignment: .leading, spacing: 8) {
@@ -1137,7 +1172,7 @@ struct DiagnosticSheet: View {
                     }
                 }
                 .padding(10)
-                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 7))
+                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
             } else {
                 HStack {
                     if diagnostic.recoveryCommand != nil {
@@ -1157,12 +1192,8 @@ struct DiagnosticSheet: View {
                     Button("Dismiss") { onDismiss() }
                 }
             }
+            }
         }
-        .padding(18)
-        .frame(width: 560, height: 390)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.16)) }
-        .shadow(color: .black.opacity(0.45), radius: 22, y: 10)
     }
 }
 
@@ -1199,63 +1230,117 @@ struct SecretEditSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Edit \(entry.alias)").font(.headline)
-            Text("\(entry.project) · blank fields keep their current values")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField("Bitwarden item name", text: $itemName).textFieldStyle(.roundedBorder)
-            if entry.itemType == SecretItemType.secureNote.rawValue {
-                TextEditor(text: $value)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(minHeight: 90, maxHeight: 135)
-                    .scrollContentBackground(.hidden)
-                    .padding(5)
-                    .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
-                    .overlay(alignment: .topLeading) {
-                        if value.isEmpty {
-                            Text("New secure-note content (optional)")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .padding(7)
-                                .allowsHitTesting(false)
-                        }
-                    }
-            } else {
-                SecureField("New value (optional)", text: $value).textFieldStyle(.roundedBorder)
-            }
-            TextField("Source URL (optional)", text: $source).textFieldStyle(.roundedBorder)
-            if let sourceValidationMessage {
-                Label(sourceValidationMessage, systemImage: "exclamationmark.circle")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
-            Toggle("Clear source", isOn: $clearSource).toggleStyle(.checkbox)
-            TextEditor(text: $notes)
-                .font(.body)
-                .frame(minHeight: 70, maxHeight: 110)
-                .scrollContentBackground(.hidden)
-                .padding(5)
-                .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
-            Toggle("Clear notes", isOn: $clearNotes).toggleStyle(.checkbox)
-            TagEditor(tags: $tags, title: "Tags", suggestions: model.entries.flatMap(\.tags))
-            HStack {
-                Spacer()
-                Button("Cancel") { onDismiss() }
-                Button("Save changes") {
-                    if model.edit(entry, itemName: itemName, value: value, source: source, notes: notes, tags: tags, clearSource: clearSource, clearNotes: clearNotes) {
-                        onDismiss()
+        SecretBarDialogSurface(width: 500, height: 560) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 9) {
+                    Image(systemName: entry.itemType == SecretItemType.secureNote.rawValue ? "note.text" : "key.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Edit secret")
+                            .font(.title3.weight(.semibold))
+                        Text(entry.alias)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(model.busy || sourceValidationMessage != nil)
+                Text("\(entry.project) · blank fields keep their current values")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        LabeledContent("Bitwarden item") {
+                            TextField("Optional item name", text: $itemName)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(entry.itemType == SecretItemType.secureNote.rawValue ? "Secure Note content" : "New value")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            if entry.itemType == SecretItemType.secureNote.rawValue {
+                                TextEditor(text: $value)
+                                    .font(.system(.body, design: .monospaced))
+                                    .frame(minHeight: 90, maxHeight: 125)
+                                    .scrollContentBackground(.hidden)
+                                    .padding(5)
+                                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
+                                    .overlay(alignment: .topLeading) {
+                                        if value.isEmpty {
+                                            Text("Optional — paste replacement content")
+                                                .font(.callout)
+                                                .foregroundStyle(.secondary)
+                                                .padding(7)
+                                                .allowsHitTesting(false)
+                                        }
+                                    }
+                            } else {
+                                SecureField("Optional replacement value", text: $value)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Source URL")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 8) {
+                                TextField("Optional https:// URL", text: $source)
+                                    .textFieldStyle(.roundedBorder)
+                                Toggle("Clear", isOn: $clearSource)
+                                    .toggleStyle(.checkbox)
+                                    .fixedSize()
+                            }
+                            if let sourceValidationMessage {
+                                Label(sourceValidationMessage, systemImage: "exclamationmark.circle")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Notes")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            TextEditor(text: $notes)
+                                .font(.body)
+                                .frame(minHeight: 70, maxHeight: 105)
+                                .scrollContentBackground(.hidden)
+                                .padding(5)
+                                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
+                                .overlay(alignment: .topLeading) {
+                                    if notes.isEmpty {
+                                        Text("Optional — leave blank to keep current notes")
+                                            .font(.callout)
+                                            .foregroundStyle(.secondary)
+                                            .padding(7)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
+                            Toggle("Clear notes", isOn: $clearNotes)
+                                .toggleStyle(.checkbox)
+                        }
+
+                        TagEditor(tags: $tags, title: "Tags", suggestions: model.entries.flatMap(\.tags))
+                    }
+                    .padding(.vertical, 2)
+                }
+
+                Divider()
+                HStack {
+                    Spacer()
+                    Button("Cancel") { onDismiss() }
+                    Button("Save changes") {
+                        if model.edit(entry, itemName: itemName, value: value, source: source, notes: notes, tags: tags, clearSource: clearSource, clearNotes: clearNotes) {
+                            onDismiss()
+                        }
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(model.busy || sourceValidationMessage != nil)
+                }
             }
         }
-        .padding(16)
-        .frame(width: 470, height: 500)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.16)) }
-        .shadow(color: .black.opacity(0.45), radius: 22, y: 10)
     }
 }
 
@@ -1264,40 +1349,38 @@ struct ImportPreviewSheet: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Import dotenv entries").font(.title3.weight(.semibold))
-            Text("Only aliases and values from the selected file are read. Existing aliases in the selected project/environment are skipped, never overwritten.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text("\(model.importCandidates.count) entries ready for \(model.importProject?.name ?? "project") / \(model.importEnvironment)")
-                .font(.headline)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(model.importCandidates) { candidate in
-                        HStack {
-                            Text(candidate.alias).font(.system(.body, design: .monospaced))
-                            Spacer()
-                            Text("value hidden").font(.caption).foregroundStyle(.secondary)
+        SecretBarDialogSurface(width: 430, height: 430) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Import dotenv entries", systemImage: "arrow.down.doc")
+                    .font(.title3.weight(.semibold))
+                Text("Only aliases and values from the selected file are read. Existing aliases in the selected project/environment are skipped, never overwritten.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("\(model.importCandidates.count) entries ready for \(model.importProject?.name ?? "project") / \(model.importEnvironment)")
+                    .font(.headline)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(model.importCandidates) { candidate in
+                            HStack {
+                                Text(candidate.alias).font(.system(.body, design: .monospaced))
+                                Spacer()
+                                Text("value hidden").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
-            }
-            HStack {
-                Spacer()
-                Button("Cancel") { model.importCandidates = []; onDismiss() }
-                Button("Create missing secrets") {
-                    model.confirmImport()
-                    onDismiss()
+                HStack {
+                    Spacer()
+                    Button("Cancel") { model.importCandidates = []; onDismiss() }
+                    Button("Create missing secrets") {
+                        model.confirmImport()
+                        onDismiss()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(model.busy)
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(model.busy)
             }
         }
-        .padding(18)
-        .frame(width: 430, height: 430)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.16)) }
-        .shadow(color: .black.opacity(0.45), radius: 22, y: 10)
     }
 }
 
@@ -1310,27 +1393,25 @@ struct SecretBarConfirmation: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.title3.weight(.semibold))
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Cancel") { onCancel() }
-                if destructive {
-                    Button(confirmTitle, role: .destructive) { onConfirm() }
-                } else {
-                    Button(confirmTitle) { onConfirm() }
+        SecretBarDialogSurface(width: 430) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(title, systemImage: destructive ? "exclamationmark.triangle" : "questionmark.circle")
+                    .font(.title3.weight(.semibold))
+                Text(message)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { onCancel() }
+                    if destructive {
+                        Button(confirmTitle, role: .destructive) { onConfirm() }
+                    } else {
+                        Button(confirmTitle) { onConfirm() }
+                    }
                 }
             }
         }
-        .padding(18)
-        .frame(width: 430)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.white.opacity(0.16)) }
-        .shadow(color: .black.opacity(0.45), radius: 22, y: 10)
     }
 }
 
@@ -1481,7 +1562,6 @@ struct SecretBarSurface<Content: View>: View {
 
 struct SecretBarView: View {
     @EnvironmentObject var model: SecretBarModel
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var tab: SecretBarTab = .secrets
     @State private var query = ""
     @State private var listFilter: SecretListFilter = .all
@@ -1621,9 +1701,6 @@ struct SecretBarView: View {
 
     var body: some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor)
-                .opacity(reduceTransparency ? 1 : 0.92)
-                .ignoresSafeArea()
             VStack(alignment: .leading, spacing: 8) {
                 header
                 Divider()
@@ -1648,13 +1725,8 @@ struct SecretBarView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(width: 620, height: 700)
-        .background {
-            if reduceTransparency {
-                Color(nsColor: .windowBackgroundColor)
-            } else {
-                Rectangle().fill(.thickMaterial)
-            }
-        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(
@@ -1772,8 +1844,9 @@ struct SecretBarView: View {
     }
 
     private var createTab: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Create a secret").font(.title2.weight(.bold))
                     Text("Save one useful credential. SecretBar keeps values off process arguments.")
@@ -1819,13 +1892,13 @@ struct SecretBarView: View {
                                     .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                                     .padding(9)
                                     .background(
-                                        createType == type ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.045),
+                                        createType == type ? Color.primary.opacity(0.13) : Color.primary.opacity(0.045),
                                         in: RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     )
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                                             .stroke(
-                                                createType == type ? Color.accentColor.opacity(0.65) : Color.primary.opacity(0.1),
+                                                createType == type ? Color.primary.opacity(0.42) : Color.primary.opacity(0.1),
                                                 lineWidth: createType == type ? 1.5 : 1
                                             )
                                     }
@@ -1860,7 +1933,7 @@ struct SecretBarView: View {
                                 .frame(minHeight: 105, maxHeight: 150)
                                 .scrollContentBackground(.hidden)
                                 .padding(5)
-                                .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
+                                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
                                 .overlay(alignment: .topLeading) {
                                     if createValue.isEmpty {
                                         Text("Paste multiline secret value…")
@@ -1880,7 +1953,7 @@ struct SecretBarView: View {
                                 .frame(minHeight: 65, maxHeight: 95)
                                 .scrollContentBackground(.hidden)
                                 .padding(5)
-                                .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
+                                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 7))
                                 .overlay(alignment: .topLeading) {
                                     if createNotes.isEmpty {
                                         Text("Optional notes: owner, rotation cadence, or setup hint…")
@@ -1910,43 +1983,45 @@ struct SecretBarView: View {
                     }
                 }
 
-                HStack {
-                    Button("Import .env…") { showDotEnvImporter = true }
-                        .buttonStyle(.bordered)
-                    if let validation = createValidationMessage {
-                        Label(validation, systemImage: "exclamationmark.circle")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                            .lineLimit(2)
-                    }
-                    Spacer()
-                    Button {
-                        guard let project = selectedProject else {
-                            model.showError(title: "Cannot create secret", message: "No project scope is available.")
-                            return
-                        }
-                        if model.create(alias: createAlias, project: project, value: createValue, itemName: createItemName, source: createSource, notes: createNotes, itemType: createType, expiresAt: createExpiresAt, environment: createEnvironment, tags: createTags) {
-                            createAlias = ""
-                            createItemName = ""
-                            createValue = ""
-                            createSource = ""
-                            createNotes = ""
-                            createExpiresAt = ""
-                            createEnvironment = "prod"
-                            createTags = []
-                            createType = .login
-                            tab = .secrets
-                        }
-                    } label: {
-                        Label("Create secret", systemImage: "plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(model.busy || model.state != .unlocked || !canCreate)
-                }
             }
             .padding(.bottom, 12)
         }
+        Divider()
+        HStack {
+            Button("Import .env…") { showDotEnvImporter = true }
+                .buttonStyle(.bordered)
+            if let validation = createValidationMessage {
+                Label(validation, systemImage: "exclamationmark.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Button {
+                guard let project = selectedProject else {
+                    model.showError(title: "Cannot create secret", message: "No project scope is available.")
+                    return
+                }
+                if model.create(alias: createAlias, project: project, value: createValue, itemName: createItemName, source: createSource, notes: createNotes, itemType: createType, expiresAt: createExpiresAt, environment: createEnvironment, tags: createTags) {
+                    createAlias = ""
+                    createItemName = ""
+                    createValue = ""
+                    createSource = ""
+                    createNotes = ""
+                    createExpiresAt = ""
+                    createEnvironment = "prod"
+                    createTags = []
+                    createType = .login
+                    tab = .secrets
+                }
+            } label: {
+                Label("Create secret", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+            .disabled(model.busy || model.state != .unlocked || !canCreate)
+        }
+    }
     }
 
     private var secretsTab: some View {
@@ -2040,6 +2115,7 @@ struct SecretBarView: View {
             }
         }
         .focusable()
+        .focusEffectDisabled()
         .focused($listFocused)
         .onAppear { listFocused = true }
         .onMoveCommand { moveSelection($0) }
@@ -2089,7 +2165,7 @@ struct SecretBarView: View {
         }
         .buttonStyle(.borderless)
         .padding(.vertical, 5)
-        .background(listFilter == filter ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .background(listFilter == filter ? Color.primary.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         .accessibilityAddTraits(listFilter == filter ? .isSelected : [])
     }
 
@@ -2229,7 +2305,24 @@ struct SecretBarView: View {
                 }
                 settingsSection("Health") {
                     Stepper("Warn before expiry: \(model.expiryWarningDays) days", value: Binding(get: { model.expiryWarningDays }, set: { model.expiryWarningDays = $0 }), in: 1...365)
-                    Button("Run health check") { model.refreshHealth() }
+                    Button {
+                        model.refreshHealth()
+                    } label: {
+                        Label("Run health check", systemImage: "stethoscope")
+                    }
+                    .disabled(model.remoteValidationInProgress)
+                    if let healthCheckStatus = model.healthCheckStatus {
+                        HStack(spacing: 6) {
+                            if model.remoteValidationInProgress {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: healthCheckStatus.contains("no issues") ? "checkmark.circle" : "info.circle")
+                            }
+                            Text(healthCheckStatus)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                     if !model.problemDetails.isEmpty {
                         Button("Show health details") { model.showHealthDiagnostics() }
                     }
@@ -2381,7 +2474,7 @@ struct SecretBarView: View {
         .padding(.vertical, 8)
         .background(
             isSelected
-                ? Color.accentColor.opacity(0.14)
+                ? Color.primary.opacity(0.12)
                 : isHovered ? Color.primary.opacity(0.06) : Color.clear,
             in: RoundedRectangle(cornerRadius: 7, style: .continuous)
         )
@@ -2440,7 +2533,7 @@ struct SecretBarView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
                 .contentShape(Rectangle())
-                .background(tab == section ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(tab == section ? Color.primary.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
