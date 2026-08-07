@@ -1383,12 +1383,11 @@ struct SecretBarSurface<Content: View>: View {
 
     var body: some View {
         content
-            .padding(12)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.09), lineWidth: 1)
+            .overlay(alignment: .bottom) {
+                Divider()
+                    .opacity(0.55)
             }
     }
 }
@@ -1404,6 +1403,7 @@ struct SecretBarView: View {
     @State private var copying: AliasEntry?
     @State private var rotating: AliasEntry?
     @State private var editing: AliasEntry?
+    @State private var hoveredEntryID: String?
     @State private var revealingID: String?
     @State private var revealedValue = ""
     @State private var showPasswordSheet = false
@@ -1539,9 +1539,13 @@ struct SecretBarView: View {
 
     var body: some View {
         ZStack {
+            Color(nsColor: .windowBackgroundColor)
+                .opacity(0.9)
+                .ignoresSafeArea()
             VStack(alignment: .leading, spacing: 8) {
                 header
                 Divider()
+                tabBar
                 Group {
                     switch tab {
                     case .create: createTab
@@ -1550,7 +1554,6 @@ struct SecretBarView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                tabBar
                 if let flash = model.flash {
                     Text(flash)
                         .font(.caption)
@@ -1562,6 +1565,7 @@ struct SecretBarView: View {
         }
         .padding(10)
         .frame(width: 620, height: 700)
+        .background(.thickMaterial)
         .onAppear {
             model.start()
             selectDetectedProjectIfNeeded()
@@ -1607,7 +1611,7 @@ struct SecretBarView: View {
                     .frame(width: 26, height: 26)
             }
             .buttonStyle(.borderless)
-            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+            .accessibilityLabel("Refresh secrets")
             .help("Refresh secrets")
             .disabled(model.busy)
             if model.state == .unlocked {
@@ -1616,7 +1620,7 @@ struct SecretBarView: View {
                         .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.borderless)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .accessibilityLabel("Lock the vault")
                 .help("Lock the vault")
                 .disabled(model.busy)
             } else {
@@ -1628,7 +1632,7 @@ struct SecretBarView: View {
                         .frame(width: 26, height: 26)
                 }
                 .menuStyle(.borderlessButton)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                .accessibilityLabel("Unlock the vault")
                 .help("Unlock the vault")
                 .disabled(model.busy)
             }
@@ -1665,10 +1669,7 @@ struct SecretBarView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        HStack(spacing: 8) {
-                            Text("Environment")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                        LabeledContent("Environment") {
                             TextField("prod", text: $createEnvironment)
                                 .textFieldStyle(.roundedBorder)
                         }
@@ -1679,33 +1680,14 @@ struct SecretBarView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         Label("What kind of secret?", systemImage: "square.stack.3d.up.fill")
                             .font(.headline)
-                        HStack(spacing: 8) {
+                        Picker("Item type", selection: $createType) {
                             ForEach(SecretItemType.allCases) { type in
-                                Button {
-                                    createType = type
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Label(type.title, systemImage: type.icon)
-                                            .font(.callout.weight(.semibold))
-                                        Text(type.shortDescription)
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(2)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(9)
-                                    .background(
-                                        createType == type ? Color.accentColor.opacity(0.22) : Color.white.opacity(0.045),
-                                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                    )
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                            .stroke(createType == type ? Color.accentColor.opacity(0.7) : Color.white.opacity(0.08))
-                                    }
-                                }
-                                .buttonStyle(.plain)
+                                Label(type.title, systemImage: type.icon).tag(type)
                             }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .accessibilityLabel("Item type")
                         Text(createType.guidance)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -1716,13 +1698,21 @@ struct SecretBarView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         Label("Secret details", systemImage: "pencil.and.outline")
                             .font(.headline)
-                        TextField("Alias, e.g. github-token", text: $createAlias).textFieldStyle(.roundedBorder)
-                        TextField("Item name in Bitwarden (optional)", text: $createItemName).textFieldStyle(.roundedBorder)
+                        LabeledContent("Alias") {
+                            TextField("e.g. github-token", text: $createAlias)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        LabeledContent("Bitwarden item") {
+                            TextField("Optional", text: $createItemName)
+                                .textFieldStyle(.roundedBorder)
+                        }
                         if createType == .secureNote {
                             TextEditor(text: $createValue)
                                 .font(.system(.body, design: .monospaced))
                                 .frame(minHeight: 105, maxHeight: 150)
-                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.14)))
+                                .scrollContentBackground(.hidden)
+                                .padding(5)
+                                .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
                                 .overlay(alignment: .topLeading) {
                                     if createValue.isEmpty {
                                         Text("Paste multiline secret value…")
@@ -1733,11 +1723,16 @@ struct SecretBarView: View {
                                     }
                                 }
                         } else {
-                            SecureField("Secret value", text: $createValue).textFieldStyle(.roundedBorder)
+                            LabeledContent("Value") {
+                                SecureField("Required", text: $createValue)
+                                    .textFieldStyle(.roundedBorder)
+                            }
                             TextEditor(text: $createNotes)
                                 .font(.body)
                                 .frame(minHeight: 65, maxHeight: 95)
-                                .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.14)))
+                                .scrollContentBackground(.hidden)
+                                .padding(5)
+                                .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
                                 .overlay(alignment: .topLeading) {
                                     if createNotes.isEmpty {
                                         Text("Optional notes: owner, rotation cadence, or setup hint…")
@@ -1755,8 +1750,14 @@ struct SecretBarView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         Label("Useful context", systemImage: "tag.fill")
                             .font(.headline)
-                        TextField("Source URL (optional)", text: $createSource).textFieldStyle(.roundedBorder)
-                        TextField("Expires on YYYY-MM-DD (optional)", text: $createExpiresAt).textFieldStyle(.roundedBorder)
+                        LabeledContent("Source") {
+                            TextField("Optional URL", text: $createSource)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        LabeledContent("Expiry") {
+                            TextField("Optional YYYY-MM-DD", text: $createExpiresAt)
+                                .textFieldStyle(.roundedBorder)
+                        }
                         TagEditor(tags: $createTags, title: "Tags help you find secrets later")
                     }
                 }
@@ -1814,10 +1815,14 @@ struct SecretBarView: View {
                 }
             }
             searchField
-            HStack(spacing: 6) {
-                ForEach(SecretListFilter.allCases) { filter in
-                    filterPill(filter)
+            HStack(spacing: 8) {
+                HStack(spacing: 2) {
+                    ForEach(SecretListFilter.allCases) { filter in
+                        filterPill(filter)
+                    }
                 }
+                .padding(2)
+                .background(Color.black.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 Spacer()
                 Menu {
                     Button { selectedTag = nil } label: {
@@ -1834,9 +1839,8 @@ struct SecretBarView: View {
                         .font(.caption.weight(.semibold))
                 }
                 .menuStyle(.borderlessButton)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 5)
-                .background(Color.white.opacity(0.07), in: Capsule())
+                .padding(.horizontal, 5)
+                .accessibilityLabel(selectedTag.map { "Filter by tag \($0)" } ?? "Filter by tag")
             }
 
             if model.remoteValidationInProgress {
@@ -1883,21 +1887,24 @@ struct SecretBarView: View {
             TextField("Search aliases, projects, items, tags…", text: $query)
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
+                .accessibilityLabel("Search secrets")
             if !query.isEmpty {
                 Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
+                    .accessibilityLabel("Clear search")
             }
             Button("⌘K") { searchFocused = true }
                 .buttonStyle(.plain)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .keyboardShortcut("k", modifiers: [.command])
+                .accessibilityLabel("Focus search")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.white.opacity(0.075), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(Color.white.opacity(0.1)) }
+        .background(Color.black.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.primary.opacity(0.12)) }
     }
 
     private func filterPill(_ filter: SecretListFilter) -> some View {
@@ -1906,11 +1913,12 @@ struct SecretBarView: View {
         } label: {
             Label(filter.title, systemImage: filter.icon)
                 .font(.caption.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(listFilter == filter ? Color.accentColor.opacity(0.32) : Color.white.opacity(0.07), in: Capsule())
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
+        .padding(.vertical, 5)
+        .background(listFilter == filter ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .accessibilityAddTraits(listFilter == filter ? .isSelected : [])
     }
 
     private func sectionHeader(_ title: String, count: Int, icon: String) -> some View {
@@ -1925,36 +1933,36 @@ struct SecretBarView: View {
     }
 
     private var emptySecretsState: some View {
-        SecretBarSurface {
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: model.state == .unlocked ? "magnifyingglass" : "lock.fill")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                Text(
-                    model.state == .unlocked && !model.remoteValidationComplete
-                        ? "Checking vault items…"
-                        : model.entries.isEmpty
-                            ? "No secrets discovered yet"
-                            : "No matching secrets"
-                )
-                .font(.headline)
-                Text(
-                    model.entries.isEmpty
-                        ? "Create one here or add a value-free .secret.json to a project in ~/dev."
-                        : "Try another search, tag, or filter. Missing remote items stay hidden."
-                )
-                .font(.caption)
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: model.state == .unlocked ? "magnifyingglass" : "lock.fill")
+                .font(.title2)
                 .foregroundStyle(.secondary)
-                if !query.isEmpty || selectedTag != nil || listFilter != .all {
-                    Button("Clear filters") {
-                        query = ""
-                        selectedTag = nil
-                        listFilter = .all
-                    }
-                    .buttonStyle(.bordered)
+            Text(
+                model.state == .unlocked && !model.remoteValidationComplete
+                    ? "Checking vault items…"
+                    : model.entries.isEmpty
+                        ? "No secrets discovered yet"
+                        : "No matching secrets"
+            )
+            .font(.headline)
+            Text(
+                model.entries.isEmpty
+                    ? "Create one here or add a value-free .secret.json to a project in ~/dev."
+                    : "Try another search, tag, or filter. Missing remote items stay hidden."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            if !query.isEmpty || selectedTag != nil || listFilter != .all {
+                Button("Clear filters") {
+                    query = ""
+                    selectedTag = nil
+                    listFilter = .all
                 }
+                .buttonStyle(.bordered)
             }
         }
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var settingsTab: some View {
@@ -2086,22 +2094,31 @@ struct SecretBarView: View {
     }
 
     private func entryCard(_ entry: AliasEntry) -> some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(entry.itemType == SecretItemType.secureNote.rawValue ? Color.orange.opacity(0.16) : Color.accentColor.opacity(0.16))
-                Image(systemName: entry.itemType == SecretItemType.secureNote.rawValue ? SecretItemType.secureNote.icon : SecretItemType.login.icon)
-                    .foregroundStyle(entry.itemType == SecretItemType.secureNote.rawValue ? .orange : .accentColor)
-            }
-            .frame(width: 34, height: 34)
+        let isSecureNote = entry.itemType == SecretItemType.secureNote.rawValue
+        let health = model.health(for: entry)
+        let isHovered = hoveredEntryID == entry.id
 
-            VStack(alignment: .leading, spacing: 4) {
+        return HStack(spacing: 10) {
+            Image(systemName: isSecureNote ? SecretItemType.secureNote.icon : SecretItemType.login.icon)
+                .font(.body.weight(.medium))
+                .foregroundStyle(isSecureNote ? .orange : .accentColor)
+                .frame(width: 28, height: 28)
+                .background(
+                    (isSecureNote ? Color.orange : Color.accentColor).opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                )
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
                     Text(entry.alias)
-                        .font(.system(.body, design: .monospaced).weight(.semibold))
+                        .font(.body.weight(.semibold))
                         .lineLimit(1)
                     if model.pinsEnabled, model.pinnedIDs.contains(entry.id) {
-                        Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.orange)
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                            .accessibilityLabel("Pinned")
                     }
                 }
                 HStack(spacing: 4) {
@@ -2116,18 +2133,10 @@ struct SecretBarView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 if !entry.tags.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(Array(entry.tags.prefix(3)), id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption2)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.08), in: Capsule())
-                        }
-                        if entry.tags.count > 3 {
-                            Text("+\(entry.tags.count - 3)").font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
+                    Label(entry.tags.prefix(3).joined(separator: " · "), systemImage: "tag")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
             }
 
@@ -2137,42 +2146,51 @@ struct SecretBarView: View {
                     .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
                     .textSelection(.disabled)
-            } else {
-                Text(model.health(for: entry))
+            } else if health != "OK" {
+                Label(health, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(healthColor(model.health(for: entry)))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                    .background(Color.white.opacity(0.06), in: Capsule())
+                    .foregroundStyle(healthColor(health))
+                    .help(health)
             }
 
-            HStack(spacing: 3) {
-                Button { copying = entry } label: { Image(systemName: "doc.on.doc") }
-                    .disabled(model.busy || model.state != .unlocked)
-                    .help("Copy value")
-                if model.hasTOTP(entry) {
-                    Button { model.copyTOTP(entry) } label: { Image(systemName: "number") }
-                        .disabled(model.busy)
-                        .help("Copy TOTP")
+            HStack(spacing: 5) {
+                Button { copying = entry } label: {
+                    Image(systemName: "doc.on.doc")
                 }
-                Button { editing = entry } label: { Image(systemName: "pencil") }
-                    .disabled(model.busy || model.state != .unlocked)
-                    .help("Edit")
-                if model.pinsEnabled {
-                    Button { model.togglePin(entry) } label: {
-                        Image(systemName: model.pinnedIDs.contains(entry.id) ? "pin.fill" : "pin")
+                .disabled(model.busy || model.state != .unlocked)
+                .accessibilityLabel("Copy \(entry.alias)")
+                .help("Copy value")
+
+                Menu {
+                    Button("Edit…") { editing = entry }
+                        .disabled(model.busy || model.state != .unlocked)
+                    if model.pinsEnabled {
+                        Button(model.pinnedIDs.contains(entry.id) ? "Unpin" : "Pin") { model.togglePin(entry) }
                     }
-                    .help(model.pinnedIDs.contains(entry.id) ? "Unpin" : "Pin")
+                    if model.hasSource(entry) { Button("Open source URL") { model.openSource(entry) } }
+                    if model.hasTOTP(entry) { Button("Copy current TOTP") { model.copyTOTP(entry) } }
+                    Button("Rotate and copy new value") { rotating = entry }
+                } label: {
+                    Image(systemName: "ellipsis")
                 }
+                .menuStyle(.borderlessButton)
+                .accessibilityLabel("More actions for \(entry.alias)")
             }
             .buttonStyle(.borderless)
-            .padding(3)
-            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+            .opacity(isHovered ? 1 : 0.72)
         }
-        .padding(10)
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(Color.white.opacity(0.08)) }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 8)
+        .background(isHovered ? Color.primary.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay(alignment: .bottom) { Divider().opacity(0.55) }
         .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                hoveredEntryID = entry.id
+            } else if hoveredEntryID == entry.id {
+                hoveredEntryID = nil
+            }
+        }
         .onTapGesture(count: 2) { editing = entry }
         .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 24, pressing: { isPressing in
             guard model.holdToReveal else { return }
@@ -2191,7 +2209,6 @@ struct SecretBarView: View {
             if model.hasTOTP(entry) { Button("Copy current TOTP") { model.copyTOTP(entry) } }
             Button("Rotate and copy new value") { rotating = entry }
         }
-        .padding(.vertical, 2)
     }
 
     @ViewBuilder
@@ -2202,7 +2219,8 @@ struct SecretBarView: View {
             tabButton(.settings, key: "3")
         }
         .frame(maxWidth: .infinity)
-        .background(Color.secondary.opacity(0.18), in: RoundedRectangle(cornerRadius: 9))
+        .padding(2)
+        .background(Color.black.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     @ViewBuilder
@@ -2214,12 +2232,14 @@ struct SecretBarView: View {
                 .labelStyle(.titleAndIcon)
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
                 .contentShape(Rectangle())
-                .background(tab == section ? Color.accentColor.opacity(0.55) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+                .background(tab == section ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
+        .accessibilityAddTraits(tab == section ? .isSelected : [])
+        .accessibilityLabel(section.title)
         if model.shortcutsEnabled {
             button.keyboardShortcut(key, modifiers: [.command])
         } else {
