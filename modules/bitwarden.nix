@@ -78,7 +78,7 @@
 
         if [ "''${DRY_RUN:-0}" = 1 ]; then
           echo "secret: dry-run; skipping Bitwarden SSH key materialization" >&2
-        elif ${secret}/bin/secret get --config "${sshSecretConfig}" ssh-private-key > "$privateTmp" 2>/dev/null \
+        elif ${pkgs.coreutils}/bin/timeout 6s ${secret}/bin/secret get --config "${sshSecretConfig}" ssh-private-key > "$privateTmp" 2>/dev/null \
           && [ -s "$privateTmp" ] \
           && ${pkgs.openssh}/bin/ssh-keygen -y -f "$privateTmp" > "$publicTmp" 2>/dev/null; then
           chmod 600 "$privateTmp"
