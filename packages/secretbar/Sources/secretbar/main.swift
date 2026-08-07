@@ -1187,6 +1187,17 @@ struct SecretEditSheet: View {
         _tags = State(initialValue: entry.tags)
     }
 
+    private var sourceValidationMessage: String? {
+        let value = source.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, !clearSource else { return nil }
+        let url = URL(string: value)
+        let scheme = url?.scheme?.lowercased()
+        guard url?.host != nil, scheme == "http" || scheme == "https" else {
+            return "Source must be an http:// or https:// URL."
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Edit \(entry.alias)").font(.headline)
@@ -1194,15 +1205,40 @@ struct SecretEditSheet: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             TextField("Bitwarden item name", text: $itemName).textFieldStyle(.roundedBorder)
-            SecureField("New value (optional)", text: $value).textFieldStyle(.roundedBorder)
+            if entry.itemType == SecretItemType.secureNote.rawValue {
+                TextEditor(text: $value)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(minHeight: 90, maxHeight: 135)
+                    .scrollContentBackground(.hidden)
+                    .padding(5)
+                    .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
+                    .overlay(alignment: .topLeading) {
+                        if value.isEmpty {
+                            Text("New secure-note content (optional)")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .padding(7)
+                                .allowsHitTesting(false)
+                        }
+                    }
+            } else {
+                SecureField("New value (optional)", text: $value).textFieldStyle(.roundedBorder)
+            }
             TextField("Source URL (optional)", text: $source).textFieldStyle(.roundedBorder)
+            if let sourceValidationMessage {
+                Label(sourceValidationMessage, systemImage: "exclamationmark.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
             Toggle("Clear source", isOn: $clearSource).toggleStyle(.checkbox)
             TextEditor(text: $notes)
                 .font(.body)
                 .frame(minHeight: 70, maxHeight: 110)
-                .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color.secondary.opacity(0.25)))
+                .scrollContentBackground(.hidden)
+                .padding(5)
+                .background(Color.black.opacity(0.13), in: RoundedRectangle(cornerRadius: 7))
             Toggle("Clear notes", isOn: $clearNotes).toggleStyle(.checkbox)
-            TagEditor(tags: $tags, title: "Tags")
+            TagEditor(tags: $tags, title: "Tags", suggestions: model.entries.flatMap(\.tags))
             HStack {
                 Spacer()
                 Button("Cancel") { onDismiss() }
@@ -1212,7 +1248,7 @@ struct SecretEditSheet: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.busy)
+                .disabled(model.busy || sourceValidationMessage != nil)
             }
         }
         .padding(16)
@@ -1301,7 +1337,19 @@ struct SecretBarConfirmation: View {
 struct TagEditor: View {
     @Binding var tags: [String]
     let title: String
+    let suggestions: [String]
     @State private var draft = ""
+
+    private var matchingSuggestions: [String] {
+        let needle = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return [] }
+        return Array(
+            Set(suggestions)
+                .filter { !$0.isEmpty && !tags.contains($0) && $0.localizedCaseInsensitiveContains(needle) }
+                .sorted()
+                .prefix(6)
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -1325,7 +1373,7 @@ struct TagEditor: View {
                         .font(.caption)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
-                        .background(Color.accentColor.opacity(0.18), in: Capsule())
+                        .background(Color.primary.opacity(0.08), in: Capsule())
                     }
                 }
             }
@@ -1334,10 +1382,31 @@ struct TagEditor: View {
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
+                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 7))
+                    .accessibilityLabel("Add tag")
                     .onSubmit(addDraft)
                 Button("Add", action: addDraft)
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if !matchingSuggestions.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 5) {
+                        ForEach(matchingSuggestions, id: \.self) { suggestion in
+                            Button {
+                                tags.append(suggestion)
+                                draft = ""
+                            } label: {
+                                Label(suggestion, systemImage: "plus")
+                                    .font(.caption2)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .accessibilityLabel("Add tag \(suggestion)")
+                        }
+                    }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Suggested tags")
             }
         }
     }
@@ -1376,6 +1445,11 @@ enum SecretListFilter: String, CaseIterable, Identifiable {
 
 struct SecretBarSurface<Content: View>: View {
     let content: Content
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var highContrast: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+    }
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -1383,11 +1457,22 @@ struct SecretBarSurface<Content: View>: View {
 
     var body: some View {
         content
-            .padding(.vertical, 10)
+            .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .bottom) {
-                Divider()
-                    .opacity(0.55)
+            .background {
+                if reduceTransparency {
+                    Color(nsColor: .controlBackgroundColor)
+                } else {
+                    Rectangle().fill(.regularMaterial)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(
+                        Color.primary.opacity(highContrast ? 0.3 : 0.12),
+                        lineWidth: highContrast ? 1.5 : 1
+                    )
             }
     }
 }
@@ -1396,13 +1481,14 @@ struct SecretBarSurface<Content: View>: View {
 
 struct SecretBarView: View {
     @EnvironmentObject var model: SecretBarModel
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var tab: SecretBarTab = .secrets
     @State private var query = ""
     @State private var listFilter: SecretListFilter = .all
     @State private var selectedTag: String?
-    @State private var copying: AliasEntry?
     @State private var rotating: AliasEntry?
     @State private var editing: AliasEntry?
+    @State private var selectedEntryID: String?
     @State private var hoveredEntryID: String?
     @State private var revealingID: String?
     @State private var revealedValue = ""
@@ -1421,6 +1507,15 @@ struct SecretBarView: View {
     @State private var showImportPreview = false
     @State private var confirmClearHistory = false
     @FocusState private var searchFocused: Bool
+    @FocusState private var listFocused: Bool
+
+    private var selectedEntry: AliasEntry? {
+        filteredEntries.first { $0.id == selectedEntryID }
+    }
+
+    private var highContrast: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+    }
 
     private var matchingEntries: [AliasEntry] {
         let sourceEntries: [AliasEntry]
@@ -1495,19 +1590,6 @@ struct SecretBarView: View {
         } else if showImportPreview {
             Color.black.opacity(0.5).ignoresSafeArea()
             ImportPreviewSheet(model: model) { showImportPreview = false }
-        } else if let entry = copying {
-            Color.black.opacity(0.5).ignoresSafeArea()
-            SecretBarConfirmation(
-                title: "Copy \(entry.alias)?",
-                message: "This puts the secret value on the clipboard. Other apps may read it until the clipboard is replaced.",
-                confirmTitle: "Copy value",
-                destructive: false,
-                onConfirm: {
-                    model.copy(entry)
-                    copying = nil
-                },
-                onCancel: { copying = nil }
-            )
         } else if let entry = rotating {
             Color.black.opacity(0.5).ignoresSafeArea()
             SecretBarConfirmation(
@@ -1540,7 +1622,7 @@ struct SecretBarView: View {
     var body: some View {
         ZStack {
             Color(nsColor: .windowBackgroundColor)
-                .opacity(0.9)
+                .opacity(reduceTransparency ? 1 : 0.92)
                 .ignoresSafeArea()
             VStack(alignment: .leading, spacing: 8) {
                 header
@@ -1563,9 +1645,23 @@ struct SecretBarView: View {
             }
             modalOverlay
         }
-        .padding(10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .frame(width: 620, height: 700)
-        .background(.thickMaterial)
+        .background {
+            if reduceTransparency {
+                Color(nsColor: .windowBackgroundColor)
+            } else {
+                Rectangle().fill(.thickMaterial)
+            }
+        }
+        .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(
+                    Color.primary.opacity(highContrast ? 0.4 : 0.16),
+                    lineWidth: highContrast ? 1.5 : 1
+                )
+        }
         .onAppear {
             model.start()
             selectDetectedProjectIfNeeded()
@@ -1585,12 +1681,11 @@ struct SecretBarView: View {
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
-                Circle().fill(model.state == .unlocked ? Color.green.opacity(0.18) : Color.orange.opacity(0.18))
                 Image(systemName: "key.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(model.state == .unlocked ? .green : .orange)
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
-            .frame(width: 30, height: 30)
+            .frame(width: 24, height: 30)
             VStack(alignment: .leading, spacing: 1) {
                 Text("SecretBar").font(.headline)
                 HStack(spacing: 5) {
@@ -1649,6 +1744,33 @@ struct SecretBarView: View {
         }
     }
 
+    private var createValidationMessage: String? {
+        let environment = createEnvironment.trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = createSource.trimmingCharacters(in: .whitespacesAndNewlines)
+        let expiry = createExpiresAt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !environment.isEmpty && environment.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) == nil {
+            return "Environment names use letters, numbers, hyphens, or underscores."
+        }
+        if !source.isEmpty {
+            let url = URL(string: source)
+            let scheme = url?.scheme?.lowercased()
+            if url?.host == nil || (scheme != "http" && scheme != "https") {
+                return "Source must be an http:// or https:// URL."
+            }
+        }
+        if !expiry.isEmpty && parseDate(expiry) == nil {
+            return "Expiry must use YYYY-MM-DD."
+        }
+        return nil
+    }
+
+    private var canCreate: Bool {
+        !createAlias.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            !createValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            selectedProject != nil &&
+            createValidationMessage == nil
+    }
+
     private var createTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -1680,14 +1802,40 @@ struct SecretBarView: View {
                     VStack(alignment: .leading, spacing: 9) {
                         Label("What kind of secret?", systemImage: "square.stack.3d.up.fill")
                             .font(.headline)
-                        Picker("Item type", selection: $createType) {
+                        HStack(spacing: 8) {
                             ForEach(SecretItemType.allCases) { type in
-                                Label(type.title, systemImage: type.icon).tag(type)
+                                Button {
+                                    createType = type
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Label(type.title, systemImage: type.icon)
+                                            .font(.callout.weight(.semibold))
+                                            .foregroundStyle(.primary)
+                                        Text(type.shortDescription)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                                    .padding(9)
+                                    .background(
+                                        createType == type ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.045),
+                                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    )
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .stroke(
+                                                createType == type ? Color.accentColor.opacity(0.65) : Color.primary.opacity(0.1),
+                                                lineWidth: createType == type ? 1.5 : 1
+                                            )
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(createType == type ? .isSelected : [])
+                                .accessibilityLabel(type.title)
+                                .accessibilityHint(type.guidance)
                             }
                         }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .accessibilityLabel("Item type")
                         Text(createType.guidance)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -1758,13 +1906,19 @@ struct SecretBarView: View {
                             TextField("Optional YYYY-MM-DD", text: $createExpiresAt)
                                 .textFieldStyle(.roundedBorder)
                         }
-                        TagEditor(tags: $createTags, title: "Tags help you find secrets later")
+                        TagEditor(tags: $createTags, title: "Tags help you find secrets later", suggestions: availableTags)
                     }
                 }
 
                 HStack {
                     Button("Import .env…") { showDotEnvImporter = true }
                         .buttonStyle(.bordered)
+                    if let validation = createValidationMessage {
+                        Label(validation, systemImage: "exclamationmark.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                            .lineLimit(2)
+                    }
                     Spacer()
                     Button {
                         guard let project = selectedProject else {
@@ -1788,7 +1942,7 @@ struct SecretBarView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(model.busy || model.state != .unlocked)
+                    .disabled(model.busy || model.state != .unlocked || !canCreate)
                 }
             }
             .padding(.bottom, 12)
@@ -1877,6 +2031,24 @@ struct SecretBarView: View {
                 }
                 .padding(.vertical, 2)
             }
+            if let selectedEntry {
+                Button("Copy selected value") { model.copy(selectedEntry) }
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityHidden(true)
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+            }
+        }
+        .focusable()
+        .focused($listFocused)
+        .onAppear { listFocused = true }
+        .onMoveCommand { moveSelection($0) }
+        .onExitCommand {
+            if searchFocused {
+                searchFocused = false
+            } else {
+                selectedEntryID = nil
+            }
         }
     }
 
@@ -1932,6 +2104,25 @@ struct SecretBarView: View {
         .padding(.top, 3)
     }
 
+    private func moveSelection(_ direction: MoveCommandDirection) {
+        let entries = filteredEntries
+        guard !entries.isEmpty else { return }
+        guard let selectedEntryID, let currentIndex = entries.firstIndex(where: { $0.id == selectedEntryID }) else {
+            self.selectedEntryID = entries.first?.id
+            return
+        }
+        let nextIndex: Int
+        switch direction {
+        case .up:
+            nextIndex = max(0, currentIndex - 1)
+        case .down:
+            nextIndex = min(entries.count - 1, currentIndex + 1)
+        default:
+            return
+        }
+        self.selectedEntryID = entries[nextIndex].id
+    }
+
     private var emptySecretsState: some View {
         VStack(alignment: .leading, spacing: 8) {
             Image(systemName: model.state == .unlocked ? "magnifyingglass" : "lock.fill")
@@ -1968,6 +2159,12 @@ struct SecretBarView: View {
     private var settingsTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Settings").font(.title2.weight(.bold))
+                    Text("Tune SecretBar to your security and accessibility preferences.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 settingsSection("How to choose a secret") {
                     Text("Login")
                         .font(.callout.weight(.semibold))
@@ -1996,7 +2193,7 @@ struct SecretBarView: View {
                         Text("1 minute").tag(60)
                         Text("5 minutes").tag(300)
                     }
-                    Text("SecretBar clears only if the clipboard has not changed since the copy.")
+                    Text("Copy is immediate. SecretBar clears only if the clipboard has not changed since the copy.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -2004,6 +2201,9 @@ struct SecretBarView: View {
                     settingToggle("Enable pinned favorites", isOn: Binding(get: { model.pinsEnabled }, set: { model.pinsEnabled = $0 }))
                     settingToggle("Enable keyboard shortcuts", isOn: Binding(get: { model.shortcutsEnabled }, set: { model.shortcutsEnabled = $0 }))
                     Text("Shortcuts apply while SecretBar is open: ⌘1 Create, ⌘2 My Secrets, ⌘3 Settings.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("SecretBar follows macOS Reduce Transparency and Increase Contrast settings.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -2096,17 +2296,15 @@ struct SecretBarView: View {
     private func entryCard(_ entry: AliasEntry) -> some View {
         let isSecureNote = entry.itemType == SecretItemType.secureNote.rawValue
         let health = model.health(for: entry)
+        let isSelected = selectedEntryID == entry.id
         let isHovered = hoveredEntryID == entry.id
 
         return HStack(spacing: 10) {
             Image(systemName: isSecureNote ? SecretItemType.secureNote.icon : SecretItemType.login.icon)
                 .font(.body.weight(.medium))
-                .foregroundStyle(isSecureNote ? .orange : .accentColor)
+                .foregroundStyle(.secondary)
                 .frame(width: 28, height: 28)
-                .background(
-                    (isSecureNote ? Color.orange : Color.accentColor).opacity(0.12),
-                    in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-                )
+                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -2117,7 +2315,7 @@ struct SecretBarView: View {
                     if model.pinsEnabled, model.pinnedIDs.contains(entry.id) {
                         Image(systemName: "pin.fill")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
                             .accessibilityLabel("Pinned")
                     }
                 }
@@ -2154,7 +2352,7 @@ struct SecretBarView: View {
             }
 
             HStack(spacing: 5) {
-                Button { copying = entry } label: {
+                Button { model.copy(entry) } label: {
                     Image(systemName: "doc.on.doc")
                 }
                 .disabled(model.busy || model.state != .unlocked)
@@ -2181,9 +2379,16 @@ struct SecretBarView: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 8)
-        .background(isHovered ? Color.primary.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background(
+            isSelected
+                ? Color.accentColor.opacity(0.14)
+                : isHovered ? Color.primary.opacity(0.06) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+        )
         .overlay(alignment: .bottom) { Divider().opacity(0.55) }
         .contentShape(Rectangle())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint("Press Return to copy. Double-click to edit.")
         .onHover { hovering in
             if hovering {
                 hoveredEntryID = entry.id
@@ -2202,6 +2407,7 @@ struct SecretBarView: View {
                 revealedValue = ""
             }
         }, perform: {})
+        .onTapGesture { selectedEntryID = entry.id }
         .contextMenu {
             if model.pinsEnabled { Button(model.pinnedIDs.contains(entry.id) ? "Unpin" : "Pin") { model.togglePin(entry) } }
             Button("Edit…") { editing = entry }
