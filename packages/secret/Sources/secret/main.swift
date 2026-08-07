@@ -354,9 +354,10 @@ let commandHelpText: [String: String] = [
     Validate configs offline: items, env keys, collisions (no vault).
     """,
     "doctor": """
-    Usage: secret doctor
+    Usage: secret doctor [--json]
 
-    Validate configs, Bitwarden state, and alias resolvability.
+    Validate configs, Bitwarden state, and alias resolvability. --json emits
+    machine-readable rows with remote item metadata and TOTP availability.
     """,
     "recent": """
     Usage: secret recent [--json]
@@ -913,41 +914,78 @@ func replacePairKey(_ key: String, _ value: J, in obj: J) -> J {
 
 // MARK: - doctor
 
-func doctor(_ definitions: [(alias: String, definition: SecretDefinition)]) async {
+func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json: Bool) async {
     let current = await currentAuthState()
     if !current.authenticated {
-        print("bitwarden: unauthenticated — run: bw login, then secret unlock --store")
+        if json { print("[]") }
+        else { print("bitwarden: unauthenticated — run: bw login, then secret unlock --store") }
         exit(1)
     }
     if !current.unlocked {
-        print("bitwarden: locked — unlock with: secret unlock --store")
+        if json { print("[]") }
+        else { print("bitwarden: locked — unlock with: secret unlock --store") }
         exit(1)
     }
-    print("bitwarden: unlocked")
-    if env("SECRET_DAEMON") == "0" {
-        print("daemon\tdisabled")
-    } else {
-        print((await daemonStatus()) == "unlocked" ? "daemon\tup" : "daemon\tdown")
+    if !json {
+        print("bitwarden: unlocked")
+        if env("SECRET_DAEMON") == "0" {
+            print("daemon\tdisabled")
+        } else {
+            print((await daemonStatus()) == "unlocked" ? "daemon\tup" : "daemon\tdown")
+        }
     }
 
     var problems = 0
+    var jsonRows: [String] = []
     let items = await vaultItems()
     for (alias, definition) in definitions {
         let field = definition.field ?? "password"
         if let item = itemFor(items, definition.item) {
             let value = itemField(item, field)
-            if let value = value as? String, !value.isEmpty, !placeholderValues.contains(value) {
+            let valid = if let value = value as? String {
+                !value.isEmpty && !placeholderValues.contains(value)
+            } else {
+                false
+            }
+            let status = valid ? "ok" : "invalid"
+            let itemName = item["name"] as? String ?? definition.item
+            let source = itemField(item, "custom:source") as? String ?? ""
+            let hasTOTP = ((item["login"] as? JSON)?["totp"] as? String)?.isEmpty == false
+            if json {
+                jsonRows.append(rowJSON([
+                    ("alias", alias),
+                    ("item", definition.item),
+                    ("field", field),
+                    ("status", status),
+                    ("itemName", itemName),
+                    ("source", source),
+                    ("hasTOTP", hasTOTP ? "true" : "false"),
+                ]))
+            } else if valid {
                 print("ok\t\(alias)\t\(definition.item)\t\(field)")
             } else {
                 print("invalid value\t\(alias)\t\(definition.item)\t\(field)")
-                problems += 1
             }
+            if !valid { problems += 1 }
         } else {
-            print("missing\t\(alias)\t\(definition.item)")
+            if json {
+                jsonRows.append(rowJSON([
+                    ("alias", alias),
+                    ("item", definition.item),
+                    ("field", field),
+                    ("status", "missing"),
+                    ("itemName", ""),
+                    ("source", ""),
+                    ("hasTOTP", "false"),
+                ]))
+            } else {
+                print("missing\t\(alias)\t\(definition.item)")
+            }
             problems += 1
         }
     }
 
+    if json { print("[" + jsonRows.joined(separator: ",") + "]") }
     let total = definitions.count
     let summary = "secret doctor: \(total - problems)/\(total) aliases ok, \(problems) problem(s)"
     if problems > 0 {
@@ -1633,7 +1671,7 @@ func run() async {
         lint(options.configPath, json: options.json)
 
     case "doctor":
-        await doctor(loaded.ordered)
+        await doctor(loaded.ordered, json: options.json)
 
     case "recent":
         printRecent(json: options.json)
