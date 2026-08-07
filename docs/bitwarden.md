@@ -228,13 +228,15 @@ Edit item metadata without replacing the configured value:
 secret edit github-token                         # prompts: name/value/source/notes/custom field
 secret edit github-token --source https://example.com --force
 secret edit github-token --name "GitHub token" --notes "owner: platform" --force
+secret edit github-token --tags "infra,production" --force
 printf '%s\n' 'new-value' | secret edit github-token --field password --value-stdin --force
 ```
 
 `secret source <alias> <url>` remains the short source-only form. `secret edit`
-changes the Bitwarden item, not the alias key in `.secret.json`; use `secret mv`
-when the alias itself should be renamed. Metadata flags are explicit while
-values stay on the hidden prompt or stdin.
+changes the Bitwarden item; `--tags` updates local alias labels in
+`.secret.json`, not Bitwarden item fields. Use `secret mv` when the alias itself
+should be renamed. Metadata flags are explicit while values stay on the hidden
+prompt or stdin.
 
 Remove or rename an alias in your own configs without hand-editing JSON:
 
@@ -386,10 +388,21 @@ each.
   pass `--optional <alias1,alias2,...>` (all missing aliases are listed).
   Skipping silently by default would drop secrets from `.env` files without
   anyone noticing.
+- Choose `type: "login"` for normal one-line credentials: passwords, API keys,
+  tokens, usernames, and similar values. Its configured `field` is usually
+  `password`; use `username` only when that is the value your app needs, and
+  use `custom:<name>` for a named Bitwarden custom field.
+- Choose `type: "secure-note"` for multiline sensitive material such as SSH
+  private keys, recovery codes, certificates, or private documents. Set
+  `field: "notes"`; in this case the encrypted Secure Note content is the
+  resolved secret value. Do not confuse this with Login `notes`, which is
+  optional item metadata.
 - The `field` in a config entry can be `password` (default), `username`,
   `notes`, or `custom:<name>` — for example `custom:source` for the URL a
   secret came from. `secret source <alias>` prints it, `secret source <alias>
   <url>` sets it, and `secret set --source URL` attaches it at creation.
+- Tags are value-free local labels on config aliases, useful for filters such
+  as `infra`, `billing`, or `development`; they are not Bitwarden item fields.
 - `secret set` with an unknown alias (or no alias at all, on a TTY) adds the
   alias to the project config — item named after the config directory, env
   key derived as `ALIAS_NAME` — then creates the vault item. `secret rm`
@@ -410,9 +423,9 @@ each.
   Touch ID, and master-password unlock; errors stay in a selectable diagnostic
   sheet with recovery-command and Bitwarden-session-reset actions. Create can
   add Login or Secure Note items, global/project aliases, tags, environments,
-  expiry metadata, and previewed `.env` imports. My Secrets has pinned and
-  deduplicated Recent rows plus a CLI-like table of all aliases, with TOTP,
-  source, edit, rotate, and optional hold-to-reveal actions. Settings owns
+  expiry metadata, and previewed `.env` imports. My Secrets uses searchable
+  cards, Recent/Pinned filters, tag filtering, TOTP/source/edit/rotate actions,
+  and optional hold-to-reveal. Settings owns
   clipboard auto-clear (disabled by default), shortcuts, repository detection,
   health checks, and value-free usage history. Copy uses the CLI clipboard path
   so the UI does not receive the value in stdout; rotate has an explicit
