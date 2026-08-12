@@ -545,6 +545,7 @@ final class SecretBarModel: ObservableObject {
             var counts: [String: Int] = [:]
             var details: [String: [String]] = [:]
             var metadata: [String: RemoteEntryMetadata] = [:]
+            var failedGroups = 0
             let groups = Dictionary(grouping: entriesToCheck) { entry in
                 "\(entry.configPath)\u{0}\(entry.environment)"
             }
@@ -556,7 +557,16 @@ final class SecretBarModel: ObservableObject {
                 let result = runSecret(arguments, cwd: first.cwd, timeout: 45)
                 guard let data = result.stdout.data(using: .utf8),
                       let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-                else { continue }
+                else {
+                    failedGroups += 1
+                    continue
+                }
+                let aliases = Set(rows.compactMap { $0["alias"] as? String })
+                let expectedAliases = Set(groupedEntries.map(\.alias))
+                if rows.isEmpty || aliases != expectedAliases {
+                    failedGroups += 1
+                    continue
+                }
 
                 for row in rows {
                     guard let alias = row["alias"] as? String,
@@ -583,14 +593,17 @@ final class SecretBarModel: ObservableObject {
             let snapshotCounts = counts
             let snapshotDetails = details
             let snapshotMetadata = metadata
+            let validationIncomplete = failedGroups > 0
             await MainActor.run {
                 self.problems = snapshotCounts
                 self.problemDetails = snapshotDetails
                 self.remoteMetadata = snapshotMetadata
-                self.remoteValidationComplete = true
+                self.remoteValidationComplete = !validationIncomplete
                 self.remoteValidationInProgress = false
                 let issueCount = snapshotCounts.values.reduce(0, +)
-                self.healthCheckStatus = issueCount == 0
+                self.healthCheckStatus = validationIncomplete
+                    ? "Health check incomplete — configured entries remain visible; try refresh."
+                    : issueCount == 0
                     ? "Health check complete — no issues found."
                     : "Health check complete — \(issueCount) issue\(issueCount == 1 ? "" : "s") found."
             }
@@ -1599,10 +1612,8 @@ struct SecretBarView: View {
 
     private var matchingEntries: [AliasEntry] {
         let sourceEntries: [AliasEntry]
-        if model.state == .unlocked {
-            sourceEntries = model.remoteValidationComplete
-                ? model.entries.filter { model.remoteMetadata[$0.id]?.isUsable == true }
-                : []
+        if model.state == .unlocked && model.remoteValidationComplete {
+            sourceEntries = model.entries.filter { model.remoteMetadata[$0.id]?.isUsable == true }
         } else {
             sourceEntries = model.entries
         }

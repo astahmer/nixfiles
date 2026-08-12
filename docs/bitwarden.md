@@ -12,6 +12,12 @@ the built-in Touch ID keychain read (no extra binary); a future passkey
 unlock can be built on the Bitwarden SDK's C FFI without changing the CLI
 surface.
 
+The CLI and SecretBar intentionally expose configured aliases, not the entire
+Bitwarden vault. An item can therefore exist in Bitwarden and still be absent
+from both clients until a value-free alias points to it. This keeps accidental
+vault-wide enumeration out of normal workflows and makes each alias's scope
+explicit.
+
 Packaging quirk: nixpkgs' swift-on-darwin links a few stdlib dylibs (notably
 `libswift_StringProcessing`) from its own corelibs store runtime, which the
 kernel SIGKILLs at dyld load when mixed with the system runtime. The
@@ -54,6 +60,25 @@ Aliases come from three places, later wins:
   one at its root for its machine-wide aliases.
 - `./.secret.local.json` — machine-local overrides, same shape, gitignored;
   discovered upward like `.secret.json` and merged last.
+
+The “global” scope means the local user alias index at
+`~/.config/secret/config.json`; it does not mean every global Bitwarden item.
+That file is optional and is not synced through Bitwarden. SecretBar labels
+this same file `Global`, while its project index also discovers value-free
+`.secret.json` files under `~/dev/*`. A terminal command run from `~` or
+`~/dev` will not see the nixfiles project aliases unless it uses the project
+working directory or an explicit `--config` path:
+
+```sh
+cd ~/dev/nixfiles && secret list
+secret list --config ~/dev/nixfiles/.secret.json
+secret print --all --config ~/dev/nixfiles/.secret.json
+```
+
+After adding an item from another machine, run `secret pull` to refresh the
+local Bitwarden cache, then declare its alias in the intended project or global
+config. `secret list` and SecretBar should then agree on the configured entry.
+They will not discover an undeclared vault item automatically.
 
 Values are never committed. Inspect configured aliases without touching the
 vault:
