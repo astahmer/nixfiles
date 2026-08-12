@@ -27,9 +27,16 @@
         ${lib.getExe jjPackage} util completion bash > "$out"
       '';
 
-      jjCompletionZsh = pkgs.runCommand "jj-completion-zsh" { } ''
-        ${lib.getExe jjPackage} util completion zsh > "$out"
-      '';
+      jjCompletionZsh =
+        pkgs.runCommand "jj-completion-zsh"
+          {
+            nativeBuildInputs = [ pkgs.zsh ];
+          }
+          ''
+            mkdir -p "$out/share/zsh/site-functions"
+            ${lib.getExe jjPackage} util completion zsh > "$out/share/zsh/site-functions/_jj"
+            zsh -fc 'zcompile "$1"' zcompile "$out/share/zsh/site-functions/_jj"
+          '';
 
       starshipInitBash =
         pkgs.runCommand "starship-init-bash"
@@ -363,6 +370,12 @@
           source ${starshipInitBash}
       '';
 
+      programs.zsh.completionInit = ''
+        fpath+=("${jjCompletionZsh}/share/zsh/site-functions")
+        autoload -U compinit && compinit -C
+        autoload -Uz _jj && compdef _jj jj
+      '';
+
       programs.zsh.initContent = lib.mkMerge [
         (lib.mkBefore ''
           ${nixPathSetup}
@@ -397,7 +410,6 @@
         (lib.mkAfter ''
           source ${starshipInitZsh}
           source ${direnvHookZsh}
-          source ${jjCompletionZsh}
         '')
       ];
 

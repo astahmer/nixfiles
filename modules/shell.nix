@@ -267,8 +267,6 @@ in
         enableZshIntegration = true;
       };
 
-      programs.zsh.completionInit = "autoload -U compinit && compinit -C";
-
       # secret: lazy alias completion, cached 60s; no startup cost beyond
       # registering one widget. The cache is refreshed only when TAB is used.
       programs.zsh.initContent = ''
