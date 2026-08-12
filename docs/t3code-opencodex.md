@@ -19,11 +19,22 @@ store at `~/.local/share/opencode/auth.json`.
 
 `~/.opencodex/config.json` is bootstrapped from
 `assets/opencodex/config.template.json` with `$VAR` references instead of API
-keys. Home Manager reconciles the provider and routing portions from that
-template while preserving OpenCodex-owned account metadata and credentials.
+keys. The template supplies first-run defaults only; once the local config
+exists, it is authoritative. This means dashboard and `ocx` edits—including
+intentional field removals—persist across Home Manager switches instead of
+being overwritten by Nix. The activation still handles the legacy provider
+migration, public account selectors, and explicitly configured secret
+injection. It only writes when initialization or one of those migrations
+actually changes the file.
+
+Changing the template updates future bootstraps. For an existing installation,
+use the dashboard or `ocx config` for an intentional setting change so the
+runtime config remains the source of truth.
+
 When the local secrets file has values, activation materializes those values
 into the private runtime config so the login service can use them without
-putting keys in the repository.
+putting keys in the repository. Those two provider key fields remain
+Nix-owned when the secret file contains a value.
 
 The configured providers and public account selectors are:
 
@@ -34,10 +45,10 @@ The configured providers and public account selectors are:
 | `codex-work` | `openai` account pool entry | First non-main Codex pool account |
 | `opencode` | OpenCode Go endpoint | OpenCode provider |
 
-The work selector is derived from the first non-main `codexAccounts[]` entry,
-so account ids and emails stay out of Nix. Add the work account through the
-OpenCodex dashboard or `ocx account`, then re-run Home Manager if the account
-was added after the initial activation.
+The work selector is seeded from the first non-main `codexAccounts[]` entry
+only when `codex-work` is missing or stale, so account ids and emails stay out
+of Nix while an existing dashboard choice is preserved. Add or switch the work
+account through the OpenCodex dashboard or `ocx account`.
 
 The per-machine secret template is deployed at
 `~/.config/opencodex/secrets.env.example`:
