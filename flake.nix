@@ -90,6 +90,7 @@
 
           packages = {
             agy = pkgs'.callPackage ./packages/agy { };
+            calldiff = pkgs'.callPackage ./packages/calldiff { };
             codex = pkgs'.callPackage ./packages/codex { };
             drydock = pkgs'.callPackage ./packages/drydock { };
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };

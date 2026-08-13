@@ -12,6 +12,7 @@
       packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
       modlens = packages.modlens;
       modsearch = packages.modsearch;
+      calldiff = packages.calldiff;
       executorScopeDir = executorDir;
 
       # Exclude deprecated readbro skill from the deployed .agents directory.
@@ -33,6 +34,7 @@
         cp -R --no-preserve=mode "${agentsSrc}/." "$out/"
         cp -R "${modlens}/share/modlens/skills/modlens" "$out/skills/"
         cp -R "${modsearch}/share/modsearch/skills/modsearch" "$out/skills/"
+        cp -R "${calldiff}/share/calldiff/skills/calldiff" "$out/skills/"
       '';
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);

@@ -68,6 +68,7 @@ list_term() {
   print_row "codex" "" "OpenAI Codex CLI for terminal and T3 Code"
   print_row "agy / modlens" "" "Antigravity CLI + image-to-structured-evidence for text-only agents"
   print_row "modsearch" "" "plug-in web search & page fetch for text-only agents"
+  print_row "calldiff" "" "Call-stack diffs for agentic code review"
   print_row "openusage" "" "AI usage and quota dashboard for the macOS menu bar"
   print_row "codexbar" "" "AI provider usage limits in the macOS menu bar"
   print_row "plannotator / nub" "" "Plan review UI + agent utils"
