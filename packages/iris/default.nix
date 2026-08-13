@@ -13,7 +13,7 @@ let
       };
       x86_64-linux = {
         url = "https://github.com/versenilvis/iris/releases/download/v${version}/iris_linux_amd64.tar.gz";
-        hash = "sha256-uilQakPWIxcYlliBkfFLN2i8TSHDMRmgIdsiG4HA2Xs=";
+        hash = "sha256-akR4EF7zesaq2gamZzZo09ilf3+V3b1IdRSp39nlnac=";
       };
     }
     .${system} or (throw "Unsupported platform for iris: ${system}");

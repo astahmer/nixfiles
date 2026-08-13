@@ -5,11 +5,11 @@ let
     {
       x86_64-linux = {
         url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-x86_64";
-        hash = "sha256-QFF8T0gwVA8uI8Bus8+Zdq5QsSNQyxeY6MekTqnDwfs=";
+        hash = "sha256-e3OFELqy56rhtLKiNknOBcen9GbFocgeSiFxv7BZKKM=";
       };
       aarch64-linux = {
         url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-arm64";
-        hash = "sha256-W9DdakBpz/YnL7bGjjCzvqB+6cf3a6iqQUL+ZTpyB+4=";
+        hash = "sha256-5zNjRJGDRbUkdxeZaWvLaSzcETD4yZF+f1ZdMb3vCB4=";
       };
       aarch64-darwin = {
         url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-macos-arm64";
