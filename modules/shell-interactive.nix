@@ -23,6 +23,8 @@
       jjPackage =
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
 
+      misePackage = config.programs.mise.package;
+
       jjCompletionBash = pkgs.runCommand "jj-completion-bash" { } ''
         ${lib.getExe jjPackage} util completion bash > "$out"
       '';
@@ -72,6 +74,24 @@
           }
           ''
             direnv hook zsh > "$out"
+          '';
+
+      miseInitBash =
+        pkgs.runCommand "mise-init-bash"
+          {
+            nativeBuildInputs = [ misePackage ];
+          }
+          ''
+            mise activate bash | sed '/^export PATH=/d' > "$out"
+          '';
+
+      miseInitZsh =
+        pkgs.runCommand "mise-init-zsh"
+          {
+            nativeBuildInputs = [ misePackage ];
+          }
+          ''
+            mise activate zsh | sed '/^export PATH=/d' > "$out"
           '';
 
       shellAliasNames = builtins.attrNames config.home.shellAliases;
@@ -367,6 +387,7 @@
           ${shellAliasesFunction}
           source ${jjCompletionBash}
           source ${direnvHookBash}
+          source ${miseInitBash}
           source ${starshipInitBash}
       '';
 
@@ -408,6 +429,7 @@
         '')
 
         (lib.mkAfter ''
+          source ${miseInitZsh}
           source ${starshipInitZsh}
           source ${direnvHookZsh}
         '')
