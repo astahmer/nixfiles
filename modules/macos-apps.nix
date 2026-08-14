@@ -21,7 +21,6 @@
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
       cmdcmdModule = import ../macos/cmdcmd.nix { inherit pkgs lib; };
-      kapModule = import ../macos/kap.nix { inherit pkgs lib; };
       cleanshotModule = import ../macos/cleanshot.nix { inherit pkgs lib; };
       caffeineModule = import ../macos/caffeine.nix { inherit pkgs lib; };
       cleanMyKeyboardId = "6468120888";
@@ -33,7 +32,6 @@
         backgroundMusicModule
         cameracontrollerModule
         cmdcmdModule
-        kapModule
         cleanshotModule
         caffeineModule
         # huesyncModule
