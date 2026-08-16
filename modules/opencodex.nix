@@ -13,6 +13,8 @@
       configFile = "${opencodexHome}/config.json";
       configTemplate = "${../assets/opencodex/config.template.json}";
       secretsEnv = "${config.home.homeDirectory}/.config/opencodex/secrets.env";
+      secretBin = "${inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret}/bin/secret";
+      secretConfig = "${../.secret.json}";
       ocx = "${opencodex}/bin/ocx";
       jq = "${pkgs.jq}/bin/jq";
       cmp = "${pkgs.diffutils}/bin/cmp";
@@ -42,13 +44,27 @@
         export PATH="${pkgs.bun}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${gettext}:${pkgs.jq}/bin:/usr/bin:/bin"
         ${pkgs.coreutils}/bin/mkdir -p "$opencodex_home" "$secrets_dir"
 
+        # Primary source: the repo's Bitwarden-backed secret config. This
+        # materializes all four provider keys (commandcode, opencode primary,
+        # opencode-go-manu, opencode-go-mathias) so a fresh machine gets the
+        # full runtime config without committing keys to the public repo.
+        read_secret() {
+          ${pkgs.coreutils}/bin/timeout 8s ${secretBin} get --config "${secretConfig}" "$1" 2>/dev/null || true
+        }
+        OPENCODEX_COMMANDCODE_API_KEY="$(read_secret opencodex-commandcode-api-key)"
+        OPENCODEX_OPENCODE_GO_API_KEY="$(read_secret opencode-go-alex)"
+        OPENCODEX_OPENCODE_GO_MANU_KEY="$(read_secret opencode-go-manu)"
+        OPENCODEX_OPENCODE_GO_MATHIAS_KEY="$(read_secret opencode-go-mathias)"
+
+        # Legacy fallback: ~/.config/opencodex/secrets.env overrides the vault
+        # for the two original keys (e.g. when Bitwarden is locked).
         if [ ! -f "$secrets_file" ] && [ -f "$example_file" ]; then
           ${pkgs.coreutils}/bin/cp "$example_file" "$secrets_file"
           ${pkgs.coreutils}/bin/chmod 600 "$secrets_file"
           echo "opencodex: created $secrets_file (fill in API keys)" >&2
         fi
 
-        # Read only the two known dotenv assignments. Do not source the file:
+        # Read only the known dotenv assignments. Do not source the file:
         # it is user-owned data and activation must not execute arbitrary shell.
         if [ -r "$secrets_file" ]; then
           while IFS= read -r line || [ -n "$line" ]; do
@@ -63,6 +79,14 @@
                 secret_name="OPENCODEX_OPENCODE_GO_API_KEY"
                 secret_value="''${line#*=}"
                 ;;
+              OPENCODEX_OPENCODE_GO_MANU_KEY=*)
+                secret_name="OPENCODEX_OPENCODE_GO_MANU_KEY"
+                secret_value="''${line#*=}"
+                ;;
+              OPENCODEX_OPENCODE_GO_MATHIAS_KEY=*)
+                secret_name="OPENCODEX_OPENCODE_GO_MATHIAS_KEY"
+                secret_value="''${line#*=}"
+                ;;
               export\ OPENCODEX_COMMANDCODE_API_KEY=*)
                 secret_name="OPENCODEX_COMMANDCODE_API_KEY"
                 secret_value="''${line#export OPENCODEX_COMMANDCODE_API_KEY=}"
@@ -70,6 +94,14 @@
               export\ OPENCODEX_OPENCODE_GO_API_KEY=*)
                 secret_name="OPENCODEX_OPENCODE_GO_API_KEY"
                 secret_value="''${line#export OPENCODEX_OPENCODE_GO_API_KEY=}"
+                ;;
+              export\ OPENCODEX_OPENCODE_GO_MANU_KEY=*)
+                secret_name="OPENCODEX_OPENCODE_GO_MANU_KEY"
+                secret_value="''${line#export OPENCODEX_OPENCODE_GO_MANU_KEY=}"
+                ;;
+              export\ OPENCODEX_OPENCODE_GO_MATHIAS_KEY=*)
+                secret_name="OPENCODEX_OPENCODE_GO_MATHIAS_KEY"
+                secret_value="''${line#export OPENCODEX_OPENCODE_GO_MATHIAS_KEY=}"
                 ;;
             esac
             case "$secret_value" in
@@ -86,6 +118,12 @@
         fi
         if [ "''${OPENCODEX_OPENCODE_GO_API_KEY:-}" = replace-me ]; then
           unset OPENCODEX_OPENCODE_GO_API_KEY
+        fi
+        if [ "''${OPENCODEX_OPENCODE_GO_MANU_KEY:-}" = replace-me ]; then
+          unset OPENCODEX_OPENCODE_GO_MANU_KEY
+        fi
+        if [ "''${OPENCODEX_OPENCODE_GO_MATHIAS_KEY:-}" = replace-me ]; then
+          unset OPENCODEX_OPENCODE_GO_MATHIAS_KEY
         fi
 
         # Use the template only for first-run defaults. Once a config exists,
@@ -137,6 +175,23 @@
                and ((.providers // {}) | has("opencode"))
             then .providers.opencode.apiKey = env.OPENCODEX_OPENCODE_GO_API_KEY
                | .providers.opencode.apiKeyPool[0].key = env.OPENCODEX_OPENCODE_GO_API_KEY
+            else .
+            end
+          | if (env.OPENCODEX_OPENCODE_GO_MANU_KEY // "") != ""
+            then (if ((.providers // {}) | has("opencode-go-manu"))
+                  then .providers["opencode-go-manu"].apiKey = env.OPENCODEX_OPENCODE_GO_MANU_KEY
+                     | .providers["opencode-go-manu"].apiKeyPool[0].key = env.OPENCODEX_OPENCODE_GO_MANU_KEY
+                  else .
+                  end)
+               | (if (((.providers.opencode.apiKeyPool // []) | length) > 1)
+                  then .providers.opencode.apiKeyPool[1].key = env.OPENCODEX_OPENCODE_GO_MANU_KEY
+                  else .
+                  end)
+            else .
+            end
+          | if (env.OPENCODEX_OPENCODE_GO_MATHIAS_KEY // "") != ""
+               and ((((.providers.opencode.apiKeyPool // []) | length) > 2))
+            then .providers.opencode.apiKeyPool[2].key = env.OPENCODEX_OPENCODE_GO_MATHIAS_KEY
             else .
             end
         ' "$candidate_config" > "$candidate_with_secrets"

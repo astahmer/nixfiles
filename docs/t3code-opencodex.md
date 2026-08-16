@@ -18,23 +18,37 @@ store at `~/.local/share/opencode/auth.json`.
 ## OpenCodex config
 
 `~/.opencodex/config.json` is bootstrapped from
-`assets/opencodex/config.template.json` with `$VAR` references instead of API
-keys. The template supplies first-run defaults only; once the local config
-exists, it is authoritative. This means dashboard and `ocx` edits—including
-intentional field removals—persist across Home Manager switches instead of
-being overwritten by Nix. The activation still handles the legacy provider
-migration, public account selectors, and explicitly configured secret
-injection. It only writes when initialization or one of those migrations
-actually changes the file.
+`assets/opencodex/config.template.json`, which is the full merged runtime
+config (providers, model routing, disabled models, account selectors) with
+`$VAR` key references instead of API keys. The template is the source of
+truth for the config shape; activation materializes the four provider keys
+from the repo's Bitwarden-backed `secret` config, so fresh machines get the
+complete setup without committing keys to the public repo.
 
-Changing the template updates future bootstraps. For an existing installation,
-use the dashboard or `ocx config` for an intentional setting change so the
-runtime config remains the source of truth.
+The activation still handles the legacy provider migration, public account
+selectors, and explicit secret injection. It only writes when initialization
+or one of those migrations actually changes the file. Dashboard and `ocx`
+edits that add new runtime state (custom models, extra key pools, accounts)
+persist because the config is re-imported from the merged candidate.
 
-When the local secrets file has values, activation materializes those values
-into the private runtime config so the login service can use them without
-putting keys in the repository. Those two provider key fields remain
-Nix-owned when the secret file contains a value.
+The four provider keys are read by activation via `secret get --config
+.secret.json` (falling back to `~/.config/opencodex/secrets.env` for the two
+original keys when Bitwarden is locked):
+
+| Secret alias | Env var | Provider usage |
+| --- | --- | --- |
+| `opencodex-commandcode-api-key` | `OPENCODEX_COMMANDCODE_API_KEY` | CommandCode provider key |
+| `opencode-go-alex` | `OPENCODEX_OPENCODE_GO_API_KEY` | OpenCode provider primary pool key |
+| `opencode-go-manu` | `OPENCODEX_OPENCODE_GO_MANU_KEY` | `opencode-go-manu` provider + OpenCode pool entry |
+| `opencode-go-mathias` | `OPENCODEX_OPENCODE_GO_MATHIAS_KEY` | OpenCode pool entry |
+
+The per-machine secret template is deployed at
+`~/.config/opencodex/secrets.env.example`:
+
+```sh
+OPENCODEX_COMMANDCODE_API_KEY=...
+OPENCODEX_OPENCODE_GO_API_KEY=...
+```
 
 The configured providers and public account selectors are:
 

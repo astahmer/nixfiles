@@ -2,48 +2,6 @@
   "port": 10100,
   "managementUsageMaxReadBytes": 67108864,
   "appOwnedMemoryBudgetMb": 256,
-  "openaiProviderTierVersion": 2,
-  "defaultProvider": "openai",
-  "multiAgentGuidanceEnabled": true,
-  "websockets": false,
-  "codexAutoStart": true,
-  "codexShimAutoRestore": true,
-  "autoSwitchThreshold": 0,
-  "googleAntigravityStaticCatalogVersion": 1,
-  "pausedCodexAccountIds": [
-    "__main__"
-  ],
-  "disabledModels": [
-    "opencode-go/deepseek-v4-pro",
-    "opencode-go/glm-5",
-    "opencode-go/glm-5.1",
-    "opencode-go/glm-5.2",
-    "opencode-go/grok-4.5",
-    "opencode-go/hy3",
-    "opencode-go/kimi-k2.5",
-    "opencode-go/kimi-k2.6",
-    "opencode-go/kimi-k2.7-code",
-    "opencode-go/kimi-k3",
-    "opencode-go/mimo-v2-omni",
-    "opencode-go/mimo-v2-pro",
-    "opencode-go/mimo-v2.5",
-    "opencode-go/mimo-v2.5-pro",
-    "opencode-go/minimax-m2.5",
-    "opencode-go/minimax-m2.7",
-    "opencode-go/minimax-m3",
-    "opencode-go/qwen3.5-plus",
-    "opencode-go/qwen3.6-plus",
-    "opencode-go/qwen3.7-max",
-    "opencode-go/qwen3.7-plus",
-    "opencode-go/qwen3.8-max",
-    "gpt-5.5",
-    "gpt-5.4",
-    "gpt-5.4-mini",
-    "gpt-5.3-codex-spark"
-  ],
-  "subagentModels": [
-    "gpt-5.6-luna"
-  ],
   "providers": {
     "openai": {
       "adapter": "openai-responses",
@@ -75,6 +33,7 @@
     "opencode": {
       "adapter": "openai-chat",
       "baseUrl": "https://opencode.ai/zen/go/v1",
+      "allowPrivateNetwork": false,
       "authMode": "key",
       "apiKey": "$OPENCODEX_OPENCODE_GO_API_KEY",
       "defaultModel": "deepseek-v4-flash",
@@ -328,10 +287,127 @@
           "id": "opencode-go-primary",
           "name": "OpenCode Go",
           "key": "$OPENCODEX_OPENCODE_GO_API_KEY"
+        },
+        {
+          "id": "65318fe6",
+          "key": "$OPENCODEX_OPENCODE_GO_MANU_KEY",
+          "addedAt": 1786908079000
+        },
+        {
+          "id": "5df27b48",
+          "key": "$OPENCODEX_OPENCODE_GO_MATHIAS_KEY",
+          "addedAt": 1786908086328
         }
       ],
-      "note": "GLM, DeepSeek, Kimi, Qwen, MiMo…",
-      "allowPrivateNetwork": false
+      "note": "GLM, DeepSeek, Kimi, Qwen, MiMo…"
+    },
+    "opencode-go-manu": {
+      "adapter": "openai-chat",
+      "baseUrl": "https://opencode.ai/zen/go/v1",
+      "authMode": "key",
+      "apiKey": "$OPENCODEX_OPENCODE_GO_MANU_KEY",
+      "defaultModel": "kimi-k2.7-code",
+      "apiKeyPool": [
+        {
+          "id": "65318fe6",
+          "key": "$OPENCODEX_OPENCODE_GO_MANU_KEY"
+        }
+      ]
     }
-  }
+  },
+  "defaultProvider": "openai",
+  "openaiProviderTierVersion": 2,
+  "googleAntigravityStaticCatalogVersion": 2,
+  "multiAgentGuidanceEnabled": true,
+  "codexShimAutoRestore": true,
+  "pausedCodexAccountIds": [
+    "__main__"
+  ],
+  "codexAccountNamespaces": {
+    "codex-perso": "@main"
+  },
+  "subagentModels": [
+    "gpt-5.6-luna"
+  ],
+  "websockets": false,
+  "codexAutoStart": true,
+  "disabledModels": [
+    "opencode-go/deepseek-v4-pro",
+    "opencode-go/glm-5",
+    "opencode-go/glm-5.1",
+    "opencode-go/glm-5.2",
+    "opencode-go/grok-4.5",
+    "opencode-go/hy3",
+    "opencode-go/kimi-k2.5",
+    "opencode-go/kimi-k2.6",
+    "opencode-go/kimi-k2.7-code",
+    "opencode-go/kimi-k3",
+    "opencode-go/mimo-v2-omni",
+    "opencode-go/mimo-v2-pro",
+    "opencode-go/mimo-v2.5",
+    "opencode-go/mimo-v2.5-pro",
+    "opencode-go/minimax-m2.5",
+    "opencode-go/minimax-m2.7",
+    "opencode-go/minimax-m3",
+    "opencode-go/qwen3.5-plus",
+    "opencode-go/qwen3.6-plus",
+    "opencode-go/qwen3.7-max",
+    "opencode-go/qwen3.7-plus",
+    "opencode-go/qwen3.8-max",
+    "gpt-5.5",
+    "gpt-5.4",
+    "gpt-5.4-mini",
+    "gpt-5.3-codex-spark",
+    "opencode/glm-5",
+    "opencode/glm-5.1",
+    "opencode/glm-5.2",
+    "opencode/glm-5.3",
+    "opencode/grok-4.5",
+    "opencode/hy3",
+    "opencode/hy3-preview",
+    "opencode/kimi-k2.5",
+    "opencode/kimi-k2.6",
+    "opencode/kimi-k3",
+    "opencode/mimo-v2-omni",
+    "opencode/mimo-v2-pro",
+    "opencode/mimo-v2.5",
+    "opencode/mimo-v2.5-pro",
+    "opencode/minimax-m2.5",
+    "opencode/minimax-m2.7",
+    "opencode/minimax-m3",
+    "opencode/qwen3.5-plus",
+    "opencode/qwen3.6-plus",
+    "opencode/qwen3.7-max",
+    "opencode/qwen3.7-plus",
+    "opencode/qwen3.8-max",
+    "commandcode/deepseek-deepseek-v4-flash",
+    "commandcode/gpt-5.3-codex",
+    "commandcode/gpt-5.6-luna",
+    "opencode-go-manu/deepseek-v4-pro",
+    "opencode-go-manu/glm-5",
+    "opencode-go-manu/glm-5.1",
+    "opencode-go-manu/glm-5.2",
+    "opencode-go-manu/glm-5.3",
+    "opencode-go-manu/gpt-5.6-luna",
+    "opencode-go-manu/grok-4.5",
+    "opencode-go-manu/hy3",
+    "opencode-go-manu/hy3-preview",
+    "opencode-go-manu/kimi-k2.5",
+    "opencode-go-manu/kimi-k2.6",
+    "opencode-go-manu/kimi-k2.7-code",
+    "opencode-go-manu/kimi-k3",
+    "opencode-go-manu/mimo-v2-omni",
+    "opencode-go-manu/mimo-v2-pro",
+    "opencode-go-manu/mimo-v2.5",
+    "opencode-go-manu/mimo-v2.5-pro",
+    "opencode-go-manu/minimax-m2.5",
+    "opencode-go-manu/minimax-m2.7",
+    "opencode-go-manu/minimax-m3",
+    "opencode-go-manu/qwen3.5-plus",
+    "opencode-go-manu/qwen3.6-plus",
+    "opencode-go-manu/qwen3.7-max",
+    "opencode-go-manu/qwen3.7-plus",
+    "opencode-go-manu/qwen3.8-max"
+  ],
+  "autoSwitchThreshold": 0
 }
