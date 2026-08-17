@@ -35,15 +35,21 @@ papercuts add --global "<global issue>" --tag tooling
 ```
 
 When moving an existing cut to the global file, move its `cut` record and every matching terminal
-record (`resolve` or `unresolvable`) together. Do not copy project-specific cuts into the global file.
+record (`resolve` or `unresolvable`) together. Older files may still contain `resolve` records;
+new resolutions remove the cut immediately. Do not copy project-specific cuts into the global file.
 
 ## Workflow
 
 1. Hit friction → `papercuts add "..." --tag docs|tooling|config|api|other`
 2. Keep working — filing takes one line
 3. Periodically: `papercuts list --format md` to review
-4. Fix the easy ones, resolve with `papercuts resolve <id>`
+4. Fix the easy ones, resolve with `papercuts resolve <id>`; this removes the cut line immediately
+   instead of appending a resolution record
 5. Mark an external or intentionally out-of-scope cut with `papercuts unresolvable <id> "<reason>"`.
    It disappears from the open list but remains in `--all`; `clean` preserves it for future context.
+
+`resolve` is intentionally destructive: it rewrites the JSONL file without the resolved `cut` record.
+`clean` removes legacy `cut`/`resolve` pairs left by older CLI versions and preserves
+`unresolvable` records.
 
 Each agent session should check open papercuts at the start and try to fix any that are quick wins.

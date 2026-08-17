@@ -33,6 +33,26 @@ function appendRecord(record: any): void {
   fs.appendFileSync(PAPERCUTS_FILE, JSON.stringify(record) + "\n", "utf-8");
 }
 
+function writeRecords(records: any[]): void {
+  const fs = require("fs");
+  const path = require("path");
+  const dir = path.dirname(PAPERCUTS_FILE);
+  if (dir !== ".") fs.mkdirSync(dir, { recursive: true });
+  const content = records.length > 0
+    ? records.map((record: any) => JSON.stringify(record)).join("\n") + "\n"
+    : "";
+  const temporaryFile = `${PAPERCUTS_FILE}.tmp-${process.pid}`;
+  fs.writeFileSync(temporaryFile, content, "utf-8");
+  fs.renameSync(temporaryFile, PAPERCUTS_FILE);
+}
+
+function removeCut(cutId: string): number {
+  const records = readRecords();
+  const keep = records.filter((record: any) => !(record.kind === "cut" && record.id === cutId));
+  writeRecords(keep);
+  return records.length - keep.length;
+}
+
 function terminalCutIds(records: any[]): Set<string> {
   return new Set(
     records
@@ -109,8 +129,8 @@ function cmdResolve(prefix: string): void {
     process.stderr.write(JSON.stringify(err) + "\n");
     process.exit(66);
   }
-  appendRecord({ kind: "resolve", id: shortId(), ts: iso(), cut_id: id });
-  const out = { ok: true, data: { cut_id: id } };
+  const removed = removeCut(id);
+  const out = { ok: true, data: { changed: removed > 0, cut_id: id } };
   process.stdout.write(JSON.stringify(out) + "\n");
 }
 
@@ -135,8 +155,7 @@ function cmdClean(): void {
     (r: any) => !(r.kind === "cut" && resolved.has(r.id)) && !(r.kind === "resolve" && resolved.has(r.cut_id))
   );
   const removed = records.length - keep.length;
-  const fs = require("fs");
-  fs.writeFileSync(PAPERCUTS_FILE, keep.map((r: any) => JSON.stringify(r)).join("\n") + "\n", "utf-8");
+  writeRecords(keep);
   const out = { ok: true, data: { removed, remaining: keep.length } };
   process.stdout.write(JSON.stringify(out) + "\n");
 }
@@ -147,9 +166,9 @@ function cmdSchema(): void {
     commands: {
       add: { args: ["text"], options: ["--global", "--tag", "--severity"], appends: true },
       list: { options: ["--global", "--format", "--all"], appends: false },
-      resolve: { args: ["id"], options: ["--global"], appends: true },
+      resolve: { args: ["id"], options: ["--global"], appends: false, removes: true },
       unresolvable: { args: ["id", "reason"], options: ["--global"], appends: true },
-      clean: { options: ["--global"], appends: true },
+      clean: { options: ["--global"], appends: false, removes: true },
       schema: { appends: false },
     },
     env: { PAPERCUTS_FILE: { default: ".papercuts.jsonl" }, PAPERCUTS_AGENT: {}, PAPERCUTS_NOW: {} },
