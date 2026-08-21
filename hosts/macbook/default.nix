@@ -29,6 +29,7 @@ in
           hm.coding
           hm.vscode
           hm.agents
+          hm.pi
           hm.tools
           hm.cliTools
           hm.work

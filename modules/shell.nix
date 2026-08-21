@@ -30,7 +30,6 @@ in
 
       bootstrap = {
         executorVersion = "1.5.35";
-        piVersion = "0.81.0";
         astOutlineVersion = "1.8.2";
         skepsisRevision = "cf699d2593e270fb8767daffcd9c46c8ce539f15";
         skepsisUrl = "https://github.com/oxidecomputer/skepsis.git";
@@ -179,11 +178,6 @@ in
           if ! command -v executor >/dev/null 2>&1 || [ "$(executor --version 2>/dev/null || true)" != "v${bootstrap.executorVersion}" ]; then
             pnpm remove -g executor >/dev/null 2>&1 || true
             pnpm add -g "executor@${bootstrap.executorVersion}"
-          fi
-
-          if ! command -v pi >/dev/null 2>&1 || [ "$(pi --version 2>/dev/null || true)" != "${bootstrap.piVersion}" ]; then
-            pnpm remove -g @earendil-works/pi-coding-agent >/dev/null 2>&1 || true
-            pnpm add -g "@earendil-works/pi-coding-agent@${bootstrap.piVersion}"
           fi
 
           ast_outline_version="$(ast-outline --version 2>/dev/null | head -n 1 || true)"
