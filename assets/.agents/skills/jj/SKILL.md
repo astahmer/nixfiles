@@ -51,6 +51,22 @@ jj squash --into <commit-id> --use-destination-message
 
 Re-scan after each; repeat until clean.
 
+## Linearizing an N-parent merge
+
+Keep one side as the spine; never hand-resolve inside the rewritten merge:
+
+```bash
+jj rebase -s <branchB-unique-start> -d <spine-tip>   # per parallel branch, oldest content first
+jj rebase -s <post-merge-line> -d <new-tip>          # move descendants over
+jj diff --from <new-tip> --to <original-merge-id> --stat   # MUST be empty before next step
+jj abandon <original-merge-commit-id>
+```
+
+Keep the original merge commit-id as **golden reference**: resolve every cascade
+conflict with `jj restore --from <golden> <paths>` + squash into the owning commit.
+The empty-diff gate is mandatory — rebasing across reformatted regions can silently
+drop whole blocks with zero conflict markers (only tree-equality detects it).
+
 ## Pruning strays safely
 
 For each candidate commit-id: assert non-ancestry first, then abandon.
@@ -71,3 +87,12 @@ Expect abandoned-head cascades: each prune can expose parents. Iterate to fixpoi
   escape filesets — don't pass bare paths to `jj file show`.
 - Empty `wip` heads multiply from workspace churn; sweep with a fixpoint loop
   excluding only the live branch ancestry.
+- Commit-ids go stale after every cascading rebase — fetch the target id
+  immediately before each squash/abandon; squashing into a superseded copy is a
+  silent no-op. Divergent change-ids also break revsets (`x & ::tip` errors);
+  disambiguate with `change_id(x) & ::tip` first.
+- Abandoning only a junk head exposes its parent as a new head — abandon the
+  whole orphan chain (`::<junk-head> & ~::<fork-point>`, by explicit commit ids).
+- `jj abandon` silently deletes bookmarks dangling on junk ("Deleted bookmarks:"
+  line). Recover what they pointed at via `jj op show <abandon-op>`, re-point at
+  the kept counterpart of the same change-id.
