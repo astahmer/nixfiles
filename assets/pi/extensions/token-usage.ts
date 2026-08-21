@@ -117,7 +117,17 @@ const startOfWeek = (date: Date): Date => {
 
 const startOfMonth = (date: Date): Date => new Date(date.getFullYear(), date.getMonth(), 1);
 
-const fmtTokens = (n: number): string => n.toLocaleString("en-US");
+const fmtTokens = (n: number): string => {
+	if (n < 1000) return String(n);
+	const units = ["K", "M", "B", "T"] as const;
+	let value = n;
+	let unitIndex = -1;
+	while (value >= 1000 && unitIndex < units.length - 1) {
+		value /= 1000;
+		unitIndex += 1;
+	}
+	return `${value >= 100 ? value.toFixed(0) : value.toFixed(1).replace(/\.0$/, "")}${units[unitIndex]}`;
+};
 
 const fmtCost = (n: number): string => `$${n.toFixed(2)}`;
 
@@ -179,7 +189,7 @@ export default function (pi: ExtensionAPI) {
 				const container = new Container();
 				container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
 				container.addChild(new Text(theme.fg("accent", theme.bold("Token usage")), 1, 0));
-				container.addChild(new Text(theme.fg("normal", lines.join("\n")), 0, 1));
+				container.addChild(new Text(theme.fg("text", lines.join("\n")), 0, 1));
 				container.addChild(new Text(theme.fg("dim", "any key to close"), 1, 0));
 				container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
 				return {
