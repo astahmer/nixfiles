@@ -58,33 +58,38 @@
     {
       home.packages = [ inputs.llm-agents.packages.${system}.pi ];
 
-      home.file = {
-        ".pi/agent/npm/package.json".source = ../assets/pi/npm/package.json;
-        ".pi/agent/npm/package-lock.json".source = ../assets/pi/npm/package-lock.json;
-        ".pi/agent/npm/node_modules".source = "${piPackages}/node_modules";
-        ".pi/agent/skills/emisoup-pen-export".source = ../assets/pi/skills/emisoup-pen-export;
-      }
-      // extensionFiles;
+      home.file = extensionFiles;
 
-      # pi mutates settings.json at runtime (lastChangelogVersion, model picks),
-      # so deploy it as a write-if-changed regular file instead of a store symlink.
-      home.activation.piSettings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        settings_file="${config.home.homeDirectory}/.pi/agent/settings.json"
-        candidate_settings="$settings_file.next.$$"
+      # pi stays fully mutable at runtime (pi install, model picks,
+      # lastChangelogVersion). Nix only seeds ~/.pi/agent/npm and settings.json
+      # when the pinned tree changes, detected via a stamp file holding the
+      # store path of the built node_modules. Day-to-day pi tweaks survive
+      # unrelated nixapply runs; bumping pins reseeds everything.
+      home.activation.piSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        agent_dir="${config.home.homeDirectory}/.pi/agent"
+        npm_dir="$agent_dir/npm"
+        stamp_file="$npm_dir/.nix-stamp"
+        wanted="${piPackages}/node_modules"
 
         export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin"
-        ${pkgs.coreutils}/bin/mkdir -p "${config.home.homeDirectory}/.pi/agent"
+        ${pkgs.coreutils}/bin/mkdir -p "$npm_dir"
 
-        ${pkgs.coreutils}/bin/cat > "$candidate_settings" <<'PI_SETTINGS_EOF'
+        current_stamp="$(${pkgs.coreutils}/bin/cat "$stamp_file" 2>/dev/null || true)"
+        if [ "$current_stamp" != "$wanted" ]; then
+          ${pkgs.coreutils}/bin/rm -rf "$npm_dir/node_modules" "$agent_dir/settings.json" \
+            "$npm_dir/package.json" "$npm_dir/package-lock.json"
+          ${pkgs.coreutils}/bin/cp -R "$wanted" "$npm_dir/node_modules"
+          ${pkgs.coreutils}/bin/chmod -R u+w "$npm_dir/node_modules"
+          ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package.json}" "$npm_dir/package.json"
+          ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package-lock.json}" "$npm_dir/package-lock.json"
+
+          ${pkgs.coreutils}/bin/cat > "$agent_dir/settings.json" <<'PI_SETTINGS_EOF'
 ${piSettingsJson}
 PI_SETTINGS_EOF
+          ${pkgs.coreutils}/bin/chmod 600 "$agent_dir/settings.json"
 
-        if [ ! -f "$settings_file" ] || ! ${pkgs.diffutils}/bin/cmp -s "$candidate_settings" "$settings_file"; then
-          ${pkgs.coreutils}/bin/mv "$candidate_settings" "$settings_file"
-          ${pkgs.coreutils}/bin/chmod 600 "$settings_file"
-          echo "pi: initialized or updated $settings_file" >&2
-        else
-          ${pkgs.coreutils}/bin/rm -f "$candidate_settings"
+          printf '%s' "$wanted" > "$stamp_file"
+          echo "pi: seeded pinned packages and settings from $wanted" >&2
         fi
       '';
     };
