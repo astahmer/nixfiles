@@ -14,7 +14,7 @@
         pname = "pi-packages";
         version = "0.84.2";
         src = ../assets/pi/npm;
-        npmDepsHash = "sha256-shMvU+ZMvoz1WQRttZFV9O6Zsgxf9rF+G/PsmR8nKW4=";
+        npmDepsHash = "sha256-55+++Jp3mawA7jEcpUpOBJhZ+Wic92Dc40MguYRQpPg=";
         dontNpmBuild = true;
         # node-pty ships platform prebuilds inside the tarball; no install
         # scripts are needed and skipping them keeps the build hermetic.
@@ -36,7 +36,6 @@
         packages = [
           "npm:@plannotator/pi-extension@0.27.6"
           "npm:pi-autoresearch@1.6.2"
-          "npm:pi-local-token-costs@1.3.0"
           "npm:pi-memory@0.4.2"
           "npm:pi-simplify@0.2.3"
           "npm:pi-subagents@0.53.0"
