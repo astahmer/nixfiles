@@ -1,0 +1,22 @@
+# Codex config template managed by nixfiles.
+# This template is used for first-run initialization only.
+# After that, user edits (from the app or CLI) are preserved.
+# nixapply only overwrites when the template changes.
+
+model = "opencode/ox-alpha-free"
+openai_base_url = "http://127.0.0.1:10100/v1"
+model_catalog_json = "HOME_DIR/.codex/opencodex-catalog.json"
+model_reasoning_effort = "max"
+service_tier = "default"
+personality = "pragmatic"
+autoupdate = false
+
+[features]
+hooks = true
+js_repl = false
+memories = true
+fast_mode = true
+
+[memories]
+generate_memories = true
+use_memories = true
