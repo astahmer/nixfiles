@@ -20,7 +20,7 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "drydock";
-  version = "0.1.5";
+  version = "0.1.7";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";
