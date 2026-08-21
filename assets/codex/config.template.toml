@@ -17,6 +17,20 @@ js_repl = false
 memories = true
 fast_mode = true
 
+[desktop]
+followUpQueueMode = "queue"
+localeOverride = "en-US"
+enabled-reasoning-efforts = [ "low", "medium", "high", "xhigh", "ultra", "max" ]
+preventSleepWhileRunning = true
+notifications-turn-mode = "always"
+appearanceTheme = "system"
+
 [memories]
 generate_memories = true
 use_memories = true
+
+[apps.connector_openai_hotline]
+enabled = false
+
+[apps.connector_openai_safety_settings]
+enabled = false
