@@ -48,17 +48,21 @@
 
       extensionNames = builtins.attrNames (builtins.readDir ../assets/pi/extensions);
 
-      extensionFiles = builtins.listToAttrs (
-        map (name: {
-          name = ".pi/agent/extensions/${name}";
-          value.source = ../assets/pi/extensions + "/${name}";
-        }) extensionNames
+      # Extensions are copied (not symlinked) into ~/.pi/agent/extensions so
+      # they stay writable at runtime. The assets tree wins on every apply;
+      # promote lasting tweaks back into assets/pi/extensions.
+      copyExtensionCmds = lib.concatStringsSep "\n" (
+        map (
+          name:
+          ''
+            ${pkgs.coreutils}/bin/rm -rf "$ext_dir/${name}"
+            ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/extensions + "/${name}"}" "$ext_dir/${name}"
+          ''
+        ) extensionNames
       );
     in
     {
       home.packages = [ inputs.llm-agents.packages.${system}.pi ];
-
-      home.file = extensionFiles;
 
       # pi stays fully mutable at runtime (pi install, model picks,
       # lastChangelogVersion). Nix only seeds ~/.pi/agent/npm and settings.json
@@ -91,6 +95,13 @@ PI_SETTINGS_EOF
           printf '%s' "$wanted" > "$stamp_file"
           echo "pi: seeded pinned packages and settings from $wanted" >&2
         fi
+      '';
+
+      home.activation.piExtensions = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        ext_dir="${config.home.homeDirectory}/.pi/agent/extensions"
+        ${pkgs.coreutils}/bin/mkdir -p "$ext_dir"
+
+        ${copyExtensionCmds}
       '';
     };
 }
