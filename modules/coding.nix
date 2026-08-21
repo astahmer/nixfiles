@@ -17,7 +17,7 @@ in
       modsearch = packages.modsearch;
       plannotator = packages.plannotator;
       codex = packages.codex;
-      opencode = packages.opencode;
+      opencode = packages.opencode2;
     in
     {
       home.packages = [

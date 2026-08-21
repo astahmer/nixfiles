@@ -10,7 +10,7 @@
     {
       home.activation.t3codeSeedProviderInstances = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         export PATH="${pkgs.nodejs_24}/bin:$PATH"
-        OPENCODE_BIN="${config.home.homeDirectory}/.nix-profile/bin/opencode" \
+        OPENCODE_BIN="${config.home.homeDirectory}/.nix-profile/bin/opencode2" \
           node "${../assets/t3code/seed-provider-instances.mjs}" || true
       '';
     };

@@ -99,6 +99,7 @@
             modsearch = pkgs'.callPackage ./packages/modsearch { };
             nub = inputs.nub.packages.${system}.default;
             opencode = inputs.llm-agents.packages.${system}.opencode;
+            opencode2 = inputs.llm-agents.packages.${system}.opencode2;
             opencodex = pkgs'.callPackage ./packages/opencodex { pkgs = pkgs'; };
             plannotator = pkgs'.callPackage ./packages/plannotator { pkgs = pkgs'; };
             ryu = pkgs'.callPackage ./packages/ryu { };
