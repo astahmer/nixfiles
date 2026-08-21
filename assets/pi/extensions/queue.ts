@@ -10,9 +10,14 @@
  * Per-message actions: Send now / Steer / Edit / Delete /
  * Delegate to subagent.
  * Bulk actions: Send all, Steer all, Delegate all, Clear all.
+ *
+ * In the manager: shift+up / shift+down move the selected item
+ * within the queue.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { DynamicBorder } from "@earendil-works/pi-coding-agent";
+import { Container, Key, matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -96,18 +101,83 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify("Queue is empty. Usage: /queue <message>", "info");
 			return;
 		}
-		const target = await ctx.ui.select("Queue manager", [
-			"(all messages)",
-			...queue.map((item) => `#${item.id} ${item.text.replace(/\s+/g, " ").slice(0, 70)}`),
-		]);
-		if (!target) return;
-		if (target === "(all messages)") {
+
+		let selectedIndex = 0;
+		const rowCount = queue.length + 1;
+
+		type ManagerResult = { action: "manageAll" } | { action: "manage"; item: QueuedMessage } | null;
+		const result = await ctx.ui.custom<ManagerResult>((tui, theme, _keybindings, done) => {
+			const container = new Container();
+			container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
+			const list = new Text("", 0, 0);
+			container.addChild(list);
+			container.addChild(new Text(theme.fg("dim", "↑↓ select · shift+↑/↓ move · enter actions · esc close"), 1, 0));
+			container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
+
+			const renderList = () => {
+				const rows = [theme.fg("accent", theme.bold(`Queue (${queue.length})`)), ""];
+				rows.push(truncateToWidth(`${selectedIndex === 0 ? "> " : "  "}${theme.fg("accent", "(all messages)")}`, 100));
+				queue.forEach((item, i) => {
+					const selected = i + 1 === selectedIndex;
+					const label = `#${item.id} ${item.text.replace(/\s+/g, " ").slice(0, 70)}`;
+					const styled = selected ? theme.fg("accent", label) : label;
+					rows.push(truncateToWidth(`${selected ? "> " : "  "}${styled}`, 100));
+				});
+				list.setText(rows.join("\n"));
+			};
+			renderList();
+
+			const move = (from: number, to: number) => {
+				if (to < 0 || to >= queue.length) return;
+				const [moved] = queue.splice(from, 1);
+				queue.splice(to, 0, moved!);
+				renderWidget(ctx);
+				tui.requestRender();
+			};
+
+			return {
+				render: (width) => container.render(width),
+				invalidate: () => container.invalidate(),
+				handleInput: (data) => {
+					if (matchesKey(data, Key.up) && selectedIndex > 0) {
+						selectedIndex--;
+					} else if (matchesKey(data, Key.down) && selectedIndex < rowCount - 1) {
+						selectedIndex++;
+					} else if (matchesKey(data, Key.shift("up"))) {
+						if (selectedIndex > 1) {
+							move(selectedIndex - 2, selectedIndex - 1);
+							selectedIndex--;
+						}
+					} else if (matchesKey(data, Key.shift("down"))) {
+						if (selectedIndex >= 1 && selectedIndex < rowCount - 1) {
+							move(selectedIndex - 1, selectedIndex);
+							selectedIndex++;
+						}
+					} else if (matchesKey(data, Key.enter)) {
+						done(
+							selectedIndex === 0
+								? { action: "manageAll" }
+								: { action: "manage", item: queue[selectedIndex - 1]! },
+						);
+						return;
+					} else if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
+						done(null);
+						return;
+					} else {
+						return;
+					}
+					renderList();
+					tui.requestRender();
+				},
+			};
+		});
+
+		if (!result) return;
+		if (result.action === "manageAll") {
 			await manageAll(ctx);
 			return;
 		}
-		const id = Number.parseInt(target.match(/^#(\d+)/)?.[1] ?? "", 10);
-		const item = queue.find((entry) => entry.id === id);
-		if (item) await manageMessage(item, ctx);
+		await manageMessage(result.item, ctx);
 	};
 
 	const manageMessage = async (item: QueuedMessage, ctx: ExtensionContext) => {
