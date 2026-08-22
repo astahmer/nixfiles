@@ -37,6 +37,11 @@
         '';
       };
       sshSecretConfig = ../.secret.json;
+      # Global-scope secret aliases are git-synced through the nixfiles clone.
+      # The symlink targets the clone (via the ~/.config/nixfiles stable
+      # pointer), NOT the read-only store, so `secret set --global` keeps
+      # working — edits land in the working copy and jj snapshots them.
+      globalSecretConfig = "$HOME/.config/nixfiles/assets/secret/global.json";
       sshPrivateKey = "${config.home.homeDirectory}/.ssh/id_ed25519";
       sshPublicKey = "${config.home.homeDirectory}/.ssh/id_ed25519.pub";
     in
@@ -66,6 +71,17 @@
           IdentityFile ~/.ssh/id_ed25519
           AddKeysToAgent yes
           ${lib.optionalString pkgs.stdenv.isDarwin "UseKeychain yes"}
+      '';
+
+      home.activation.secretGlobalConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        target="$HOME/.config/secret/config.json"
+        mkdir -p "$HOME/.config/secret"
+        if [ -f "$target" ] && [ ! -L "$target" ]; then
+          backup="$target.migrated.$(${pkgs.coreutils}/bin/date +%Y%m%d%H%M%S)"
+          mv "$target" "$backup"
+          echo "secret: machine-local global config moved to $backup" >&2
+        fi
+        ln -sfn "${globalSecretConfig}" "$target"
       '';
 
       home.activation.sshPrivateKey = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
