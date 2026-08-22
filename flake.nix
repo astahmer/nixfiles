@@ -96,6 +96,7 @@
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
             iris = pkgs'.callPackage ./packages/iris { };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
+            mise = pkgs'.callPackage ./packages/mise { };
             modlens = pkgs'.callPackage ./packages/modlens { };
             modsearch = pkgs'.callPackage ./packages/modsearch { };
             nub = inputs.nub.packages.${system}.default;
