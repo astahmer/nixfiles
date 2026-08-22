@@ -1,5 +1,7 @@
 import AppKit
 import Foundation
+import LocalAuthentication
+import Security
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -320,6 +322,8 @@ final class SecretBarModel: ObservableObject {
     @Published var importEnvironment = "prod"
     @Published var remoteMetadata: [String: RemoteEntryMetadata] = [:]
     @Published var remoteValidationComplete = false
+    @Published var revealingID: String?
+    @Published var revealedValue = ""
     @Published var remoteValidationInProgress = false
     @Published var healthCheckStatus: String?
 
@@ -384,48 +388,125 @@ final class SecretBarModel: ObservableObject {
 
     func refreshEverything() {
         setBusy(true)
-        refreshStatus()
-        if state == .unlocked {
-            // Pull the Bitwarden cache before indexing/health so items created
-            // on other machines are visible instead of reported missing.
-            _ = runSecret(["pull"], timeout: 60)
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            // Subprocess work stays off the main thread; only state updates
+            // hop back, so the UI never beachballs on the secret CLI.
+            let newState = Self.classifyVaultState(runSecret(["status", "--check"]))
+            if newState == .unlocked {
+                // Pull the Bitwarden cache before indexing/health so items
+                // created on other machines are visible instead of reported
+                // missing.
+                _ = runSecret(["pull"], timeout: 90)
+            }
+            let sessionAge = Self.readSessionAge()
+            await MainActor.run {
+                self.state = newState
+                self.refreshIndex()
+                self.refreshHistory()
+                self.sessionCreated = sessionAge
+                self.refreshHealth()
+                self.setBusy(false)
+            }
         }
-        refreshIndex()
-        refreshHistory()
-        refreshSessionAge()
-        refreshHealth()
-        setBusy(false)
     }
 
     func syncVault() {
         setBusy(true)
-        if state == .unlocked {
-            let result = runSecret(["pull"], timeout: 60)
-            if result.status == 0 {
-                flash("vault synced from server")
-            } else {
-                showError(title: "Vault sync failed", message: resultDetail(result, fallback: "secret pull failed"))
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let newState = Self.classifyVaultState(runSecret(["status", "--check"]))
+            let pulled: RunResult? = newState == .unlocked ? runSecret(["pull"], timeout: 90) : nil
+            await MainActor.run {
+                self.state = newState
+                if let pulled {
+                    if pulled.status == 0 {
+                        self.flash("vault synced from server")
+                    } else {
+                        self.showError(title: "Vault sync failed", message: self.resultDetail(pulled, fallback: "secret pull failed"))
+                    }
+                }
+                self.refreshIndex()
+                self.refreshHistory()
+                self.refreshHealth()
+                self.setBusy(false)
             }
         }
-        refreshStatus()
-        refreshIndex()
-        refreshHistory()
-        refreshHealth()
-        setBusy(false)
     }
 
     func refreshStatus() {
-        let result = runSecret(["status", "--check"])
-        let output = "\(result.stdout)\n\(result.stderr)".lowercased()
-        if result.status == 0 {
-            state = .unlocked
-        } else if output.contains("unauthenticated") {
-            state = .unauthenticated
-        } else if output.contains("locked") {
-            state = .locked
-        } else {
-            state = .error
+        Task.detached(priority: .utility) { [weak self] in
+            let newState = Self.classifyVaultState(runSecret(["status", "--check"]))
+            let model = self
+            await MainActor.run { model?.state = newState }
         }
+    }
+
+    nonisolated static func classifyVaultState(_ result: RunResult) -> VaultState {
+        let output = "\(result.stdout)\n\(result.stderr)".lowercased()
+        if result.status == 0 { return .unlocked }
+        if output.contains("unauthenticated") { return .unauthenticated }
+        if output.contains("locked") { return .locked }
+        return .error
+    }
+
+    nonisolated static func detailText(_ result: RunResult, fallback: String = "") -> String {
+        let detail = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !detail.isEmpty { return detail }
+        let output = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        return output.isEmpty ? fallback : output
+    }
+
+    nonisolated static func readSessionAge() -> String? {
+        let process = runProcess(
+            executable: "/usr/bin/security",
+            arguments: ["find-generic-password", "-a", "bitwarden-session", "-s", "secret-cli"],
+            timeout: 5
+        )
+        guard process.status == 0 else { return nil }
+        let pattern = #"20\d\d-\d\d-\d\d[ T]\d\d:\d\d:\d\d"#
+        guard let range = process.stdout.range(of: pattern, options: .regularExpression) else { return nil }
+        let raw = String(process.stdout[range]).replacingOccurrences(of: "T", with: " ")
+        let parser = DateFormatter()
+        parser.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        guard let date = parser.date(from: raw) else { return nil }
+        let display = DateFormatter()
+        display.dateFormat = "yyyy-MM-dd HH:mm"
+        return display.string(from: date)
+    }
+
+    /// Authenticates with LocalAuthentication in-process (the app owns a real
+    /// foreground GUI context, unlike CLI child processes of menu-bar/agent
+    /// apps where the Touch ID prompt fails silently) and reads the Touch
+    /// ID-gated session cache with the already-authenticated context, so the
+    /// user sees exactly one fingerprint prompt.
+    nonisolated static func readBiometricSessionToken(reason: String) -> String? {
+        let context = LAContext()
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { return nil }
+        let semaphore = DispatchSemaphore(value: 0)
+        var granted = false
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { ok, _ in
+            granted = ok
+            semaphore.signal()
+        }
+        _ = semaphore.wait(timeout: .now() + 60)
+        guard granted else { return nil }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "secret-cli",
+            kSecAttrAccount as String: "biometric-session",
+            kSecReturnData as String: true,
+            kSecUseAuthenticationContext as String: context,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data,
+              let token = String(data: data, encoding: .utf8),
+              !token.isEmpty else { return nil }
+        return token
     }
 
     func refreshIndex() {
@@ -661,73 +742,89 @@ final class SecretBarModel: ObservableObject {
         return Int(text[match].filter(\.isNumber)) ?? 0
     }
 
-    func refreshSessionAge() {
-        let process = runProcess(
-            executable: "/usr/bin/security",
-            arguments: ["find-generic-password", "-a", "bitwarden-session", "-s", "secret-cli"],
-            timeout: 5
-        )
-        guard process.status == 0 else {
-            sessionCreated = nil
-            return
-        }
-        let pattern = #"20\d\d-\d\d-\d\d[ T]\d\d:\d\d:\d\d"#
-        guard let range = process.stdout.range(of: pattern, options: .regularExpression) else { return }
-        let raw = String(process.stdout[range]).replacingOccurrences(of: "T", with: " ")
-        let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        guard let date = parser.date(from: raw) else { return }
-        let display = DateFormatter()
-        display.dateFormat = "yyyy-MM-dd HH:mm"
-        sessionCreated = display.string(from: date)
-    }
-
     func copy(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(scoped(["get", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd, allowBiometrics: true)
-        setBusy(false)
-        guard result.status == 0 else {
-            showError(title: "Could not copy \(entry.alias)", message: resultDetail(result, fallback: "secret get failed"))
-            return
+        let arguments = scoped(["get", "--copy", "--config", entry.configPath, entry.alias], entry)
+        let cwd = entry.cwd
+        let alias = entry.alias
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(arguments, cwd: cwd, allowBiometrics: true)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                guard result.status == 0 else {
+                    self.showError(title: "Could not copy \(alias)", message: Self.detailText(result, fallback: "secret get failed"))
+                    return
+                }
+                self.scheduleClipboardClear()
+                self.flash("copied \(alias)")
+                self.refreshHistory()
+            }
         }
-        scheduleClipboardClear()
-        flash("copied \(entry.alias)")
-        refreshHistory()
     }
 
-    func reveal(_ entry: AliasEntry) -> String? {
+    func beginReveal(_ entry: AliasEntry) {
+        revealingID = entry.id
+        revealedValue = ""
         setBusy(true)
-        let result = runSecret(scoped(["get", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd, allowBiometrics: true)
-        setBusy(false)
-        guard result.status == 0 else {
-            showError(title: "Could not reveal \(entry.alias)", message: resultDetail(result, fallback: "secret get failed"))
-            return nil
+        let arguments = scoped(["get", "--config", entry.configPath, entry.alias], entry)
+        let cwd = entry.cwd
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(arguments, cwd: cwd, allowBiometrics: true)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                guard self.revealingID == entry.id else { return }
+                self.revealedValue = result.status == 0
+                    ? result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                    : ""
+            }
         }
-        return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func endReveal(_ entry: AliasEntry) {
+        guard revealingID == entry.id else { return }
+        revealingID = nil
+        revealedValue = ""
     }
 
     func openSource(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(scoped(["source", "--config", entry.configPath, entry.alias, "--open"], entry), cwd: entry.cwd)
-        setBusy(false)
-        if result.status == 0 {
-            flash("opened source for \(entry.alias)")
-        } else {
-            showError(title: "No source for \(entry.alias)", message: resultDetail(result, fallback: "This item has no source URL."))
+        let arguments = scoped(["source", "--config", entry.configPath, entry.alias, "--open"], entry)
+        let cwd = entry.cwd
+        let alias = entry.alias
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(arguments, cwd: cwd)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                if result.status == 0 {
+                    self.flash("opened source for \(alias)")
+                } else {
+                    self.showError(title: "No source for \(alias)", message: Self.detailText(result, fallback: "This item has no source URL."))
+                }
+            }
         }
     }
 
     func rotate(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(scoped(["rotate", "--config", entry.configPath, entry.alias, "--force"], entry), cwd: entry.cwd, timeout: 60, allowBiometrics: true)
-        setBusy(false)
-        if result.status == 0 {
-            scheduleClipboardClear()
-            flash("rotated \(entry.alias) — new value copied")
-            refreshHistory()
-        } else {
-            showError(title: "Could not rotate \(entry.alias)", message: resultDetail(result, fallback: "secret rotate failed"))
+        let arguments = scoped(["rotate", "--config", entry.configPath, entry.alias, "--force"], entry)
+        let cwd = entry.cwd
+        let alias = entry.alias
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(arguments, cwd: cwd, timeout: 90, allowBiometrics: true)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                if result.status == 0 {
+                    self.scheduleClipboardClear()
+                    self.flash("rotated \(alias) — new value copied")
+                    self.refreshHistory()
+                } else {
+                    self.showError(title: "Could not rotate \(alias)", message: Self.detailText(result, fallback: "secret rotate failed"))
+                }
+            }
         }
     }
 
@@ -741,17 +838,20 @@ final class SecretBarModel: ObservableObject {
         itemType: SecretItemType,
         expiresAt: String,
         environment: String,
-        tags: [String]
-    ) -> Bool {
+        tags: [String],
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
         let cleanAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanAlias.isEmpty else {
             showError(title: "Cannot create secret", message: "Enter an alias.")
-            return false
+            completion(false)
+            return
         }
         guard !cleanValue.isEmpty else {
             showError(title: "Cannot create secret", message: "Enter a value.")
-            return false
+            completion(false)
+            return
         }
         var arguments = ["set", cleanAlias, "--type", itemType.rawValue]
         let cleanEnvironment = environment.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -767,17 +867,26 @@ final class SecretBarModel: ObservableObject {
         if !expiresAt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { arguments += ["--expires-at", expiresAt] }
         let cleanTags = tags.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         if !cleanTags.isEmpty { arguments += ["--tags", cleanTags.joined(separator: ",")] }
+        let finalArguments = arguments
 
         setBusy(true)
-        let result = runSecret(arguments, cwd: project.dir, input: cleanValue, timeout: 60, allowBiometrics: true)
-        setBusy(false)
-        guard result.status == 0 else {
-            showError(title: "Could not create \(cleanAlias)", message: resultDetail(result, fallback: "secret set failed"))
-            return false
+        let dir = project.dir
+        let scopeName = project.isGlobal ? "global" : project.name
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(finalArguments, cwd: dir, input: cleanValue, timeout: 90, allowBiometrics: true)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                guard result.status == 0 else {
+                    self.showError(title: "Could not create \(cleanAlias)", message: Self.detailText(result, fallback: "secret set failed"))
+                    completion(false)
+                    return
+                }
+                self.flash("created \(cleanAlias) in \(scopeName)")
+                self.refreshEverything()
+                completion(true)
+            }
         }
-        flash("created \(cleanAlias) in \(project.isGlobal ? "global" : project.name)")
-        refreshEverything()
-        return true
     }
 
     func prepareImport(url: URL, project: Project, environment: String) {
@@ -819,25 +928,33 @@ final class SecretBarModel: ObservableObject {
         let candidates = importCandidates
         let existing = Set(entries.filter { $0.project == project.name && $0.environment == importEnvironment }.map(\.alias))
         let skipped = candidates.filter { existing.contains($0.alias) }.map(\.alias)
-        var failures: [String] = []
-        setBusy(true)
-        for candidate in candidates where !existing.contains(candidate.alias) {
-            var arguments = ["set", candidate.alias]
-            if project.isGlobal { arguments.append("--global") } else { arguments += ["--config", project.configPath] }
-            if importEnvironment != "prod" { arguments += ["--env", importEnvironment] }
-            let result = runSecret(arguments, cwd: project.dir, input: candidate.value, timeout: 60)
-            if result.status != 0 { failures.append("\(candidate.alias): \(resultDetail(result, fallback: "failed"))") }
-        }
-        setBusy(false)
         importCandidates = []
         importProject = nil
-        refreshEverything()
-        if !failures.isEmpty {
-            showError(title: "Import completed with errors", message: ((skipped.isEmpty ? [] : ["Skipped existing aliases: \(skipped.joined(separator: ", "))"]) + failures).joined(separator: "\n"))
-        } else if !skipped.isEmpty {
-            flash("imported new aliases; skipped existing: \(skipped.joined(separator: ", "))")
-        } else {
-            flash("imported \(candidates.count) aliases")
+        setBusy(true)
+        let environment = importEnvironment
+        let dir = project.dir
+        Task.detached(priority: .userInitiated) { [weak self] in
+            var builtFailures: [String] = []
+            for candidate in candidates where !existing.contains(candidate.alias) {
+                var arguments = ["set", candidate.alias]
+                if project.isGlobal { arguments.append("--global") } else { arguments += ["--config", project.configPath] }
+                if environment != "prod" { arguments += ["--env", environment] }
+                let result = runSecret(arguments, cwd: dir, input: candidate.value, timeout: 90)
+                if result.status != 0 { builtFailures.append("\(candidate.alias): \(Self.detailText(result, fallback: "failed"))") }
+            }
+            let failures = builtFailures
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                self.refreshEverything()
+                if !failures.isEmpty {
+                    self.showError(title: "Import completed with errors", message: ((skipped.isEmpty ? [] : ["Skipped existing aliases: \(skipped.joined(separator: ", "))"]) + failures).joined(separator: "\n"))
+                } else if !skipped.isEmpty {
+                    self.flash("imported new aliases; skipped existing: \(skipped.joined(separator: ", "))")
+                } else {
+                    self.flash("imported \(candidates.count) aliases")
+                }
+            }
         }
     }
 
@@ -849,8 +966,9 @@ final class SecretBarModel: ObservableObject {
         notes: String?,
         tags: [String],
         clearSource: Bool,
-        clearNotes: Bool
-    ) -> Bool {
+        clearNotes: Bool,
+        completion: @escaping @MainActor (Bool) -> Void
+    ) {
         let cleanName = itemName.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanSource = source?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -860,7 +978,8 @@ final class SecretBarModel: ObservableObject {
         let hasChanges = !cleanName.isEmpty || !cleanValue.isEmpty || tagsChanged || clearSource || cleanSource?.isEmpty == false || clearNotes || cleanNotes?.isEmpty == false
         guard hasChanges else {
             showError(title: "Nothing to save", message: "Enter a change first.")
-            return false
+            completion(false)
+            return
         }
         var arguments = scoped(["edit", entry.alias, "--config", entry.configPath, "--force"], entry)
         if !cleanName.isEmpty { arguments += ["--name", itemName] }
@@ -868,61 +987,102 @@ final class SecretBarModel: ObservableObject {
         if clearSource || cleanSource?.isEmpty == false { arguments += ["--source", clearSource ? "" : source ?? ""] }
         if clearNotes || cleanNotes?.isEmpty == false { arguments += ["--notes", clearNotes ? "" : notes ?? ""] }
         if tagsChanged { arguments += ["--tags", cleanTags.joined(separator: ",")] }
+        let finalArguments = arguments
 
         setBusy(true)
-        let result = runSecret(arguments, cwd: entry.cwd, input: cleanValue.isEmpty ? nil : cleanValue, timeout: 60, allowBiometrics: true)
-        setBusy(false)
-        guard result.status == 0 else {
-            showError(title: "Could not edit \(entry.alias)", message: resultDetail(result, fallback: "secret edit failed"))
-            return false
+        let cwd = entry.cwd
+        let alias = entry.alias
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(finalArguments, cwd: cwd, input: cleanValue.isEmpty ? nil : cleanValue, timeout: 90, allowBiometrics: true)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                guard result.status == 0 else {
+                    self.showError(title: "Could not edit \(alias)", message: Self.detailText(result, fallback: "secret edit failed"))
+                    completion(false)
+                    return
+                }
+                self.flash("updated \(alias)")
+                self.refreshEverything()
+                completion(true)
+            }
         }
-        flash("updated \(entry.alias)")
-        refreshEverything()
-        return true
     }
 
     func unlockWithTouchID() {
         setBusy(true)
-        // `secret unlock --helper` verifies the token against bw itself and
-        // persists it (biometric cache + daemon when available). A follow-up
-        // `status --check` here would report locked again whenever only the
-        // cache persisted, so the exit status is the source of truth.
-        let result = runSecret(["unlock", "--helper"], timeout: 90)
-        setBusy(false)
-        if result.status == 0 {
-            flash("unlocked with Touch ID")
-            refreshEverything()
-        } else {
-            showError(title: "Touch ID unlock failed", message: resultDetail(result, fallback: "Touch ID authenticated, but Bitwarden is still locked."))
-            refreshStatus()
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            // Authenticate here in the app (a real foreground GUI context)
+            // instead of inside the spawned CLI: LAContext prompts do not
+            // present reliably for child processes of menu-bar/agent apps —
+            // that is why Touch ID unlock appeared to do nothing.
+            guard let token = Self.readBiometricSessionToken(reason: "Unlock SecretBar secrets") else {
+                await MainActor.run {
+                    self.setBusy(false)
+                    self.showError(
+                        title: "Touch ID unavailable",
+                        message: "No usable Touch ID session cache was found. Unlock with your master password once — that refreshes both caches so Touch ID works afterwards."
+                    )
+                    self.refreshStatus()
+                }
+                return
+            }
+            let result = runSecret(["unlock", "--session-stdin"], input: token, timeout: 90)
+            let verified = result.status == 0
+                && runSecret(["status", "--check"], timeout: 30).status == 0
+            await MainActor.run {
+                self.setBusy(false)
+                if verified {
+                    self.flash("unlocked with Touch ID")
+                    self.refreshEverything()
+                } else {
+                    self.showError(title: "Touch ID unlock failed", message: Self.detailText(result, fallback: "The cached session was rejected. Unlock with your master password once to refresh it."))
+                    self.refreshStatus()
+                }
+            }
         }
     }
 
     func copyTOTP(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(scoped(["totp", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd, allowBiometrics: true)
-        setBusy(false)
-        if result.status == 0 {
-            scheduleClipboardClear()
-            flash("copied current TOTP for \(entry.alias)")
-            refreshHistory()
-        } else {
-            showError(title: "Could not copy TOTP", message: resultDetail(result, fallback: "secret totp failed"))
+        let arguments = scoped(["totp", "--copy", "--config", entry.configPath, entry.alias], entry)
+        let cwd = entry.cwd
+        let alias = entry.alias
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(arguments, cwd: cwd, allowBiometrics: true)
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                if result.status == 0 {
+                    self.scheduleClipboardClear()
+                    self.flash("copied current TOTP for \(alias)")
+                    self.refreshHistory()
+                } else {
+                    self.showError(title: "Could not copy TOTP", message: Self.detailText(result, fallback: "secret totp failed"))
+                }
+            }
         }
     }
 
     func unlockWithPassword(_ password: String) {
         guard !password.isEmpty else { return }
         setBusy(true)
-        let result = runSecret(["unlock", "--store"], input: password, timeout: 60)
-        let verified = result.status == 0 && runSecret(["status", "--check"], timeout: 30).status == 0
-        setBusy(false)
-        if verified {
-            flash("unlocked; session stored")
-            refreshEverything()
-        } else {
-            showError(title: "Password unlock failed", message: resultDetail(result, fallback: "Bitwarden is still locked."))
-            refreshStatus()
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let result = runSecret(["unlock", "--store"], input: password, timeout: 120)
+            let verified = result.status == 0
+                && runSecret(["status", "--check"], timeout: 30).status == 0
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.setBusy(false)
+                if verified {
+                    self.flash("unlocked; session stored")
+                    self.refreshEverything()
+                } else {
+                    self.showError(title: "Password unlock failed", message: Self.detailText(result, fallback: "Bitwarden is still locked."))
+                    self.refreshStatus()
+                }
+            }
         }
     }
 
@@ -1394,8 +1554,10 @@ struct SecretEditSheet: View {
                     Spacer()
                     Button("Cancel") { onDismiss() }
                     Button("Save changes") {
-                        if model.edit(entry, itemName: itemName, value: value, source: source, notes: notes, tags: tags, clearSource: clearSource, clearNotes: clearNotes) {
-                            onDismiss()
+                        model.edit(entry, itemName: itemName, value: value, source: source, notes: notes, tags: tags, clearSource: clearSource, clearNotes: clearNotes) { updated in
+                            if updated {
+                                onDismiss()
+                            }
                         }
                     }
                     .keyboardShortcut(.defaultAction)
@@ -1633,8 +1795,6 @@ struct SecretBarView: View {
     @State private var editing: AliasEntry?
     @State private var selectedEntryID: String?
     @State private var hoveredEntryID: String?
-    @State private var revealingID: String?
-    @State private var revealedValue = ""
     @State private var showPasswordSheet = false
     @State private var selectedProjectID = ""
     @State private var createAlias = ""
@@ -2086,7 +2246,8 @@ struct SecretBarView: View {
                     model.showError(title: "Cannot create secret", message: "No project scope is available.")
                     return
                 }
-                if model.create(alias: createAlias, project: project, value: createValue, itemName: createItemName, source: createSource, notes: createNotes, itemType: createType, expiresAt: createExpiresAt, environment: createEnvironment, tags: createTags) {
+                model.create(alias: createAlias, project: project, value: createValue, itemName: createItemName, source: createSource, notes: createNotes, itemType: createType, expiresAt: createExpiresAt, environment: createEnvironment, tags: createTags) { created in
+                    guard created else { return }
                     createAlias = ""
                     createItemName = ""
                     createValue = ""
@@ -2175,7 +2336,11 @@ struct SecretBarView: View {
                             ForEach(recentEntries) { entryCard($0) }
                         }
                         if !allEntries.isEmpty {
-                            sectionHeader("All secrets", count: allEntries.count, icon: "square.stack.3d.up.fill")
+                            sectionHeader(
+                                pinnedEntries.isEmpty && recentEntries.isEmpty ? "All secrets" : "Everything else",
+                                count: allEntries.count,
+                                icon: "square.stack.3d.up.fill"
+                            )
                             ForEach(allEntries) { entryCard($0) }
                         }
                         if pinnedEntries.isEmpty && recentEntries.isEmpty && allEntries.isEmpty {
@@ -2520,8 +2685,8 @@ struct SecretBarView: View {
             }
 
             Spacer(minLength: 4)
-            if model.holdToReveal, revealingID == entry.id {
-                Text(revealedValue)
+            if model.holdToReveal, model.revealingID == entry.id {
+                Text(model.revealedValue)
                     .font(.system(.caption, design: .monospaced))
                     .lineLimit(1)
                     .textSelection(.disabled)
@@ -2581,11 +2746,9 @@ struct SecretBarView: View {
         .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 24, pressing: { isPressing in
             guard model.holdToReveal else { return }
             if isPressing {
-                revealingID = entry.id
-                revealedValue = model.reveal(entry) ?? ""
-            } else if revealingID == entry.id {
-                revealingID = nil
-                revealedValue = ""
+                model.beginReveal(entry)
+            } else if model.revealingID == entry.id {
+                model.endReveal(entry)
             }
         }, perform: {})
         .onTapGesture { selectedEntryID = entry.id }
