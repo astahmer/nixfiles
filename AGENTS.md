@@ -49,6 +49,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 
 ## Notes for Agents
 
+- Global-scope secret aliases (the `secret` CLI's global config) live in the git-synced file `assets/secret/global.json`; Home Manager symlinks `~/.config/secret/config.json` to it through the `~/.config/nixfiles` stable pointer, so `secret set --global` edits land in the working copy and jj snapshots them — push so other machines see new aliases. Machine-specific overrides belong in `.secret.local.json`.
 - `assets/.agents` is the source of the global skills tree; update it when adding or changing global skills.
 - Read `AGENTS_TASTE.md` for undocumented user preferences before making changes. After completing a task, update it only when the session revealed a new durable preference not already documented in the repository instructions.
 - Agent-made `jj` revisions carry a session deeplink and a short summary of the initial prompt in the description body (after the first line), prefixed with `prompt_summary:`; keep the first line a lowercase concise title. Use the harness active at request time, not a fixed one: Codex desktop links `codex://threads/<thread-id>` via `$CODEX_THREAD_ID`; T3 Code/OpenCode and other harnesses use their own session id/link from their session store. Summarize the prompt in 1-2 lines after `prompt_summary:`; the deeplink preserves full context.

@@ -52,7 +52,8 @@ func runProcess(
     arguments: [String],
     cwd: String? = nil,
     input: String? = nil,
-    timeout: TimeInterval = 45
+    timeout: TimeInterval = 45,
+    extraEnvironment: [String: String] = [:]
 ) -> RunResult {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: executable)
@@ -65,6 +66,9 @@ func runProcess(
     let home = homeDirectory()
     environment["HOME"] = home
     environment["PATH"] = "\(home)/.nix-profile/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    for (key, value) in extraEnvironment {
+        environment[key] = value
+    }
     process.environment = environment
 
     let output = Pipe()
@@ -107,9 +111,20 @@ func runSecret(
     _ arguments: [String],
     cwd: String? = nil,
     input: String? = nil,
-    timeout: TimeInterval = 45
+    timeout: TimeInterval = 45,
+    allowBiometrics: Bool = false
 ) -> RunResult {
-    runProcess(executable: secretBin(), arguments: arguments, cwd: cwd, input: input, timeout: timeout)
+    // SECRET_BIOMETRIC_UNLOCK lets the CLI fall back to the Touch ID-gated
+    // session cache when no stored session resolves. Only set on user-
+    // initiated actions so background timers never trigger a prompt.
+    runProcess(
+        executable: secretBin(),
+        arguments: arguments,
+        cwd: cwd,
+        input: input,
+        timeout: timeout,
+        extraEnvironment: allowBiometrics ? ["SECRET_BIOMETRIC_UNLOCK": "1"] : [:]
+    )
 }
 
 func runTool(
@@ -277,6 +292,7 @@ private enum PreferenceKey {
     static let holdToReveal = "secretbar.holdToReveal"
     static let clipboardClearSeconds = "secretbar.clipboardClearSeconds"
     static let expiryWarningDays = "secretbar.expiryWarningDays"
+    static let showInMenuBar = "secretbar.showInMenuBar"
 }
 
 // MARK: - Model
@@ -333,6 +349,9 @@ final class SecretBarModel: ObservableObject {
         return value == 0 ? 14 : value
     }() {
         didSet { UserDefaults.standard.set(expiryWarningDays, forKey: PreferenceKey.expiryWarningDays) }
+    }
+    @Published var showInMenuBar: Bool = SecretBarModel.preferenceBool(PreferenceKey.showInMenuBar, defaultValue: true) {
+        didSet { UserDefaults.standard.set(showInMenuBar, forKey: PreferenceKey.showInMenuBar) }
     }
 
     private var statusTimer: Timer?
@@ -666,7 +685,7 @@ final class SecretBarModel: ObservableObject {
 
     func copy(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(scoped(["get", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd)
+        let result = runSecret(scoped(["get", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd, allowBiometrics: true)
         setBusy(false)
         guard result.status == 0 else {
             showError(title: "Could not copy \(entry.alias)", message: resultDetail(result, fallback: "secret get failed"))
@@ -679,7 +698,7 @@ final class SecretBarModel: ObservableObject {
 
     func reveal(_ entry: AliasEntry) -> String? {
         setBusy(true)
-        let result = runSecret(scoped(["get", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd)
+        let result = runSecret(scoped(["get", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd, allowBiometrics: true)
         setBusy(false)
         guard result.status == 0 else {
             showError(title: "Could not reveal \(entry.alias)", message: resultDetail(result, fallback: "secret get failed"))
@@ -701,7 +720,7 @@ final class SecretBarModel: ObservableObject {
 
     func rotate(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(scoped(["rotate", "--config", entry.configPath, entry.alias, "--force"], entry), cwd: entry.cwd, timeout: 60)
+        let result = runSecret(scoped(["rotate", "--config", entry.configPath, entry.alias, "--force"], entry), cwd: entry.cwd, timeout: 60, allowBiometrics: true)
         setBusy(false)
         if result.status == 0 {
             scheduleClipboardClear()
@@ -750,7 +769,7 @@ final class SecretBarModel: ObservableObject {
         if !cleanTags.isEmpty { arguments += ["--tags", cleanTags.joined(separator: ",")] }
 
         setBusy(true)
-        let result = runSecret(arguments, cwd: project.dir, input: cleanValue, timeout: 60)
+        let result = runSecret(arguments, cwd: project.dir, input: cleanValue, timeout: 60, allowBiometrics: true)
         setBusy(false)
         guard result.status == 0 else {
             showError(title: "Could not create \(cleanAlias)", message: resultDetail(result, fallback: "secret set failed"))
@@ -851,7 +870,7 @@ final class SecretBarModel: ObservableObject {
         if tagsChanged { arguments += ["--tags", cleanTags.joined(separator: ",")] }
 
         setBusy(true)
-        let result = runSecret(arguments, cwd: entry.cwd, input: cleanValue.isEmpty ? nil : cleanValue, timeout: 60)
+        let result = runSecret(arguments, cwd: entry.cwd, input: cleanValue.isEmpty ? nil : cleanValue, timeout: 60, allowBiometrics: true)
         setBusy(false)
         guard result.status == 0 else {
             showError(title: "Could not edit \(entry.alias)", message: resultDetail(result, fallback: "secret edit failed"))
@@ -864,10 +883,13 @@ final class SecretBarModel: ObservableObject {
 
     func unlockWithTouchID() {
         setBusy(true)
-        let result = runSecret(["unlock", "--helper"], timeout: 60)
-        let verified = result.status == 0 && runSecret(["status", "--check"], timeout: 30).status == 0
+        // `secret unlock --helper` verifies the token against bw itself and
+        // persists it (biometric cache + daemon when available). A follow-up
+        // `status --check` here would report locked again whenever only the
+        // cache persisted, so the exit status is the source of truth.
+        let result = runSecret(["unlock", "--helper"], timeout: 90)
         setBusy(false)
-        if verified {
+        if result.status == 0 {
             flash("unlocked with Touch ID")
             refreshEverything()
         } else {
@@ -878,7 +900,7 @@ final class SecretBarModel: ObservableObject {
 
     func copyTOTP(_ entry: AliasEntry) {
         setBusy(true)
-        let result = runSecret(scoped(["totp", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd)
+        let result = runSecret(scoped(["totp", "--copy", "--config", entry.configPath, entry.alias], entry), cwd: entry.cwd, allowBiometrics: true)
         setBusy(false)
         if result.status == 0 {
             scheduleClipboardClear()
@@ -1602,6 +1624,7 @@ struct SecretBarSurface<Content: View>: View {
 
 struct SecretBarView: View {
     @EnvironmentObject var model: SecretBarModel
+    @Environment(\.openWindow) private var openWindow
     @State private var tab: SecretBarTab = .secrets
     @State private var query = ""
     @State private var listFilter: SecretListFilter = .all
@@ -1818,6 +1841,12 @@ struct SecretBarView: View {
             .help("Pull from Bitwarden and refresh")
             .disabled(model.busy)
             Menu {
+                Button {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                } label: {
+                    Label("Open Main Window", systemImage: "macwindow")
+                }
                 Button { model.syncVault() } label: {
                     Label("Sync vault from server", systemImage: "arrow.triangle.2.circlepath")
                 }
@@ -2329,6 +2358,10 @@ struct SecretBarView: View {
                         .foregroundStyle(.secondary)
                 }
                 settingsSection("Appearance and shortcuts") {
+                    settingToggle("Show menu bar icon", isOn: Binding(get: { model.showInMenuBar }, set: { model.showInMenuBar = $0 }))
+                    Text("When off, open SecretBar from the Dock or Launchpad. Changing this takes effect on next launch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     settingToggle("Enable pinned favorites", isOn: Binding(get: { model.pinsEnabled }, set: { model.pinsEnabled = $0 }))
                     settingToggle("Enable keyboard shortcuts", isOn: Binding(get: { model.shortcutsEnabled }, set: { model.shortcutsEnabled = $0 }))
                     Text("Shortcuts apply while SecretBar is open: ⌘1 Create, ⌘2 My Secrets, ⌘3 Settings.")
@@ -2632,13 +2665,62 @@ struct SecretBarView: View {
 final class SecretBarAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         SecretBarModel.shared.start()
+        // Launchd/activation autostarts pass SECRETBAR_AUTOSTART=1; the app
+        // should sit in the background then, not throw a window on screen.
+        // A manual `open` (Dock, Spotlight, `secretbar`) keeps the window up.
+        if ProcessInfo.processInfo.environment["SECRETBAR_AUTOSTART"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                NSApp.hide(nil)
+            }
+        }
     }
 }
 
 @main
-struct SecretBarApp: App {
+enum SecretBarEntry {
+    // The menu bar icon toggle needs a relaunch because SwiftUI Scene bodies
+    // cannot conditionally include a MenuBarExtra reliably across toolchains;
+    // choosing the layout here keeps each scene list unconditional.
+    static func main() {
+        let defaults = UserDefaults.standard
+        let showInMenuBar = defaults.object(forKey: "secretbar.showInMenuBar") == nil
+            ? true
+            : defaults.bool(forKey: "secretbar.showInMenuBar")
+        if showInMenuBar {
+            SecretBarCombinedApp.main()
+        } else {
+            SecretBarWindowApp.main()
+        }
+    }
+}
+
+private struct SecretBarWindowApp: App {
     @NSApplicationDelegateAdaptor(SecretBarAppDelegate.self) private var appDelegate
     @StateObject private var model = SecretBarModel.shared
+
+    var body: some Scene {
+        Window("SecretBar", id: "main") {
+            SecretBarView().environmentObject(model)
+        }
+        .defaultSize(width: 640, height: 720)
+    }
+}
+
+private struct SecretBarCombinedApp: App {
+    @NSApplicationDelegateAdaptor(SecretBarAppDelegate.self) private var appDelegate
+    @StateObject private var model = SecretBarModel.shared
+
+    var body: some Scene {
+        Window("SecretBar", id: "main") {
+            SecretBarView().environmentObject(model)
+        }
+        .defaultSize(width: 640, height: 720)
+        SecretMenuBarScene(model: model)
+    }
+}
+
+struct SecretMenuBarScene: Scene {
+    let model: SecretBarModel
 
     var body: some Scene {
         MenuBarExtra {

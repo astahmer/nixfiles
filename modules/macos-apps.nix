@@ -16,7 +16,9 @@
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
         /usr/bin/pkill -TERM -f '/Applications/SecretBar.app/Contents/MacOS/secretbar' 2>/dev/null || true
         /bin/sleep 1
-        exec /usr/bin/open "$HOME/Applications/SecretBar.app"
+        # SECRETBAR_AUTOSTART makes the app hide its window after launch; it
+        # is a background resident at login/activation time only.
+        exec /usr/bin/open --env SECRETBAR_AUTOSTART=1 "$HOME/Applications/SecretBar.app"
       '';
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
