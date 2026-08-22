@@ -104,38 +104,38 @@
 
       # opencode2 config: use activation script to preserve user edits from app updates
       home.activation.opencode2Config = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-                config_file="${config.home.homeDirectory}/.config/opencode/opencode.json"
-                candidate_config="$config_file.next.$$"
-                current_sorted="$config_file.current.sorted"
-                candidate_sorted="$candidate_config.sorted"
+        config_file="${config.home.homeDirectory}/.config/opencode/opencode.json"
+        candidate_config="$config_file.next.$$"
+        current_sorted="$config_file.current.sorted"
+        candidate_sorted="$candidate_config.sorted"
 
-                export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${pkgs.jq}/bin:/usr/bin:/bin"
-                ${pkgs.coreutils}/bin/mkdir -p "${config.home.homeDirectory}/.config/opencode"
+        export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${pkgs.jq}/bin:/usr/bin:/bin"
+        ${pkgs.coreutils}/bin/mkdir -p "${config.home.homeDirectory}/.config/opencode"
 
-                # Write the nix-managed config to a candidate file
-                ${pkgs.coreutils}/bin/cat > "$candidate_config" <<'OPENCODE_CONFIG_EOF'
-                ${opencodeConfigJson}
-        OPENCODE_CONFIG_EOF
+        # Write the nix-managed config to a candidate file
+        ${pkgs.coreutils}/bin/cat > "$candidate_config" <<'OPENCODE_CONFIG_EOF'
+        ${opencodeConfigJson}
+OPENCODE_CONFIG_EOF
 
-                # Only write if config doesn't exist or has changed
-                config_changed=0
-                if [ ! -f "$config_file" ]; then
-                  config_changed=1
-                else
-                  ${pkgs.jq}/bin/jq -S . "$config_file" > "$current_sorted" 2>/dev/null || config_changed=1
-                  ${pkgs.jq}/bin/jq -S . "$candidate_config" > "$candidate_sorted" 2>/dev/null || config_changed=1
-                  if [ "$config_changed" -eq 0 ] && ! ${pkgs.diffutils}/bin/cmp -s "$current_sorted" "$candidate_sorted"; then
-                    config_changed=1
-                  fi
-                fi
+        # Only write if config doesn't exist or has changed
+        config_changed=0
+        if [ ! -f "$config_file" ]; then
+          config_changed=1
+        else
+          ${pkgs.jq}/bin/jq -S . "$config_file" > "$current_sorted" 2>/dev/null || config_changed=1
+          ${pkgs.jq}/bin/jq -S . "$candidate_config" > "$candidate_sorted" 2>/dev/null || config_changed=1
+          if [ "$config_changed" -eq 0 ] && ! ${pkgs.diffutils}/bin/cmp -s "$current_sorted" "$candidate_sorted"; then
+            config_changed=1
+          fi
+        fi
 
-                if [ "$config_changed" -eq 1 ]; then
-                  ${pkgs.coreutils}/bin/cp "$candidate_config" "$config_file"
-                  ${pkgs.coreutils}/bin/chmod 600 "$config_file"
-                  echo "opencode2: initialized or updated $config_file" >&2
-                fi
+        if [ "$config_changed" -eq 1 ]; then
+          ${pkgs.coreutils}/bin/cp "$candidate_config" "$config_file"
+          ${pkgs.coreutils}/bin/chmod 600 "$config_file"
+          echo "opencode2: initialized or updated $config_file" >&2
+        fi
 
-                ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$current_sorted" "$candidate_sorted"
+        ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$current_sorted" "$candidate_sorted"
       '';
 
       home.file.".copilot/instructions/copilot.instructions.md".source =
