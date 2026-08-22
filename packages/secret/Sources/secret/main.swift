@@ -41,6 +41,7 @@ struct Options {
     var global = false
     var helper = false
     var store = false
+    var sessionStdin = false
 }
 
 let commandAliases: [String: String] = [
@@ -117,6 +118,8 @@ func parseOptions(_ argv: [String]) -> Options {
             options.global = true
         } else if argument == "--helper" {
             options.helper = true
+        } else if argument == "--session-stdin" {
+            options.sessionStdin = true
         } else if argument == "--export" {
             options.export = true
         } else if argument == "--json" {
@@ -1094,6 +1097,15 @@ func run() async {
         let token: String
         if fromEnv {
             token = env("BW_SESSION") ?? ""
+        } else if options.sessionStdin {
+            // SecretBar authenticates with LocalAuthentication in-process (a
+            // spawned CLI cannot reliably present the Touch ID prompt from a
+            // menu-bar/agent context) and hands over the cached token here.
+            let line = readLine() ?? ""
+            token = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if token.isEmpty {
+                fail("--session-stdin requires a session token on stdin")
+            }
         } else if options.helper {
             guard let helperToken = helperSessionRead() else {
                 fail("Touch ID unlock unavailable — run 'secret unlock --store' once to cache the session, or use 'secret unlock'")
@@ -1115,6 +1127,19 @@ func run() async {
             warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again")
         }
         daemonStop()
+        let rejected = check.status != 0 || !(jsonObject(check.stdout)?["status"] as? String == "unlocked")
+        if rejected {
+            if options.helper || options.sessionStdin {
+                // A rejected cached token would otherwise be re-stored and
+                // reported as success; drop it and point at the fix.
+                helperClearSession()
+                fail("cached session was rejected — unlock with your master password once ('secret unlock --store') to refresh the caches")
+            }
+            if fromEnv {
+                fail("refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'")
+            }
+            warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again")
+        }
         if options.helper {
             setenv("BW_SESSION", token, 1)
             // Always refresh the Touch ID-gated cache so later invocations
@@ -1128,10 +1153,10 @@ func run() async {
             }
             return
         }
-        if options.store {
+        if options.store || options.sessionStdin {
             storeSession(token)
             _ = helperSessionStore(token)
-            success("unlocked; session stored (clear with 'secret lock')")
+            success(options.sessionStdin ? "unlocked with Touch ID session; caches refreshed" : "unlocked; session stored (clear with 'secret lock')")
         } else {
             print(token)
         }
