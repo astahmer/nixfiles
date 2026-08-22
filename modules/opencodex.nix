@@ -15,6 +15,9 @@
       secretsEnv = "${config.home.homeDirectory}/.config/opencodex/secrets.env";
       secretBin = "${inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret}/bin/secret";
       secretConfig = "${../.secret.json}";
+      # global-scope aliases (opencode-go-manu/mathias) live in the git-synced
+      # global secret config, not the machine-local .secret.json
+      globalSecretConfig = "$HOME/.config/nixfiles/assets/secret/global.json";
       ocx = "${opencodex}/bin/ocx";
       jq = "${pkgs.jq}/bin/jq";
       cmp = "${pkgs.diffutils}/bin/cmp";
@@ -49,12 +52,13 @@
         # opencode-go-manu, opencode-go-mathias) so a fresh machine gets the
         # full runtime config without committing keys to the public repo.
         read_secret() {
-          ${pkgs.coreutils}/bin/timeout 8s ${secretBin} get --config "${secretConfig}" "$1" 2>/dev/null || true
+          local cfg="''${2:-${secretConfig}}"
+          ${pkgs.coreutils}/bin/timeout 8s ${secretBin} get --config "$cfg" "$1" 2>/dev/null || true
         }
         OPENCODEX_COMMANDCODE_API_KEY="$(read_secret opencodex-commandcode-api-key)"
         OPENCODEX_OPENCODE_GO_API_KEY="$(read_secret opencode-go-alex)"
-        OPENCODEX_OPENCODE_GO_MANU_KEY="$(read_secret opencode-go-manu)"
-        OPENCODEX_OPENCODE_GO_MATHIAS_KEY="$(read_secret opencode-go-mathias)"
+        OPENCODEX_OPENCODE_GO_MANU_KEY="$(read_secret opencode-go-manu "${globalSecretConfig}")"
+        OPENCODEX_OPENCODE_GO_MATHIAS_KEY="$(read_secret opencode-go-mathias "${globalSecretConfig}")"
 
         # Legacy fallback: ~/.config/opencodex/secrets.env overrides the vault
         # for the two original keys (e.g. when Bitwarden is locked).
