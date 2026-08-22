@@ -364,11 +364,35 @@ final class SecretBarModel: ObservableObject {
     }
 
     func refreshEverything() {
+        setBusy(true)
         refreshStatus()
+        if state == .unlocked {
+            // Pull the Bitwarden cache before indexing/health so items created
+            // on other machines are visible instead of reported missing.
+            _ = runSecret(["pull"], timeout: 60)
+        }
         refreshIndex()
         refreshHistory()
         refreshSessionAge()
         refreshHealth()
+        setBusy(false)
+    }
+
+    func syncVault() {
+        setBusy(true)
+        if state == .unlocked {
+            let result = runSecret(["pull"], timeout: 60)
+            if result.status == 0 {
+                flash("vault synced from server")
+            } else {
+                showError(title: "Vault sync failed", message: resultDetail(result, fallback: "secret pull failed"))
+            }
+        }
+        refreshStatus()
+        refreshIndex()
+        refreshHistory()
+        refreshHealth()
+        setBusy(false)
     }
 
     func refreshStatus() {
@@ -542,6 +566,9 @@ final class SecretBarModel: ObservableObject {
         remoteValidationInProgress = true
         healthCheckStatus = "Checking \(entriesToCheck.count) configured item\(entriesToCheck.count == 1 ? "" : "s")…"
         Task.detached(priority: .utility) {
+            // Refresh the local vault cache so items created on other machines
+            // are not reported as missing.
+            _ = runSecret(["pull"], timeout: 60)
             var counts: [String: Int] = [:]
             var details: [String: [String]] = [:]
             var metadata: [String: RemoteEntryMetadata] = [:]
@@ -1611,12 +1638,10 @@ struct SecretBarView: View {
     }
 
     private var matchingEntries: [AliasEntry] {
-        let sourceEntries: [AliasEntry]
-        if model.state == .unlocked && model.remoteValidationComplete {
-            sourceEntries = model.entries.filter { model.remoteMetadata[$0.id]?.isUsable == true }
-        } else {
-            sourceEntries = model.entries
-        }
+        // Every configured alias stays visible. Vault problems (missing or
+        // invalid items) surface as the row's health badge instead of
+        // silently dropping entries from the list.
+        let sourceEntries = model.entries
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return sourceEntries }
         return sourceEntries.filter {
@@ -1789,9 +1814,28 @@ struct SecretBarView: View {
                     .frame(width: 26, height: 26)
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("Refresh secrets")
-            .help("Refresh secrets")
+            .accessibilityLabel("Sync and refresh secrets")
+            .help("Pull from Bitwarden and refresh")
             .disabled(model.busy)
+            Menu {
+                Button { model.syncVault() } label: {
+                    Label("Sync vault from server", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(model.busy || model.state != .unlocked)
+                if model.state == .unlocked {
+                    Button { model.lock() } label: {
+                        Label("Lock vault", systemImage: "lock.fill")
+                    }
+                }
+                Divider()
+                Button("Quit SecretBar", role: .destructive) { NSApplication.shared.terminate(nil) }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .frame(width: 26, height: 26)
+            }
+            .menuStyle(.borderlessButton)
+            .accessibilityLabel("SecretBar actions")
+            .help("Sync, lock, or quit SecretBar")
             if model.state == .unlocked {
                 Button { model.lock() } label: {
                     Image(systemName: "lock.fill")
@@ -2226,7 +2270,7 @@ struct SecretBarView: View {
             Text(
                 model.entries.isEmpty
                     ? "Create one here or add a value-free .secret.json to a project in ~/dev."
-                    : "Try another search, tag, or filter. Missing remote items stay hidden."
+                    : "Try another search, tag, or filter. Entries with vault problems are flagged, not hidden."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -2602,6 +2646,9 @@ struct SecretBarApp: App {
         } label: {
             StatusIcon(state: model.state)
                 .contextMenu {
+                    // NOTE: context menus on a MenuBarExtra label are ignored
+                    // by macOS when menuBarExtraStyle is .window; the reliable
+                    // surface for these actions is the … menu inside the panel.
                     Button("Refresh") { model.refreshEverything() }
                     if model.state == .unlocked {
                         Button("Lock vault") { model.lock() }
