@@ -343,6 +343,18 @@
         }
       '';
 
+      jjCleanFunction = ''
+        jjc() {
+          # abandon empty-diff commits reachable from @; mutable() keeps immutable history out
+          local revset="empty() & ::@ & mutable()"
+          if [[ -z "$(jj log -r "$revset" --no-graph -T 'change_id.short()' 2>/dev/null)" ]]; then
+            echo "jjc: no empty commits to clean"
+            return 0
+          fi
+          jj abandon "$revset"
+        }
+      '';
+
       initagentFunction = ''
         initagent() {
           local src_dir="''${HOME}/.agents"
@@ -382,6 +394,7 @@
 
         ${jjsearchFunction}
         ${jjEvolveFunction}
+        ${jjCleanFunction}
         ${initagentFunction}
         ${nixfilesHereFunction}
           ${shellAliasesFunction}
@@ -423,6 +436,7 @@
 
           ${jjsearchFunction}
           ${jjEvolveFunction}
+          ${jjCleanFunction}
           ${initagentFunction}
           ${nixfilesHereFunction}
           ${shellAliasesFunction}
