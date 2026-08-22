@@ -239,7 +239,7 @@ in
 
       home.packages = [
         pkgs.fd
-        pkgs.nh
+        inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
         nixfilesBootstrap
         nixfilesCheck
         jjPrompt
