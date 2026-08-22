@@ -996,6 +996,35 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
     if problems > 0 { exit(1) }
 }
 
+// MARK: - Biometric session bootstrap
+
+// When no session is resolvable (no BW_SESSION, no stored keychain session),
+// fall back to the Touch ID-gated cache. Only offered in interactive
+// contexts so headless scripts and timers never block on a biometric prompt:
+// a TTY on stdin, or SECRET_BIOMETRIC_UNLOCK=1 which SecretBar sets on
+// user-initiated actions only.
+func maybeBootstrapBiometricSession() {
+    if (env("BW_SESSION") ?? "").isEmpty == false { return }
+    guard readSession() == nil else { return }
+    guard env("SECRET_NO_BIOMETRICS") == nil else { return }
+    guard isatty(0) == 1 || env("SECRET_BIOMETRIC_UNLOCK") == "1" else { return }
+    guard let token = helperSessionRead(), !token.isEmpty else { return }
+    let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
+    var valid = false
+    if check.status == 0,
+       let data = jsonObject(check.stdout),
+       (data["status"] as? String) == "unlocked" {
+        valid = true
+    }
+    if valid {
+        setenv("BW_SESSION", token, 1)
+    } else {
+        // Stale token: drop the cache so the next `unlock --helper`
+        // re-stores a fresh one instead of failing forever.
+        helperClearSession()
+    }
+}
+
 // MARK: - Dispatch
 
 func run() async {
@@ -1031,6 +1060,14 @@ func run() async {
             printHelp()
         }
         return
+    }
+
+    let vaultTouchingCommands: Set<String> = [
+        "get", "set", "edit", "id", "totp", "source", "pin", "rotate",
+        "rm", "unset", "mv", "env", "run", "doctor", "pull", "list",
+    ]
+    if vaultTouchingCommands.contains(options.command) {
+        maybeBootstrapBiometricSession()
     }
 
     switch options.command {
@@ -1079,15 +1116,17 @@ func run() async {
         }
         daemonStop()
         if options.helper {
-            // A helper token is valid only inside this process unless it is
-            // handed to the long-lived bw serve daemon. That was the reason
-            // SecretBar could report success and immediately see "locked" on
-            // its next status check.
             setenv("BW_SESSION", token, 1)
+            // Always refresh the Touch ID-gated cache so later invocations
+            // can re-unlock via the biometric bootstrap fallback even when
+            // the bw serve daemon is not running.
+            _ = helperSessionStore(token)
             if daemonEnabled(), await daemonStart() {
                 success("unlocked with Touch ID; secret daemon ready")
-                return
+            } else {
+                success("unlocked with Touch ID; cached behind Touch ID")
             }
+            return
         }
         if options.store {
             storeSession(token)
@@ -1102,6 +1141,9 @@ func run() async {
         daemonStop()
         let hadSession = readSession() != nil
         clearSession()
+        // The Touch ID cache is kept: if the old token is still accepted,
+        // post-lock commands re-unlock through a fresh biometric prompt;
+        // if bw invalidated it, the bootstrap stale-check removes it.
         writeErr(hadSession ? "secret: vault locked; stored session cleared\n" : "secret: vault locked\n")
 
     case "list":

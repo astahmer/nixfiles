@@ -58,6 +58,16 @@ func helperSessionStore(_ token: String) -> Bool {
     #endif
 }
 
+func helperClearSession() {
+    #if os(macOS)
+    SecItemDelete([
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: helperService,
+        kSecAttrAccount as String: helperAccount,
+    ] as CFDictionary)
+    #endif
+}
+
 func helperSessionRead() -> String? {
     if let helper = helperBinaryPath() {
         let r = runCommand(helper, [])
