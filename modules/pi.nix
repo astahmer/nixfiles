@@ -14,7 +14,7 @@
         pname = "pi-packages";
         version = "0.84.2";
         src = ../assets/pi/npm;
-        npmDepsHash = "sha256-55+++Jp3mawA7jEcpUpOBJhZ+Wic92Dc40MguYRQpPg=";
+        npmDepsHash = "sha256-uq/WV47U2GlLjwx0BOHxbCUcZ6F3qG9UrRBJ+d6FLeI=";
         dontNpmBuild = true;
         # node-pty ships platform prebuilds inside the tarball; no install
         # scripts are needed and skipping them keeps the build hermetic.
@@ -34,11 +34,14 @@
         defaultModel = "ox-alpha-free";
         defaultThinkingLevel = "high";
         packages = [
+          "npm:@ff-labs/pi-fff@0.9.6"
           "npm:@plannotator/pi-extension@0.27.6"
           "npm:pi-autoresearch@1.6.2"
           "npm:pi-memory@0.4.2"
           "npm:pi-simplify@0.2.3"
+          "npm:pi-smart-copy@0.1.0"
           "npm:pi-subagents@0.53.0"
+          "npm:pine-of-glass@0.6.2"
         ];
         tuiMode = "fullscreen";
         hideThinkingBlock = true;

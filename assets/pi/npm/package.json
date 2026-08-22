@@ -2,10 +2,13 @@
   "name": "pi-extensions",
   "private": true,
   "dependencies": {
+    "@ff-labs/pi-fff": "^0.9.6",
     "@plannotator/pi-extension": "^0.27.6",
     "pi-autoresearch": "^1.6.2",
     "pi-memory": "^0.4.2",
     "pi-simplify": "^0.2.3",
-    "pi-subagents": "^0.53.0"
+    "pi-smart-copy": "^0.1.0",
+    "pi-subagents": "^0.53.0",
+    "pine-of-glass": "^0.6.0"
   }
 }
