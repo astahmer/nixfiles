@@ -1093,7 +1093,10 @@ func run() async {
         }
 
     case "unlock":
-        let fromEnv = env("BW_SESSION").map { !$0.isEmpty } ?? false
+        // --session-stdin carries an explicit token from SecretBar's own
+        // biometric read; a stale BW_SESSION inherited from the environment
+        // must not shadow it.
+        let fromEnv = !options.sessionStdin && (env("BW_SESSION").map { !$0.isEmpty } ?? false)
         let token: String
         if fromEnv {
             token = env("BW_SESSION") ?? ""

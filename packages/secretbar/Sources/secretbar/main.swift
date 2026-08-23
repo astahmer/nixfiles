@@ -481,34 +481,28 @@ final class SecretBarModel: ObservableObject {
 
     /// Authenticates with LocalAuthentication in-process (the app owns a real
     /// foreground GUI context, unlike CLI child processes of menu-bar/agent
-    /// apps where the Touch ID prompt fails silently) and reads the Touch
-    /// ID-gated session cache with the already-authenticated context, so the
-    /// user sees exactly one fingerprint prompt.
+    /// apps where the Touch ID prompt fails silently) and reads the file-based
+    /// biometric session cache. No keychain ACLs involved: Nix rebuilds change
+    /// the binary signature and keychain would demand the login password.
     nonisolated static func readBiometricSessionToken(reason: String) -> String? {
         let context = LAContext()
         var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else { return nil }
+        let policy: LAPolicy = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+            ? .deviceOwnerAuthenticationWithBiometrics
+            : .deviceOwnerAuthentication
+        guard context.canEvaluatePolicy(policy, error: &error) else { return nil }
         let semaphore = DispatchSemaphore(value: 0)
         var granted = false
-        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { ok, _ in
+        context.evaluatePolicy(policy, localizedReason: reason) { ok, _ in
             granted = ok
             semaphore.signal()
         }
         _ = semaphore.wait(timeout: .now() + 60)
         guard granted else { return nil }
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "secret-cli",
-            kSecAttrAccount as String: "biometric-session",
-            kSecReturnData as String: true,
-            kSecUseAuthenticationContext as String: context,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              let token = String(data: data, encoding: .utf8),
-              !token.isEmpty else { return nil }
+        let path = homeDirectory() + "/.config/secret/biometric-session"
+        guard let data = FileManager.default.contents(atPath: path),
+              !data.isEmpty,
+              let token = String(data: data, encoding: .utf8) else { return nil }
         return token
     }
 
@@ -1031,12 +1025,13 @@ final class SecretBarModel: ObservableObject {
                 }
                 return
             }
-            let result = runSecret(["unlock", "--session-stdin"], input: token, timeout: 90)
-            let verified = result.status == 0
-                && runSecret(["status", "--check"], timeout: 30).status == 0
+            let result = runSecret(["unlock", "--session-stdin"], input: token, timeout: 120)
             await MainActor.run {
                 self.setBusy(false)
-                if verified {
+                if result.status == 0 {
+                    // The CLI already verified the session (daemon verdict
+                    // first); an extra status roundtrip here raced with
+                    // daemon startup and produced false failures.
                     self.flash("unlocked with Touch ID")
                     self.refreshEverything()
                 } else {
@@ -2805,6 +2800,7 @@ struct SecretBarView: View {
             }
             .buttonStyle(.borderless)
             .opacity(isHovered ? 1 : 0.72)
+            .frame(width: 58, alignment: .trailing)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 8)
