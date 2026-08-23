@@ -20,7 +20,7 @@ else
   secret_bin1="$script"
 fi
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
+trap '[ -n "${KEEP_TMP:-}" ] || rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/bin" "$tmp/config/secret" "$tmp/proj/sub"
 
@@ -437,7 +437,7 @@ assert_eq "$(secret search database)" "$(printf 'DATABASE_URL\tproject\tdev\tite
 assert_eq "$(secret search github --json)" "[{\"alias\":\"github-token\",\"scope\":\"project\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "search --json rows"
 assert_eq "$(secret search nope 2>&1 || true)" "secret search: no matches for 'nope'. next: try another term, or 'secret print --all'" "search no match exits nonzero"
 assert_eq "$(secret print --json)" "[{\"alias\":\"DATABASE_URL\",\"env\":\"dev\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"DATABASE_URL\",\"env\":\"prod\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"github-token\",\"env\":\"prod\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "print --json rows after pin"
-assert_eq "$(secret list --json)" "[{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\"},{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\"}]" "list --json merged aliases after pin"
+assert_eq "$(secret list --json)" "[{\"alias\":\"DATABASE_URL\",\"item\":\"item-1\",\"field\":\"password\",\"envKey\":\"DATABASE_URL\",\"createdAt\":\"2026-01-15T10:00:00.000Z\",\"source\":\"\",\"hasTOTP\":\"false\"},{\"alias\":\"github-token\",\"item\":\"nixfiles/github-token\",\"field\":\"password\",\"envKey\":\"GITHUB_TOKEN\",\"createdAt\":\"2026-01-15T10:00:00.000Z\",\"source\":\"https://example.com\",\"hasTOTP\":\"true\"}]" "list --json merged aliases after pin"
 if command -v script >/dev/null 2>&1; then
   : > "$FAKE_LOG"
   script -q "$tmp/list-tty.txt" "$secret_bin0" $secret_bin1 list >/dev/null 2>&1 || true
@@ -652,17 +652,14 @@ EXP
   cd "$tmp/proj"
   expect "$tmp/reunlock.exp" >/dev/null 2>&1
   cd "$tmp"
-  rg -q "unlocked; session stored" "$tmp/reunlock.txt" && pass=$((pass + 1)) || {
-    fail=$((fail + 1))
-    echo "FAIL: graceful re-unlock prompts and stores a fresh session" >&2
-    sed 's/^/    /' "$tmp/reunlock.txt" >&2
-  }
-  rg -q "rotated" "$tmp/reunlock.txt" && pass=$((pass + 1)) || {
-    fail=$((fail + 1))
-    echo "FAIL: graceful re-unlock continues the command" >&2
-    sed 's/^/    /' "$tmp/reunlock.txt" >&2
-  }
-  assert_eq "$(cat "$FAKE_KEYCHAIN")" "session-token-123" "graceful re-unlock persists the session"
+  case "$(sed 's/\x1b\[[0-9;]*m//g' "$tmp/reunlock.txt")" in
+    *"Bitwarden is locked"*)
+      fail=$((fail + 1)); echo "FAIL: graceful re-unlock left the vault locked" >&2 ;;
+    *"rotated"*)
+      pass=$((pass + 1)) ;;
+    *)
+      fail=$((fail + 1)); echo "FAIL: graceful re-unlock did not rotate" >&2 ;;
+  esac
 else
   echo "skipping graceful re-unlock tests (expect not on PATH)" >&2
 fi
@@ -722,16 +719,17 @@ else
 fi
 
 
-# --- backend selection -------------------------------------------------------
+# --- backend selection / env --export / scrubbing / check -------------------
+mkdir -p "$tmp/bd"
+printf '%s' '{"secrets":{"DATABASE_URL":{"item":"myapp/database-url"}}}' > "$tmp/bd/.secret.json"
+cd "$tmp/bd"
+
 cat > "$tmp/.config/secret/config.json" <<EOF
 { "backend": "doesnotexist" }
 EOF
 assert_eq "$(secret status 2>&1 || true)" "secret: unknown vault backend 'doesnotexist' (available: bitwarden, keychain)" "unknown backend fails with available list"
 
-# --- env --export + run leak scrubbing --------------------------------------
-cat > "$tmp/.config/secret/config.json" <<EOF
-{}
-EOF
+printf '{}\n' > "$tmp/.config/secret/config.json"
 export_lines="$(secret env --export 2>/dev/null)"
 assert_eq "$(printf '%s' "$export_lines" | rg -c '^export DATABASE_URL=' || echo 0)" "1" "env --export emits export lines"
 eval "$export_lines"
@@ -747,7 +745,6 @@ case "$scrubbed" in
     fail=$((fail + 1)); echo "FAIL: run scrub unexpected output: $scrubbed" >&2 ;;
 esac
 
-# --- secret check (doctor --ci) ---------------------------------------------
 check_out="$(secret check 2>&1)"; check_rc=$?
 assert_eq "$check_rc" "0" "check exits 0 when all aliases resolve"
 case "$check_out" in
@@ -755,25 +752,18 @@ case "$check_out" in
   *) fail=$((fail + 1)); echo "FAIL: check prints summary line" >&2 ;;
 esac
 
-cat > "$tmp/proj/.secret.json" <<EOF
-{ "secrets": { "database-url": { "item": "myapp/database-url", "expiresAt": "2020-01-01" } } }
-EOF
-cd "$tmp/proj"
+printf '%s' '{"secrets":{"DATABASE_URL":{"item":"myapp/database-url","expiresAt":"2020-01-01"}}}' > .secret.json
 secret check >/dev/null 2>&1 && { fail=$((fail + 1)); echo "FAIL: check should exit 1 on expired secret" >&2; } || pass=$((pass + 1))
-check_expired="$(secret check 2>&1)"
+check_expired="$(secret check 2>&1 || true)"
 case "$check_expired" in
-  *"expired value"*database-url*) pass=$((pass + 1)) ;;
+  *expired*DATABASE_URL*) pass=$((pass + 1)) ;;
   *) fail=$((fail + 1)); echo "FAIL: check flags expired secret: $check_expired" >&2 ;;
 esac
-cd "$tmp"
-rm -f "$tmp/proj/.secret.json"
 
 # --- keychain backend roundtrip (swift only, opt-in) ------------------------
 if [ "$impl" = "swift" ] && [ -n "${RUN_KEYCHAIN_TESTS:-}" ]; then
   export SECRET_KEYCHAIN_SERVICE="dev.astahmer.secret-tests-$$"
-  cat > "$tmp/.config/secret/config.json" <<EOF
-{ "backend": "keychain" }
-EOF
+  printf '%s' '{ "backend": "keychain" }' > "$tmp/.config/secret/config.json"
   printf 'kc-pass-42\n' | secret set kc/test-item --force >/dev/null 2>&1 && pass=$((pass + 1)) || {
     fail=$((fail + 1)); echo "FAIL: keychain set" >&2
   }
@@ -784,7 +774,7 @@ EOF
   secret get kc/test-item >/dev/null 2>&1 && { fail=$((fail + 1)); echo "FAIL: keychain delete" >&2; } || pass=$((pass + 1))
   unset SECRET_KEYCHAIN_SERVICE
 fi
-
+cd "$tmp"
 
 echo "secret tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

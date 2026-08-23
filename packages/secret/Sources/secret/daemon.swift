@@ -491,6 +491,7 @@ func bitwardenRequireUnlocked() async {
     var current = await currentAuthState()
     if !current.unlocked {
         if current.authenticated, isatty(0) == 1, env("SECRET_NO_PROMPT") == nil {
+            if env("SECRET_DEBUG") != nil { writeErr("debug: interactive unlock attempt\n") }
             let token = runBwUnlock()
             if !token.isEmpty {
                 let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))

@@ -487,10 +487,12 @@ func loadDefinitions(configPath: String? = nil, environment: String = "prod", al
 
 func readConfig(_ path: String) -> J {
     guard let raw = readFile(path) else { fail("cannot read config \(path): no such file") }
-    // A global config may carry only settings (e.g. {"backend": "..."}),
-    // so accept either a secrets map or a backend selector.
+    // A global config may carry only settings (e.g. {"backend": "..."}), so
+    // accept a secrets map, a backend selector, or an empty object.
     guard let parsed = parseJSONOrdered(raw), parsed.isObject,
-          parsed.get("secrets")?.isObject == true || parsed.get("backend")?.string() != nil else {
+          parsed.get("secrets")?.isObject == true
+              || parsed.get("backend")?.string() != nil
+              || (parsed.pairs() ?? []).isEmpty else {
         fail("invalid config: \(path)")
     }
     return parsed

@@ -977,7 +977,7 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
                 if !ci { print("ok\t\(alias)\t\(definition.item)\t\(field)") }
             } else {
                 print("\(status) value\t\(alias)\t\(definition.item)\t\(field)")
-                problems += 1
+                if status == "invalid" { problems += 1 } // expired already counted
             }
         } else {
             if json {
@@ -1157,9 +1157,16 @@ func run() async {
             }
             // Keep the plain stored session in sync too so non-interactive
             // callers (wrapper restore) see the same fresh token.
-            if options.sessionStdin { storeSession(token) }
+            if options.sessionStdin {
+                storeSession(token)
+                _ = helperSessionStore(token)
+                success("unlocked with Touch ID; cached behind Touch ID")
+                return
+            }
+            // Plain --helper without a daemon: hand the token to the caller
+            // (the shell wrapper exports it for the session).
             _ = helperSessionStore(token)
-            success("unlocked with Touch ID; cached behind Touch ID")
+            print(token)
             return
         }
         if !(await vaultBackend.sessionValid(token)) {
@@ -1196,7 +1203,9 @@ func run() async {
             var itemIndex: [String: JSON] = [:]
             if authState.unlocked, let items = await vaultBackend.items() {
                 for item in items {
+                    // pinned configs reference items by id; fresh ones by name
                     if let name = item["name"] as? String { itemIndex[name] = item }
+                    if let itemId = item["id"] as? String { itemIndex[itemId] = item }
                 }
             }
             let items = entries.map { alias, definition -> String in
@@ -1208,7 +1217,7 @@ func run() async {
                     ("item", definition.item),
                     ("field", definition.field ?? "password"),
                     ("envKey", dotenvKey(alias, definition)),
-                    ("createdAt", item.flatMap { formatCreatedAt($0["creationDate"] as? String ?? "") } ?? ""),
+                    ("createdAt", item?["creationDate"] as? String ?? ""),
                     ("source", source),
                     ("hasTOTP", hasTOTP ? "true" : "false"),
                 ])

@@ -37,6 +37,12 @@ func helperClearSession() {
 }
 
 func helperSessionStore(_ token: String) -> Bool {
+    // A legacy secret-unlock-helper binary on PATH still wins (old installs,
+    // test fixtures); delegate storage to it when present.
+    if let helper = helperBinaryPath() {
+        let r = runCommand(helper, ["store", token])
+        if r.status == 0 { return true }
+    }
     helperClearLegacyKeychain()
     return FileManager.default.createFile(
         atPath: biometricCachePath,
@@ -46,6 +52,14 @@ func helperSessionStore(_ token: String) -> Bool {
 }
 
 func helperSessionRead() -> String? {
+    // Legacy helper binary first (old installs, test fixtures).
+    if let helper = helperBinaryPath() {
+        let r = runCommand(helper, [])
+        if r.status == 0 {
+            let token = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !token.isEmpty { return token }
+        }
+    }
     guard let data = FileManager.default.contents(atPath: biometricCachePath), !data.isEmpty else {
         return nil
     }
