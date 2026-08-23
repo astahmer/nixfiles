@@ -1093,14 +1093,12 @@ func run() async {
         }
 
     case "unlock":
-        // --session-stdin carries an explicit token from SecretBar's own
-        // biometric read; a stale BW_SESSION inherited from the environment
-        // must not shadow it.
-        let fromEnv = !options.sessionStdin && (env("BW_SESSION").map { !$0.isEmpty } ?? false)
+        // `unlock` always means "obtain a fresh session". An inherited
+        // BW_SESSION is deliberately ignored: shells keep exporting stale
+        // tokens long after logout/login rotated them, which turned
+        // 'secret unlock --store' into an unreachable error.
         let token: String
-        if fromEnv {
-            token = env("BW_SESSION") ?? ""
-        } else if options.sessionStdin {
+        if options.sessionStdin {
             // SecretBar authenticates with LocalAuthentication in-process (a
             // spawned CLI cannot reliably present the Touch ID prompt from a
             // menu-bar/agent context) and hands over the cached token here.
@@ -1151,10 +1149,10 @@ func run() async {
         }
         let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
         if check.status == 0, let data = jsonObject(check.stdout), (data["status"] as? String) != "unlocked" {
-            if fromEnv {
-                fail("refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'")
-            }
-            warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again")
+            // A fresh interactive token rejected by a plain status check is
+            // usually transient secure-storage state; still store it — the
+            // daemon handoff below is what actually matters.
+            warn("bw status did not confirm the new session (stale secure-storage state) — continuing; commands go through the secret daemon")
         }
         daemonStop()
         if options.store {

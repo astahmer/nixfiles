@@ -322,6 +322,9 @@ final class SecretBarModel: ObservableObject {
     @Published var importEnvironment = "prod"
     @Published var remoteMetadata: [String: RemoteEntryMetadata] = [:]
     @Published var createdAtByKey: [String: Date] = [:]
+    /// True when a biometric session cache file exists; Touch ID unlock
+    /// needs it seeded by one master-password unlock.
+    @Published var biometricCacheAvailable = false
     @Published var remoteValidationComplete = false
     @Published var revealingID: String?
     @Published var revealedValue = ""
@@ -401,8 +404,10 @@ final class SecretBarModel: ObservableObject {
                 _ = runSecret(["pull"], timeout: 90)
             }
             let sessionAge = Self.readSessionAge()
+            let cacheAvailable = FileManager.default.fileExists(atPath: homeDirectory() + "/.config/secret/biometric-session")
             await MainActor.run {
                 self.state = newState
+                self.biometricCacheAvailable = cacheAvailable
                 self.refreshIndex()
                 self.refreshHistory()
                 self.sessionCreated = sessionAge
@@ -2111,6 +2116,10 @@ struct SecretBarView: View {
                 } else {
                     Menu {
                         Button { model.unlockWithTouchID() } label: { Label("Unlock with Touch ID", systemImage: "touchid") }
+                            .disabled(!model.biometricCacheAvailable)
+                            .help(model.biometricCacheAvailable
+                                ? "Unlock with Touch ID"
+                                : "Seeded after your next master password unlock")
                         Button { showPasswordSheet = true } label: { Label("Unlock with master password…", systemImage: "key") }
                     } label: {
                         Image(systemName: "lock.open.fill")
