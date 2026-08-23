@@ -28,14 +28,14 @@ extension into `~/Library/Caches/dev.nixfiles.window-switcher/winlist`
 ## Install
 
 ```bash
-cd ~/dev/nixfiles/assets/raycast/window-switcher   # or ~/.config/raycast-extensions/window-switcher
+cd ~/dev/nixfiles/assets/raycast/window-switcher   # or ~/RaycastExtensions/window-switcher
 pnpm install
 ```
 
 Then in Raycast: `Import Extension` → pick this folder. Assign e.g. `⌥Space`
 or any hotkey you like to the `Switch Window` command.
 
-The folder is also symlinked to `~/.config/raycast-extensions/window-switcher`
+The folder is also symlinked to `~/RaycastExtensions/window-switcher`
 by Home Manager (`modules/raycast-local-extensions.nix`), so importing from the
 stable path survives moving/cloning the nixfiles repo.
 

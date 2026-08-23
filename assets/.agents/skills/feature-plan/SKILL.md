@@ -1,6 +1,6 @@
 ---
 name: feature-plan
-description: Creates structured feature plan documents from a template. Use when user asks to create a plan, feature plan, spec, design doc, or "let's plan X".
+description: Creates structured feature plan documents from a template. Use when user asks to create a plan, feature plan, spec, design doc, or "let's plan X". Triggers on "feature plan" with or without the dash.
 ---
 
 # Feature Plan

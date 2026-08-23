@@ -31,7 +31,11 @@ export default function Command() {
     try {
       const status = await focusWindow(win);
       // activating the target dismisses the Raycast panel by itself
-      if (!status.startsWith("ok")) setFocusMessage(`Focus fallback used: ${status}`);
+      if (!status.startsWith("ok")) {
+        setFocusMessage(
+          `${status} — grant Raycast Screen Recording + Accessibility + Automation(System Events) in System Settings → Privacy, then quit & reopen Raycast`,
+        );
+      }
     } catch (err) {
       setFocusMessage(String(err instanceof Error ? err.message : err));
     }
@@ -84,7 +88,7 @@ export default function Command() {
                   title="Open Privacy Settings"
                   icon={Icon.Gear}
                   onAction={() =>
-                    open("x-apple.system.preferences:com.apple.preference.security?Privacy_ScreenCapture")
+                    open("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
                   }
                 />
                 <Action.CopyToClipboard title="Copy Debug Info" content={JSON.stringify(result)} />
@@ -95,11 +99,11 @@ export default function Command() {
       )}
       {sections.map(([app, wins]) => (
         <List.Section key={app} title={app} subtitle={String(wins.length)}>
-          {wins.map((win) => (
+          {wins.map((win, idx) => (
             <List.Item
               key={`${win.pid}-${win.cgid}`}
               icon={win.path ? { fileIcon: win.path } : Icon.Window}
-              title={win.title || "(untitled)"}
+              title={win.title || `(untitled #${idx + 1} · ${win.cgid})`}
               accessories={[
                 { text: win.onscreen ? "visible" : "other space" },
                 { text: `${Math.round(win.w)}×${Math.round(win.h)}` },

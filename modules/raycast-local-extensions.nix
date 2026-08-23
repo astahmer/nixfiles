@@ -1,8 +1,10 @@
 # Local Raycast extensions developed in this repo live under
 # assets/raycast/<name>. Raycast imports them from a stable path so the
-# registration survives clone moves: ~/.config/raycast-extensions/<name>
+# registration survives clone moves: ~/RaycastExtensions/<name>
 # is seeded as a WRITABLE copy on every activation (Raycast needs to run
 # npm/pnpm install inside it), with node_modules preserved across reseeds.
+# NOTE: deliberately NOT ~/.config — Raycast rejects hidden folders as
+# "Invalid development sources location" when importing.
 # See assets/raycast/window-switcher/README.md for the import flow and the
 # permissions the extension needs.
 { ... }:
@@ -16,7 +18,7 @@ in
       seedScript = pkgs.writeShellScript "seed-raycast-extensions" ''
         set -eu
         src_base="${raycastAssets}"
-        dst_base="$HOME/.config/raycast-extensions"
+        dst_base="$HOME/RaycastExtensions"
         mkdir -p "$dst_base"
         for src in "$src_base"/*/; do
           name="$(basename "$src")"

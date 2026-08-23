@@ -145,16 +145,7 @@ func focusViaWindowMenu(pid: pid_t, title: String) -> String {
       end tell
     end run
     """
-    let pr = Process()
-    pr.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-    pr.arguments = ["-e", script, String(pid), title]
-    let pipe = Pipe()
-    pr.standardOutput = pipe
-    pr.standardError = FileHandle.nullDevice
-    do { try pr.run() } catch { return "osascript-error" }
-    pr.waitUntilExit()
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "osascript-error"
+    return runOsa(script, [String(pid), title]) ?? "osascript-error"
 }
 
 func activateApp(_ pid: pid_t) {
@@ -186,12 +177,119 @@ func focusWindow(pid: pid_t, cgid: CGWindowID, title: String) -> String {
         return "ok"
     }
 
-    // Path 2: fullscreen / other-Space windows invisible to AX -> Window menu.
+    // Path 2: fullscreen / other-Space windows invisible to AX.
     // The app must be active first or macOS may not follow the clicked entry
     // into its fullscreen Space.
-    guard !title.isEmpty else { return "no-title-for-menu" }
     activateApp(pid)
-    return focusViaWindowMenu(pid: pid, title: title)
+
+    // Path 2a: click the Window-menu entry matching the target title.
+    if !title.isEmpty {
+        let r = focusViaWindowMenu(pid: pid, title: title)
+        if r.hasPrefix("ok") { return r }
+    }
+
+    // Path 2b: no usable title (Screen Recording not granted)? Click every
+    // window entry of the app's Window menu until the target cgid is
+    // frontmost. Window entries focus their window directly.
+    let r = focusByMenuScan(pid: pid, cgid: cgid)
+    if r.hasPrefix("ok") { return r }
+    return title.isEmpty ? "no-title-for-menu" : "not-in-menu"
+}
+
+private let menuVerbJunk = [
+    "minimize", "zoom", "bring all to front", "reduce", "fill", "center",
+    "réduire", "zoomer", "ramener au premier plan", "organiser au premier plan",
+    "déplacer et redimensionner", "occuper toute", "supprimer la fenêtre",
+    "minimiser toutes", "réduire/agrandir", "move & resize", "remove window",
+    "toggle full screen", "show previous tab", "show next tab",
+    "move tab to new window", "merge all windows", "zoom split",
+    "select previous split", "select next split", "select split",
+    "resize split", "return to default size", "float on top",
+    "use as default", "show/hide all terminals", "full screen tile",
+    "tile window", "move window",
+]
+
+/// Returns the clickable window-entry titles of the app's native Window menu.
+func windowMenuEntries(pid: pid_t) -> [String] {
+    let script = """
+    on run argv
+      set pid to (item 1 of argv) as integer
+      tell application "System Events"
+        set p to first application process whose unix id is pid
+        set menuNames to {"Window", "Fenêtre", "Ventana", "Fenster", "Finestra", "Janela"}
+        set targetMenu to missing value
+        repeat with mbi in menu bar items of menu bar 1 of p
+          try
+            if (name of mbi as text) is in menuNames then set targetMenu to contents of mbi
+          end try
+        end repeat
+        if targetMenu is missing value then return ""
+        set out to {}
+        repeat with it_ in menu items of menu 1 of targetMenu
+          try
+            set nm to name of it_ as text
+            if nm is not missing value and nm is not "" then set out to out & {nm}
+          end try
+        end repeat
+        set AppleScript's text item delimiters to linefeed
+        return out as text
+      end tell
+    end run
+    """
+    guard let out = runOsa(script, [String(pid)]) else { return [] }
+    return out.isEmpty ? [] : out.components(separatedBy: .newlines).map {
+        $0.trimmingCharacters(in: .whitespaces)
+    }.filter { !$0.isEmpty }
+}
+
+func runOsa(_ script: String, _ args: [String]) -> String? {
+    let pr = Process()
+    pr.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+    pr.arguments = ["-e", script] + args
+    let pipe = Pipe()
+    pr.standardOutput = pipe
+    pr.standardError = FileHandle.nullDevice
+    do { try pr.run() } catch { return nil }
+    pr.waitUntilExit()
+    guard pr.terminationStatus == 0 else { return nil }
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+func focusByMenuScan(pid: pid_t, cgid: CGWindowID) -> String {
+    let entries = windowMenuEntries(pid: pid).filter { name in
+        let lower = name.lowercased()
+        if name.hasSuffix("…") || name.hasSuffix("...") { return false }
+        return !menuVerbJunk.contains(where: { lower.contains($0) })
+    }
+    for name in entries {
+        let clickScript = """
+        on run argv
+          set pid to (item 1 of argv) as integer
+          set wtitle to item 2 of argv
+          tell application "System Events"
+            set p to first application process whose unix id is pid
+            set menuNames to {"Window", "Fenêtre", "Ventana", "Fenster", "Finestra", "Janela"}
+            set targetMenu to missing value
+            repeat with mbi in menu bar items of menu bar 1 of p
+              try
+                if (name of mbi as text) is in menuNames then set targetMenu to contents of mbi
+              end try
+            end repeat
+            if targetMenu is missing value then return "no-window-menu"
+            try
+              click (first menu item of menu 1 of targetMenu whose name is wtitle)
+              return "ok"
+            end try
+            return "miss"
+          end tell
+        end run
+        """
+        let r = runOsa(clickScript, [String(pid), name]) ?? "err"
+        usleep(600_000)
+        if r == "ok", frontmostWindowCgid(pid: pid) == Int(cgid) { return "ok-menu-scan" }
+    }
+    return "scan-failed"
 }
 
 func main() {
