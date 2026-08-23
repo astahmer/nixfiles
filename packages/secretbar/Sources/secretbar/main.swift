@@ -1361,6 +1361,7 @@ struct MasterPasswordSheet: View {
     @ObservedObject var model: SecretBarModel
     let onDismiss: () -> Void
     @State private var password = ""
+    @FocusState private var passwordFocused: Bool
 
     var body: some View {
         SecretBarDialogSurface(width: 380) {
@@ -1372,7 +1373,9 @@ struct MasterPasswordSheet: View {
                     .foregroundStyle(.secondary)
                 SecureField("Master password", text: $password)
                     .textFieldStyle(.roundedBorder)
+                    .focused($passwordFocused)
                     .onSubmit { unlock() }
+                    .onAppear { passwordFocused = true }
                 HStack {
                     Spacer()
                     Button("Cancel") { onDismiss() }
@@ -1862,6 +1865,7 @@ struct SecretBarView: View {
     @State private var showDotEnvImporter = false
     @State private var showImportPreview = false
     @State private var confirmClearHistory = false
+    @State private var confirmLock = false
     @FocusState private var searchFocused: Bool
     @FocusState private var listFocused: Bool
 
@@ -1974,6 +1978,19 @@ struct SecretBarView: View {
                 },
                 onCancel: { confirmClearHistory = false }
             )
+        } else if confirmLock {
+            Color.black.opacity(0.5).ignoresSafeArea()
+            SecretBarConfirmation(
+                title: "Lock the vault?",
+                message: "Copying or revealing secrets will require unlocking again.",
+                confirmTitle: "Lock vault",
+                destructive: false,
+                onConfirm: {
+                    model.lock()
+                    confirmLock = false
+                },
+                onCancel: { confirmLock = false }
+            )
         }
     }
 
@@ -2071,7 +2088,7 @@ struct SecretBarView: View {
                 }
                 .disabled(model.busy || model.state != .unlocked)
                 if model.state == .unlocked {
-                    Button { model.lock() } label: {
+                    Button { confirmLock = true } label: {
                         Label("Lock vault", systemImage: "lock.fill")
                     }
                 }
@@ -2084,28 +2101,33 @@ struct SecretBarView: View {
             .menuStyle(.borderlessButton)
             .accessibilityLabel("SecretBar actions")
             .help("Sync, lock, or quit SecretBar")
-            if model.state == .unlocked {
-                Button { model.lock() } label: {
-                    Image(systemName: "lock.fill")
-                        .frame(width: 26, height: 26)
+            // Fixed-width slot so swapping lock/unlock controls never shifts
+            // the rest of the header.
+            HStack {
+                if model.state == .unlocked {
+                    Button { confirmLock = true } label: {
+                        Image(systemName: "lock.fill")
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Lock the vault")
+                    .help("Lock the vault")
+                    .disabled(model.busy)
+                } else {
+                    Menu {
+                        Button { model.unlockWithTouchID() } label: { Label("Unlock with Touch ID", systemImage: "touchid") }
+                        Button { showPasswordSheet = true } label: { Label("Unlock with master password…", systemImage: "key") }
+                    } label: {
+                        Image(systemName: "lock.open.fill")
+                            .frame(width: 26, height: 26)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .accessibilityLabel("Unlock the vault")
+                    .help("Unlock the vault")
+                    .disabled(model.busy)
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Lock the vault")
-                .help("Lock the vault")
-                .disabled(model.busy)
-            } else {
-                Menu {
-                    Button { model.unlockWithTouchID() } label: { Label("Unlock with Touch ID", systemImage: "touchid") }
-                    Button { showPasswordSheet = true } label: { Label("Unlock with master password…", systemImage: "key") }
-                } label: {
-                    Image(systemName: "lock.open.fill")
-                        .frame(width: 26, height: 26)
-                }
-                .menuStyle(.borderlessButton)
-                .accessibilityLabel("Unlock the vault")
-                .help("Unlock the vault")
-                .disabled(model.busy)
             }
+            .frame(width: 30)
         }
     }
 
@@ -2392,6 +2414,7 @@ struct SecretBarView: View {
                         sortHeader("Last used", .lastUsed, width: 92)
                         Text("").frame(width: 58)
                     }
+                    .padding(.horizontal, 6)
                     .padding(.bottom, 4)
                     Divider()
                     if sortedEntries.isEmpty {

@@ -1119,6 +1119,33 @@ func run() async {
                 ? "Touch ID unlock returned no session token"
                 : "bw unlock returned no session token")
         }
+        if options.helper || options.sessionStdin {
+            setenv("BW_SESSION", token, 1)
+            // Daemon verdict first: direct `bw status` can report locked due
+            // to transient secure-storage state even when a serve daemon
+            // started with this session works fine.
+            if daemonEnabled(), await daemonStart() {
+                _ = helperSessionStore(token)
+                success(options.sessionStdin
+                    ? "unlocked with Touch ID session; secret daemon ready"
+                    : "unlocked with Touch ID; secret daemon ready")
+                return
+            }
+            let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
+            let rejected = check.status != 0 || !(jsonObject(check.stdout)?["status"] as? String == "unlocked")
+            if rejected {
+                // A rejected cached token must not be re-stored and reported
+                // as success; drop it and point at the fix.
+                helperClearSession()
+                fail("cached session was rejected — unlock with your master password once ('secret unlock --store') to refresh the caches")
+            }
+            // Keep the plain stored session in sync too so non-interactive
+            // callers (wrapper restore) see the same fresh token.
+            if options.sessionStdin { storeSession(token) }
+            _ = helperSessionStore(token)
+            success("unlocked with Touch ID; cached behind Touch ID")
+            return
+        }
         let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
         if check.status == 0, let data = jsonObject(check.stdout), (data["status"] as? String) != "unlocked" {
             if fromEnv {
@@ -1127,36 +1154,10 @@ func run() async {
             warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again")
         }
         daemonStop()
-        let rejected = check.status != 0 || !(jsonObject(check.stdout)?["status"] as? String == "unlocked")
-        if rejected {
-            if options.helper || options.sessionStdin {
-                // A rejected cached token would otherwise be re-stored and
-                // reported as success; drop it and point at the fix.
-                helperClearSession()
-                fail("cached session was rejected — unlock with your master password once ('secret unlock --store') to refresh the caches")
-            }
-            if fromEnv {
-                fail("refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'")
-            }
-            warn("bw rejected the new session (stale secure-storage state) — run 'bw logout && bw login' once, then unlock again")
-        }
-        if options.helper {
-            setenv("BW_SESSION", token, 1)
-            // Always refresh the Touch ID-gated cache so later invocations
-            // can re-unlock via the biometric bootstrap fallback even when
-            // the bw serve daemon is not running.
-            _ = helperSessionStore(token)
-            if daemonEnabled(), await daemonStart() {
-                success("unlocked with Touch ID; secret daemon ready")
-            } else {
-                success("unlocked with Touch ID; cached behind Touch ID")
-            }
-            return
-        }
-        if options.store || options.sessionStdin {
+        if options.store {
             storeSession(token)
             _ = helperSessionStore(token)
-            success(options.sessionStdin ? "unlocked with Touch ID session; caches refreshed" : "unlocked; session stored (clear with 'secret lock')")
+            success("unlocked; session stored (clear with 'secret lock')")
         } else {
             print(token)
         }
