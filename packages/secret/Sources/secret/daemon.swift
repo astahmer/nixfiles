@@ -487,7 +487,7 @@ func vaultItems() async -> [JSON]? {
     return spawnVaultItems()
 }
 
-func requireUnlocked() async {
+func bitwardenRequireUnlocked() async {
     var current = await currentAuthState()
     if !current.unlocked {
         if current.authenticated, isatty(0) == 1, env("SECRET_NO_PROMPT") == nil {

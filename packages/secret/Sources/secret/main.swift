@@ -745,21 +745,9 @@ func dotenvValue(_ value: String) -> String {
     "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
 }
 
-func runBwInput(_ args: [String], input: String) -> String {
-    guard let bw = pathTo("bw") else { fail("could not run Bitwarden CLI (is 'bw' installed?)") }
-    let r = runCommand(bw, args, input: input)
-    if r.status != 0 {
-        let detail = r.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-            : r.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        fail("Bitwarden CLI request failed: \(detail.isEmpty ? "no output" : String(detail.prefix(300)))")
-    }
-    return r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-}
-
 func resolveRequired(_ items: [JSON]?, _ alias: String, _ definition: SecretDefinition) async -> String {
     if items == nil {
-        await requireUnlocked()
+        await vaultBackend.requireUnlocked()
         fail("could not read vault items (bw list items failed)")
     }
     guard let item = itemFor(items, definition.item) else {
@@ -777,7 +765,7 @@ func resolveOptional(_ items: [JSON]?, _ definition: SecretDefinition) -> String
 }
 
 func getValue(_ alias: String, _ definition: SecretDefinition) async -> String {
-    let items = await vaultItems()
+    let items = await vaultBackend.items()
     return await resolveRequired(items, alias, definition)
 }
 
@@ -792,9 +780,9 @@ func setValue(
     itemType: String? = nil,
     biometricConfirm: Bool = false
 ) async {
-    await requireUnlocked()
+    await vaultBackend.requireUnlocked()
     let field = definition.field ?? "password"
-    let items = await vaultItems()
+    let items = await vaultBackend.items()
     let item = itemFor(items, definition.item)
     if item == nil {
         var payload = newItem(
@@ -805,10 +793,7 @@ func setValue(
         )
         if let notes, field != "notes" { setItemField(&payload, "notes", notes) }
         if let source { setItemField(&payload, "custom:source", source) }
-        if !(await daemonMutate(method: "POST", path: "/object/item", payload: payload)) {
-            runBwInput(["create", "item"], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
-            daemonStop()
-        }
+        await vaultBackend.createItem(payload)
         success("created item \(definition.item)")
         return
     }
@@ -827,10 +812,7 @@ func setValue(
     if let name { payload["name"] = name }
     if let notes { setItemField(&payload, "notes", notes) }
     if let source { setItemField(&payload, "custom:source", source) }
-    if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
-        runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
-        daemonStop()
-    }
+    await vaultBackend.updateItem(id: id, payload)
     success("updated item \(definition.item)")
 }
 
@@ -847,8 +829,8 @@ func editItem(
     guard value != nil || source != nil || name != nil || notes != nil else {
         fail("edit needs a field change (name, value, source, notes, or --field)")
     }
-    await requireUnlocked()
-    let items = await vaultItems()
+    await vaultBackend.requireUnlocked()
+    let items = await vaultBackend.items()
     guard let item = itemFor(items, definition.item) else {
         fail("item not found for \(alias): \(definition.item)")
     }
@@ -864,10 +846,7 @@ func editItem(
     if let name { payload["name"] = name }
     if let source { setItemField(&payload, "custom:source", source) }
     if let notes { setItemField(&payload, "notes", notes) }
-    if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
-        runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
-        daemonStop()
-    }
+    await vaultBackend.updateItem(id: id, payload)
     success("edited \(alias)")
 }
 
@@ -918,7 +897,7 @@ func replacePairKey(_ key: String, _ value: J, in obj: J) -> J {
 // MARK: - doctor
 
 func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json: Bool) async {
-    let current = await currentAuthState()
+    let current = await vaultBackend.authState()
     if !current.authenticated {
         if json { print("[]") }
         else { print("bitwarden: unauthenticated — run: bw login, then secret unlock --store") }
@@ -934,13 +913,13 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
         if env("SECRET_DAEMON") == "0" {
             print("daemon\tdisabled")
         } else {
-            print((await daemonStatus()) == "unlocked" ? "daemon\tup" : "daemon\tdown")
+            print("daemon\t\(await vaultBackend.daemonSummary())")
         }
     }
 
     var problems = 0
     var jsonRows: [String] = []
-    let items = await vaultItems()
+    let items = await vaultBackend.items()
     for (alias, definition) in definitions {
         let field = definition.field ?? "password"
         if let item = itemFor(items, definition.item) {
@@ -1075,9 +1054,9 @@ func run() async {
 
     switch options.command {
     case "status":
-        let current = await currentAuthState()
+        let current = await vaultBackend.authState()
         if current.unlocked {
-            let daemonUp = (await daemonStatus()) == "unlocked"
+            let daemonUp = await vaultBackend.daemonSummary() == "up"
             print(outColor("32", "unlocked — ready. next: secret list, or secret env --output .env\(daemonUp ? " (daemon up)" : "")"))
         } else {
             print(outColor("33", current.authenticated
@@ -1113,7 +1092,7 @@ func run() async {
             }
             token = helperToken
         } else {
-            token = runBwUnlock()
+            token = await vaultBackend.interactiveUnlock()
         }
         if token.isEmpty {
             fail(options.helper
@@ -1125,15 +1104,14 @@ func run() async {
             // Daemon verdict first: direct `bw status` can report locked due
             // to transient secure-storage state even when a serve daemon
             // started with this session works fine.
-            if daemonEnabled(), await daemonStart() {
+            if await vaultBackend.startSessionDaemon(token: token) {
                 _ = helperSessionStore(token)
                 success(options.sessionStdin
                     ? "unlocked with Touch ID session; secret daemon ready"
                     : "unlocked with Touch ID; secret daemon ready")
                 return
             }
-            let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
-            let rejected = check.status != 0 || !(jsonObject(check.stdout)?["status"] as? String == "unlocked")
+            let rejected = !(await vaultBackend.sessionValid(token))
             if rejected {
                 // A rejected cached token must not be re-stored and reported
                 // as success; drop it and point at the fix.
@@ -1147,14 +1125,13 @@ func run() async {
             success("unlocked with Touch ID; cached behind Touch ID")
             return
         }
-        let check = runCommand(pathTo("bw") ?? "bw", ["status"], env: envWithSession(token))
-        if check.status == 0, let data = jsonObject(check.stdout), (data["status"] as? String) != "unlocked" {
+        if !(await vaultBackend.sessionValid(token)) {
             // A fresh interactive token rejected by a plain status check is
             // usually transient secure-storage state; still store it — the
             // daemon handoff below is what actually matters.
             warn("bw status did not confirm the new session (stale secure-storage state) — continuing; commands go through the secret daemon")
         }
-        daemonStop()
+        vaultBackend.stopSessionDaemon()
         if options.store {
             storeSession(token)
             _ = helperSessionStore(token)
@@ -1164,8 +1141,7 @@ func run() async {
         }
 
     case "lock":
-        runBw(["lock"])
-        daemonStop()
+        await vaultBackend.lock()
         let hadSession = readSession() != nil
         clearSession()
         // The Touch ID cache is kept: if the old token is still accepted,
@@ -1179,9 +1155,9 @@ func run() async {
             // Best-effort vault metadata for UI consumers: created dates and
             // source resolve only when a session is available; keys are
             // always present so parsing stays uniform.
-            let authState = await currentAuthState()
+            let authState = await vaultBackend.authState()
             var itemIndex: [String: JSON] = [:]
-            if authState.unlocked, let items = await vaultItems() {
+            if authState.unlocked, let items = await vaultBackend.items() {
                 for item in items {
                     if let name = item["name"] as? String { itemIndex[name] = item }
                 }
@@ -1203,7 +1179,7 @@ func run() async {
             print("[" + items.joined(separator: ",") + "]")
         } else if outIsTTY() {
             let header = ["ALIAS", "ITEM", "FIELD", "CREATED AT", "SOURCE"]
-            let items = await vaultItems()
+            let items = await vaultBackend.items()
             var hidden = 0
             var rows: [[String]] = []
             for (alias, definition) in entries {
@@ -1400,9 +1376,9 @@ func run() async {
             fail("id requires an alias, e.g. secret id github-token (see 'secret list')")
         }
         guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
-        let items = await vaultItems()
+        let items = await vaultBackend.items()
         guard let item = itemFor(items, definition.item) else {
-            await requireUnlocked()
+            await vaultBackend.requireUnlocked()
             fail("item not found for \(alias): \(definition.item)")
         }
         guard let id = item["id"] as? String else { fail("Bitwarden item for \(alias) has no id") }
@@ -1414,8 +1390,8 @@ func run() async {
             fail("totp requires an alias, e.g. secret totp github-token (see 'secret list')")
         }
         guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
-        await requireUnlocked()
-        let code = runBw(["get", "totp", definition.item])
+        await vaultBackend.requireUnlocked()
+        let code = vaultBackend.totp(itemName: definition.item)
         recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "totp", target: alias, env: environment))
         if options.copy {
             copyToClipboardOrFail(code)
@@ -1430,19 +1406,16 @@ func run() async {
         }
         guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
         let url = options.positional.count > 1 ? options.positional[1] : nil
-        let items = await vaultItems()
+        let items = await vaultBackend.items()
         guard let item = itemFor(items, definition.item) else {
-            await requireUnlocked()
+            await vaultBackend.requireUnlocked()
             fail("item not found for \(alias): \(definition.item)")
         }
     if let url {
         guard var payload = jsonObject(jsonString(item)) else { fail("Bitwarden item for \(alias) is invalid") }
         setItemField(&payload, "custom:source", url)
             let id = payload["id"] as? String ?? ""
-            if !(await daemonMutate(method: "PUT", path: "/object/item/\(id)", payload: payload)) {
-                runBwInput(["edit", "item", id], input: Data(jStringify(anyToJ(payload), pretty: false).utf8).base64EncodedString())
-            daemonStop()
-        }
+            await vaultBackend.updateItem(id: id, payload)
         if options.openURL {
             openInBrowser(url)
         } else {
@@ -1465,11 +1438,8 @@ func run() async {
     }
 
     case "pull":
-        await requireUnlocked()
-        if !(await daemonMutate(method: "POST", path: "/sync")) {
-            runBw(["sync"])
-            daemonStop()
-        }
+        await vaultBackend.requireUnlocked()
+        await vaultBackend.syncCache()
         recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "pull", target: "", env: environment))
         success("vault cache pulled from server")
 
@@ -1485,7 +1455,7 @@ func run() async {
         ) else {
             fail("alias \(alias) is not in a project, local, or user config (see 'secret print --all')")
         }
-        await requireUnlocked()
+        await vaultBackend.requireUnlocked()
         var itemNames: [String] = []
         if let item = holder.config.get("secrets")?.get(alias)?.get("item")?.string() {
             itemNames.append(item)
@@ -1495,7 +1465,7 @@ func run() async {
                 itemNames.append(item)
             }
         }
-        let items = await vaultItems()
+        let items = await vaultBackend.items()
         var ids: [String: String] = [:]
         for item in itemNames {
             guard let entry = itemFor(items, item) else { fail("item not found for \(alias): \(item)") }
@@ -1558,9 +1528,9 @@ func run() async {
             fail("rm requires an alias, e.g. secret rm github-token (see 'secret list')")
         }
         guard let definition = loaded.definitions[alias] else { fail("unknown alias: \(alias) (see 'secret list')") }
-        let items = await vaultItems()
+        let items = await vaultBackend.items()
         guard let item = itemFor(items, definition.item) else {
-            await requireUnlocked()
+            await vaultBackend.requireUnlocked()
             if items != nil {
                 unsetAlias(alias, options.global ? userConfigPath : options.configPath, quiet: true)
                 info("item not found in vault — removed \(alias) from config")
@@ -1576,10 +1546,7 @@ func run() async {
             if !confirmed { fail("aborted; use --force to delete without confirmation") }
         }
         guard let id = item["id"] as? String else { fail("Bitwarden item for \(alias) has no id") }
-        if !(await daemonMutate(method: "DELETE", path: "/object/item/\(id)")) {
-            runBw(["delete", "item", definition.item])
-            daemonStop()
-        }
+        await vaultBackend.deleteItem(id: id, fallbackName: definition.item)
         recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "rm", target: alias, env: environment))
         success("deleted item \(definition.item) for \(alias) (config entry kept)")
 
@@ -1616,7 +1583,7 @@ func run() async {
         for alias in optionalSet where loaded.definitions[alias] == nil {
             writeErr("secret: \(alias) is not declared (optional, skipping)\n")
         }
-        let items = await vaultItems()
+        let items = await vaultBackend.items()
         if items != nil {
             let missing = selected.filter { candidate in
                 guard let definition = loaded.definitions[candidate] else { return false }
@@ -1681,7 +1648,7 @@ func run() async {
         for alias in optionalSet where loaded.definitions[alias] == nil {
             writeErr("secret: \(alias) is not declared (optional, skipping)\n")
         }
-        let items = await vaultItems()
+        let items = await vaultBackend.items()
         if items != nil {
             let missing = selected.filter { candidate in
                 guard let definition = loaded.definitions[candidate] else { return false }
@@ -1729,9 +1696,9 @@ func run() async {
         guard let selected = loaded.selectedAliases, !selected.isEmpty else {
             fail("prune requires .secret.json or --config FILE with a secrets map; see docs/bitwarden.md")
         }
-        let items = await vaultItems()
+        let items = await vaultBackend.items()
         if items == nil {
-            await requireUnlocked()
+            await vaultBackend.requireUnlocked()
             fail("could not read vault items — cannot prune")
         }
         let missing = selected.filter { alias in

@@ -2413,6 +2413,7 @@ struct SecretBarView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 10) {
                         sortHeader("Secret", .alias)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         sortHeader("Project", .project, width: 104)
                         sortHeader("Created", .createdAt, width: 92)
                         sortHeader("Last used", .lastUsed, width: 92)
@@ -2982,7 +2983,9 @@ private struct SecretBarCombinedApp: App {
 }
 
 struct SecretMenuBarScene: Scene {
-    let model: SecretBarModel
+    // Scenes do not auto-subscribe to ObservableObject changes; without
+    // @ObservedObject the menu bar icon never re-renders on lock/unlock.
+    @ObservedObject var model: SecretBarModel
 
     var body: some Scene {
         MenuBarExtra {
