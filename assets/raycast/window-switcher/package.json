@@ -1,0 +1,39 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "window-switcher",
+  "title": "Window Switcher",
+  "description": "Switch to any window of any app on any Space \u2014 multiple windows of the same app are listed individually",
+  "icon": "command-icon.png",
+  "author": "astahmer",
+  "categories": [
+    "System",
+    "Productivity"
+  ],
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "switch-window",
+      "title": "Switch Window",
+      "description": "List every open window across all Spaces and focus the picked one",
+      "mode": "view"
+    }
+  ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "dependencies": {
+    "@raycast/api": "^1.100.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "lint": "ray lint"
+  }
+}

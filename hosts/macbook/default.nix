@@ -43,6 +43,7 @@ in
             }
           )
           hm.macosApps
+          hm.raycastLocalExtensions
 
           (
             { ... }:
