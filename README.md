@@ -64,7 +64,7 @@ The default user is `astahmer`. Change `nixfiles.username` in `modules/global-op
 
 ### Secrets and MCP credentials
 
-The global `secret` command, project-local `.secret.json` files, Bitwarden, and the explicit `.env` projection flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). Home Manager does not contact Bitwarden during activation.
+The global `secret` command, project-local `.secret.json` files, Bitwarden, and the explicit `.env` projection flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). Home Manager does not contact Bitwarden during activation. The full secrets system (backends, biometric cache, leak-guarded `secret run`, CI checks, SecretBar) is documented in [`docs/secrets.md`](docs/secrets.md).
 
 The ModLens Gemini (AI Studio) key setup — get, store, project, rotate — is
 documented in [`docs/gemini-api-key.md`](docs/gemini-api-key.md).

@@ -42,11 +42,13 @@ struct Options {
     var helper = false
     var store = false
     var sessionStdin = false
+    var ci = false
 }
 
 let commandAliases: [String: String] = [
     "st": "status",
     "ls": "list",
+    "check": "doctor",
     "g": "get",
     "s": "set",
     "add": "set",
@@ -120,6 +122,8 @@ func parseOptions(_ argv: [String]) -> Options {
             options.helper = true
         } else if argument == "--session-stdin" {
             options.sessionStdin = true
+        } else if argument == "--ci" {
+            options.ci = true
         } else if argument == "--export" {
             options.export = true
         } else if argument == "--json" {
@@ -322,6 +326,7 @@ let commandHelpText: [String: String] = [
       --output FILE     Atomically write the dotenv to FILE (mode 0600)
       --env NAME        Environment overrides (default: prod)
       --export          Print shell export lines instead of dotenv
+                        (direnv: put `eval "$(secret env --export)"` in .envrc)
       --diff, --dry, --dry-run
                         Show what --output would write without writing
       --required a,b,c  Fail unless these aliases are in the config
@@ -332,6 +337,10 @@ let commandHelpText: [String: String] = [
 
     Inject project aliases into a command's environment. Strict by default;
     --optional warns and skips unresolved aliases.
+
+    Leak guard: everything the command writes to stdout/stderr is filtered,
+    replacing known secret values with [scrubbed] before it reaches the
+    terminal or logs.
     """,
     "print": """
     Usage: secret print [project|global|local] [--all] [--json]
@@ -357,10 +366,13 @@ let commandHelpText: [String: String] = [
     Validate configs offline: items, env keys, collisions (no vault).
     """,
     "doctor": """
-    Usage: secret doctor [--json]
+    Usage: secret doctor [--json] [--ci]
 
-    Validate configs, Bitwarden state, and alias resolvability. --json emits
+    Validate configs, vault state, alias resolvability, and expiry. --json emits
     machine-readable rows with remote item metadata and TOTP availability.
+    --ci (or the `secret check` alias) is non-interactive, prints only problems
+    plus a summary line, and exits 1 when any problem is found — suitable for
+    CI and pre-push hooks.
     """,
     "recent": """
     Usage: secret recent [--json]
@@ -745,6 +757,14 @@ func dotenvValue(_ value: String) -> String {
     "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
 }
 
+func parseExpiry(_ value: String) -> Date? {
+    let plain = DateFormatter()
+    plain.dateFormat = "yyyy-MM-dd"
+    plain.locale = Locale(identifier: "en_US_POSIX")
+    if let date = plain.date(from: value) { return date }
+    return ISO8601DateFormatter().date(from: value)
+}
+
 func resolveRequired(_ items: [JSON]?, _ alias: String, _ definition: SecretDefinition) async -> String {
     if items == nil {
         await vaultBackend.requireUnlocked()
@@ -896,7 +916,7 @@ func replacePairKey(_ key: String, _ value: J, in obj: J) -> J {
 
 // MARK: - doctor
 
-func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json: Bool) async {
+func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json: Bool, ci: Bool = false) async {
     let current = await vaultBackend.authState()
     if !current.authenticated {
         if json { print("[]") }
@@ -908,7 +928,7 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
         else { print("bitwarden: locked — unlock with: secret unlock --store") }
         exit(1)
     }
-    if !json {
+    if !json && !ci {
         print("bitwarden: unlocked")
         if env("SECRET_DAEMON") == "0" {
             print("daemon\tdisabled")
@@ -918,8 +938,10 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
     }
 
     var problems = 0
+    if ci { setenv("SECRET_NO_PROMPT", "1", 1) }
     var jsonRows: [String] = []
     let items = await vaultBackend.items()
+    var expiringSoon: [String] = []
     for (alias, definition) in definitions {
         let field = definition.field ?? "password"
         if let item = itemFor(items, definition.item) {
@@ -929,7 +951,15 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
             } else {
                 false
             }
-            let status = valid ? "ok" : "invalid"
+            var status = valid ? "ok" : "invalid"
+            if valid, let expiresText = definition.expiresAt, let expiry = parseExpiry(expiresText) {
+                if expiry < Date() {
+                    status = "expired"
+                    problems += 1
+                } else if expiry < Date().addingTimeInterval(14 * 86_400) {
+                    expiringSoon.append(alias)
+                }
+            }
             let itemName = item["name"] as? String ?? definition.item
             let source = itemField(item, "custom:source") as? String ?? ""
             let hasTOTP = ((item["login"] as? JSON)?["totp"] as? String)?.isEmpty == false
@@ -943,12 +973,12 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
                     ("source", source),
                     ("hasTOTP", hasTOTP ? "true" : "false"),
                 ]))
-            } else if valid {
-                print("ok\t\(alias)\t\(definition.item)\t\(field)")
+            } else if status == "ok" {
+                if !ci { print("ok\t\(alias)\t\(definition.item)\t\(field)") }
             } else {
-                print("invalid value\t\(alias)\t\(definition.item)\t\(field)")
+                print("\(status) value\t\(alias)\t\(definition.item)\t\(field)")
+                problems += 1
             }
-            if !valid { problems += 1 }
         } else {
             if json {
                 jsonRows.append(rowJSON([
@@ -968,8 +998,11 @@ func doctor(_ definitions: [(alias: String, definition: SecretDefinition)], json
     }
 
     if json { print("[" + jsonRows.joined(separator: ",") + "]") }
+    for alias in expiringSoon where !ci {
+        warn("expiring soon: \(alias)")
+    }
     let total = definitions.count
-    let summary = "secret doctor: \(total - problems)/\(total) aliases ok, \(problems) problem(s)"
+    let summary = "secret \(ci ? "check" : "doctor"): \(total - problems)/\(total) aliases ok, \(problems) problem(s)"
     if problems > 0 {
         warn(summary)
     } else {
@@ -1012,6 +1045,10 @@ func maybeBootstrapBiometricSession() {
 func run() async {
     var options = parseOptions(Array(CommandLine.arguments.dropFirst()))
     options.command = commandAliases[options.command] ?? options.command
+    // `secret check` is doctor in CI mode: non-interactive, expiry-aware.
+    if options.command == "doctor", CommandLine.arguments.dropFirst().first == "check" {
+        options.ci = true
+    }
     if options.command == "global" && options.positional.first == "add" {
         options.command = "set"
         options.global = true
@@ -1675,7 +1712,9 @@ func run() async {
         var mergedEnv = ProcessInfo.processInfo.environment
         for (key, value) in envVars { mergedEnv[key] = value }
         let commandPath = command.contains("/") ? command : (pathTo(command) ?? command)
-        let status = runCommandPassthrough(commandPath, args, env: mergedEnv)
+        // Leak guard: values injected into the environment are also scrubbed
+        // from everything the command writes to stdout/stderr.
+        let status = runCommandScrubbed(commandPath, args, env: mergedEnv, secrets: envVars.sorted { $0.key < $1.key })
         exit(status == 0 ? 0 : status)
 
     case "print":

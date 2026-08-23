@@ -137,7 +137,7 @@ struct BitwardenBackend: VaultBackend {
 
 // MARK: - Backend selection
 
-let availableBackends = ["bitwarden"]
+let availableBackends = ["bitwarden", "keychain"]
 
 /// Selected once per invocation from the global config's top-level
 /// `"backend"` key; defaults to Bitwarden.
@@ -150,10 +150,12 @@ func activeBackend() -> VaultBackend {
     } else {
         requested = "bitwarden"
     }
-    guard requested == "bitwarden" else {
+    switch requested {
+    case "bitwarden": return BitwardenBackend()
+    case "keychain": return KeychainBackend()
+    default:
         fail("unknown vault backend '\(requested)' (available: \(availableBackends.joined(separator: ", ")))")
     }
-    return BitwardenBackend()
 }
 
 /// Process-wide backend instance; selection reads only a small local config

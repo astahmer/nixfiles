@@ -487,7 +487,10 @@ func loadDefinitions(configPath: String? = nil, environment: String = "prod", al
 
 func readConfig(_ path: String) -> J {
     guard let raw = readFile(path) else { fail("cannot read config \(path): no such file") }
-    guard let parsed = parseJSONOrdered(raw), parsed.isObject, parsed.get("secrets")?.isObject == true else {
+    // A global config may carry only settings (e.g. {"backend": "..."}),
+    // so accept either a secrets map or a backend selector.
+    guard let parsed = parseJSONOrdered(raw), parsed.isObject,
+          parsed.get("secrets")?.isObject == true || parsed.get("backend")?.string() != nil else {
         fail("invalid config: \(path)")
     }
     return parsed
@@ -803,3 +806,132 @@ func valueFor(_ item: JSON?, _ definition: SecretDefinition) -> String? {
     if let value = value as? String, !value.isEmpty, !placeholderValues.contains(value) { return value }
     return nil
 }
+
+
+// MARK: - Output leak scrubbing for `secret run`
+
+/// Streams a child process's stdout/stderr through a filter that replaces
+/// every occurrence of known secret values with "[scrubbed]" before anything
+/// reaches the terminal. Handles matches split across chunk boundaries by
+/// holding back a tail until more data arrives.
+final class StreamScrubber {
+    private let needles: [Data]
+    private var pending = Data()
+    private let marker = Data("[scrubbed]".utf8)
+
+    init(secrets: [String]) {
+        needles = Set(secrets.filter { !$0.isEmpty })
+            .map { Data($0.utf8) }
+            .sorted { $0.count > $1.count }
+    }
+
+    func scrub(_ chunk: Data) -> Data {
+        guard !needles.isEmpty else { return chunk }
+        pending.append(chunk)
+        var out = Data()
+        while true {
+            // find earliest match across needles (longest-first ordering
+            // breaks ties at the same position)
+            var hitStart = -1
+            var hitEnd = -1
+            for needle in needles {
+                if let range = pending.range(of: needle) {
+                    if hitStart == -1 || range.lowerBound < hitStart
+                        || (range.lowerBound == hitStart && needle.count > hitEnd - hitStart) {
+                        hitStart = range.lowerBound
+                        hitEnd = range.upperBound
+                    }
+                }
+            }
+            guard hitStart != -1 else { break }
+            out.append(pending.prefix(hitStart))
+            out.append(marker)
+            pending.removeFirst(hitEnd)
+        }
+        let holdback = (needles.map { $0.count }.max() ?? 1) - 1
+        if pending.count > holdback {
+            out.append(pending.prefix(pending.count - holdback))
+            pending.removeFirst(pending.count - holdback)
+        }
+        return out
+    }
+
+    func flush() -> Data {
+        var out = pending
+        pending.removeAll()
+        var final = Data()
+        while true {
+            var hitStart = -1
+            var hitEnd = -1
+            for needle in needles {
+                if let range = out.range(of: needle) {
+                    if hitStart == -1 || range.lowerBound < hitStart {
+                        hitStart = range.lowerBound
+                        hitEnd = range.upperBound
+                    }
+                }
+            }
+            guard hitStart != -1 else { break }
+            final.append(out.prefix(hitStart))
+            final.append(marker)
+            out.removeFirst(hitEnd)
+        }
+        final.append(out)
+        return final
+    }
+}
+
+/// Like runCommandPassthrough, but child stdout/stderr are filtered so secret
+/// values never appear in terminal output or logs.
+func runCommandScrubbed(
+    _ executable: String,
+    _ args: [String],
+    env: [String: String],
+    secrets: [(key: String, value: String)]
+) -> Int32 {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: executable)
+    process.arguments = args
+    process.environment = env
+
+    let outPipe = Pipe()
+    let errPipe = Pipe()
+    process.standardOutput = outPipe
+    process.standardError = errPipe
+    process.standardInput = FileHandle.nullDevice
+
+    do {
+        try process.run()
+    } catch {
+        writeErr("secret run: could not launch \(executable): \(error.localizedDescription)\n")
+        return 127
+    }
+
+    let stdoutScrubber = StreamScrubber(secrets: secrets.map { $0.value })
+    let stderrScrubber = StreamScrubber(secrets: secrets.map { $0.value })
+
+    let drainGroup = DispatchGroup()
+
+    func pump(_ handle: FileHandle, _ scrubber: StreamScrubber, to target: FileHandle) {
+        drainGroup.enter()
+        handle.readabilityHandler = { h in
+            let data = h.availableData
+            if data.isEmpty {
+                h.readabilityHandler = nil
+                target.write(scrubber.flush())
+                drainGroup.leave()
+                return
+            }
+            target.write(scrubber.scrub(data))
+        }
+    }
+    pump(outPipe.fileHandleForReading, stdoutScrubber, to: FileHandle.standardOutput)
+    pump(errPipe.fileHandleForReading, stderrScrubber, to: FileHandle.standardError)
+
+    process.waitUntilExit()
+    // Wait for both streams to hit EOF and flush, otherwise short-lived
+    // commands can exit before their filtered output reaches the terminal.
+    _ = drainGroup.wait(timeout: .now() + 10)
+    return process.terminationStatus
+}
+

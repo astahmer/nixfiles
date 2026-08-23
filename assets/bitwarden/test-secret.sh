@@ -535,7 +535,7 @@ rg -q '"EXTRA"' .secret.local.json && {
   echo "FAIL: unset removes from the local config" >&2
 } || pass=$((pass + 1))
 assert_eq "$(secret get BASE)" "old-pass" "local item wins"
-assert_eq "$(secret run -- sh -c 'echo $BASE')" "old-pass" "run injects project env"
+assert_eq "$(secret run -- sh -c 'echo $BASE')" "[scrubbed]" "run injects env and scrubs secret values from output"
 secret run -- sh -c 'exit 3' 2>/dev/null && {
   fail=$((fail + 1))
   echo "FAIL: run propagates nonzero exit" >&2
@@ -553,7 +553,7 @@ mkdir -p "$tmp/optdir"
 printf '%s' '{"secrets":{"BASE":{"item":"base/item"},"BROKEN":{"item":"base/missing"}}}' > "$tmp/optdir/.secret.json"
 cd "$tmp/optdir"
 assert_fail secret run -- sh -c 'echo hi'
-assert_eq "$(secret run --optional BROKEN -- sh -c 'echo $BASE')" "old-pass" "run --optional skips unresolved aliases"
+assert_eq "$(secret run --optional BROKEN -- sh -c 'echo $BASE')" "[scrubbed]" "run --optional skips unresolved aliases (output scrubbed)"
 assert_eq "$(secret env --optional BROKEN --export)" "$(printf 'export BASE='\''old-pass'\''')" "env --optional skips unresolved aliases"
 cd "$tmp"
 
@@ -576,7 +576,7 @@ export FAKE_DAEMON_MISSING="$tmp/daemon-missing.txt"
 assert_eq "$(secret status)" "unlocked — ready. next: secret list, or secret env --output .env (daemon up)" "daemon status reports the daemon"
 assert_eq "$(secret get github-token)" "old-pass" "daemon get via HTTP"
 assert_eq "$(secret env --export)" "$(printf '# source: https://example.com\nexport GITHUB_TOKEN='\''old-pass'\''')" "daemon env via HTTP"
-assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon run via HTTP"
+assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "[scrubbed]" "daemon run via HTTP (output scrubbed)"
 assert_eq "$(rg -c -- '-- serve --' "$FAKE_LOG" || echo 0)" "1" "daemon spawned exactly once"
 assert_eq "$(rg -c -- '-- get ' "$FAKE_LOG" || echo 0)" "0" "daemon mode never spawns bw get"
 assert_eq "$(rg -c 'GET /list/object/items' "$FAKE_DAEMON_LOG" || echo 0)" "3" "three item lists served over HTTP"
@@ -584,7 +584,7 @@ touch "$FAKE_DAEMON_MISSING"
 assert_fail secret env --output x
 assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' secret status)" "locked — unlock with: secret unlock --store" "locked daemon falls back to spawn status"
 rm -f "$FAKE_DAEMON_MISSING"
-assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "old-pass" "daemon recovers after denied requests"
+assert_eq "$(secret run -- sh -c 'echo $GITHUB_TOKEN')" "[scrubbed]" "daemon recovers after denied requests (output scrubbed)"
 # mutations ride the daemon while it is up
 : > "$FAKE_LOG"
 : > "$FAKE_DAEMON_LOG"
@@ -667,14 +667,21 @@ else
   echo "skipping graceful re-unlock tests (expect not on PATH)" >&2
 fi
 : > "$FAKE_LOG"
-assert_eq "$(BW_SESSION=existing-token secret unlock)" "existing-token" "unlock reuses the env session without prompting"
-assert_eq "$(rg -c -- 'unlock-env:' "$FAKE_LOG" || echo 0)" "0" "unlock does not prompt when a session is present"
+assert_eq "$(BW_SESSION=stale-token secret unlock)" "session-token-123" "unlock ignores stale env and obtains a fresh session"
+assert_eq "$(rg -c -- 'unlock-env:' "$FAKE_LOG" || echo 0)" "1" "unlock always prompts for a fresh session"
 : > "$FAKE_KEYCHAIN"
-BW_SESSION=existing-token secret unlock --store >/dev/null 2>&1
-assert_eq "$(cat "$FAKE_KEYCHAIN" 2>/dev/null || true)" "existing-token" "unlock --store persists the env session"
-assert_eq "$(FAKE_BW_STATUS='{"status":"locked"}' BW_SESSION=bad-token secret unlock --store 2>&1 || true)" "secret: refusing to store a rejected session — run 'bw logout && bw login' once, then 'secret unlock --store'" "unlock refuses a rejected env session"
+# unlock ignores any inherited BW_SESSION: it always means "fresh session"
+BW_SESSION=stale-dead-token secret unlock --store >/dev/null 2>&1
+assert_eq "$(cat "$FAKE_KEYCHAIN" 2>/dev/null || true)" "session-token-123" "unlock --store persists a fresh session, ignoring stale env"
+reject_out="$(FAKE_BW_STATUS='{"status":"locked"}' FAKE_BW_REJECT_UNLOCK=1 secret unlock --store 2>&1 || true)"
+case "$reject_out" in
+  *"bw status did not confirm the new session"*"unlocked; session stored"*)
+    pass=$((pass + 1)) ;;
+  *)
+    fail=$((fail + 1)); echo "FAIL: rejected fresh session should warn-and-store: $reject_out" >&2 ;;
+esac
 assert_eq "$(FAKE_UNLOCK_EMPTY=1 secret unlock --store 2>&1 || true)" "secret: bw unlock returned no session token" "unlock refuses to store an empty token"
-if FAKE_BW_REJECT_UNLOCK=1 FAKE_BW_STATUS='{"status":"locked"}' secret unlock --store 2>&1 >/dev/null | rg -q "bw rejected the new session"; then
+if FAKE_BW_REJECT_UNLOCK=1 FAKE_BW_STATUS='{"status":"locked"}' secret unlock --store 2>&1 >/dev/null | rg -q "did not confirm the new session"; then
   pass=$((pass + 1))
 else
   fail=$((fail + 1))
@@ -713,6 +720,71 @@ else
     echo "FAIL: lock clears stored session file" >&2
   }
 fi
+
+
+# --- backend selection -------------------------------------------------------
+cat > "$tmp/.config/secret/config.json" <<EOF
+{ "backend": "doesnotexist" }
+EOF
+assert_eq "$(secret status 2>&1 || true)" "secret: unknown vault backend 'doesnotexist' (available: bitwarden, keychain)" "unknown backend fails with available list"
+
+# --- env --export + run leak scrubbing --------------------------------------
+cat > "$tmp/.config/secret/config.json" <<EOF
+{}
+EOF
+export_lines="$(secret env --export 2>/dev/null)"
+assert_eq "$(printf '%s' "$export_lines" | rg -c '^export DATABASE_URL=' || echo 0)" "1" "env --export emits export lines"
+eval "$export_lines"
+assert_eq "$DATABASE_URL" "old-pass" "env --export output evals to the secret value"
+
+scrubbed="$(secret run -- sh -c 'echo "leak: $DATABASE_URL"' 2>/dev/null)"
+case "$scrubbed" in
+  *old-pass*)
+    fail=$((fail + 1)); echo "FAIL: run leaks secret values into stdout" >&2 ;;
+  *"leak: [scrubbed]"*)
+    pass=$((pass + 1)) ;;
+  *)
+    fail=$((fail + 1)); echo "FAIL: run scrub unexpected output: $scrubbed" >&2 ;;
+esac
+
+# --- secret check (doctor --ci) ---------------------------------------------
+check_out="$(secret check 2>&1)"; check_rc=$?
+assert_eq "$check_rc" "0" "check exits 0 when all aliases resolve"
+case "$check_out" in
+  *"aliases ok"*) pass=$((pass + 1)) ;;
+  *) fail=$((fail + 1)); echo "FAIL: check prints summary line" >&2 ;;
+esac
+
+cat > "$tmp/proj/.secret.json" <<EOF
+{ "secrets": { "database-url": { "item": "myapp/database-url", "expiresAt": "2020-01-01" } } }
+EOF
+cd "$tmp/proj"
+secret check >/dev/null 2>&1 && { fail=$((fail + 1)); echo "FAIL: check should exit 1 on expired secret" >&2; } || pass=$((pass + 1))
+check_expired="$(secret check 2>&1)"
+case "$check_expired" in
+  *"expired value"*database-url*) pass=$((pass + 1)) ;;
+  *) fail=$((fail + 1)); echo "FAIL: check flags expired secret: $check_expired" >&2 ;;
+esac
+cd "$tmp"
+rm -f "$tmp/proj/.secret.json"
+
+# --- keychain backend roundtrip (swift only, opt-in) ------------------------
+if [ "$impl" = "swift" ] && [ -n "${RUN_KEYCHAIN_TESTS:-}" ]; then
+  export SECRET_KEYCHAIN_SERVICE="dev.astahmer.secret-tests-$$"
+  cat > "$tmp/.config/secret/config.json" <<EOF
+{ "backend": "keychain" }
+EOF
+  printf 'kc-pass-42\n' | secret set kc/test-item --force >/dev/null 2>&1 && pass=$((pass + 1)) || {
+    fail=$((fail + 1)); echo "FAIL: keychain set" >&2
+  }
+  assert_eq "$(secret get kc/test-item 2>/dev/null)" "kc-pass-42" "keychain get roundtrip"
+  printf 'kc-pass-43\n' | secret set kc/test-item --force >/dev/null 2>&1
+  assert_eq "$(secret get kc/test-item 2>/dev/null)" "kc-pass-43" "keychain update roundtrip"
+  secret rm kc/test-item --force >/dev/null 2>&1
+  secret get kc/test-item >/dev/null 2>&1 && { fail=$((fail + 1)); echo "FAIL: keychain delete" >&2; } || pass=$((pass + 1))
+  unset SECRET_KEYCHAIN_SERVICE
+fi
+
 
 echo "secret tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
