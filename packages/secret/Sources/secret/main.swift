@@ -1174,12 +1174,28 @@ func run() async {
     case "list":
         let entries = loaded.ordered
         if options.json {
+            // Best-effort vault metadata for UI consumers: created dates and
+            // source resolve only when a session is available; keys are
+            // always present so parsing stays uniform.
+            let authState = await currentAuthState()
+            var itemIndex: [String: JSON] = [:]
+            if authState.unlocked, let items = await vaultItems() {
+                for item in items {
+                    if let name = item["name"] as? String { itemIndex[name] = item }
+                }
+            }
             let items = entries.map { alias, definition -> String in
-                rowJSON([
+                let item = itemIndex[definition.item]
+                let source = item.flatMap { itemField($0, "custom:source") as? String } ?? ""
+                let hasTOTP = ((item?["login"] as? JSON)?["totp"] as? String)?.isEmpty == false
+                return rowJSON([
                     ("alias", alias),
                     ("item", definition.item),
                     ("field", definition.field ?? "password"),
                     ("envKey", dotenvKey(alias, definition)),
+                    ("createdAt", item.flatMap { formatCreatedAt($0["creationDate"] as? String ?? "") } ?? ""),
+                    ("source", source),
+                    ("hasTOTP", hasTOTP ? "true" : "false"),
                 ])
             }
             print("[" + items.joined(separator: ",") + "]")

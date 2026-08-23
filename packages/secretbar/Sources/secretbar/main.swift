@@ -321,6 +321,7 @@ final class SecretBarModel: ObservableObject {
     @Published var importProject: Project?
     @Published var importEnvironment = "prod"
     @Published var remoteMetadata: [String: RemoteEntryMetadata] = [:]
+    @Published var createdAtByKey: [String: Date] = [:]
     @Published var remoteValidationComplete = false
     @Published var revealingID: String?
     @Published var revealedValue = ""
@@ -405,6 +406,7 @@ final class SecretBarModel: ObservableObject {
                 self.refreshIndex()
                 self.refreshHistory()
                 self.sessionCreated = sessionAge
+                self.refreshListMetadata()
                 self.refreshHealth()
                 self.setBusy(false)
             }
@@ -428,6 +430,7 @@ final class SecretBarModel: ObservableObject {
                 }
                 self.refreshIndex()
                 self.refreshHistory()
+                self.refreshListMetadata()
                 self.refreshHealth()
                 self.setBusy(false)
             }
@@ -1203,6 +1206,41 @@ final class SecretBarModel: ObservableObject {
         return formatDate(date)
     }
 
+    func lastUsedDate(_ entry: AliasEntry) -> Date? {
+        guard let value = lastUsedByKey["\(entry.environment):\(entry.alias)"] else { return nil }
+        return parseDate(value)
+    }
+
+    /// Created dates come from the vault via `secret list --json`, grouped per
+    /// config like the health check; best-effort (empty while locked).
+    func refreshListMetadata() {
+        let groups = Dictionary(grouping: entries) { "\($0.configPath)\u{0}\($0.environment)" }
+            .values.map { group in
+                (configPath: group[0].configPath, environment: group[0].environment, cwd: group[0].cwd, entries: group)
+            }
+        Task.detached(priority: .utility) { [weak self] in
+            var builtCreated: [String: Date] = [:]
+            for group in groups {
+                var arguments = ["list", "--json", "--config", group.configPath]
+                if group.environment != "prod" { arguments += ["--env", group.environment] }
+                let result = runSecret(arguments, cwd: group.cwd, timeout: 60)
+                guard result.status == 0,
+                      let data = result.stdout.data(using: .utf8),
+                      let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { continue }
+                for row in rows {
+                    guard let alias = row["alias"] as? String,
+                          let entry = group.entries.first(where: { $0.alias == alias }),
+                          let createdText = row["createdAt"] as? String,
+                          !createdText.isEmpty,
+                          let date = parseDate(createdText) else { continue }
+                    builtCreated[entry.id] = date
+                }
+            }
+            let created = builtCreated
+            await MainActor.run { [weak self] in self?.createdAtByKey = created }
+        }
+    }
+
     private func scheduleClipboardClear() {
         clipboardTask?.cancel()
         guard clipboardClearSeconds > 0 else { return }
@@ -1243,6 +1281,12 @@ func parseDate(_ value: String) -> Date? {
 func formatDate(_ date: Date) -> String {
     let formatter = DateFormatter()
     formatter.dateFormat = "yyyy-MM-dd HH:mm"
+    return formatter.string(from: date)
+}
+
+func formatDateShort(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.setLocalizedDateFormatFromTemplate("yMMMd")
     return formatter.string(from: date)
 }
 
@@ -1748,6 +1792,13 @@ enum SecretListFilter: String, CaseIterable, Identifiable {
     }
 }
 
+enum SecretSortKey: String, CaseIterable {
+    case alias
+    case project
+    case createdAt
+    case lastUsed
+}
+
 struct SecretBarSurface<Content: View>: View {
     let content: Content
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -1790,6 +1841,8 @@ struct SecretBarView: View {
     @State private var tab: SecretBarTab = .secrets
     @State private var query = ""
     @State private var listFilter: SecretListFilter = .all
+    @State private var sortKey: SecretSortKey = .alias
+    @State private var sortAscending = true
     @State private var selectedTag: String?
     @State private var rotating: AliasEntry?
     @State private var editing: AliasEntry?
@@ -1854,21 +1907,27 @@ struct SecretBarView: View {
         Array(Set(model.entries.flatMap(\.tags))).sorted()
     }
 
-    private var pinnedEntries: [AliasEntry] {
-        guard model.pinsEnabled, listFilter == .all else { return [] }
-        return filteredEntries.filter { model.pinnedIDs.contains($0.id) }
+    private func compareEntries(_ a: AliasEntry, _ b: AliasEntry) -> Bool {
+        switch sortKey {
+        case .alias:
+            return a.alias.localizedStandardCompare(b.alias) == .orderedAscending
+        case .project:
+            return a.project == b.project ? a.alias < b.alias : a.project < b.project
+        case .createdAt:
+            let ad = model.createdAtByKey[a.id] ?? .distantPast
+            let bd = model.createdAtByKey[b.id] ?? .distantPast
+            return ad == bd ? a.alias < b.alias : ad < bd
+        case .lastUsed:
+            let an = model.lastUsedDate(a) ?? .distantPast
+            let bn = model.lastUsedDate(b) ?? .distantPast
+            return an == bn ? a.alias < b.alias : an > bn // most recent first by default
+        }
     }
 
-    private var recentEntries: [AliasEntry] {
-        guard listFilter == .all else { return [] }
-        let hidden = Set(pinnedEntries.map(\.id))
-        return filteredEntries.filter { model.recent.contains($0) && !hidden.contains($0.id) }
-    }
-
-    private var allEntries: [AliasEntry] {
-        guard listFilter == .all else { return filteredEntries }
-        let hidden = Set(pinnedEntries.map(\.id) + recentEntries.map(\.id))
-        return filteredEntries.filter { !hidden.contains($0.id) }
+    private var sortedEntries: [AliasEntry] {
+        filteredEntries.sorted { asc, b in
+            sortAscending ? compareEntries(asc, b) : compareEntries(b, asc)
+        }
     }
 
     private var selectedProject: Project? {
@@ -2325,32 +2384,22 @@ struct SecretBarView: View {
             }
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if listFilter == .all && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && selectedTag == nil {
-                        if !pinnedEntries.isEmpty {
-                            sectionHeader("Pinned", count: pinnedEntries.count, icon: "pin.fill")
-                            ForEach(pinnedEntries) { entryCard($0) }
-                        }
-                        if !recentEntries.isEmpty {
-                            sectionHeader("Recent", count: recentEntries.count, icon: "clock.fill")
-                            ForEach(recentEntries) { entryCard($0) }
-                        }
-                        if !allEntries.isEmpty {
-                            sectionHeader(
-                                pinnedEntries.isEmpty && recentEntries.isEmpty ? "All secrets" : "Everything else",
-                                count: allEntries.count,
-                                icon: "square.stack.3d.up.fill"
-                            )
-                            ForEach(allEntries) { entryCard($0) }
-                        }
-                        if pinnedEntries.isEmpty && recentEntries.isEmpty && allEntries.isEmpty {
-                            emptySecretsState
-                        }
-                    } else if filteredEntries.isEmpty {
-                        emptySecretsState
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 10) {
+                        sortHeader("Secret", .alias)
+                        sortHeader("Project", .project, width: 104)
+                        sortHeader("Created", .createdAt, width: 92)
+                        sortHeader("Last used", .lastUsed, width: 92)
+                        Text("").frame(width: 58)
+                    }
+                    .padding(.bottom, 4)
+                    Divider()
+                    if sortedEntries.isEmpty {
+                        emptySecretsState.padding(.top, 12)
                     } else {
-                        sectionHeader("Results", count: filteredEntries.count, icon: "magnifyingglass")
-                        ForEach(filteredEntries) { entryCard($0) }
+                        ForEach(sortedEntries) { entry in
+                            entryCard(entry)
+                        }
                     }
                 }
                 .padding(.vertical, 2)
@@ -2418,19 +2467,31 @@ struct SecretBarView: View {
         .accessibilityAddTraits(listFilter == filter ? .isSelected : [])
     }
 
-    private func sectionHeader(_ title: String, count: Int, icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.caption2)
-            Text(title.uppercased()).font(.caption2.weight(.bold))
-            Text("\(count)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
-            Spacer()
+    private func sortHeader(_ title: String, _ key: SecretSortKey, width: CGFloat? = nil) -> some View {
+        Button {
+            if sortKey == key {
+                sortAscending.toggle()
+            } else {
+                sortKey = key
+                sortAscending = true
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(title).font(.caption2.weight(.bold))
+                if sortKey == key {
+                    Image(systemName: sortAscending ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                }
+            }
+            .foregroundStyle(sortKey == key ? Color.primary : Color.secondary)
         }
-        .foregroundStyle(.secondary)
-        .padding(.top, 3)
+        .buttonStyle(.plain)
+        .frame(width: width, alignment: .leading)
+        .accessibilityLabel("Sort by \(title)")
     }
 
     private func moveSelection(_ direction: MoveCommandDirection) {
-        let entries = filteredEntries
+        let entries = sortedEntries
         guard !entries.isEmpty else { return }
         guard let selectedEntryID, let currentIndex = entries.firstIndex(where: { $0.id == selectedEntryID }) else {
             self.selectedEntryID = entries.first?.id
@@ -2644,58 +2705,57 @@ struct SecretBarView: View {
         let health = model.health(for: entry)
         let isSelected = selectedEntryID == entry.id
         let isHovered = hoveredEntryID == entry.id
+        let created = model.createdAtByKey[entry.id].map(formatDateShort) ?? "—"
+        let lastUsed = model.lastUsedDate(entry).map(formatDateShort) ?? "never"
 
         return HStack(spacing: 10) {
-            Image(systemName: isSecureNote ? SecretItemType.secureNote.icon : SecretItemType.login.icon)
-                .font(.body.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
-                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .accessibilityHidden(true)
+            HStack(spacing: 8) {
+                Image(systemName: isSecureNote ? SecretItemType.secureNote.icon : SecretItemType.login.icon)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Text(entry.alias)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(1)
-                    if model.pinsEnabled, model.pinnedIDs.contains(entry.id) {
-                        Image(systemName: "pin.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .accessibilityLabel("Pinned")
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 5) {
+                        Text(entry.alias)
+                            .font(.body.weight(.semibold))
+                            .lineLimit(1)
+                        if health != "OK" {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                                .help(health)
+                        }
+                        if model.pinsEnabled, model.pinnedIDs.contains(entry.id) {
+                            Image(systemName: "pin.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("Pinned")
+                        }
                     }
-                }
-                HStack(spacing: 4) {
-                    Text(entry.item).lineLimit(1)
-                    Text("•").foregroundStyle(.tertiary)
-                    Text(entry.project)
-                    if entry.environment != "prod" {
-                        Text("•").foregroundStyle(.tertiary)
-                        Text(entry.environment)
-                    }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                if !entry.tags.isEmpty {
-                    Label(entry.tags.prefix(3).joined(separator: " · "), systemImage: "tag")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
+                    Text(entry.item).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer(minLength: 4)
-            if model.holdToReveal, model.revealingID == entry.id {
-                Text(model.revealedValue)
-                    .font(.system(.caption, design: .monospaced))
-                    .lineLimit(1)
-                    .textSelection(.disabled)
-            } else if health != "OK" {
-                Label(health, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(healthColor(health))
-                    .help(health)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(entry.project).font(.caption2).lineLimit(1)
+                if entry.environment != "prod" {
+                    Text(entry.environment).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                }
             }
+            .frame(width: 104, alignment: .leading)
+
+            Text(created)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 92, alignment: .leading)
+            Text(lastUsed)
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 92, alignment: .leading)
 
             HStack(spacing: 5) {
                 Button { model.copy(entry) } label: {
@@ -2832,10 +2892,21 @@ final class SecretBarAppDelegate: NSObject, NSApplicationDelegate {
         // should sit in the background then, not throw a window on screen.
         // A manual `open` (Dock, Spotlight, `secretbar`) keeps the window up.
         if ProcessInfo.processInfo.environment["SECRETBAR_AUTOSTART"] == "1" {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                NSApp.hide(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+                self?.mainWindow()?.orderOut(nil)
             }
         }
+    }
+
+    // Dock click with no visible windows brings the main window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if flag { return true }
+        mainWindow()?.makeKeyAndOrderFront(nil)
+        return false
+    }
+
+    private func mainWindow() -> NSWindow? {
+        NSApp.windows.first { $0.title == "SecretBar" || $0.identifier?.rawValue.contains("main") == true }
     }
 }
 
