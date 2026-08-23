@@ -1775,7 +1775,7 @@ func run() async {
         lint(options.configPath, json: options.json)
 
     case "doctor":
-        await doctor(loaded.ordered, json: options.json)
+        await doctor(loaded.ordered, json: options.json, ci: options.ci)
 
     case "recent":
         printRecent(json: options.json)
