@@ -14,7 +14,7 @@
         pname = "pi-packages";
         version = "0.84.2";
         src = ../assets/pi/npm;
-        npmDepsHash = "sha256-dKEsF6Zafo3XapjdxVjxawNRKmaiyE4UcG+y2YjZPFo=";
+        npmDepsHash = "sha256-+P1q5p1Kk1BmshU8NcIaSsSsU/ug8SSEkrBt6aiEo3I=";
         dontNpmBuild = true;
         # node-pty ships platform prebuilds inside the tarball; no install
         # scripts are needed and skipping them keeps the build hermetic.
@@ -34,14 +34,12 @@
         defaultModel = "ox-alpha-free";
         defaultThinkingLevel = "high";
         packages = [
-          "npm:@ff-labs/pi-fff@0.9.6"
-          "npm:@plannotator/pi-extension@0.27.6"
-          "npm:pi-autoresearch@1.6.2"
+          "npm:@ff-labs/pi-fff@0.10.5"
+          "npm:@plannotator/pi-extension@0.27.8"
           "npm:pi-memory@0.4.2"
           "npm:pi-simplify@0.2.3"
           "npm:pi-smart-copy@0.1.0"
-          "npm:pi-subagents@0.53.0"
-          "npm:pine-of-glass@0.6.2"
+          "npm:pi-subagents@0.56.0"
           "npm:pi-goosedump@0.12.57"
         ];
         tuiMode = "fullscreen";
@@ -66,6 +64,12 @@
     in
     {
       home.packages = [ inputs.llm-agents.packages.${system}.pi ];
+
+      # pi-subagents runtime config (assets win on every apply, same
+      # philosophy as the extensions tree). The extension also writes this
+      # file via /subagents settings; nixapply reverts those tweaks.
+      home.file.".pi/agent/extensions/subagent/config.json".source =
+        ../assets/pi/subagent-config.json;
 
       # pi stays fully mutable at runtime (pi install, model picks,
       # lastChangelogVersion). Nix only seeds ~/.pi/agent/npm and settings.json

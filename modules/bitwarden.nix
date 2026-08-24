@@ -74,9 +74,9 @@
 
         # Remote M1 agent host over Tailscale. Resolves through MagicDNS's
         # search domain, so only the device alias is committed here (repo is
-        # public). The device must be named `m1` in the Tailscale admin
+        # public). The device must be named `m1-perso` in the Tailscale admin
         # console for this to resolve.
-        Host m1
+        Host m1-perso
           User ${config.home.username}
           ServerAliveInterval 30
           ServerAliveCountMax 3

@@ -102,6 +102,7 @@
             nub = inputs.nub.packages.${system}.default;
             nh = pkgs'.callPackage ./packages/nh { };
             opencode = inputs.llm-agents.packages.${system}.opencode;
+            pi-watchdog = pkgs'.callPackage ./packages/pi-watchdog { };
             opencode2 = inputs.llm-agents.packages.${system}.opencode2;
             opencodex = pkgs'.callPackage ./packages/opencodex { pkgs = pkgs'; };
             plannotator = pkgs'.callPackage ./packages/plannotator { pkgs = pkgs'; };

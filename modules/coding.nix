@@ -19,6 +19,7 @@ in
       plannotator = packages.plannotator;
       codex = packages.codex;
       opencode = packages.opencode2;
+      pi-watchdog = packages.pi-watchdog;
     in
     {
       home.packages = [
@@ -51,6 +52,7 @@ in
         pkgs.nixd
         pkgs.nixfmt
         nub
+        pi-watchdog
         pkgs.tokei
         pkgs.tmux
         pkgs.tree
