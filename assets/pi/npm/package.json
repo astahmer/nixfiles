@@ -5,6 +5,7 @@
     "@ff-labs/pi-fff": "^0.9.6",
     "@plannotator/pi-extension": "^0.27.6",
     "pi-autoresearch": "^1.6.2",
+    "pi-goosedump": "^0.12.57",
     "pi-memory": "^0.4.2",
     "pi-simplify": "^0.2.3",
     "pi-smart-copy": "^0.1.0",

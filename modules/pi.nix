@@ -14,7 +14,7 @@
         pname = "pi-packages";
         version = "0.84.2";
         src = ../assets/pi/npm;
-        npmDepsHash = "sha256-uq/WV47U2GlLjwx0BOHxbCUcZ6F3qG9UrRBJ+d6FLeI=";
+        npmDepsHash = "sha256-dKEsF6Zafo3XapjdxVjxawNRKmaiyE4UcG+y2YjZPFo=";
         dontNpmBuild = true;
         # node-pty ships platform prebuilds inside the tarball; no install
         # scripts are needed and skipping them keeps the build hermetic.
@@ -42,6 +42,7 @@
           "npm:pi-smart-copy@0.1.0"
           "npm:pi-subagents@0.53.0"
           "npm:pine-of-glass@0.6.2"
+          "npm:pi-goosedump@0.12.57"
         ];
         tuiMode = "fullscreen";
         hideThinkingBlock = true;
