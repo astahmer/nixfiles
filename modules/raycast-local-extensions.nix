@@ -26,9 +26,16 @@ in
           tmp="$dst_base/.tmp-$name"
           keep="$dst_base/.keep-node_modules-$name"
           if [ -d "$dst/node_modules" ]; then mv "$dst/node_modules" "$keep"; fi
+          # Store copies are read-only (cp -R preserves 555/444); clear macOS
+          # immutable flags then grant owner write so rm -rf can actually unlink.
+          chflags -R nouchg "$dst" "$tmp" 2>/dev/null || true
+          chmod -R u+wx "$dst" "$tmp" 2>/dev/null || true
           rm -rf "$dst" "$tmp"
           mkdir -p "$dst"
           cp -R "$src"/. "$dst"/
+          # Keep the seeded copy writable (Raycast runs npm/pnpm install inside
+          # it) and reseedable (read-only dirs break the next rm -rf).
+          chmod -R u+wx "$dst"
           if [ -d "$keep" ]; then mv "$keep" "$dst/node_modules"; fi
         done
       '';
