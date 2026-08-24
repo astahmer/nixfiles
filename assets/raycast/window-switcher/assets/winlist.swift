@@ -50,12 +50,13 @@ func cgWindows(onlyOnscreen: Bool = false) -> [Win] {
         guard let b = w["kCGWindowBounds"] as? [String: CGFloat] else { continue }
         let bw = b["Width"] ?? 0, bh = b["Height"] ?? 0
         if bw < 150 || bh < 150 { continue }
-        if (w["kCGWindowAlpha"] as? Double).map({ $0 <= 0.01 }) == true { continue }
+        // NOTE: do NOT filter on kCGWindowAlpha — windows on other Spaces
+        // report alpha 0 and must stay listed.
         out.append(Win(
             owner: owner,
             pid: w["kCGWindowOwnerPID"] as? Int ?? -1,
             cgid: w["kCGWindowNumber"] as? Int ?? -1,
-            title: w["kCGWindowTitle"] as? String ?? "",
+            title: w["kCGWindowName"] as? String ?? "",
             x: b["X"] ?? 0, y: b["Y"] ?? 0, w: bw, h: bh,
             onscreen: w["kCGWindowIsOnscreen"] as? Bool ?? false,
             path: NSRunningApplication(processIdentifier: pid_t(w["kCGWindowOwnerPID"] as? Int ?? -1))?.bundleURL?.path ?? ""
@@ -300,16 +301,48 @@ func main() {
     }
     switch cmd {
     case "list":
-        let wins = cgWindows()
+        var wins = cgWindows()
+        // Enrich titles via Accessibility (works without Screen Recording):
+        // AX exposes real titles for current-Space windows (+ Electron apps
+        // after the AXManualAccessibility poke).
+        var axCache: [Int: [AxWin]] = [:]
+        for i in wins.indices where wins[i].title.isEmpty {
+            let pid = wins[i].pid
+            let axWins: [AxWin]
+            if let cached = axCache[pid] { axWins = cached }
+            else { axWins = axWindows(pid: pid_t(pid)); axCache[pid] = axWins }
+            if let m = axWins.first(where: { $0.cgid == CGWindowID(wins[i].cgid) }), !m.title.isEmpty {
+                wins[i] = Win(owner: wins[i].owner, pid: wins[i].pid, cgid: wins[i].cgid,
+                              title: m.title, x: wins[i].x, y: wins[i].y, w: wins[i].w, h: wins[i].h,
+                              onscreen: wins[i].onscreen, path: wins[i].path)
+            }
+        }
+        if wins.contains(where: { $0.title.isEmpty }) {
+            // helper binary has its own TCC identity (does NOT inherit
+            // Raycast's grant): trigger the system prompt so a dedicated
+            // toggle shows up in the Screen Recording pane.
+            CGRequestScreenCaptureAccess()
+        }
         let payload: [String: Any] = [
             "windows": wins.map { w in
                 ["owner": w.owner, "pid": w.pid, "cgid": w.cgid, "title": w.title,
                  "x": w.x, "y": w.y, "w": w.w, "h": w.h, "onscreen": w.onscreen, "path": w.path]
             },
-            "titlesEmpty": wins.allSatisfy { $0.title.isEmpty },
+            "untitled": wins.filter { $0.title.isEmpty }.count,
+            "total": wins.count,
         ]
         let data = try! JSONSerialization.data(withJSONObject: payload)
         FileHandle.standardOutput.write(data)
+        // TCC diagnostics: who are we, do we hold screen-recording?
+        let diag: [String: Any] = [
+            "pid": ProcessInfo.processInfo.processIdentifier,
+            "ppid": Int(getppid()),
+            "preflightScreenCapture": CGPreflightScreenCaptureAccess(),
+            "isBundle": Bundle.main.bundlePath != "/",
+        ]
+        if let d = try? JSONSerialization.data(withJSONObject: diag) {
+            try? d.write(to: URL(fileURLWithPath: "/tmp/ws-diag.json"))
+        }
 
     case "focus":
         guard args.count >= 3, let pid = Int32(args[1]), let cgid = CGWindowID(args[2]) else {

@@ -1,9 +1,9 @@
 import { Action, ActionPanel, Icon, List, open } from "@raycast/api";
 import { useEffect, useMemo, useState } from "react";
-import { focusWindow, listWindows, WinInfo } from "./lib/helper";
+import { focusWindow, listWindows, ListResult, WinInfo } from "./lib/helper";
 
 export default function Command() {
-  const [result, setResult] = useState<{ windows: WinInfo[]; titlesEmpty: boolean } | null>(null);
+  const [result, setResult] = useState<ListResult | null>(null);
   const [searchText, setSearchText] = useState("");
   const [focusMessage, setFocusMessage] = useState<string | null>(null);
 
@@ -65,7 +65,7 @@ export default function Command() {
     });
   }, [filtered]);
 
-  const screenRecordingWarning = result?.titlesEmpty === true;
+  const manyUntitled = result !== null && result.total > 0 && result.untitled > result.total / 2;
 
   return (
     <List
@@ -76,10 +76,10 @@ export default function Command() {
       throttle
       searchBarPlaceholder="Filter by app or window title…"
     >
-      {screenRecordingWarning && (
-        <List.Section title="⚠️ Titles hidden">
+      {manyUntitled && (
+        <List.Section title="⚠️ Some titles hidden">
           <List.Item
-            title="Grant Screen Recording to Raycast for window titles"
+            title="Grant Screen Recording to the window-switcher helper for cross-Space titles"
             subtitle="System Settings → Privacy"
             icon={Icon.ExclamationMark}
             actions={
@@ -123,7 +123,7 @@ export default function Command() {
           ))}
         </List.Section>
       ))}
-      {result !== null && sections.length === 0 && !screenRecordingWarning && (
+      {result !== null && sections.length === 0 && !manyUntitled && (
         <List.EmptyView title="No windows found" description="Try Rescan, or check Accessibility permissions." />
       )}
       {focusMessage && (
