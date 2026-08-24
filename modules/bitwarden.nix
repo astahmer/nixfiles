@@ -71,6 +71,15 @@
           IdentityFile ~/.ssh/id_ed25519
           AddKeysToAgent yes
           ${lib.optionalString pkgs.stdenv.isDarwin "UseKeychain yes"}
+
+        # Remote M1 agent host over Tailscale. Resolves through MagicDNS's
+        # search domain, so only the device alias is committed here (repo is
+        # public). The device must be named `m1` in the Tailscale admin
+        # console for this to resolve.
+        Host m1
+          User ${config.home.username}
+          ServerAliveInterval 30
+          ServerAliveCountMax 3
       '';
 
       home.activation.secretGlobalConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

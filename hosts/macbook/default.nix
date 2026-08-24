@@ -20,6 +20,7 @@ in
           hm.terminal
           hm.shell
           hm.bitwarden
+          hm.herdrRemote
           hm.git
           hm.jujutsu
           hm.ryu
