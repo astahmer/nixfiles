@@ -18,5 +18,11 @@
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
+  <!-- Menu bar agent app: never shows a Dock icon at launch. When the user
+       disables the menu bar icon (secretbar.showInMenuBar=false) the app
+       restores a regular activation policy at runtime so the Dock becomes
+       the entry point again. -->
+  <key>LSUIElement</key>
+  <true/>
 </dict>
 </plist>

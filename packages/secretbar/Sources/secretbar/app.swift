@@ -2613,7 +2613,7 @@ struct SecretBarView: View {
                 }
                 settingsSection("Appearance and shortcuts") {
                     settingToggle("Show menu bar icon", isOn: Binding(get: { model.showInMenuBar }, set: { model.showInMenuBar = $0 }))
-                    Text("When off, open SecretBar from the Dock or Launchpad. Changing this takes effect on next launch.")
+                    Text("When off, reopen SecretBar via Spotlight or the secretbar command. Changing this takes effect on next launch.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     settingToggle("Enable pinned favorites", isOn: Binding(get: { model.pinsEnabled }, set: { model.pinsEnabled = $0 }))
@@ -2915,11 +2915,23 @@ struct SecretBarView: View {
 
 @MainActor
 final class SecretBarAppDelegate: NSObject, NSApplicationDelegate {
+    let statusItemController = SecretBarStatusItemController()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         SecretBarModel.shared.start()
+        let showInMenuBar = UserDefaults.standard.object(forKey: "secretbar.showInMenuBar") == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: "secretbar.showInMenuBar")
+        // LSUIElement keeps the Dock clean at launch (menu bar agent app). The
+        // regular policy is only restored when the menu bar icon is disabled,
+        // so that mode keeps the Dock as its entry point.
+        NSApp.setActivationPolicy(showInMenuBar ? .accessory : .regular)
+        if showInMenuBar {
+            statusItemController.start(model: SecretBarModel.shared)
+        }
         // Launchd/activation autostarts pass SECRETBAR_AUTOSTART=1; the app
         // should sit in the background then, not throw a window on screen.
-        // A manual `open` (Dock, Spotlight, `secretbar`) keeps the window up.
+        // A manual `open` (Spotlight, `secretbar`) keeps the window up.
         if ProcessInfo.processInfo.environment["SECRETBAR_AUTOSTART"] == "1" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
                 self?.mainWindow()?.orderOut(nil)
@@ -2927,7 +2939,9 @@ final class SecretBarAppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // Dock click with no visible windows brings the main window back.
+    // Dock click with no visible windows brings the main window back. Only
+    // reachable when the menu bar icon is disabled (.regular policy); with
+    // the menu bar icon on the app runs as an accessory with no Dock icon.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if flag { return true }
         mainWindow()?.makeKeyAndOrderFront(nil)
@@ -2978,32 +2992,5 @@ private struct SecretBarCombinedApp: App {
             SecretBarView().environmentObject(model)
         }
         .defaultSize(width: 640, height: 720)
-        SecretMenuBarScene(model: model)
-    }
-}
-
-struct SecretMenuBarScene: Scene {
-    // Scenes do not auto-subscribe to ObservableObject changes; without
-    // @ObservedObject the menu bar icon never re-renders on lock/unlock.
-    @ObservedObject var model: SecretBarModel
-
-    var body: some Scene {
-        MenuBarExtra {
-            SecretBarView().environmentObject(model)
-        } label: {
-            StatusIcon(state: model.state)
-                .contextMenu {
-                    // NOTE: context menus on a MenuBarExtra label are ignored
-                    // by macOS when menuBarExtraStyle is .window; the reliable
-                    // surface for these actions is the … menu inside the panel.
-                    Button("Refresh") { model.refreshEverything() }
-                    if model.state == .unlocked {
-                        Button("Lock vault") { model.lock() }
-                    }
-                    Divider()
-                    Button("Quit SecretBar", role: .destructive) { NSApplication.shared.terminate(nil) }
-                }
-        }
-        .menuBarExtraStyle(.window)
     }
 }

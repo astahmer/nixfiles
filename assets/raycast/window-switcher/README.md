@@ -53,3 +53,34 @@ stable path survives moving/cloning the nixfiles repo.
 - `assets/winlist.swift` — helper source (`list` / `focus <pid> <cgid> <title>`).
 - `src/lib/helper.ts` — compile-cache + exec plumbing.
 - `src/switch-window.tsx` — the List UI.
+
+## Regression tests
+
+```bash
+npm test          # static guards + runtime contract of `winlist list`
+npm run test:live # additionally performs a real cross-Space focus round-trip
+```
+
+`tests/check.mjs` guards every bug class that actually bit us:
+
+| Guard | Catches |
+|---|---|
+| source uses `kCGWindowName`, never `kCGWindowTitle` | wrong CG dictionary key (titles empty) |
+| no `kCGWindowAlpha … continue` filter | other-Space windows dropped from the list |
+| helper.ts verifies `ws-diag` marker in built binary | stale binary served after source changes |
+| newest-mtime source selection across candidate paths | stale `environment.assetsPath` copy shadowing edits |
+| repo ↔ `~/RaycastExtensions/window-switcher` diff | seeded-folder drift after nixapply |
+| `winlist list` JSON contract + title coverage invariants | schema breaks, silent title loss (majority titled, other-Space rows titled) |
+| live E1/E2: dead pid / bogus cgid | crashes or ungraceful errors on bad input |
+| live E3: focus with EMPTY title (cgid-based paths only) | title-dependent regressions in AX/scan paths |
+| live E4: off-Screen window focus round-trip + restore | the "does nothing on Enter" class of bugs |
+| live E5: duplicate titles across windows | wrong-window disambiguation |
+| live E6: rapid focus bursts | deadlocks/hangs; must finish < 75s |
+| post-suite restore of your original frontmost window | tests leaving your session elsewhere |
+
+`--live` focuses a real off-screen window and polls up to 8 s for the Space
+switch, then restores the previous window. It mutates your session briefly —
+run it when you're not mid-something.
+
+Not automatable (by macOS design): TCC permission grants and the one-time
+Accessibility/Automation consent prompts — those need a human.

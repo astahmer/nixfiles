@@ -35,18 +35,23 @@ let junkOwners: Set<String> = [
 
 func cgWindows(onlyOnscreen: Bool = false) -> [Win] {
     let opts: CGWindowListOption = onlyOnscreen
-        ? [.excludeDesktopElements]
+        ? [.optionOnScreenOnly, .excludeDesktopElements]
         : [.optionAll, .excludeDesktopElements]
     guard let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] else { return [] }
     var out: [Win] = []
+    var appCache: [Int: NSRunningApplication?] = [:]
+    func app(forPid pid: Int) -> NSRunningApplication? {
+        if let cached = appCache[pid] { return cached }
+        let a = NSRunningApplication(processIdentifier: pid_t(pid))
+        appCache[pid] = a
+        return a
+    }
     for w in list {
         guard w["kCGWindowLayer"] as? Int == 0 else { continue }
         let owner = w["kCGWindowOwnerName"] as? String ?? ""
         if owner.isEmpty || junkOwners.contains(owner) { continue }
-        if let pid = w["kCGWindowOwnerPID"] as? Int,
-           NSRunningApplication(processIdentifier: pid_t(pid))?.activationPolicy != .regular {
-            continue // skip menu-bar agents / background helpers
-        }
+        guard let pidNum = w["kCGWindowOwnerPID"] as? Int,
+              app(forPid: pidNum)?.activationPolicy == .regular else { continue }
         guard let b = w["kCGWindowBounds"] as? [String: CGFloat] else { continue }
         let bw = b["Width"] ?? 0, bh = b["Height"] ?? 0
         if bw < 150 || bh < 150 { continue }
@@ -54,12 +59,12 @@ func cgWindows(onlyOnscreen: Bool = false) -> [Win] {
         // report alpha 0 and must stay listed.
         out.append(Win(
             owner: owner,
-            pid: w["kCGWindowOwnerPID"] as? Int ?? -1,
+            pid: pidNum,
             cgid: w["kCGWindowNumber"] as? Int ?? -1,
             title: w["kCGWindowName"] as? String ?? "",
             x: b["X"] ?? 0, y: b["Y"] ?? 0, w: bw, h: bh,
             onscreen: w["kCGWindowIsOnscreen"] as? Bool ?? false,
-            path: NSRunningApplication(processIdentifier: pid_t(w["kCGWindowOwnerPID"] as? Int ?? -1))?.bundleURL?.path ?? ""
+            path: app(forPid: pidNum)?.bundleURL?.path ?? ""
         ))
     }
     return out
@@ -98,12 +103,38 @@ func axWindows(pid: pid_t) -> [AxWin] {
     return out
 }
 
+/// Light-weight frontmost-window probe (no AppKit lookups — called in polls).
 func frontmostWindowCgid(pid: pid_t) -> Int? {
-    // on-screen list comes back front-to-back
-    for w in cgWindows(onlyOnscreen: true) where w.pid == pid {
-        return w.cgid
+    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return nil }
+    // list comes back front-to-back
+    for w in list {
+        guard w["kCGWindowLayer"] as? Int == 0,
+              w["kCGWindowOwnerPID"] as? Int == Int(pid) else { continue }
+        if let b = w["kCGWindowBounds"] as? [String: CGFloat], (b["Width"] ?? 0) >= 150 {
+            return w["kCGWindowNumber"] as? Int
+        }
     }
     return nil
+}
+
+// Remember dead-end strategies per pid so failures stay fast.
+var strategyMemo: [Int: (Date, String)] = [:]
+func memoSet(_ pid: Int, _ what: String) { strategyMemo[pid] = (Date(), what) }
+func memoHit(_ pid: Int, _ what: String, ttl: TimeInterval) -> Bool {
+    guard let m = strategyMemo[pid], m.1 == what, Date().timeIntervalSince(m.0) < ttl else { return false }
+    return true
+}
+
+/// Light probe: ids of all on-screen windows (any display).
+func onscreenIds() -> Set<Int> {
+    guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return [] }
+    var ids = Set<Int>()
+    for w in list {
+        guard w["kCGWindowLayer"] as? Int == 0 else { continue }
+        if let b = w["kCGWindowBounds"] as? [String: CGFloat], (b["Width"] ?? 0) >= 150,
+           let n = w["kCGWindowNumber"] as? Int { ids.insert(n) }
+    }
+    return ids
 }
 
 // Path 2 fallback: click the app's Window-menu entry for the target title.
@@ -156,10 +187,91 @@ func activateApp(_ pid: pid_t) {
     } else {
         app.activate(options: [.activateIgnoringOtherApps])
     }
-    usleep(350_000)
+    usleep(200_000)
+}
+
+func hasOnscreenWindow(_ pid: pid_t) -> Bool {
+    frontmostWindowCgid(pid: pid) != nil || !cgWindows(onlyOnscreen: true).filter({ $0.pid == Int(pid) }).isEmpty
+}
+
+/// Poll until the given cgid is the app's frontmost window.
+func verifyLanded(_ pid: pid_t, _ cgid: CGWindowID, timeoutMs: Int) -> Bool {
+    let deadline = DispatchTime.now() + .milliseconds(timeoutMs)
+    while DispatchTime.now() < deadline {
+        if frontmostWindowCgid(pid: pid) == Int(cgid) { return true }
+        usleep(80_000)
+    }
+    return false
+}
+
+/// Native-tab apps (Ghostty & co): one AX window, N CG windows, no per-tab
+/// menu entries. Cycle "Show Next Tab" until the target CG window is frontmost.
+func focusViaTabCycle(pid: pid_t, cgid: CGWindowID) -> String {
+    let count = cgWindows().filter { $0.pid == Int(pid) }.count
+    guard count > 1 else { return "single-window" }
+    let script = """
+    on run argv
+      set pid to (item 1 of argv) as integer
+      tell application "System Events"
+        set p to first application process whose unix id is pid
+        set menuNames to {"Window", "Fenêtre", "Ventana", "Fenster", "Finestra", "Janela"}
+        set nextNames to {"Show Next Tab", "Onglet suivant", "Next Tab"}
+        set targetMenu to missing value
+        repeat with mbi in menu bar items of menu bar 1 of p
+          try
+            if (name of mbi as text) is in menuNames then set targetMenu to contents of mbi
+          end try
+        end repeat
+        if targetMenu is missing value then return "no-window-menu"
+        repeat with it_ in menu items of menu 1 of targetMenu
+          try
+            if (name of it_ as text) is in nextNames then
+              click it_
+              return "ok"
+            end if
+          end try
+        end repeat
+        return "no-next-tab-item"
+      end tell
+    end run
+    """
+    let maxIters = min(count * 2, 10)
+    var lastKey = ""
+    var stale = 0
+    for _ in 0..<maxIters {
+        guard runOsa(script, [String(pid)]) == "ok" else { return "no-tab-menu" }
+        var key = ""
+        for _ in 0..<2 {
+            usleep(180_000)
+            if onscreenIds().contains(Int(cgid)) { return "ok-tabs" }
+            if let f = frontmostWindowCgid(pid: pid) { key = String(f) }
+        }
+        // three consecutive clicks with zero movement -> this app's tabs are
+        // unreachable from the Window menu; stop burning time
+        if !key.isEmpty && key == lastKey {
+            stale += 1
+            if stale >= 2 { return "tab-cycle-stuck" }
+        } else {
+            stale = 0
+        }
+        lastKey = key
+    }
+    return "tab-cycle-failed"
 }
 
 func focusWindow(pid: pid_t, cgid: CGWindowID, title: String) -> String {
+    var misses: [String] = []
+    // "landed" = target visible on some display (key-ness follows from the
+    // activation we perform; requiring topmost breaks with multi-display).
+    func landed() -> Bool { onscreenIds().contains(Int(cgid)) }
+    func waitLanded(_ ms: Int) -> Bool {
+        let deadline = DispatchTime.now() + .milliseconds(ms)
+        while DispatchTime.now() < deadline {
+            if landed() { return true }
+            usleep(80_000)
+        }
+        return false
+    }
     let axWins = axWindows(pid: pid)
 
     // Path 1: direct AX raise (same Space, normal cross-Space windows, minimized)
@@ -167,34 +279,112 @@ func focusWindow(pid: pid_t, cgid: CGWindowID, title: String) -> String {
         axWins.first(where: { $0.cgid == cgid })
         ?? axWins.first(where: { !title.isEmpty && $0.title == title })
     if let m = match {
-        if m.minimized {
-            AXUIElementSetAttributeValue(m.el, "AXMinimized" as CFString, kCFBooleanFalse)
-            usleep(100_000)
+        for attempt in 0..<2 {
+            if m.minimized {
+                AXUIElementSetAttributeValue(m.el, "AXMinimized" as CFString, kCFBooleanFalse)
+                usleep(60_000)
+            }
+            activateApp(pid)
+            AXUIElementPerformAction(m.el, kAXRaiseAction as CFString)
+            if waitLanded(attempt == 0 ? 900 : 700) {
+                return attempt == 0 ? "ok-ax" : "ok-ax-retry"
+            }
         }
-        activateApp(pid)
-        AXUIElementPerformAction(m.el, kAXRaiseAction as CFString)
-        usleep(150_000)
-        AXUIElementPerformAction(m.el, kAXRaiseAction as CFString)
-        return "ok"
     }
 
-    // Path 2: fullscreen / other-Space windows invisible to AX.
-    // The app must be active first or macOS may not follow the clicked entry
-    // into its fullscreen Space.
+    // Strategy A2: Ghostty-native AppleScript — its dictionary exposes
+    // windows -> tabs with a settable `selected`; selecting makes Ghostty
+    // raise the exact tab itself. Instant and precise for scriptable windows.
+    if !title.isEmpty,
+       NSRunningApplication(processIdentifier: pid)?.bundleIdentifier == "com.mitchellh.ghostty" {
+        let g = focusViaGhosttyAppleScript(pid: pid, title: title) { onscreenIds().contains(Int(cgid)) }
+        if g.hasPrefix("ok") { return g }
+        // AppleScript sees every scriptable Ghostty window/tab; if the title
+        // isn't there the target lives on another Space and is unreachable by
+        // any strategy (menu/scan/cycle all no-op for this app) — fail fast.
+        if g == "not-found" { return "failed: ghostty-other-space-unreachable" }
+        misses.append(g)
+    }
+
+    let appVisible = hasOnscreenWindow(pid)
+
+    // Strategy B/C/D state machine — every strategy verifies its landing;
+    // we only give up after all of them had a chance.
+
+    // B1: menu click WITHOUT activation first (avoids the "wrong window
+    // flash" of jumping to the app's most-recent window).
+    if !title.isEmpty && appVisible && focusViaWindowMenu(pid: pid, title: title).hasPrefix("ok") {
+        if waitLanded(2500) { return "ok-menu" }
+        misses.append("menu-noact")
+    }
+
+    // B2: with activation (required when all windows are on other Spaces).
     activateApp(pid)
-
-    // Path 2a: click the Window-menu entry matching the target title.
-    if !title.isEmpty {
-        let r = focusViaWindowMenu(pid: pid, title: title)
-        if r.hasPrefix("ok") { return r }
+    if !title.isEmpty && focusViaWindowMenu(pid: pid, title: title).hasPrefix("ok") {
+        if waitLanded(2500) { return "ok-menu-activated" }
+        misses.append("menu-act")
+        // System Events races are real: one settle-delayed retry.
+        usleep(250_000)
+        if focusViaWindowMenu(pid: pid, title: title).hasPrefix("ok"), waitLanded(2000) {
+            return "ok-menu-retry"
+        }
     }
 
-    // Path 2b: no usable title (Screen Recording not granted)? Click every
-    // window entry of the app's Window menu until the target cgid is
-    // frontmost. Window entries focus their window directly.
-    let r = focusByMenuScan(pid: pid, cgid: cgid)
-    if r.hasPrefix("ok") { return r }
-    return title.isEmpty ? "no-title-for-menu" : "not-in-menu"
+    // C: scan Window-menu entries clicking each until target lands (works
+    // even with empty titles — verification is cgid-based).
+    if memoHit(Int(pid), "scan-dead", ttl: 120) {
+        misses.append("scan-dead(cached)")
+    } else {
+        let scan = focusByMenuScan(pid: pid, cgid: cgid)
+        if scan.hasPrefix("ok") { return scan }
+        misses.append(scan)
+        if scan == "scan-failed" { memoSet(Int(pid), "scan-dead") }
+    }
+
+    // D: native-tab cycle (Ghostty-style apps).
+    if memoHit(Int(pid), "tabs-dead", ttl: 300) {
+        misses.append("tabs-dead(cached)")
+    } else {
+        let tab = focusViaTabCycle(pid: pid, cgid: cgid)
+        if tab.hasPrefix("ok") { return tab }
+        misses.append(tab)
+        if tab == "tab-cycle-stuck" || tab == "no-next-tab-item" || tab == "tab-cycle-failed" {
+            memoSet(Int(pid), "tabs-dead")
+        }
+    }
+
+    return "failed: " + misses.joined(separator: ",")
+}
+
+func focusViaGhosttyAppleScript(pid: pid_t, title: String, landedCheck: () -> Bool) -> String {
+    let script = """
+    on run argv
+      set wtitle to item 1 of argv
+      tell application "Ghostty"
+        repeat with w in windows
+          repeat with t in tabs of w
+            try
+              if (name of t) is wtitle then
+                set selected of t to true
+                return "ok"
+              end if
+            end try
+          end repeat
+        end repeat
+        return "not-found"
+      end tell
+    end run
+    """
+    // first-ever call may block on the macOS Automation consent dialog
+    let r = runOsa(script, [title], timeoutSeconds: 6)
+    guard r == "ok" else { return r ?? "osa-error" }
+    var landedNow = false
+    let deadline = Date().addingTimeInterval(1.2)
+    while Date() < deadline {
+        if landedCheck() { landedNow = true; break }
+        usleep(100_000)
+    }
+    return landedNow ? "ok-ghostty-as" : "ghostty-as-unverified"
 }
 
 private let menuVerbJunk = [
@@ -243,7 +433,7 @@ func windowMenuEntries(pid: pid_t) -> [String] {
     }.filter { !$0.isEmpty }
 }
 
-func runOsa(_ script: String, _ args: [String]) -> String? {
+func runOsa(_ script: String, _ args: [String], timeoutSeconds: Double = 0) -> String? {
     let pr = Process()
     pr.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
     pr.arguments = ["-e", script] + args
@@ -251,44 +441,50 @@ func runOsa(_ script: String, _ args: [String]) -> String? {
     pr.standardOutput = pipe
     pr.standardError = FileHandle.nullDevice
     do { try pr.run() } catch { return nil }
-    pr.waitUntilExit()
+    if timeoutSeconds > 0 {
+        let deadline = Date().addingTimeInterval(timeoutSeconds)
+        while pr.isRunning && Date() < deadline { usleep(50_000) }
+        if pr.isRunning { pr.terminate(); return nil }
+    } else {
+        pr.waitUntilExit()
+    }
     guard pr.terminationStatus == 0 else { return nil }
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 func focusByMenuScan(pid: pid_t, cgid: CGWindowID) -> String {
-    let entries = windowMenuEntries(pid: pid).filter { name in
+    let entries = Array(windowMenuEntries(pid: pid).filter { name in
         let lower = name.lowercased()
         if name.hasSuffix("…") || name.hasSuffix("...") { return false }
         return !menuVerbJunk.contains(where: { lower.contains($0) })
-    }
+    }.prefix(6))
+    let clickScript = """
+    on run argv
+      set pid to (item 1 of argv) as integer
+      set wtitle to item 2 of argv
+      tell application "System Events"
+        set p to first application process whose unix id is pid
+        set menuNames to {"Window", "Fen\u{00EA}tre", "Ventana", "Fenster", "Finestra", "Janela"}
+        set targetMenu to missing value
+        repeat with mbi in menu bar items of menu bar 1 of p
+          try
+            if (name of mbi as text) is in menuNames then set targetMenu to contents of mbi
+          end try
+        end repeat
+        if targetMenu is missing value then return "no-window-menu"
+        try
+          click (first menu item of menu 1 of targetMenu whose name is wtitle)
+          return "ok"
+        end try
+        return "miss"
+      end tell
+    end run
+    """
     for name in entries {
-        let clickScript = """
-        on run argv
-          set pid to (item 1 of argv) as integer
-          set wtitle to item 2 of argv
-          tell application "System Events"
-            set p to first application process whose unix id is pid
-            set menuNames to {"Window", "Fenêtre", "Ventana", "Fenster", "Finestra", "Janela"}
-            set targetMenu to missing value
-            repeat with mbi in menu bar items of menu bar 1 of p
-              try
-                if (name of mbi as text) is in menuNames then set targetMenu to contents of mbi
-              end try
-            end repeat
-            if targetMenu is missing value then return "no-window-menu"
-            try
-              click (first menu item of menu 1 of targetMenu whose name is wtitle)
-              return "ok"
-            end try
-            return "miss"
-          end tell
-        end run
-        """
         let r = runOsa(clickScript, [String(pid), name]) ?? "err"
-        usleep(600_000)
-        if r == "ok", frontmostWindowCgid(pid: pid) == Int(cgid) { return "ok-menu-scan" }
+        usleep(400_000)
+        if r == "ok", onscreenIds().contains(Int(cgid)) { return "ok-menu-scan" }
     }
     return "scan-failed"
 }

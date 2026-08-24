@@ -1,20 +1,28 @@
-import { Action, ActionPanel, Icon, List, open } from "@raycast/api";
+import { Action, ActionPanel, Icon, List, open, showToast, Toast } from "@raycast/api";
 import { useEffect, useMemo, useState } from "react";
-import { focusWindow, listWindows, ListResult, WinInfo } from "./lib/helper";
+import { focusWindow, herdrFocusWorkspace, herdrWorkspaces, listWindowsCached, HerdrWorkspace, ListResult, WinInfo } from "./lib/helper";
+
+interface HerdrMatch {
+  workspaceId: string;
+  label: string;
+}
 
 export default function Command() {
   const [result, setResult] = useState<ListResult | null>(null);
+  const [workspaces, setWorkspaces] = useState<HerdrWorkspace[] | null>(null);
   const [searchText, setSearchText] = useState("");
-  const [focusMessage, setFocusMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const [expandedApps, setExpandedApps] = useState<Set<string>>(new Set());
+  const PER_SECTION_CAP = 8;
 
   useEffect(() => {
     let alive = true;
-    listWindows()
-      .then((r) => alive && setResult(r))
-      .catch((err) => {
-        console.error(err);
-        if (alive) setFocusMessage(String(err?.message ?? err));
-      });
+    // stale-while-revalidate: instant paint from cache, fresh scan behind it
+    listWindowsCached()
+      .then(({ data }) => alive && setResult(data))
+      .catch((err) => alive && setMessage(String(err?.message ?? err)));
+    herdrWorkspaces().then((ws) => alive && setWorkspaces(ws));
     return () => {
       alive = false;
     };
@@ -22,24 +30,54 @@ export default function Command() {
 
   function rescan() {
     setResult(null);
-    listWindows()
-      .then(setResult)
-      .catch((err) => setFocusMessage(String(err?.message ?? err)));
+    listWindowsCached(0) // maxAge 0 forces a fresh scan
+      .then(({ data }) => setResult(data))
+      .catch((err) => setMessage(String(err?.message ?? err)));
+  }
+
+  async function refreshAfterAction() {
+    try {
+      const { data } = await listWindowsCached(0);
+      setResult(data);
+    } catch {}
+  }
+  void refreshAfterAction;
+
+  function toast(style: Toast.Style, title: string, message?: string) {
+    void showToast({ style, title, message });
   }
 
   async function handleFocus(win: WinInfo) {
-    try {
-      const status = await focusWindow(win);
-      // activating the target dismisses the Raycast panel by itself
-      if (!status.startsWith("ok")) {
-        setFocusMessage(
-          `${status} — grant Raycast Screen Recording + Accessibility + Automation(System Events) in System Settings → Privacy, then quit & reopen Raycast`,
-        );
-      }
-    } catch (err) {
-      setFocusMessage(String(err instanceof Error ? err.message : err));
+    const status = await focusWindow(win)
+      .catch((err) => `error: ${err instanceof Error ? err.message : String(err)}`);
+    if (!status.startsWith("ok")) {
+      setMessage(`Could not focus "${win.title || win.owner}": ${status}`);
+      toast(Toast.Style.Failure, "Focus failed", String(status));
     }
-    void listWindows().then(setResult).catch(() => {});
+    await refreshAfterAction();
+  }
+
+  async function handleHerdr(match: HerdrMatch, win: WinInfo) {
+    const ok = await herdrFocusWorkspace(match.workspaceId);
+    if (!ok) {
+      toast(Toast.Style.Failure, "herdr workspace focus failed");
+      return;
+    }
+    await handleFocus(win); // raise the window/space that hosts it
+    toast(Toast.Style.Success, `herdr workspace: ${match.label}`);
+  }
+
+  /** Match a window title against herdr workspace labels ("~/dev/emisoup" ⊃ "emisoup"). */
+  function herdrMatchFor(win: WinInfo): HerdrMatch | null {
+    if (!workspaces || !win.title || win.title.length < 3) return null;
+    const t = win.title.toLowerCase();
+    for (const ws of workspaces) {
+      const label = ws.label?.toLowerCase();
+      if (label && label.length > 2 && t.includes(label)) {
+        return { workspaceId: ws.workspace_id, label: ws.label };
+      }
+    }
+    return null;
   }
 
   const query = searchText.toLowerCase();
@@ -57,7 +95,6 @@ export default function Command() {
     for (const wins of map.values()) {
       wins.sort((a, b) => Number(b.onscreen) - Number(a.onscreen) || a.y - b.y || a.x - b.x);
     }
-    // apps with an on-screen window float to the top
     return [...map.entries()].sort((a, b) => {
       const aOn = Math.max(...a[1].map((w) => Number(w.onscreen)));
       const bOn = Math.max(...b[1].map((w) => Number(w.onscreen)));
@@ -91,7 +128,6 @@ export default function Command() {
                     open("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
                   }
                 />
-                <Action.CopyToClipboard title="Copy Debug Info" content={JSON.stringify(result)} />
               </ActionPanel>
             }
           />
@@ -99,36 +135,61 @@ export default function Command() {
       )}
       {sections.map(([app, wins]) => (
         <List.Section key={app} title={app} subtitle={String(wins.length)}>
-          {wins.map((win, idx) => (
+          {(expandedApps.has(app) ? wins : wins.slice(0, PER_SECTION_CAP)).map((win, idx) => {
+            const hm = app === "Ghostty" ? herdrMatchFor(win) : null;
+            return (
+              <List.Item
+                key={`${win.pid}-${win.cgid}`}
+                icon={win.path ? { fileIcon: win.path } : Icon.Window}
+                title={win.title || `(untitled #${idx + 1} · ${win.cgid})`}
+                accessories={[
+                  { text: win.onscreen ? "visible" : "other space" },
+                  { text: `${Math.round(win.w)}×${Math.round(win.h)}` },
+                ]}
+                actions={
+                  <ActionPanel>
+                    <Action title="Focus Window" icon={Icon.ArrowRight} onAction={() => handleFocus(win)} />
+                    {hm && (
+                      <Action
+                        title={`Focus herdr workspace “${hm.label}”`}
+                        icon={Icon.Terminal}
+                        onAction={() => handleHerdr(hm, win)}
+                      />
+                    )}
+                    <Action.CopyToClipboard
+                      title="Copy Window Title"
+                      content={win.title}
+                      shortcut={{ modifiers: ["cmd"], key: "." }}
+                    />
+                    <Action title="Rescan Windows" icon={Icon.RotateAntiClockwise} onAction={rescan} />
+                  </ActionPanel>
+                }
+              />
+            );
+          })}
+          {!expandedApps.has(app) && wins.length > PER_SECTION_CAP && (
             <List.Item
-              key={`${win.pid}-${win.cgid}`}
-              icon={win.path ? { fileIcon: win.path } : Icon.Window}
-              title={win.title || `(untitled #${idx + 1} · ${win.cgid})`}
-              accessories={[
-                { text: win.onscreen ? "visible" : "other space" },
-                { text: `${Math.round(win.w)}×${Math.round(win.h)}` },
-              ]}
+              key={`${app}-more`}
+              title={`Show ${wins.length - PER_SECTION_CAP} more…`}
+              icon={Icon.ChevronDown}
               actions={
                 <ActionPanel>
-                  <Action title="Focus Window" icon={Icon.ArrowRight} onAction={() => handleFocus(win)} />
-                  <Action.CopyToClipboard
-                    title="Copy Window Title"
-                    content={win.title}
-                    shortcut={{ modifiers: ["cmd"], key: "." }}
+                  <Action
+                    title="Show All"
+                    onAction={() => setExpandedApps(new Set([...expandedApps, app]))}
                   />
-                  <Action title="Rescan Windows" icon={Icon.RotateAntiClockwise} onAction={rescan} />
                 </ActionPanel>
               }
             />
-          ))}
+          )}
         </List.Section>
       ))}
       {result !== null && sections.length === 0 && !manyUntitled && (
         <List.EmptyView title="No windows found" description="Try Rescan, or check Accessibility permissions." />
       )}
-      {focusMessage && (
+      {message && (
         <List.Section title="Last message">
-          <List.Item title={focusMessage} icon={Icon.Message} />
+          <List.Item title={message} icon={Icon.Message} />
         </List.Section>
       )}
     </List>
