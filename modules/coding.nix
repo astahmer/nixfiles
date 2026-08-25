@@ -20,6 +20,7 @@ in
       codex = packages.codex;
       opencode = packages.opencode2;
       pi-watchdog = packages.pi-watchdog;
+      qmd = inputs.qmd.packages.${pkgs.stdenv.hostPlatform.system}.default;
     in
     {
       home.packages = [
@@ -53,6 +54,7 @@ in
         pkgs.nixfmt
         nub
         pi-watchdog
+        qmd
         pkgs.tokei
         pkgs.tmux
         pkgs.tree

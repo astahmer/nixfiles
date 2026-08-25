@@ -34,6 +34,14 @@
       url = "github:numtide/llm-agents.nix";
     };
 
+    # qmd: on-device markdown/code search backend used by pi-memory.
+    # Upstream maintains its own flake incl. per-system node_modules hashes;
+    # intentionally NOT following our nixpkgs (node-gyp/bun combo as tested
+    # upstream).
+    qmd = {
+      url = "github:tobi/qmd";
+    };
+
   };
 
   outputs =
@@ -102,6 +110,7 @@
             nub = inputs.nub.packages.${system}.default;
             nh = pkgs'.callPackage ./packages/nh { };
             opencode = inputs.llm-agents.packages.${system}.opencode;
+            qmd = inputs.qmd.packages.${system}.default;
             pi-watchdog = pkgs'.callPackage ./packages/pi-watchdog { };
             opencode2 = inputs.llm-agents.packages.${system}.opencode2;
             opencodex = pkgs'.callPackage ./packages/opencodex { pkgs = pkgs'; };
