@@ -21,6 +21,7 @@ in
           hm.shell
           hm.bitwarden
           hm.herdrRemote
+          hm.ssh
           hm.git
           hm.jujutsu
           hm.ryu

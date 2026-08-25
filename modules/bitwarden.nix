@@ -60,27 +60,8 @@
 
       home.sessionVariables.SSH_AUTH_SOCK = "${config.home.homeDirectory}/.bitwarden-ssh-agent.sock";
 
-      # Keep the connection policy declarative while leaving private key
-      # material in Bitwarden. OrbStack's include stays first, as its own
-      # comment requires; the identity file is refreshed only when the vault
-      # item can be read during activation.
-      home.file.".ssh/config".text = ''
-        Include ~/.orbstack/ssh/config
-
-        Host *
-          IdentityFile ~/.ssh/id_ed25519
-          AddKeysToAgent yes
-          ${lib.optionalString pkgs.stdenv.isDarwin "UseKeychain yes"}
-
-        # Remote M1 agent host over Tailscale. Resolves through MagicDNS's
-        # search domain, so only the device alias is committed here (repo is
-        # public). The device must be named `m1-perso` in the Tailscale admin
-        # console for this to resolve.
-        Host m1-perso
-          User ${config.home.username}
-          ServerAliveInterval 30
-          ServerAliveCountMax 3
-      '';
+      # Connection policy (hosts, aliases) lives in the ssh module; this
+      # module only materializes the private key at activation time.
 
       home.activation.secretGlobalConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         target="$HOME/.config/secret/config.json"
