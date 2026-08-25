@@ -84,7 +84,7 @@
 
         if [ "''${DRY_RUN:-0}" = 1 ]; then
           echo "secret: dry-run; skipping Bitwarden SSH key materialization" >&2
-        elif ${pkgs.coreutils}/bin/timeout 6s ${secret}/bin/secret get --config "${sshSecretConfig}" ssh-private-key > "$privateTmp" 2>/dev/null \
+        elif ${pkgs.coreutils}/bin/timeout 6s ${secret}/bin/secret get --config "${sshSecretConfig}" ssh-private-key-work > "$privateTmp" 2>/dev/null \
           && [ -s "$privateTmp" ] \
           && ${pkgs.openssh}/bin/ssh-keygen -y -f "$privateTmp" > "$publicTmp" 2>/dev/null; then
           chmod 600 "$privateTmp"
@@ -92,6 +92,16 @@
           mv -f "$privateTmp" "${sshPrivateKey}"
           mv -f "$publicTmp" "${sshPublicKey}"
           echo "secret: refreshed $HOME/.ssh/id_ed25519 from Bitwarden" >&2
+
+          # Keep authorized_keys in sync with the shared vault key so peer
+          # machines using the same profile can SSH in without a password.
+          # Idempotent append: pre-existing entries are preserved.
+          touch "$sshDir/authorized_keys"
+          chmod 600 "$sshDir/authorized_keys"
+          if ! ${pkgs.coreutils}/bin/grep -qxF "$(cat ${sshPublicKey})" "$sshDir/authorized_keys"; then
+            ${pkgs.coreutils}/bin/cat "${sshPublicKey}" >> "$sshDir/authorized_keys"
+            echo "secret: added id_ed25519 to authorized_keys" >&2
+          fi
         else
           rm -f "$privateTmp" "$publicTmp"
           echo "secret: SSH key item unavailable or invalid; keeping the existing $HOME/.ssh/id_ed25519" >&2
