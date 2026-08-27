@@ -21,6 +21,10 @@
             write-change-id-header = true;
           };
 
+          revsets = {
+            log = "connected(@ | ancestors(remote_bookmarks()) | bookmarks())";
+          };
+
           ui = {
             # Use Fresh's daemon IPC integration so JJ edits work from
             # terminals without a directly attached device (including agent
