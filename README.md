@@ -136,7 +136,7 @@ nix run .#update-pins -- --list
 nix run .#update-pins -- --dry-run
 
 # Update a selected set
-nix run .#update-pins -- --only codex,iris,ryu
+nix run .#update-pins -- --only codex,iris,ryu,zed
 
 # Update and run the fast evaluation checks
 nix run .#update-pins -- --validate fast

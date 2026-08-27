@@ -13,6 +13,7 @@
       thaw = pkgs.thaw;
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
       tidyports = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tidyports;
+      zed = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.zed;
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
         /usr/bin/pkill -TERM -f '/Applications/SecretBar.app/Contents/MacOS/secretbar' 2>/dev/null || true
         /bin/sleep 1
@@ -78,6 +79,7 @@
       home.file."Applications/Thaw.app".source = "${thaw}/Applications/Thaw.app";
       home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
       home.file."Applications/Tidy Ports.app".source = "${tidyports}/Applications/Tidy Ports.app";
+      home.file."Applications/Zed.app".source = "${zed}/Applications/Zed.app";
 
       # The plist may be unchanged when only the app store path changes. Run
       # the same single-instance launcher during every activation so the live

@@ -21,6 +21,7 @@ in
       opencode = packages.opencode2;
       pi-watchdog = packages.pi-watchdog;
       qmd = inputs.qmd.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      zed = packages.zed;
     in
     {
       home.packages = [
@@ -58,8 +59,7 @@ in
         pkgs.tokei
         pkgs.tmux
         pkgs.tree
-        # Temporarily disabled while Zed is not in use.
-        # zed
+        zed
         pkgs.curl
         pkgs.ripgrep
         pkgs.ripdrag

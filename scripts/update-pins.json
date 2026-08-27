@@ -90,6 +90,24 @@
       ]
     },
     {
+      "name": "zed",
+      "type": "nix-update",
+      "description": "Zed editor prebuilt release bundle",
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "zed",
+        "--use-github-releases",
+        "--github-releases-limit",
+        "100",
+        "--version-regex",
+        "^v([0-9]+\\.[0-9]+\\.[0-9]+)$"
+      ]
+    },
+    {
       "name": "nixpkgs",
       "type": "flake-input",
       "description": "Primary nixpkgs pin",
@@ -319,6 +337,7 @@
           ".#iris",
           ".#modlens",
           ".#ryu",
+          ".#zed",
           "--no-link"
         ]
       }

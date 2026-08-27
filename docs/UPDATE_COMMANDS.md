@@ -22,6 +22,7 @@ These packages use release archives and the `finalAttrs` pattern:
 | `iris` | IRIS release archive | `nix run nixpkgs#nix-update -- --flake iris` |
 | `lightjj` | lightjj release binary | `nix run nixpkgs#nix-update -- --flake lightjj` |
 | `ryu` | jj-ryu release archive | `nix run nixpkgs#nix-update -- --flake ryu --version=unstable` |
+| `zed` | Zed editor prebuilt release bundle | `nix run nixpkgs#nix-update -- --flake zed --use-github-releases --github-releases-limit 100 --version-regex '^v([0-9]+\.[0-9]+\.[0-9]+)$'` |
 
 The commands update the current platform's source selection. Review and
 refresh the other platform hashes before applying a cross-platform change.

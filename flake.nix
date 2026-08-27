@@ -117,6 +117,7 @@
             plannotator = pkgs'.callPackage ./packages/plannotator { pkgs = pkgs'; };
             ryu = pkgs'.callPackage ./packages/ryu { };
             secret = pkgs'.callPackage ./packages/secret { };
+            zed = pkgs'.callPackage ./packages/zed { };
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
             codexbar = pkgs'.callPackage ./packages/codexbar { };
