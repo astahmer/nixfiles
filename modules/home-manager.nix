@@ -27,6 +27,7 @@ in
             hm.git
             hm.jujutsu
             hm.coding
+            hm.zed
             hm.vscode
             hm.agents
             hm.linuxApps

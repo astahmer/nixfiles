@@ -1,0 +1,65 @@
+{
+  "effect Context.Tag": {
+    "prefix": "efctag",
+    "body": [
+      "class $1 extends Context.Tag(\"$1\")<$1, $2>() {}"
+    ],
+    "description": "context tag"
+  },
+  "effect Context.Reference": {
+    "prefix": "efref",
+    "body": [
+      "class $1 extends Context.Reference<$1>()(\"$1\", { defaultValue: () => $2 }) {}"
+    ],
+    "description": "context reference"
+  },
+  "Effect.gen(function* () {...})": {
+    "prefix": "efgen",
+    "body": [
+      "Effect.gen(function* () {",
+      "  $1",
+      "})"
+    ],
+    "description": "effect gen"
+  },
+  "Effect.fn(function* () {...})": {
+    "prefix": "effn",
+    "body": [
+      "Effect.fn(function* () {",
+      "  $1",
+      "})"
+    ],
+    "description": "effect fn"
+  },
+  "effect Schema.TaggedError": {
+    "prefix": "efserr",
+    "body": [
+      "class $1 extends Schema.TaggedError<$1>()(",
+      "  \"$1\",",
+      "  {",
+      "  ${2:cause: Schema.Any}",
+      "  },",
+      ") {}"
+    ],
+    "description": "schema error"
+  },
+  "Effect Schema.Class": {
+    "prefix": "efsc",
+    "body": [
+      "class $1 extends Schema.Class<$1>(\"$1\")({",
+      "    $2: $3,",
+      "}) {}"
+    ],
+    "description": "schema tagged request"
+  },
+  "effect Effect.Service": {
+    "prefix": "efs",
+    "body": [
+      "export class $1 extends Effect.Service<$1>()(\"$1\", {",
+      "    accessors: true,",
+      "    effect: $2,",
+      "}) {}"
+    ],
+    "description": "schema tagged request"
+  }
+}

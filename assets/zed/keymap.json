@@ -1,0 +1,107 @@
+// Nix-managed Zed keymap mirrored from the synced VS Code keybindings.
+// VS Code Remote Sync remains the owner/manager of the source keybindings.
+// Zed's VSCode base keymap supplies the standard shortcuts; these are the
+// custom overrides and closest available equivalents from the VS Code file.
+[
+    {
+        "context": "Workspace",
+        "use_key_equivalents": true,
+        "bindings": {
+            // Keep the existing custom Git-panel shortcut.
+            "cmd-g": "git_panel::ToggleFocus",
+            "ctrl-shift-g": null,
+
+            // VS Code reserves these, but Zed has no view-picker equivalent.
+            "ctrl-shift-q": null,
+            "ctrl-q": null,
+
+            // There is no Zed rectangular/column-selection action equivalent.
+            "cmd-shift-i": null,
+
+            // Avoid opening Zed's debug panel on the VS Code custom shortcut;
+            // editor.action.nextMatchFindAction has no direct Zed equivalent.
+            "cmd-shift-d": null
+        }
+    },
+    {
+        "context": "Editor",
+        "use_key_equivalents": true,
+        "bindings": {
+            // VS Code cursorWordPart* -> Zed subword movement.
+            "cmd-shift-i": null,
+            "ctrl-left": "editor::MoveToPreviousSubwordStart",
+            "ctrl-right": "editor::MoveToNextSubwordEnd",
+            "ctrl-shift-left": "editor::SelectToPreviousSubwordStart",
+            "ctrl-shift-right": "editor::SelectToNextSubwordEnd",
+
+            // VS Code smartSelect expand/shrink.
+            "shift-end": "editor::SelectLargerSyntaxNode",
+            "shift-home": "editor::SelectSmallerSyntaxNode",
+
+            // Preserve the five-line PageUp/PageDown behavior with Zed's
+            // documented keystroke-sequence action.
+            "pagedown": [
+                "workspace::SendKeystrokes",
+                "down down down down down"
+            ],
+            "pageup": [
+                "workspace::SendKeystrokes",
+                "up up up up up"
+            ],
+            "shift-pagedown": [
+                "workspace::SendKeystrokes",
+                "shift-down shift-down shift-down shift-down shift-down"
+            ],
+            "shift-pageup": [
+                "workspace::SendKeystrokes",
+                "shift-up shift-up shift-up shift-up shift-up"
+            ],
+
+            // VS Code replaceInFiles -> Zed project search with replacement.
+            "cmd-shift-h": [
+                "pane::DeploySearch",
+                {
+                    "replace_enabled": true
+                }
+            ],
+
+            // VS Code referenceSearch.trigger.
+            "cmd-\"": "editor::FindAllReferences",
+
+            // VS Code disables F3's next-match binding in the editor.
+            "f3": null
+        }
+    },
+    {
+        "context": "Markdown",
+        "bindings": {
+            // Match the VS Code override that disables Markdown's bold shortcut.
+            "cmd-b": null
+        }
+    },
+    {
+        "context": "Terminal",
+        "use_key_equivalents": true,
+        "bindings": {
+            "cmd-k": "terminal::Clear",
+            "ctrl-`": null,
+            // VS Code sends Escape followed by Return to the terminal.
+            "shift-enter": ["terminal::SendText", "\u001b\r"]
+        }
+    },
+    {
+        "context": "Workspace",
+        "use_key_equivalents": true,
+        "bindings": {
+            // VS Code toggleMaximizeEditorGroup -> Zed pane zoom.
+            "cmd-k cmd-m": "workspace::ToggleZoom",
+            "ctrl-cmd-m": "workspace::ToggleZoom",
+
+            // VS Code search.action.openNewEditor -> closest Zed project search.
+            "cmd-k cmd-f": "pane::DeploySearch",
+
+            // VS Code intentionally disables the normal open-file/folder shortcut.
+            "cmd-o": null
+        }
+    }
+]

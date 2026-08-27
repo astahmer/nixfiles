@@ -29,6 +29,7 @@ in
           hm.opencodex
           hm.t3code
           hm.coding
+          hm.zed
           hm.vscode
           hm.agents
           hm.pi

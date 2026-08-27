@@ -1,8 +1,8 @@
-// Readonly migration reference derived from the synced VS Code settings at:
+// Nix-managed Zed settings mirrored from the synced VS Code settings at:
 // ~/Library/Application Support/Code/User/settings.json
 //
-// This file is not deployed by Nix and is not the owner of ~/.config/zed/settings.json.
-// Review and copy mappings into Zed's user settings manually when desired.
+// VS Code Remote Sync remains the owner/manager of VS Code settings. Zed is
+// configured from this separate file by Home Manager.
 // VS Code extension IDs do not map 1:1 to Zed formatter names:
 // - "language_server" is the closest match for VS Code built-in/LSP formatting.
 // - "prettier" requires the Zed Prettier extension or a project-provided formatter.
@@ -10,12 +10,29 @@
 {
     // VS Code's default keymap is the closest match for this setup.
     "base_keymap": "VSCode",
+    // nh/Nix owns the Zed bundle, so updates arrive through the flake.
+    "auto_update": false,
+
+    // Preserve the current Zed appearance while adopting the editor behavior.
+    "theme": {
+        "mode": "system",
+        "light": "One Light",
+        "dark": "One Dark"
+    },
+    "ui_font_size": 16,
+    "buffer_font_size": 15,
 
     "format_on_save": "on",
+    "formatter": "language_server",
+    "hard_tabs": false,
     "remove_trailing_whitespace_on_save": true,
     "ensure_final_newline_on_save": true,
     "soft_wrap": "none",
     "show_whitespaces": "none",
+    "show_edit_predictions": true,
+    "sticky_scroll": {
+        "enabled": true
+    },
     "show_wrap_guides": true,
     "wrap_guides": [
         80,
@@ -24,6 +41,8 @@
     "minimap": {
         "show": "never"
     },
+    "max_tabs": 5,
+    "use_smartcase_search": true,
 
     // VS Code's files.exclude and search.exclude are represented by one Zed scan list.
     // These entries include Zed's standard defaults because this setting replaces them.
@@ -48,14 +67,25 @@
         "**/packages/**/build",
         "**/packages/**/coverage",
         "**/routeTree.gen.ts",
-        "**/.references",
-        "**/*.local*"
+        "**/.references"
     ],
 
     "project_panel": {
         "dock": "right",
         "auto_reveal_entries": true,
         "git_status": true
+    },
+    "git_panel": {
+        "group_by": "staging",
+        "tree_view": true
+    },
+    "git": {
+        "inline_blame": {
+            "enabled": false
+        }
+    },
+    "terminal": {
+        "scroll_multiplier": 3.0
     },
 
     "languages": {

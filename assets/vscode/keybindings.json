@@ -1,4 +1,7 @@
-// Empty
+// Readonly snapshot of the synced VS Code keybindings.
+// Source: ~/Library/Application Support/Code/User/keybindings.json
+// VS Code Remote Sync remains the owner/manager of the live keybindings file.
+// This snapshot is not applied by Nix.
 [
   {
     "key": "shift+cmd+i",
@@ -262,5 +265,41 @@
   {
     "key": "shift+cmd+[Quote]",
     "command": "editor.action.referenceSearch.trigger"
+  },
+  {
+    "key": "ctrl+shift+q",
+    "command": "workbench.action.quickOpenNavigateNextInViewPicker",
+    "when": "inQuickOpen && inViewsPicker"
+  },
+  {
+    "key": "ctrl+q",
+    "command": "-workbench.action.quickOpenNavigateNextInViewPicker",
+    "when": "inQuickOpen && inViewsPicker"
+  },
+  {
+    "key": "ctrl+shift+q",
+    "command": "workbench.action.quickOpenView"
+  },
+  {
+    "key": "ctrl+q",
+    "command": "-workbench.action.quickOpenView"
+  },
+  // Restore after jcode global-hotkey hijack of cmd+k / cmd+m
+  {
+    "key": "cmd+k cmd+m",
+    "command": "workbench.action.toggleMaximizeEditorGroup"
+  },
+  // Non-chord backup (macOS uses cmd+m for Minimize, so chord can fail if prefix is eaten)
+  {
+    "key": "ctrl+cmd+m",
+    "command": "workbench.action.toggleMaximizeEditorGroup"
+  },
+  {
+    "key": "shift+enter",
+    "command": "workbench.action.terminal.sendSequence",
+    "args": {
+      "text": "\u001b\r"
+    },
+    "when": "terminalFocus"
   }
 ]
