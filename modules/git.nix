@@ -50,7 +50,8 @@
             name = lib.mkDefault "Alexandre Stahmer";
             email = lib.mkDefault "alexandre.stahmer@gmail.com";
           };
-          core.editor = lib.mkDefault "fresh";
+          # Fresh's daemon editor avoids requiring Git itself to own a TTY.
+          core.editor = lib.mkDefault "fresh --cmd daemon open-file . --wait";
           init.defaultBranch = lib.mkDefault "main";
           pull.rebase = lib.mkDefault true;
           push = {

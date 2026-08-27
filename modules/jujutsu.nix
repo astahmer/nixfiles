@@ -22,7 +22,10 @@
           };
 
           ui = {
-            editor = "fresh";
+            # Use Fresh's daemon IPC integration so JJ edits work from
+            # terminals without a directly attached device (including agent
+            # subprocesses), while still blocking until the buffer is closed.
+            editor = "fresh --cmd daemon open-file . --wait";
             conflict-marker-style = "git";
             pager = "delta";
             # https://docs.jj-vcs.dev/latest/config/#processing-contents-to-be-paged
