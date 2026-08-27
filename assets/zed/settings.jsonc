@@ -1,0 +1,137 @@
+// Readonly migration reference derived from the synced VS Code settings at:
+// ~/Library/Application Support/Code/User/settings.json
+//
+// This file is not deployed by Nix and is not the owner of ~/.config/zed/settings.json.
+// Review and copy mappings into Zed's user settings manually when desired.
+// VS Code extension IDs do not map 1:1 to Zed formatter names:
+// - "language_server" is the closest match for VS Code built-in/LSP formatting.
+// - "prettier" requires the Zed Prettier extension or a project-provided formatter.
+// - Oxc and the VS Code SQL formatter need a deliberate Zed-compatible formatter choice.
+{
+    // VS Code's default keymap is the closest match for this setup.
+    "base_keymap": "VSCode",
+
+    "format_on_save": "on",
+    "remove_trailing_whitespace_on_save": true,
+    "ensure_final_newline_on_save": true,
+    "soft_wrap": "none",
+    "show_whitespaces": "none",
+    "show_wrap_guides": true,
+    "wrap_guides": [
+        80,
+        120
+    ],
+    "minimap": {
+        "show": "never"
+    },
+
+    // VS Code's files.exclude and search.exclude are represented by one Zed scan list.
+    // These entries include Zed's standard defaults because this setting replaces them.
+    "file_scan_exclusions": [
+        "**/.git",
+        "**/.jj",
+        "**/.svn",
+        "**/.hg",
+        "**/CVS",
+        "**/.DS_Store",
+        "**/Thumbs.db",
+        "**/.classpath",
+        "**/.settings",
+        "**/node_modules",
+        "**/.netlify",
+        "**/.next",
+        "**/build",
+        "**/dist",
+        "**/docker",
+        "**/.pnpm",
+        "**/packages/**/dist",
+        "**/packages/**/build",
+        "**/packages/**/coverage",
+        "**/routeTree.gen.ts",
+        "**/.references",
+        "**/*.local*"
+    ],
+
+    "project_panel": {
+        "dock": "right",
+        "auto_reveal_entries": true,
+        "git_status": true
+    },
+
+    "languages": {
+        "Astro": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "Docker Compose": {
+            "formatter": "language_server",
+            "format_on_save": "on",
+            "tab_size": 2
+        },
+        "GitHub Actions": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "Gleam": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "Handlebars": {
+            "format_on_save": "on"
+        },
+        "HTML": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "JavaScript": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "JSON": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "JSONC": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "Nix": {
+            "formatter": {
+                "external": {
+                    "command": "nixfmt",
+                    "arguments": []
+                }
+            },
+            "format_on_save": "on"
+        },
+        "SQL": {
+            // VS Code uses adpyke.vscode-sql-formatter; keep this enabled while
+            // choosing the equivalent Zed formatter for the projects that need it.
+            "format_on_save": "on"
+        },
+        "TSX": {
+            // VS Code uses oxc.oxc-vscode; language-server formatting is the closest
+            // portable fallback until an oxfmt command is intentionally provisioned.
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "TypeScript": {
+            // VS Code uses oxc.oxc-vscode; language-server formatting is the closest
+            // portable fallback until an oxfmt command is intentionally provisioned.
+            "formatter": "language_server",
+            "format_on_save": "on"
+        },
+        "Vue": {
+            "formatter": "prettier",
+            "format_on_save": "on"
+        },
+        "YAML": {
+            "formatter": "language_server",
+            "format_on_save": "on"
+        }
+    }
+
+    // Intentionally not translated: VS Code/Copilot/GitLens/Supermaven/chat settings,
+    // workbench and icon-theme settings, files.readonlyInclude, sync.gist, jj-view's
+    // machine-specific binaryPath, and copilotProxy.* settings.
+}
