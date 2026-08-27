@@ -103,6 +103,24 @@
         }
       '';
 
+      approveFunction = ''
+        approve() {
+          if [[ $# -lt 1 ]]; then
+            echo "Usage: approve <pull-request> [gh pr review flags]" >&2
+            return 2
+          fi
+
+          local token
+          token="$(command secret get global/gh-vincent-approve-najar)" || return 1
+          if [[ -z "$token" ]]; then
+            echo "approve: secret returned an empty token" >&2
+            return 1
+          fi
+
+          GITHUB_TOKEN="$token" command gh pr review --approve "$@"
+        }
+      '';
+
       jjsearchFunction = ''
                 jjsearch() {
                   local mode="fixed"
@@ -397,6 +415,7 @@
         ${jjCleanFunction}
         ${initagentFunction}
         ${nixfilesHereFunction}
+        ${approveFunction}
           ${shellAliasesFunction}
           source ${jjCompletionBash}
           source ${direnvHookBash}
@@ -439,6 +458,7 @@
           ${jjCleanFunction}
           ${initagentFunction}
           ${nixfilesHereFunction}
+          ${approveFunction}
           ${shellAliasesFunction}
         '')
 
