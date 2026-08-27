@@ -14,6 +14,7 @@
 
           snapshot = {
             max-new-file-size = "12MiB";
+            auto-update-stale = true;
           };
 
           git = {
