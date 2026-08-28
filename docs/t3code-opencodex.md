@@ -59,6 +59,26 @@ The configured providers and public account selectors are:
 | `codex-work` | `openai` account pool entry | First non-main Codex pool account |
 | `opencode` | OpenCode Go endpoint | OpenCode provider |
 
+`codex-perso` is a model-routing selector backed by the native Codex `main`
+login; it is not a provider or account name to add in the dashboard. The
+first-run template leaves the native account usable. Existing pause choices
+remain user-owned, so if `__main__` was paused on a machine, clear that pause
+in the dashboard before using `codex-perso/...`.
+
+For an existing machine whose selector is missing or whose account list looks
+stale, restart the proxy first so it reloads the on-disk account state:
+
+```sh
+ocx restart
+ocx account list openai
+# In the dashboard, unpause the `main` account if it is paused.
+ocx account use openai main
+ocx sync
+```
+
+Do not add an account or provider named `codex-perso`; that name is reserved
+by the selector above.
+
 The work selector is seeded from the first non-main `codexAccounts[]` entry
 only when `codex-work` is missing or stale, so account ids and emails stay out
 of Nix while an existing dashboard choice is preserved. Add or switch the work

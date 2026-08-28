@@ -320,9 +320,6 @@
   "googleAntigravityStaticCatalogVersion": 2,
   "multiAgentGuidanceEnabled": true,
   "codexShimAutoRestore": true,
-  "pausedCodexAccountIds": [
-    "__main__"
-  ],
   "codexAccountNamespaces": {
     "codex-perso": "@main"
   },
