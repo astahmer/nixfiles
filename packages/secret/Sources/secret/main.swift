@@ -1302,7 +1302,7 @@ func run() async {
             let prefix = options.global
                 ? "global"
                 : URL(fileURLWithPath: filePath).deletingLastPathComponent().lastPathComponent
-            let item = "\(prefix)/\(kebab(aliasValue))"
+            let item = options.name ?? "\(prefix)/\(kebab(aliasValue))"
             let newField = options.field ?? (options.itemType == "secure-note" ? "notes" : "password")
             var definitionPairs: [(String, J)] = [
                 ("item", .str(item)),
