@@ -319,7 +319,8 @@ Environments override the base (prod) mappings with per-env items:
 secret env --env dev --output .env.dev
 secret env --required DATABASE_URL,STRIPE_KEY --output .env
 secret env --export --output exports.sh
-secret env --diff --output .env
+secret env --merge --output .env
+secret env --diff --merge --output .env
 secret run -- npm test
 secret run --optional STRIPE_KEY -- npm test
 ```
@@ -327,9 +328,12 @@ secret run --optional STRIPE_KEY -- npm test
 `--env` defaults to `prod`; unknown environments are rejected. `--required`
 fails unless every listed alias is present in the selected project config.
 `--export` prints `export KEY='value'` lines (or writes them atomically with
-`--output`) for sourcing instead of dotenv format. `--diff` resolves every
-value, prints `+`/`-` lines against the target (default `./.env`), and writes
-nothing — a dry run for rotation checklists. `secret run -- <command>` loads
+`--output`) for sourcing instead of dotenv format. `--merge` upserts only the
+declared alias keys into an existing dotenv and leaves every other key
+untouched (`--output` defaults to `./.env`). Use it when the file also holds
+hand-maintained values. `--diff` prints key names only (`+` added, `~`
+changed, `-` removed) against the target (default `./.env`) and writes
+nothing — never secret values. `secret run -- <command>` loads
 the project aliases into the command's environment and runs it, propagating
 its exit code — use `--` so the command's own flags are not parsed by
 `secret`. `run` is strict by default: every declared alias must resolve, or

@@ -29,6 +29,7 @@ struct Options {
     var diff = false
     var dry = false
     var dryRun = false
+    var merge = false
     var source: String?
     var name: String?
     var notes: String?
@@ -136,6 +137,8 @@ func parseOptions(_ argv: [String]) -> Options {
             options.dry = true
         } else if argument == "--dry-run" {
             options.dryRun = true
+        } else if argument == "--merge" {
+            options.merge = true
         } else if argument == "--source" {
             index += 1
             guard index < argv.count else { fail("--source requires a URL") }
@@ -318,7 +321,7 @@ let commandHelpText: [String: String] = [
     Scaffold a .secret.json template; optional aliases to prefill.
     """,
     "env": """
-    Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]
+    Usage: secret env [--output FILE] [--env NAME] [--export] [--merge] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]
 
     Generate dotenv from the project config. Strict by default: every alias must
     resolve. Pass --optional to warn-and-skip unresolved aliases.
@@ -327,8 +330,10 @@ let commandHelpText: [String: String] = [
       --env NAME        Environment overrides (default: prod)
       --export          Print shell export lines instead of dotenv
                         (direnv: put `eval "$(secret env --export)"` in .envrc)
+      --merge           Upsert alias keys into an existing dotenv; keep other keys
+                        (--output defaults to ./.env). Incompatible with --export.
       --diff, --dry, --dry-run
-                        Show what --output would write without writing
+                        Show key-level added/changed/removed without printing values
       --required a,b,c  Fail unless these aliases are in the config
       --optional a,b,c  Warn and skip aliases that cannot resolve
     """,
@@ -435,8 +440,9 @@ func printHelp() {
       --export            With env: print shell export lines instead of dotenv
       --json              With list/print/history/recent: machine-readable JSON on stdout
       --all               With print: merge project, global, and local scopes
+      --merge             With env: upsert alias keys into an existing dotenv (keep other keys)
       --diff, --dry, --dry-run
-                          With env: show what --output would write without writing (default target ./.env)
+                          With env: show key-level added/changed/removed without printing values (default target ./.env)
       -h, --help          Show this help; accepted after any command
       --store             With unlock: persist the session token to ~/.config/secret/session (mode 0600)
       --helper            With unlock: get the session via Touch ID (macOS)
@@ -1661,20 +1667,48 @@ func run() async {
             }
             lines.append(options.export ? "export \(key)=\(value)" : "\(key)=\(value)")
         }
+        if options.merge && options.export {
+            fail("--merge cannot be combined with --export")
+        }
+        let incoming = incomingDotenvVars(lines)
+        let incomingKeys = Set(incoming.map(\.key))
+        let target = options.outputPath ?? "\(FileManager.default.currentDirectoryPath)/.env"
+        let previousText = readFile(target) ?? ""
+        let previousKeys = dotenvKeySet(previousText)
+        let output: String
+        if options.merge {
+            output = mergeDotenv(existing: previousText, incoming: incoming)
+        } else {
+            output = lines.joined(separator: "\n") + "\n"
+        }
+        let nextKeys = dotenvKeySet(output)
         if options.diff || options.dry || options.dryRun {
-            let target = options.outputPath ?? "\(FileManager.default.currentDirectoryPath)/.env"
-            let previous = (readFile(target) ?? "").split(separator: "\n").filter { $0 != "" }.map(String.init)
-            let added = lines.filter { !previous.contains($0) }
-            let removed = previous.filter { !lines.contains($0) }
-            for line in removed { print(outColor("31", "- \(line)")) }
-            for line in added { print(outColor("32", "+ \(line)")) }
+            let added = incomingKeys.subtracting(previousKeys).sorted()
+            let removed = options.merge ? [String]() : previousKeys.subtracting(nextKeys).sorted()
+            let changed = incomingKeys.intersection(previousKeys).filter { key in
+                let old = previousText.split(separator: "\n").compactMap { line -> String? in
+                    dotenvAssignment(String(line))?.key == key ? String(line) : nil
+                }.last
+                let neu = incoming.first { $0.key == key }?.assignment
+                return old != neu
+            }.sorted()
+            for key in removed { print(outColor("31", "- \(key)")) }
+            for key in changed { print(outColor("33", "~ \(key)")) }
+            for key in added { print(outColor("32", "+ \(key)")) }
+            let kept = options.merge ? previousKeys.subtracting(incomingKeys).count : 0
             recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "env", target: "\(target) (diff)", env: environment))
-            info("env --diff: \(added.count) addition(s), \(removed.count) removal(s) for \(target)")
+            info(
+                "env --diff: \(added.count) added, \(changed.count) changed, \(removed.count) removed"
+                    + (options.merge ? ", \(kept) other keys kept" : "")
+                    + " for \(target) (keys only, no values)"
+            )
             return
         }
-        let output = lines.joined(separator: "\n") + "\n"
-        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "env", target: options.outputPath ?? "stdout", env: environment))
-        if let outputPath = options.outputPath {
+        recordHistory(entry: HistoryEntry(at: isoNow(), cmd: "env", target: options.outputPath ?? (options.merge ? target : "stdout"), env: environment))
+        if options.merge {
+            writeAtomic(target, output)
+            success("merged \(incoming.count) aliases into \(target) (mode 0600)")
+        } else if let outputPath = options.outputPath {
             writeAtomic(outputPath, output)
             success("wrote \(lines.count) aliases (env \(environment)) to \(outputPath) (mode 0600)")
         } else {

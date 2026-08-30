@@ -394,6 +394,75 @@ func dotenvKey(_ alias: String, _ definition: SecretDefinition) -> String {
     return key
 }
 
+func dotenvAssignment(_ line: String) -> (key: String, value: String)? {
+    let trimmed = line.trimmingCharacters(in: .whitespaces)
+    if trimmed.isEmpty || trimmed.hasPrefix("#") { return nil }
+    let body = trimmed.hasPrefix("export ") ? String(trimmed.dropFirst("export ".count)) : trimmed
+    guard let eq = body.firstIndex(of: "=") else { return nil }
+    let key = String(body[..<eq])
+    if key.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) == nil { return nil }
+    return (key, String(body[body.index(after: eq)...]))
+}
+
+struct IncomingDotenvVar {
+    var key: String
+    var assignment: String
+    var source: String?
+}
+
+func incomingDotenvVars(_ lines: [String]) -> [IncomingDotenvVar] {
+    var incoming: [IncomingDotenvVar] = []
+    var pendingSource: String?
+    for line in lines {
+        if line.hasPrefix("# source:") {
+            pendingSource = line
+            continue
+        }
+        guard let parsed = dotenvAssignment(line) else {
+            pendingSource = nil
+            continue
+        }
+        incoming.append(IncomingDotenvVar(key: parsed.key, assignment: line, source: pendingSource))
+        pendingSource = nil
+    }
+    return incoming
+}
+
+func mergeDotenv(existing: String, incoming: [IncomingDotenvVar]) -> String {
+    let byKey = Dictionary(uniqueKeysWithValues: incoming.map { ($0.key, $0) })
+    var seen = Set<String>()
+    var out: [String] = []
+    let rawLines = existing.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    var index = 0
+    while index < rawLines.count {
+        let line = rawLines[index]
+        let next = index + 1 < rawLines.count ? rawLines[index + 1] : nil
+        if line.hasPrefix("# source:"), let next, let parsed = dotenvAssignment(next), byKey[parsed.key] != nil {
+            index += 1
+            continue
+        }
+        if let parsed = dotenvAssignment(line), let neu = byKey[parsed.key] {
+            if let source = neu.source { out.append(source) }
+            out.append(neu.assignment)
+            seen.insert(parsed.key)
+            index += 1
+            continue
+        }
+        out.append(line)
+        index += 1
+    }
+    while out.last == "" { out.removeLast() }
+    for neu in incoming where !seen.contains(neu.key) {
+        if let source = neu.source { out.append(source) }
+        out.append(neu.assignment)
+    }
+    return out.joined(separator: "\n") + "\n"
+}
+
+func dotenvKeySet(_ text: String) -> Set<String> {
+    Set(text.split(separator: "\n").compactMap { dotenvAssignment(String($0))?.key })
+}
+
 // TS semantics: user config, project config, then local config; environment
 // overrides merge after the bases. Duplicate aliases keep their first-seen
 // position (JS object assignment does not reorder keys).

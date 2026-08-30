@@ -30,7 +30,7 @@ values unless explicitly requested, and never stores `BW_SESSION`.
 - `secret pull` — refresh the local vault cache from the server explicitly; never automatic (`sync`/`sy` still work).
 - `secret init [alias...]` — scaffold a project `.secret.json` (directory name + kebab alias as item prefix); pass aliases to prefill; refuses to overwrite without `--force`.
 - `secret print [project|global|nix]` — show every alias in one scope (alias, env, item, field, dotenv key); `--all` merges scopes with a scope column; never values, no vault access.
-- `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--export` prints `export KEY='value'` lines, `--diff` dry-runs without writing.
+- `secret env --output .env` — generate a project dotenv atomically with mode 0600; `--merge` upserts alias keys into an existing file and keeps the rest; `--export` prints `export KEY='value'` lines; `--diff` dry-runs key names only (no values).
 - `secret run -- <cmd>` — inject project aliases into a command's environment and run it, propagating its exit code; strict by default (any unresolvable alias aborts), `--optional A,B` opts out.
 - `secret lint` — validate configs offline (items, env keys, dotenv-key collisions); no vault access, works locked; `--json` supported.
 - `secret doctor` — validate configs, Bitwarden state, and alias resolvability without printing values.
@@ -92,4 +92,5 @@ shared 60-second cache; neither runs at shell startup.
 - Overwriting an existing item always confirms first unless `--force`/`-f` is passed.
 - Prefer Bitwarden item IDs over names in configs when names can collide.
 - When a task needs an app's secrets, generate its `.env` with
-  `secret env --output .env` and keep `.env` gitignored.
+  `secret env --output .env` (or `secret env --merge --output .env` when the
+  file also has hand-maintained keys) and keep `.env` gitignored.
