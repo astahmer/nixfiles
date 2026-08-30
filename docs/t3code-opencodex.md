@@ -55,15 +55,17 @@ The configured providers and public account selectors are:
 | Selector | OpenCodex route | Purpose |
 | --- | --- | --- |
 | `commandcode` | CommandCode provider | CommandCode API-key provider (`cmdcode`) |
-| `codex-perso` | `openai` account `@main` | Personal/main Codex login |
-| `codex-work` | `openai` account pool entry | First non-main Codex pool account |
+| `codex-perso` | `openai` account `emialex.stahmer@gmail.com` | Personal Codex login |
+| `codex-work` | `openai` account `accounts+chatgpt@welii.io` | Work Codex login |
 | `opencode` | OpenCode Go endpoint | OpenCode provider |
 
-`codex-perso` is a model-routing selector backed by the native Codex `main`
-login; it is not a provider or account name to add in the dashboard. The
-first-run template leaves the native account usable. Existing pause choices
-remain user-owned, so if `__main__` was paused on a machine, clear that pause
-in the dashboard before using `codex-perso/...`.
+`codex-perso` and `codex-work` are model-routing selectors bound by account
+email; they are not provider or account names to add in the dashboard. The
+activation migration clears all persisted account pauses on every rebuild
+(older templates paused `__main__` by default, and OpenCodex auto-pauses
+drained accounts), so a quota window can never surface as a misleading 401
+while the account still has weekly headroom. Pauses are runtime state and
+rebuilds re-enable every account.
 
 For an existing machine whose selector is missing or whose account list looks
 stale, restart the proxy first so it reloads the on-disk account state:
@@ -71,8 +73,6 @@ stale, restart the proxy first so it reloads the on-disk account state:
 ```sh
 ocx restart
 ocx account list openai
-# In the dashboard, unpause the `main` account if it is paused.
-ocx account use openai main
 ocx sync
 ```
 

@@ -145,20 +145,25 @@
             | $base
             | del(.providers["opencode-go"])
             | del(.providers.commandcode.disabled)
+            # Selectors must always reach their bound account. Older templates
+            # paused __main__ by default and OpenCodex auto-pauses drained
+            # accounts, which turns quota exhaustion into a misleading 401;
+            # a persisted pause must never defeat the bindings below. Pauses
+            # are therefore cleared on every activation (rebuild re-enables).
+            | del(.pausedCodexAccountIds)
+            # Selectors bind by account email, never by hardcoded account id:
+            # codex-perso -> the emialex gmail account (falls back to @main
+            # when no pool account matches, e.g. first run), and codex-work
+            # -> the welii.io account. Account ids are machine-local runtime
+            # state; emails are stable across machines.
             | (($base.codexAccounts // [])
-               | map(select(.isMain != true and (.id | type == "string")) | .id)
-            ) as $workIds
-            | ($workIds | .[0]) as $work
-            | (($base.codexAccountNamespaces // {}) + {"codex-perso": "@main"}) as $namespaces
-            | .codexAccountNamespaces = (
-                if (($namespaces["codex-work"] // "") as $selected
-                    | ($workIds | index($selected)) != null)
-                then $namespaces
-                elif $work != null
-                then ($namespaces + {"codex-work": $work})
-                else ($namespaces | del(."codex-work"))
-                end
-              )
+               | map(select((.email // "") | contains("emialex"))) | .[0].id
+               // "@main") as $persoId
+            | (($base.codexAccounts // [])
+               | map(select((.email // "") | contains("@welii.io"))) | .[0].id
+               // "@main") as $workId
+            | .codexAccountNamespaces = (($base.codexAccountNamespaces // {})
+               + {"codex-perso": $persoId, "codex-work": $workId})
           ' "$config_file" > "$candidate_config"
         else
           ${jq} '
