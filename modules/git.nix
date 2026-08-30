@@ -67,6 +67,14 @@
           core.pager = lib.mkDefault "delta";
           branch.sort = lib.mkDefault "-committerdate";
           tag.sort = lib.mkDefault "taggerdate";
+          # Let Git resolve compact GitHub forms directly. The colon form is
+          # recognized as a remote URL, so it works with `git clone` (unlike a
+          # bare `astahmer/repo`, which Git treats as a local path).
+          url."https://github.com/astahmer/".insteadOf = [
+            "astahmer:"
+            "git.astahmer.dev:"
+            "https://git.astahmer.dev/"
+          ];
           alias = {
             go = lib.mkDefault "checkout";
             prev = lib.mkDefault "checkout -";
