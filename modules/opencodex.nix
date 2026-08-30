@@ -59,6 +59,8 @@
         OPENCODEX_OPENCODE_GO_API_KEY="$(read_secret opencode-go-alex)"
         OPENCODEX_OPENCODE_GO_MANU_KEY="$(read_secret opencode-go-manu "${globalSecretConfig}")"
         OPENCODEX_OPENCODE_GO_MATHIAS_KEY="$(read_secret opencode-go-mathias "${globalSecretConfig}")"
+        OPENCODEX_CODEX_ALEX2_EMAIL="$(read_secret opencodex-codex-alex2-email)"
+        OPENCODEX_CODEX_WORK_EMAIL="$(read_secret opencodex-codex-work-email)"
 
         # Legacy fallback: ~/.config/opencodex/secrets.env overrides the vault
         # for the two original keys (e.g. when Bitwarden is locked).
@@ -145,20 +147,27 @@
             | $base
             | del(.providers["opencode-go"])
             | del(.providers.commandcode.disabled)
+            # Selectors must always reach their bound account. Older templates
+            # paused __main__ by default and OpenCodex auto-pauses drained
+            # accounts, which turns quota exhaustion into a misleading 401;
+            # a persisted pause must never defeat the bindings below. Pauses
+            # are therefore cleared on every activation (rebuild re-enables).
+            | del(.pausedCodexAccountIds)
+            # Resolve pool selectors from private secret aliases, never from
+            # hardcoded account ids or public identity values. Missing aliases
+            # preserve existing runtime bindings and fall back to @main.
             | (($base.codexAccounts // [])
-               | map(select(.isMain != true and (.id | type == "string")) | .id)
-            ) as $workIds
-            | ($workIds | .[0]) as $work
-            | (($base.codexAccountNamespaces // {}) + {"codex-perso": "@main"}) as $namespaces
-            | .codexAccountNamespaces = (
-                if (($namespaces["codex-work"] // "") as $selected
-                    | ($workIds | index($selected)) != null)
-                then $namespaces
-                elif $work != null
-                then ($namespaces + {"codex-work": $work})
-                else ($namespaces | del(."codex-work"))
-                end
-              )
+               | map(select((env.OPENCODEX_CODEX_ALEX2_EMAIL // "") != ""
+                  and (((.email // "") | ascii_downcase)
+                  == ((env.OPENCODEX_CODEX_ALEX2_EMAIL // "") | ascii_downcase)))) | .[0].id
+               // ($base.codexAccountNamespaces["codex-alex2"] // "@main")) as $alex2Id
+            | (($base.codexAccounts // [])
+               | map(select((env.OPENCODEX_CODEX_WORK_EMAIL // "") != ""
+                  and (((.email // "") | ascii_downcase)
+                  == ((env.OPENCODEX_CODEX_WORK_EMAIL // "") | ascii_downcase)))) | .[0].id
+               // ($base.codexAccountNamespaces["codex-work"] // "@main")) as $workId
+            | .codexAccountNamespaces = (($base.codexAccountNamespaces // {})
+               + {"codex-alex2": $alex2Id, "codex-perso": "@main", "codex-work": $workId})
           ' "$config_file" > "$candidate_config"
         else
           ${jq} '

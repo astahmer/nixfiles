@@ -42,6 +42,16 @@ original keys when Bitwarden is locked):
 | `opencode-go-manu` | `OPENCODEX_OPENCODE_GO_MANU_KEY` | `opencode-go-manu` provider + OpenCode pool entry |
 | `opencode-go-mathias` | `OPENCODEX_OPENCODE_GO_MATHIAS_KEY` | OpenCode pool entry |
 
+Pool-account identity matching also uses private `secret` aliases:
+`opencodex-codex-alex2-email` and `opencodex-codex-work-email`. Their values
+are read in-memory during activation and are never stored in this repository.
+Create or update them with the hidden prompt:
+
+```sh
+secret set opencodex-codex-alex2-email
+secret set opencodex-codex-work-email
+```
+
 The per-machine secret template is deployed at
 `~/.config/opencodex/secrets.env.example`:
 
@@ -55,15 +65,19 @@ The configured providers and public account selectors are:
 | Selector | OpenCodex route | Purpose |
 | --- | --- | --- |
 | `commandcode` | CommandCode provider | CommandCode API-key provider (`cmdcode`) |
-| `codex-perso` | `openai` account `@main` | Personal/main Codex login |
-| `codex-work` | `openai` account pool entry | First non-main Codex pool account |
+| `codex-perso` | native `openai` `@main` account | Main personal Codex login |
+| `codex-work` | `openai` pool account selected by private identity alias | Work Codex login |
 | `opencode` | OpenCode Go endpoint | OpenCode provider |
 
-`codex-perso` is a model-routing selector backed by the native Codex `main`
-login; it is not a provider or account name to add in the dashboard. The
-first-run template leaves the native account usable. Existing pause choices
-remain user-owned, so if `__main__` was paused on a machine, clear that pause
-in the dashboard before using `codex-perso/...`.
+`codex-perso` and `codex-work` are model-routing selectors; they are not
+provider or account names to add in the dashboard. `codex-perso` always uses
+native `@main`, while `codex-work` uses the account selected by its private
+identity alias. The
+activation migration clears all persisted account pauses on every rebuild
+(older templates paused `__main__` by default, and OpenCodex auto-pauses
+drained accounts), so a quota window can never surface as a misleading 401
+while the account still has weekly headroom. Pauses are runtime state and
+rebuilds re-enable every account.
 
 For an existing machine whose selector is missing or whose account list looks
 stale, restart the proxy first so it reloads the on-disk account state:
@@ -71,18 +85,16 @@ stale, restart the proxy first so it reloads the on-disk account state:
 ```sh
 ocx restart
 ocx account list openai
-# In the dashboard, unpause the `main` account if it is paused.
-ocx account use openai main
 ocx sync
 ```
 
 Do not add an account or provider named `codex-perso`; that name is reserved
 by the selector above.
 
-The work selector is seeded from the first non-main `codexAccounts[]` entry
-only when `codex-work` is missing or stale, so account ids and emails stay out
-of Nix while an existing dashboard choice is preserved. Add or switch the work
-account through the OpenCodex dashboard or `ocx account`.
+The pool selectors preserve existing runtime bindings when their private
+aliases are unavailable, so account ids and identity values stay out of Nix.
+Add or switch accounts through the OpenCodex dashboard or `ocx account`, then
+run `nixapply` after updating the aliases.
 
 The per-machine secret template is deployed at
 `~/.config/opencodex/secrets.env.example`:
