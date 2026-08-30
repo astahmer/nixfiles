@@ -124,7 +124,7 @@ Nix invocation directly.
 - `modules/opencodex.nix` for `opencodex` (`ocx`) on both macOS and NixOS
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
-The coding profile also installs `modlens`, an image-to-structured-evidence CLI for text-only agents, `modsearch`, its web-search/page-fetch sibling, and `agy`, the Google Antigravity CLI that both use as their no-key provider. Their skills are merged into the deployed `~/.agents/skills` tree. Provider sign-in stays a manual runtime step (run `agy` once and complete the browser flow); API keys and credentials stay out of the repository.
+The coding profile also installs `modlens`, an image-to-structured-evidence CLI for text-only agents, and `modsearch`, its web-search/page-fetch sibling. Their skills are merged into the deployed `~/.agents/skills` tree. Both previously used the Google Antigravity CLI (`agy`) as a no-key provider; that integration was removed because it breached the Antigravity Additional Terms of Service (Section 6 bans using third-party tools against the Service via Antigravity OAuth). Configure a provider API key per tool instead; API keys and credentials stay out of the repository.
 
 ## Updating versions
 

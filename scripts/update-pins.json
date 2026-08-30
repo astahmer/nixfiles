@@ -277,20 +277,6 @@
         "--flake",
         "modsearch"
       ]
-    },
-    {
-      "name": "agy",
-      "type": "manual",
-      "description": "Antigravity CLI flat native build; refresh the release-manifest URL and both platform hashes together",
-      "enabled": false,
-      "command": [
-        "nix",
-        "run",
-        "nixpkgs#nix-update",
-        "--",
-        "--flake",
-        "agy"
-      ]
     }
   ],
   "validations": {

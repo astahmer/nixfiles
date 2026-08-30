@@ -97,7 +97,6 @@
           };
 
           packages = {
-            agy = pkgs'.callPackage ./packages/agy { };
             calldiff = pkgs'.callPackage ./packages/calldiff { };
             codex = pkgs'.callPackage ./packages/codex { };
             drydock = pkgs'.callPackage ./packages/drydock { };
@@ -123,6 +122,7 @@
             codexbar = pkgs'.callPackage ./packages/codexbar { };
             crisp = pkgs'.callPackage ./packages/crisp { };
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
+            notunes = pkgs'.callPackage ./packages/notunes { };
             secretbar = pkgs'.callPackage ./packages/secretbar { };
             tidyports = pkgs'.callPackage ./packages/tidyports { };
           };
