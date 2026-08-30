@@ -239,6 +239,7 @@ in
 
       home.packages = [
         pkgs.fd
+        pkgs.eza
         # nh pipes builds through nom by default and fails with a bare ENOENT
         # when it is not on PATH.
         pkgs.nix-output-monitor
