@@ -1,9 +1,12 @@
 # AI Studio (Gemini) API key for ModLens
 
 The Google AI Studio API key powers the ModLens `gemini-api` provider — the
-fastest free vision route (roughly 5-10s per image, no agy sign-in needed).
-The default `antigravity-cli` provider stays keyless, so this key is optional;
-add it when you want the fast path or as a fallback.
+fastest free vision route (roughly 5-10s per image). ModLens has no keyless
+default provider anymore: the `antigravity-cli` provider (backed by the `agy`
+package) was removed because it breached the Google Antigravity Additional
+Terms of Service (Section 6 bans using third-party tools against the Service
+via Antigravity OAuth). The default is currently `openai` (see "Related keys"
+below) — add this key if you'd rather default to `gemini-api` instead.
 
 The key is a runtime secret only. It never lives in this repository: the repo
 declares the value-free alias, Bitwarden holds the value, and the `secret`
@@ -17,8 +20,8 @@ command projects it into `GEMINI_API_KEY`.
 
 No credit card is required and the free tier does not expire, but rate limits
 apply (roughly 10-15 requests/min, ~1500/day for the default flash model).
-Google may use free-tier traffic to improve products: do not send sensitive
-images through this route — use `antigravity-cli` for those.
+Google may use free-tier traffic to improve products: avoid sending sensitive
+images through this route; use a paid provider (openai, anthropic) instead.
 
 ## 2. Store it in Bitwarden
 
@@ -86,15 +89,24 @@ secret rotate gemini-api-key   # new random value -> Bitwarden + clipboard
 ```
 
 To invalidate a leaked key, delete it in AI Studio (API keys page) and store a
-fresh one with `secret set gemini-api-key`. Removing the key entirely means
-ModLens falls back to the `antigravity-cli` provider — nothing else in the
-profile reads `GEMINI_API_KEY`.
+fresh one with `secret set gemini-api-key`. Removing the key entirely has no
+effect on the current default (`openai`, see "Related keys") unless you had
+also set `provider` to `gemini-api`; nothing else in the profile reads
+`GEMINI_API_KEY`.
 
 ## Related keys
 
-- ModLens can also use Anthropic (`ANTHROPIC_API_KEY`) or any
-  OpenAI-compatible endpoint (`OPENAI_BASE_URL` + `OPENAI_API_KEY`); those
-  aliases are not declared in `.secret.json` — add them there if you use them.
-- `modsearch` does not consume this key: search and fetch ride the agy
-  sign-in. Its optional Tavily fallback would need a `tavily-api-key` alias
-  (`TAVILY_API_KEY`) declared the same way before `secret env` can project it.
+- ModLens is currently set to default to `openai` (`provider` in
+  `~/.modlens/config.json`, plus `openai.baseUrl` =
+  `https://api.openai.com/v1` and `openai.model` = `gpt-4.1-mini`). The
+  `openai-key` alias in `.secret.json` projects `OPENAI_API_KEY`; run ModLens
+  through `secret run --optional openai-key -- modlens ...` (or `secret env
+  --output .env`) so the key never lands in the config file. Switch to
+  `gemini-api` with this doc's key instead if you'd rather not depend on
+  OpenAI.
+- ModLens can also use Anthropic (`ANTHROPIC_API_KEY`); that alias is not
+  declared in `.secret.json` — add it there if you use it.
+- `modsearch` has no configured auth path anymore: it previously rode the agy
+  sign-in, which was removed for the same ToS reason. Its optional Tavily
+  fallback would need a `tavily-api-key` alias (`TAVILY_API_KEY`) declared the
+  same way before `secret env` can project it — not set up yet.
