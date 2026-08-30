@@ -11,6 +11,7 @@
       codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
       crisp = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.crisp;
       thaw = pkgs.thaw;
+      notunes = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.notunes;
       secretbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secretbar;
       tidyports = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tidyports;
       zed = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.zed;
@@ -77,6 +78,7 @@
       home.file."Applications/CodexBar.app".source = "${codexbar}/Applications/CodexBar.app";
       home.file."Applications/Crisp.app".source = "${crisp}/Applications/Crisp.app";
       home.file."Applications/Thaw.app".source = "${thaw}/Applications/Thaw.app";
+      home.file."Applications/noTunes.app".source = "${notunes}/Applications/noTunes.app";
       home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
       home.file."Applications/Tidy Ports.app".source = "${tidyports}/Applications/Tidy Ports.app";
       home.file."Applications/Zed.app".source = "${zed}/Applications/Zed.app";
@@ -95,6 +97,17 @@
           # LaunchServices, otherwise a Nix switch can leave the old menu
           # bar app alive and macOS will keep reusing it.
           ProgramArguments = [ "${secretbarLauncher}" ];
+          RunAtLoad = true;
+        };
+      };
+
+      launchd.agents.notunes = {
+        enable = true;
+        config = {
+          ProgramArguments = [
+            "/usr/bin/open"
+            "${config.home.homeDirectory}/Applications/noTunes.app"
+          ];
           RunAtLoad = true;
         };
       };
@@ -123,6 +136,7 @@
         codexbar
         crisp
         thaw
+        notunes
         secretbar
         tidyports
       ];
