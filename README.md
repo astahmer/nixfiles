@@ -84,6 +84,29 @@ sudo nixos-rebuild switch --flake "$NH_FLAKE#workstation"
 
 Add your own hardware-specific config before treating it as a real machine profile.
 
+## Nix store maintenance
+
+Run this occasionally—monthly, or when the Nix store has grown unusually
+large—to remove old profile generations, collect unreachable paths, and
+deduplicate the remaining store. The first command is intentionally first:
+deleting old generations can make more paths collectible.
+
+```bash
+# Remove generations older than seven days and collect what becomes unreachable.
+sudo nix-collect-garbage --delete-older-than 7d
+
+# Run an explicit store GC with the feature enabled for the elevated Nix command.
+sudo nix --extra-experimental-features nix-command store gc
+
+# Deduplicate identical files in the remaining store (can be CPU/IO intensive).
+sudo nix --extra-experimental-features nix-command store optimise
+```
+
+Check available space before and after with `df -h /`. `nh clean all` may fail
+on a standalone macOS install if root's `/etc/nix/nix.conf` does not enable
+`nix-command`; the explicit commands above pass the feature to the elevated
+Nix invocation directly.
+
 ## Modules worth reusing
 
 - `modules/base.nix` for the shared state versions plus the NixOS baseline
