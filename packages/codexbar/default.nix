@@ -7,11 +7,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "codexbar";
-  version = "0.54.0";
+  version = "0.56.4";
 
   src = fetchurl {
     url = "https://github.com/steipete/CodexBar/releases/download/v${finalAttrs.version}/CodexBar-macos-universal-${finalAttrs.version}.zip";
-    hash = "sha256-jL+ml+qhcpAdhkk5VNvNR1BikT37loBguWEfcqL/GnY=";
+    hash = "sha256-SZc8VA9zy4ia2fOL1Lpx7F6mb6sO0z/FIJMyDt6KMB4=";
   };
 
   sourceRoot = ".";

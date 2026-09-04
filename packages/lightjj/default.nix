@@ -13,14 +13,14 @@ let
       };
       aarch64-darwin = {
         url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-macos-arm64";
-        hash = "sha256-h1Gmlhw2afEe4Ndw2r8JcN7msBGz7xAhrDN2XsHmnj8=";
+        hash = "sha256-Wa+XDM38oiTqjsgHe5U1Q+UN0isQ3bkHkcmaB10F9Hg=";
       };
     }
     .${system} or (throw "Unsupported platform for lightjj: ${system}");
 in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "lightjj";
-  version = "1.37.0";
+  version = "1.37.2";
 
   src = pkgs.fetchurl (sourceFor pkgs.stdenv.hostPlatform.system finalAttrs.version);
 
