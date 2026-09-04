@@ -56,8 +56,8 @@
         inputs.flake-parts.flakeModules.modules
         inputs.home-manager.flakeModules.home-manager
       ]
-      ++ (inputs.import-tree ./modules).imports
-      ++ (inputs.import-tree ./hosts).imports;
+      ++ [ (inputs.import-tree ./modules) ]
+      ++ [ (inputs.import-tree ./hosts) ];
 
       perSystem =
         { pkgs, system, ... }:
@@ -100,8 +100,8 @@
             calldiff = pkgs'.callPackage ./packages/calldiff { };
             codex = pkgs'.callPackage ./packages/codex { };
             drydock = pkgs'.callPackage ./packages/drydock { };
-            # hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
-            # iris = pkgs'.callPackage ./packages/iris { };
+            hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
+            iris = pkgs'.callPackage ./packages/iris { };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
             mise = pkgs'.callPackage ./packages/mise { };
             modlens = pkgs'.callPackage ./packages/modlens { };
@@ -119,7 +119,7 @@
             zed = pkgs'.callPackage ./packages/zed { };
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
-            # codexbar = pkgs'.callPackage ./packages/codexbar { };
+            codexbar = pkgs'.callPackage ./packages/codexbar { };
             crisp = pkgs'.callPackage ./packages/crisp { };
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
             notunes = pkgs'.callPackage ./packages/notunes { };
