@@ -21,6 +21,7 @@ These packages use release archives and the `finalAttrs` pattern:
 | `codex` | OpenAI Codex release archive | `nix run nixpkgs#nix-update -- --flake codex --use-github-releases --github-releases-limit 100 --version-regex 'rust-v(.*)'` |
 | `iris` | IRIS release archive | `nix run nixpkgs#nix-update -- --flake iris` |
 | `lightjj` | lightjj release binary | `nix run nixpkgs#nix-update -- --flake lightjj` |
+| `nub` | Nub prebuilt release archive | `nix run nixpkgs#nix-update -- --flake nub` |
 | `ryu` | jj-ryu release archive | `nix run nixpkgs#nix-update -- --flake ryu --version=unstable` |
 | `zed` | Zed editor prebuilt release bundle | `nix run nixpkgs#nix-update -- --flake zed --use-github-releases --github-releases-limit 100 --version-regex '^v([0-9]+\.[0-9]+\.[0-9]+)$'` |
 
@@ -42,7 +43,7 @@ archive hash. Provider sign-in remains a runtime concern.
 ## Flake inputs
 
 The registry includes `nixpkgs`, `flake-parts`, `import-tree`, `home-manager`,
-`nix-index-database`, `nub`, and `llm-agents`. Update one input with its
+`nix-index-database`, and `llm-agents`. Update one input with its
 configured command, or update the whole lock file with `nix flake update`.
 
 Keep `llm-agents` on its own pinned nixpkgs revision. Its packages are built
@@ -55,5 +56,5 @@ OpenCode is consumed from that package set, so update it by updating the
 
 ```bash
 nix flake check --no-build --all-systems
-nix build .#codex .#iris .#modlens .#modsearch .#ryu --no-link
+nix build .#codex .#iris .#modlens .#modsearch .#nub .#ryu --no-link
 ```

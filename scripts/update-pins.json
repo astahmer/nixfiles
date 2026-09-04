@@ -76,6 +76,19 @@
       ]
     },
     {
+      "name": "nub",
+      "type": "nix-update",
+      "description": "Nub prebuilt release archive",
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "nub"
+      ]
+    },
+    {
       "name": "ryu",
       "type": "nix-update",
       "description": "jj-ryu prebuilt release binary",
@@ -165,18 +178,6 @@
         "lock",
         "--update-input",
         "nix-index-database"
-      ]
-    },
-    {
-      "name": "nub",
-      "type": "flake-input",
-      "description": "Nub package pin",
-      "command": [
-        "nix",
-        "flake",
-        "lock",
-        "--update-input",
-        "nub"
       ]
     },
     {
@@ -322,6 +323,7 @@
           ".#codex",
           ".#iris",
           ".#modlens",
+          ".#nub",
           ".#ryu",
           ".#zed",
           "--no-link"

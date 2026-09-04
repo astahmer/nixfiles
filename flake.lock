@@ -231,27 +231,6 @@
         "type": "github"
       }
     },
-    "nub": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1785012795,
-        "narHash": "sha256-fFRLGvTe9ZxtaqrDgJPspKl19C2dXOAZ4jWFQu68QO8=",
-        "owner": "nubjs",
-        "repo": "nub",
-        "rev": "bd6353142f56ff29cb60d18c7dcf82a193ed6025",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nubjs",
-        "ref": "v0.6.0",
-        "repo": "nub",
-        "type": "github"
-      }
-    },
     "qmd": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -279,7 +258,6 @@
         "llm-agents": "llm-agents",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs_2",
-        "nub": "nub",
         "qmd": "qmd"
       }
     },
