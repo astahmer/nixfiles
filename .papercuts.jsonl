@@ -1,2 +1,3 @@
 {"kind":"cut","id":"pc_8csqzmn407li","ts":"2026-08-03T16:02:40.526Z","agent":"unknown","text":"AGENTS.md refers to assets/executor/setup.sh, but the deployed source is assets/executor/setup.ts; the path should be kept in sync to avoid dead-end inspection.","tags":["docs"],"severity":"minor"}
 {"kind":"resolve","id":"pc_3hqwrk8rrgh2","ts":"2026-08-03T16:03:54.086Z","cut_id":"pc_8csqzmn407li"}
+{"kind":"cut","id":"pc_9io8qx44q2be","ts":"2026-09-08T14:28:55.562Z","agent":"unknown","text":"Following the nested shiftshift flake's nixpkgs from nixfiles changed fetchPnpmDeps behavior and invalidated its pinned frontend hash; nested source flakes need to retain their compatible nixpkgs pin unless their fixed-output hashes are refreshed.","tags":["config"],"severity":"major"}

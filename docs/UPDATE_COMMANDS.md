@@ -28,17 +28,30 @@ These packages use release archives and the `finalAttrs` pattern:
 The commands update the current platform's source selection. Review and
 refresh the other platform hashes before applying a cross-platform change.
 
+## macOS GUI packages
+
+The macOS profile uses prebuilt nixpkgs packages for Raycast, Google Chrome,
+Slack, Spotify, VS Code, Cursor, OrbStack, MonitorControl, Beekeeper Studio,
+ChatGPT, Linear, and Ghostty (`ghostty-bin`). Discord uses the pinned signed
+upstream DMG in `discord-bin` because the nixpkgs package reconstructs its
+bundle and Gatekeeper rejects it. Update nixpkgs-managed apps by updating the
+`nixpkgs` flake input; update `discord-bin` as a manual package. Do not add
+separate Homebrew installs. Their bundles are linked once into `~/Applications`,
+while the profile keeps only the CLI launchers needed by the shell.
+
 ## Manual package updates
 
-`hunk`, `opencodex`, `plannotator`, `ghui`, `modlens`, and `modsearch` remain in the registry as
-disabled manual entries because their release version is coupled to an npm
-binary, Bun lockfile, recursive dependency hash, bundled skill, or several
-platform hashes. Update those values together, then run the package build and
+`hunk`, `opencodex`, `plannotator`, `ghui`, `modlens`, `modsearch`,
+`claude-desktop`, `discord-bin`, `pen-dev`, `recordly`, `t3code-bin`, and
+`tldraw-offline` remain in the registry as disabled manual entries. The GUI
+packages pin upstream release archives and app-bundle names; Claude also pins
+a build revision. Update those values together, then run the package build and
 `--validate fast`. ModLens updates must verify both npm tarballs, the published
-CLI entry point, and the bundled `skills/modlens` references. ModSearch updates must refresh the npm tarball hash, regenerate
-`assets/modsearch/package-lock.json` from the pinned tarball, rebuild for the new
-recursive output hash, and refresh the pinned upstream skill commit plus its
-archive hash. Provider sign-in remains a runtime concern.
+CLI entry point, and the bundled `skills/modlens` references. ModSearch updates
+must refresh the npm tarball hash, regenerate `assets/modsearch/package-lock.json`
+from the pinned tarball, rebuild for the new recursive output hash, and refresh
+the pinned upstream skill commit plus its archive hash. Provider sign-in
+remains a runtime concern.
 
 ## Flake inputs
 

@@ -2,12 +2,20 @@
 {
   config.flake.modules.homeManager.terminal =
     { pkgs, lib, ... }:
+    let
+      isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+      ghosttyPackage = if isDarwin then pkgs."ghostty-bin" else pkgs.ghostty;
+      ghosttyCli = pkgs.writeShellScriptBin "ghostty" ''
+        exec "${lib.getExe ghosttyPackage}" "$@"
+      '';
+    in
     lib.mkMerge [
       {
         programs.ghostty = {
           enable = true;
-          # Official Ghostty.app on macOS; nixpkgs package on Linux.
-          package = if pkgs.stdenv.hostPlatform.isDarwin then null else pkgs.ghostty;
+          # The macOS app is linked into ~/Applications by macosApps. Keep
+          # only a CLI launcher in the profile so Raycast sees one app.
+          package = if isDarwin then null else ghosttyPackage;
           installBatSyntax = false;
           enableZshIntegration = true;
           enableBashIntegration = true;
@@ -19,6 +27,8 @@
             window-height = 35;
           };
         };
+
+        home.packages = lib.optionals isDarwin [ ghosttyCli ];
       }
 
       (lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {

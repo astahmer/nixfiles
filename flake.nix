@@ -114,12 +114,18 @@
             zed = pkgs'.callPackage ./packages/zed { };
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+            claude-desktop = pkgs'.callPackage ./packages/claude-desktop { };
             codexbar = pkgs'.callPackage ./packages/codexbar { };
             crisp = pkgs'.callPackage ./packages/crisp { };
+            discord-bin = pkgs'.callPackage ./packages/discord-bin { };
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
             notunes = pkgs'.callPackage ./packages/notunes { };
+            pen-dev = pkgs'.callPackage ./packages/pen-dev { };
+            recordly = pkgs'.callPackage ./packages/recordly { };
             secretbar = pkgs'.callPackage ./packages/secretbar { };
+            t3code-bin = pkgs'.callPackage ./packages/t3code-bin { };
             tidyports = pkgs'.callPackage ./packages/tidyports { };
+            tldraw-offline = pkgs'.callPackage ./packages/tldraw-offline { };
           };
           apps.update-pins = mkBunApp "update-pins" ./scripts/update-pins.ts;
         };

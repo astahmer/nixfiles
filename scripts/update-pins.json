@@ -1,6 +1,23 @@
 {
   "updates": [
     {
+      "name": "claude-desktop",
+      "type": "manual",
+      "description": "Claude Desktop release ZIP and build revision move together",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "claude-desktop"
+      ]
+    },
+    {
       "name": "codex",
       "type": "nix-update",
       "description": "Codex CLI prebuilt release archive",
@@ -34,6 +51,23 @@
         "100",
         "--version-regex",
         "v(.*)"
+      ]
+    },
+    {
+      "name": "discord-bin",
+      "type": "manual",
+      "description": "Discord signed macOS DMG release archive",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "discord-bin"
       ]
     },
     {
@@ -277,6 +311,78 @@
         "--",
         "--flake",
         "modsearch"
+      ]
+    },
+    {
+      "name": "pen-dev",
+      "type": "manual",
+      "description": "pen.dev release ZIP and app name are pinned together",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "pen-dev",
+        "--use-github-releases"
+      ]
+    },
+    {
+      "name": "recordly",
+      "type": "manual",
+      "description": "Recordly release ZIP and arm64 hash",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "recordly",
+        "--use-github-releases"
+      ]
+    },
+    {
+      "name": "t3code-bin",
+      "type": "manual",
+      "description": "T3 Code arm64 release ZIP; keep the binary package separate from the source build",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "t3code-bin",
+        "--use-github-releases"
+      ]
+    },
+    {
+      "name": "tldraw-offline",
+      "type": "manual",
+      "description": "tldraw offline arm64 release ZIP",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "nix",
+        "run",
+        "nixpkgs#nix-update",
+        "--",
+        "--flake",
+        "tldraw-offline",
+        "--use-github-releases"
       ]
     }
   ],

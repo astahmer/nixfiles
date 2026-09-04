@@ -24,7 +24,6 @@ in
     in
     {
       home.packages = [
-        pkgs."google-chrome"
         pkgs.bat
         pkgs.gh
         pkgs."github-copilot-cli"
@@ -57,7 +56,6 @@ in
         pkgs.tokei
         pkgs.tmux
         pkgs.tree
-        zed
         pkgs.curl
         pkgs.ripgrep
         pkgs.ripdrag
@@ -73,7 +71,9 @@ in
         ghui
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+        pkgs."google-chrome"
         pkgs.docker
+        zed
       ];
     };
 
