@@ -11,7 +11,7 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/Zed-aarch64.dmg";
-        hash = "sha256-gguuh+RAVtWZJNVDwwVA98VtNLnHqBaQP1sdopIU44k=";
+        hash = "sha256-cjj0DTcHhTaoS5SXLkQcIssg00m53SityEXg3G7B1LQ=";
       };
       x86_64-darwin = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/Zed-x86_64.dmg";
@@ -30,7 +30,7 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "zed";
-  version = "1.17.2";
+  version = "1.18.0";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
 
