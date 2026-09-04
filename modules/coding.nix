@@ -8,7 +8,7 @@ in
     let
       packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
       calldiff = packages.calldiff;
-      nub = inputs.nub.packages.${pkgs.stdenv.hostPlatform.system}.default;
+      nub = packages.nub;
       cursorAgent = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."cursor-agent";
       ghui = packages.ghui;
       hunk = packages.hunk;

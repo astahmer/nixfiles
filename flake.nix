@@ -25,11 +25,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nub = {
-      url = "github:nubjs/nub/v0.6.0";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     llm-agents = {
       url = "github:numtide/llm-agents.nix";
     };
@@ -106,7 +101,7 @@
             mise = pkgs'.callPackage ./packages/mise { };
             modlens = pkgs'.callPackage ./packages/modlens { };
             modsearch = pkgs'.callPackage ./packages/modsearch { };
-            nub = inputs.nub.packages.${system}.default;
+            nub = pkgs'.callPackage ./packages/nub { };
             nh = pkgs'.callPackage ./packages/nh { };
             opencode = inputs.llm-agents.packages.${system}.opencode;
             qmd = inputs.qmd.packages.${system}.default;
