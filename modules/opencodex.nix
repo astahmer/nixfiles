@@ -171,7 +171,10 @@
           ' "$config_file" > "$candidate_config"
         else
           ${jq} '
-            .codexAccountNamespaces = {"codex-perso": "@main"}
+            .codexAccountNamespaces = {
+              "codex-alex2": "@main",
+              "codex-perso": "@main"
+            }
           ' "$config_template" > "$candidate_config"
         fi
 
