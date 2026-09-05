@@ -100,7 +100,8 @@ Rules of the road:
 
 ## SecretBar
 
-Dock app + optional menu bar icon (Settings → Appearance). Panel header has
-sync/lock/quit; the secrets tab is a sortable table (Secret/Project/Created/
-Last used). Autostart passes `SECRET_AUTOSTART=1` so no window pops at login;
-dock clicks reopen it.
+Menu bar companion with an optional main window (Settings → Appearance, off by
+default). Panel header has sync/lock/quit; the secrets tab is a sortable table
+(Secret/Project/Last used). Hold the eye control to view a value when
+hold-to-reveal is enabled. Autostart passes `SECRET_AUTOSTART=1` so no window
+pops at login; closing the main window leaves the menu bar companion active.

@@ -454,11 +454,12 @@ each.
   add Login or Secure Note items, global/project aliases, tags, environments,
   expiry metadata, and previewed `.env` imports. My Secrets uses searchable
   cards, Recent/Pinned filters, tag filtering, TOTP/source/edit/rotate actions,
-  and optional hold-to-reveal. Settings owns
+  and an optional hold-to-reveal eye control. Settings owns
   clipboard auto-clear (disabled by default), shortcuts, repository detection,
-  health checks, and value-free usage history. Copy uses the CLI clipboard path
-  so the UI does not receive the value in stdout; rotate has an explicit
-  confirmation dialog.
+  health checks, the optional main window (off by default), and value-free
+  usage history. Closing the main window leaves SecretBar running in the menu
+  bar. Copy uses the CLI clipboard path so the UI does not receive the value in
+  stdout; rotate has an explicit confirmation dialog.
 - Sharing is intentionally deferred. Keep one-off personal copy/paste as the
   current workflow; before implementing sharing, design separate flows for a
   single secret or secure note versus a selected project environment, with
