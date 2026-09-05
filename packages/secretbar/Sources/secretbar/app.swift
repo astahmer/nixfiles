@@ -295,6 +295,7 @@ private enum PreferenceKey {
     static let clipboardClearSeconds = "secretbar.clipboardClearSeconds"
     static let expiryWarningDays = "secretbar.expiryWarningDays"
     static let showInMenuBar = "secretbar.showInMenuBar"
+    static let showMainWindow = "secretbar.showMainWindow"
 }
 
 // MARK: - Model
@@ -329,6 +330,7 @@ final class SecretBarModel: ObservableObject {
     @Published var revealedValue = ""
     @Published var remoteValidationInProgress = false
     @Published var healthCheckStatus: String?
+    @Published var revealError: String?
 
     @Published var pinnedIDs: Set<String> = Set(UserDefaults.standard.stringArray(forKey: PreferenceKey.pinnedIDs) ?? []) {
         didSet { UserDefaults.standard.set(Array(pinnedIDs).sorted(), forKey: PreferenceKey.pinnedIDs) }
@@ -359,6 +361,9 @@ final class SecretBarModel: ObservableObject {
     }
     @Published var showInMenuBar: Bool = SecretBarModel.preferenceBool(PreferenceKey.showInMenuBar, defaultValue: true) {
         didSet { UserDefaults.standard.set(showInMenuBar, forKey: PreferenceKey.showInMenuBar) }
+    }
+    @Published var showMainWindow: Bool = SecretBarModel.preferenceBool(PreferenceKey.showMainWindow, defaultValue: false) {
+        didSet { UserDefaults.standard.set(showMainWindow, forKey: PreferenceKey.showMainWindow) }
     }
 
     private var statusTimer: Timer?
@@ -765,6 +770,7 @@ final class SecretBarModel: ObservableObject {
     func beginReveal(_ entry: AliasEntry) {
         revealingID = entry.id
         revealedValue = ""
+        revealError = nil
         setBusy(true)
         let arguments = scoped(["get", "--config", entry.configPath, entry.alias], entry)
         let cwd = entry.cwd
@@ -774,9 +780,11 @@ final class SecretBarModel: ObservableObject {
                 guard let self else { return }
                 self.setBusy(false)
                 guard self.revealingID == entry.id else { return }
-                self.revealedValue = result.status == 0
-                    ? result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-                    : ""
+                if result.status == 0 {
+                    self.revealedValue = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+                } else {
+                    self.revealError = "Could not reveal value"
+                }
             }
         }
     }
@@ -785,6 +793,7 @@ final class SecretBarModel: ObservableObject {
         guard revealingID == entry.id else { return }
         revealingID = nil
         revealedValue = ""
+        revealError = nil
     }
 
     func openSource(_ entry: AliasEntry) {
@@ -1480,7 +1489,7 @@ struct SecretEditSheet: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                Text("\(entry.project) · blank fields keep their current values")
+                Text("\(entry.project) · known item details are prefilled; blank fields keep their current values")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -1578,6 +1587,16 @@ struct SecretEditSheet: View {
                     .disabled(model.busy || sourceValidationMessage != nil)
                 }
             }
+        }
+        .onAppear {
+            if model.remoteMetadata[entry.id] == nil {
+                model.refreshHealth()
+            }
+        }
+        .onChange(of: model.remoteMetadata[entry.id]) { _, metadata in
+            guard let metadata else { return }
+            if itemName.isEmpty { itemName = metadata.itemName ?? "" }
+            if source.isEmpty { source = metadata.source ?? "" }
         }
     }
 }
@@ -2039,11 +2058,13 @@ struct SecretBarView: View {
             .help("Pull from Bitwarden and refresh")
             .disabled(model.busy)
             Menu {
-                Button {
-                    openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
-                } label: {
-                    Label("Open Main Window", systemImage: "macwindow")
+                if model.showMainWindow {
+                    Button {
+                        openWindow(id: "main")
+                        NSApp.activate(ignoringOtherApps: true)
+                    } label: {
+                        Label("Open Main Window", systemImage: "macwindow")
+                    }
                 }
                 Button { model.syncVault() } label: {
                     Label("Sync vault from server", systemImage: "arrow.triangle.2.circlepath")
@@ -2557,7 +2578,7 @@ struct SecretBarView: View {
                 }
                 settingsSection("Security") {
                     settingToggle("Hold to reveal values", isOn: Binding(get: { model.holdToReveal }, set: { model.holdToReveal = $0 }))
-                    Text("Values appear only while holding a recent-row action. They are never copied or recorded.")
+                    Text("When enabled, hold the eye button on a secret row to view its value. Values are never copied or recorded.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -2575,6 +2596,13 @@ struct SecretBarView: View {
                 settingsSection("Appearance and shortcuts") {
                     settingToggle("Show menu bar icon", isOn: Binding(get: { model.showInMenuBar }, set: { model.showInMenuBar = $0 }))
                     Text("When off, reopen SecretBar via Spotlight or the secretbar command. Changing this takes effect on next launch.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    settingToggle("Show main window", isOn: Binding(get: { model.showMainWindow }, set: { model.showMainWindow = $0 }))
+                        .disabled(!model.showInMenuBar)
+                    Text(model.showInMenuBar
+                        ? "Off by default. Closing the window keeps SecretBar running in the menu bar. Changing this takes effect on next launch."
+                        : "The main window is required when the menu bar icon is disabled.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     settingToggle("Enable pinned favorites", isOn: Binding(get: { model.pinsEnabled }, set: { model.pinsEnabled = $0 }))
@@ -2720,10 +2748,28 @@ struct SecretBarView: View {
                             Image(systemName: "pin.fill")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
-                                .accessibilityLabel("Pinned")
+                            .accessibilityLabel("Pinned")
                         }
                     }
-                    Text(entry.item).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                    if model.revealingID == entry.id {
+                        Group {
+                            if let revealError = model.revealError {
+                                Text(revealError)
+                                    .foregroundStyle(.orange)
+                            } else if model.revealedValue.isEmpty {
+                                Text("Reading value…")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(model.revealedValue)
+                                    .textSelection(.enabled)
+                                    .lineLimit(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .font(.caption2.monospaced())
+                    } else {
+                        Text(entry.item).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2742,6 +2788,21 @@ struct SecretBarView: View {
                 .frame(width: 92, alignment: .leading)
 
             HStack(spacing: 5) {
+                if model.holdToReveal {
+                    Button {} label: {
+                        Image(systemName: model.revealingID == entry.id ? "eye.fill" : "eye")
+                    }
+                    .buttonStyle(.borderless)
+                    .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 24, pressing: { isPressing in
+                        if isPressing {
+                            model.beginReveal(entry)
+                        } else {
+                            model.endReveal(entry)
+                        }
+                    }, perform: {})
+                    .accessibilityLabel("Hold to view \(entry.alias)")
+                    .help("Hold to view value")
+                }
                 Button { model.copy(entry) } label: {
                     Image(systemName: "doc.on.doc")
                 }
@@ -2766,7 +2827,7 @@ struct SecretBarView: View {
             }
             .buttonStyle(.borderless)
             .opacity(isHovered ? 1 : 0.72)
-            .frame(width: 58, alignment: .trailing)
+            .frame(width: 82, alignment: .trailing)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 8)
@@ -2788,14 +2849,6 @@ struct SecretBarView: View {
             }
         }
         .onTapGesture(count: 2) { editing = entry }
-        .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 24, pressing: { isPressing in
-            guard model.holdToReveal else { return }
-            if isPressing {
-                model.beginReveal(entry)
-            } else if model.revealingID == entry.id {
-                model.endReveal(entry)
-            }
-        }, perform: {})
         .onTapGesture { selectedEntryID = entry.id }
         .contextMenu {
             if model.pinsEnabled { Button(model.pinnedIDs.contains(entry.id) ? "Unpin" : "Pin") { model.togglePin(entry) } }
@@ -2904,6 +2957,10 @@ final class SecretBarAppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     private func mainWindow() -> NSWindow? {
         NSApp.windows.first { $0.title == "SecretBar" || $0.identifier?.rawValue.contains("main") == true }
     }
@@ -2919,11 +2976,30 @@ enum SecretBarEntry {
         let showInMenuBar = defaults.object(forKey: "secretbar.showInMenuBar") == nil
             ? true
             : defaults.bool(forKey: "secretbar.showInMenuBar")
+        let showMainWindow = defaults.object(forKey: "secretbar.showMainWindow") == nil
+            ? false
+            : defaults.bool(forKey: "secretbar.showMainWindow")
         if showInMenuBar {
-            SecretBarCombinedApp.main()
+            if showMainWindow {
+                SecretBarCombinedApp.main()
+            } else {
+                SecretBarMenuBarApp.main()
+            }
         } else {
             SecretBarWindowApp.main()
         }
+    }
+}
+
+private struct SecretBarMenuBarApp: App {
+    @NSApplicationDelegateAdaptor(SecretBarAppDelegate.self) private var appDelegate
+    @StateObject private var model = SecretBarModel.shared
+
+    var body: some Scene {
+        // The status item owns the only user-facing panel in this mode. An
+        // empty Settings scene keeps SwiftUI's App contract without creating
+        // the optional main window.
+        Settings { EmptyView() }
     }
 }
 

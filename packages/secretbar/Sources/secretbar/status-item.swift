@@ -146,9 +146,11 @@ final class SecretBarStatusItemController: NSObject, NSWindowDelegate {
     private func buildMenu(model: SecretBarModel) -> NSMenu {
         let menu = NSMenu()
 
-        let open = NSMenuItem(title: "Open SecretBar", action: #selector(openFromMenu(_:)), keyEquivalent: "")
-        open.target = self
-        menu.addItem(open)
+        if model.showMainWindow {
+            let open = NSMenuItem(title: "Open Main Window", action: #selector(openFromMenu(_:)), keyEquivalent: "")
+            open.target = self
+            menu.addItem(open)
+        }
 
         switch model.state {
         case .unlocked:
