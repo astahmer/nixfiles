@@ -55,17 +55,25 @@ The configured providers and public account selectors are:
 | Selector | OpenCodex route | Purpose |
 | --- | --- | --- |
 | `commandcode` | CommandCode provider | CommandCode API-key provider (`cmdcode`) |
-| `codex-perso` | `openai` account `emialex.stahmer@gmail.com` | Personal Codex login |
+| `codex-alex2` | `openai` account `alexandre.stahmer@gmail.com` | Personal Codex login |
+| `codex-perso` | Same account as `codex-alex2` | Compatibility alias |
 | `codex-work` | `openai` account `accounts+chatgpt@welii.io` | Work Codex login |
 | `opencode` | OpenCode Go endpoint | OpenCode provider |
 
-`codex-perso` and `codex-work` are model-routing selectors bound by account
-email; they are not provider or account names to add in the dashboard. The
+`codex-alex2`, `codex-perso`, and `codex-work` are model-routing selectors bound
+by account email; they are not provider or account names to add in the dashboard. The
 activation migration clears all persisted account pauses on every rebuild
 (older templates paused `__main__` by default, and OpenCodex auto-pauses
 drained accounts), so a quota window can never surface as a misleading 401
 while the account still has weekly headroom. Pauses are runtime state and
 rebuilds re-enable every account.
+
+On a new machine, apply Home Manager first, then complete the OpenAI OAuth
+login inside OpenCodex. OAuth tokens and machine-local account ids stay in the
+user-owned OpenCodex runtime and are never copied through Nix. Run `nixapply`
+again after the login (or once after login if it already existed) so the
+email-based migration binds `codex-alex2` and `codex-perso` to that machine's
+account id, then refresh the catalog with `ocx sync`.
 
 For an existing machine whose selector is missing or whose account list looks
 stale, restart the proxy first so it reloads the on-disk account state:

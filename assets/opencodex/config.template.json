@@ -321,6 +321,7 @@
   "multiAgentGuidanceEnabled": true,
   "codexShimAutoRestore": true,
   "codexAccountNamespaces": {
+    "codex-alex2": "@main",
     "codex-perso": "@main"
   },
   "subagentModels": [

@@ -152,22 +152,26 @@
             # are therefore cleared on every activation (rebuild re-enables).
             | del(.pausedCodexAccountIds)
             # Selectors bind by account email, never by hardcoded account id:
-            # codex-perso -> the emialex gmail account (falls back to @main
-            # when no pool account matches, e.g. first run), and codex-work
-            # -> the welii.io account. Account ids are machine-local runtime
-            # state; emails are stable across machines.
+            # codex-alex2 and its codex-perso compatibility alias -> the
+            # alexandre.stahmer@gmail.com account (falls back to @main when no
+            # pool account matches, e.g. first run), and codex-work -> the
+            # welii.io account. Account ids are machine-local runtime state;
+            # emails are stable across machines.
             | (($base.codexAccounts // [])
-               | map(select((.email // "") | contains("emialex"))) | .[0].id
+               | map(select((.email // "") | ascii_downcase | contains("alexandre.stahmer@gmail.com"))) | .[0].id
                // "@main") as $persoId
             | (($base.codexAccounts // [])
                | map(select((.email // "") | contains("@welii.io"))) | .[0].id
                // "@main") as $workId
             | .codexAccountNamespaces = (($base.codexAccountNamespaces // {})
-               + {"codex-perso": $persoId, "codex-work": $workId})
+               + {"codex-alex2": $persoId, "codex-perso": $persoId, "codex-work": $workId})
           ' "$config_file" > "$candidate_config"
         else
           ${jq} '
-            .codexAccountNamespaces = {"codex-perso": "@main"}
+            .codexAccountNamespaces = {
+              "codex-alex2": "@main",
+              "codex-perso": "@main"
+            }
           ' "$config_template" > "$candidate_config"
         fi
 
