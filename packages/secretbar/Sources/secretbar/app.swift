@@ -321,7 +321,6 @@ final class SecretBarModel: ObservableObject {
     @Published var importProject: Project?
     @Published var importEnvironment = "prod"
     @Published var remoteMetadata: [String: RemoteEntryMetadata] = [:]
-    @Published var createdAtByKey: [String: Date] = [:]
     /// True when a biometric session cache file exists; Touch ID unlock
     /// needs it seeded by one master-password unlock.
     @Published var biometricCacheAvailable = false
@@ -411,7 +410,6 @@ final class SecretBarModel: ObservableObject {
                 self.refreshIndex()
                 self.refreshHistory()
                 self.sessionCreated = sessionAge
-                self.refreshListMetadata()
                 self.refreshHealth()
                 self.setBusy(false)
             }
@@ -435,7 +433,6 @@ final class SecretBarModel: ObservableObject {
                 }
                 self.refreshIndex()
                 self.refreshHistory()
-                self.refreshListMetadata()
                 self.refreshHealth()
                 self.setBusy(false)
             }
@@ -1211,36 +1208,6 @@ final class SecretBarModel: ObservableObject {
         return parseDate(value)
     }
 
-    /// Created dates come from the vault via `secret list --json`, grouped per
-    /// config like the health check; best-effort (empty while locked).
-    func refreshListMetadata() {
-        let groups = Dictionary(grouping: entries) { "\($0.configPath)\u{0}\($0.environment)" }
-            .values.map { group in
-                (configPath: group[0].configPath, environment: group[0].environment, cwd: group[0].cwd, entries: group)
-            }
-        Task.detached(priority: .utility) { [weak self] in
-            var builtCreated: [String: Date] = [:]
-            for group in groups {
-                var arguments = ["list", "--json", "--config", group.configPath]
-                if group.environment != "prod" { arguments += ["--env", group.environment] }
-                let result = runSecret(arguments, cwd: group.cwd, timeout: 60)
-                guard result.status == 0,
-                      let data = result.stdout.data(using: .utf8),
-                      let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { continue }
-                for row in rows {
-                    guard let alias = row["alias"] as? String,
-                          let entry = group.entries.first(where: { $0.alias == alias }),
-                          let createdText = row["createdAt"] as? String,
-                          !createdText.isEmpty,
-                          let date = parseDate(createdText) else { continue }
-                    builtCreated[entry.id] = date
-                }
-            }
-            let created = builtCreated
-            await MainActor.run { [weak self] in self?.createdAtByKey = created }
-        }
-    }
-
     private func scheduleClipboardClear() {
         clipboardTask?.cancel()
         guard clipboardClearSeconds > 0 else { return }
@@ -1798,7 +1765,6 @@ enum SecretListFilter: String, CaseIterable, Identifiable {
 enum SecretSortKey: String, CaseIterable {
     case alias
     case project
-    case createdAt
     case lastUsed
 }
 
@@ -1917,10 +1883,6 @@ struct SecretBarView: View {
             return a.alias.localizedStandardCompare(b.alias) == .orderedAscending
         case .project:
             return a.project == b.project ? a.alias < b.alias : a.project < b.project
-        case .createdAt:
-            let ad = model.createdAtByKey[a.id] ?? .distantPast
-            let bd = model.createdAtByKey[b.id] ?? .distantPast
-            return ad == bd ? a.alias < b.alias : ad < bd
         case .lastUsed:
             let an = model.lastUsedDate(a) ?? .distantPast
             let bn = model.lastUsedDate(b) ?? .distantPast
@@ -2415,7 +2377,6 @@ struct SecretBarView: View {
                         sortHeader("Secret", .alias)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         sortHeader("Project", .project, width: 104)
-                        sortHeader("Created", .createdAt, width: 92)
                         sortHeader("Last used", .lastUsed, width: 92)
                         Text("").frame(width: 58)
                     }
@@ -2733,7 +2694,6 @@ struct SecretBarView: View {
         let health = model.health(for: entry)
         let isSelected = selectedEntryID == entry.id
         let isHovered = hoveredEntryID == entry.id
-        let created = model.createdAtByKey[entry.id].map(formatDateShort) ?? "—"
         let lastUsed = model.lastUsedDate(entry).map(formatDateShort) ?? "never"
 
         return HStack(spacing: 10) {
@@ -2776,10 +2736,6 @@ struct SecretBarView: View {
             }
             .frame(width: 104, alignment: .leading)
 
-            Text(created)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 92, alignment: .leading)
             Text(lastUsed)
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
