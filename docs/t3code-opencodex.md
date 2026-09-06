@@ -70,10 +70,10 @@ The configured providers and public account selectors are:
 | `codex-work` | `openai` pool account selected by private identity alias | Work Codex login |
 | `opencode` | OpenCode Go endpoint | OpenCode provider |
 
-`codex-perso` and `codex-work` are model-routing selectors; they are not
-provider or account names to add in the dashboard. `codex-perso` always uses
-native `@main`, while `codex-work` uses the account selected by its private
-identity alias. The
+`codex-alex2`, `codex-perso`, and `codex-work` are model-routing selectors;
+they are not provider or account names to add in the dashboard. `codex-perso`
+always uses native `@main`, while the pool selectors use private identity
+aliases. The
 activation migration clears all persisted account pauses on every rebuild
 (older templates paused `__main__` by default, and OpenCodex auto-pauses
 drained accounts), so a quota window can never surface as a misleading 401
@@ -84,9 +84,9 @@ On a new machine, apply Home Manager first, then complete the OpenAI OAuth
 login inside OpenCodex. OAuth tokens and machine-local account ids stay in the
 user-owned OpenCodex runtime and are never copied through Nix. Run `nixapply`
 again after the login (or once after login if it already existed) so the
-private identity aliases bind `codex-alex2` and `codex-work` to machine-local
-pool-account ids while `codex-perso` remains bound to native `@main`; then
-refresh the catalog with `ocx sync`.
+private identity aliases bind pool selectors to machine-local account ids while
+`codex-perso` remains bound to native `@main`; then refresh the catalog with
+`ocx sync`.
 
 For an existing machine whose selector is missing or whose account list looks
 stale, restart the proxy first so it reloads the on-disk account state:
