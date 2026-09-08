@@ -147,11 +147,6 @@
         executable = true;
       };
 
-      home.file.".local/bin/antislop" = {
-        source = mkExecutableFile "hm_antislop.ts" ../assets/antislop/antislop.ts;
-        executable = true;
-      };
-
       home.file.".local/bin/cursor" = {
         text = ''
           #!/usr/bin/env bash
