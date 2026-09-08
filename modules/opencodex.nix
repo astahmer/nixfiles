@@ -172,8 +172,9 @@
         else
           ${jq} '
             .codexAccountNamespaces = {
-              "codex-alex2": "@main",
-              "codex-perso": "@main"
+              "codex-perso": "@main",
+              "codex-work": "chatgpt-1786023688396",
+              "codex-alex2": "chatgpt-1788600942946"
             }
           ' "$config_template" > "$candidate_config"
         fi
