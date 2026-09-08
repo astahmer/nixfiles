@@ -115,6 +115,7 @@ Nix invocation directly.
 - `modules/shell.nix` for shell integrations and prompt tools
 - `modules/jujutsu.nix` for Jujutsu config
 - `modules/macos-apps.nix` for macOS app packages
+- `modules/shiftshift.nix` for the pinned shiftshift app bundle and config seed
 - `modules/linux-apps.nix` for Linux desktop app packages
 - `modules/tools.nix` for jjui, lazygit, and lazydocker
 - `modules/launcher.nix` for Vicinae on Linux

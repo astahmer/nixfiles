@@ -56,7 +56,8 @@ remains a runtime concern.
 ## Flake inputs
 
 The registry includes `nixpkgs`, `flake-parts`, `import-tree`, `home-manager`,
-`nix-index-database`, and `llm-agents`. Update one input with its
+`nix-index-database`, `llm-agents`, and the pinned `shiftshift` app
+input. Update one input with its
 configured command, or update the whole lock file with `nix flake update`.
 
 Keep `llm-agents` on its own pinned nixpkgs revision. Its packages are built

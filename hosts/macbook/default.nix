@@ -45,6 +45,7 @@ in
               home.file.".config/karabiner/karabiner.json".source = ./karabiner.json;
             }
           )
+          hm.shiftshift
           hm.macosApps
           hm.raycastLocalExtensions
 

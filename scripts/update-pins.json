@@ -227,6 +227,18 @@
       ]
     },
     {
+      "name": "shiftshift",
+      "type": "flake-input",
+      "description": "Pinned shiftshift app source and reproducible Tauri build",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "shiftshift"
+      ]
+    },
+    {
       "name": "hunk",
       "type": "manual",
       "description": "Version, source, and platform npm binary hashes move together",

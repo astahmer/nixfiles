@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "settings": {
+    "bindings": {
+      "left": "capture",
+      "right": "toggle_panel"
+    },
+    "theme": "github-light",
+    "notification_style": "custom",
+    "notify_sound": true,
+    "notify_sound_name": "Glass",
+    "notify_sound_volume": 48,
+    "notify_content": "icon_title",
+    "toast_position": "middle_right",
+    "toast_custom_x": 3160,
+    "toast_custom_y": 1084,
+    "toast_duration_ms": 1800,
+    "toast_font_scale": 100,
+    "dock_enabled": true,
+    "dock_position": "bottom_right",
+    "dock_custom_x": 2730,
+    "dock_custom_y": 1746,
+    "dock_item_count": 10,
+    "dock_row_height": 36,
+    "dock_expanded_width": 320,
+    "dock_expanded_height": 508,
+    "fallback_toggle": "CmdOrCtrl+Shift+Space",
+    "fallback_capture": "CmdOrCtrl+Shift+C",
+    "fallback_image": "CmdOrCtrl+Shift+I",
+    "capture_mode": "silent",
+    "highlight_submit": "copy_hide_write",
+    "hide_on_blur": true,
+    "input_spellcheck": false,
+    "clipboard_watch": false,
+    "separate_tag_tabs": true,
+    "launch_at_login": true,
+    "backend": "folder",
+    "s3": {
+      "endpoint": "",
+      "bucket": "",
+      "region": "",
+      "access_key_id": "",
+      "secret_access_key": "",
+      "prefix": ""
+    },
+    "sort_mode": "manual",
+    "show_in_dock": false,
+    "show_tray_icon": false,
+    "folder_path": "~/Library/Mobile Documents/com~apple~CloudDocs/shiftshift",
+    "panel_opacity": 0,
+    "excluded_apps": [
+      "1Password",
+      "Bitwarden",
+      "Dashlane",
+      "LastPass",
+      "Keychain Access",
+      "KeePassXC",
+      "Enpass",
+      "NordPass",
+      "RoboForm"
+    ],
+    "encrypt_local_storage": false,
+    "panel_width": 947,
+    "panel_height": 442,
+    "panel_x": 472,
+    "panel_y": 357,
+    "panel_placed": true,
+    "pinned_items": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  },
+  "templates": [],
+  "custom_themes": [
+    {
+      "id": "967c7638-97c8-45c0-8670-ce451a2dab49",
+      "name": "Custom",
+      "mode": "dark",
+      "colors": {
+        "bg": "#000000",
+        "fg": "#ebebeb",
+        "muted": "#ffffff",
+        "row_bg": "#0e0e0e",
+        "accent": "#61afef",
+        "accent_fg": "#aaaaaa",
+        "border": "#232323"
+      }
+    }
+  ]
+}

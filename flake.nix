@@ -37,6 +37,12 @@
       url = "github:tobi/qmd";
     };
 
+    # shiftshift is a private, local-first app repo; SSH keeps the input
+    # usable without putting GitHub credentials in the flake.
+    shiftshift = {
+      url = "git+ssh://git@github.com/astahmer/shiftshift-app.git?ref=main";
+    };
+
   };
 
   outputs =
@@ -123,6 +129,18 @@
             pen-dev = pkgs'.callPackage ./packages/pen-dev { };
             recordly = pkgs'.callPackage ./packages/recordly { };
             secretbar = pkgs'.callPackage ./packages/secretbar { };
+            shiftshift =
+              let
+                version = (builtins.fromJSON (builtins.readFile "${inputs.shiftshift}/package.json")).version;
+              in
+              pkgs'.callPackage ./packages/shiftshift {
+                pkgs = pkgs';
+                shiftshiftNixpkgs = inputs.shiftshift.inputs.nixpkgs;
+                shiftshiftRustOverlay = inputs.shiftshift.inputs.rust-overlay.overlays.default;
+                shiftshiftSource = inputs.shiftshift;
+                shiftshiftIcon = "${inputs.shiftshift}/src-tauri/icons/icon.icns";
+                inherit version;
+              };
             t3code-bin = pkgs'.callPackage ./packages/t3code-bin { };
             tidyports = pkgs'.callPackage ./packages/tidyports { };
             tldraw-offline = pkgs'.callPackage ./packages/tldraw-offline { };
