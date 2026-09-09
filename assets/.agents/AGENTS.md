@@ -198,6 +198,36 @@ When the user asks "any [other] questions?" or "need anything from me?" — coll
 - Avoid exporting things not intended for external use.
 - Validate using standard schema (Effect Schema or zod) rather than manual checks.
 
+## Investigation and boundary defaults
+
+- Prefer domain-local code over generic utility dumping grounds. Add shared
+  code only when multiple real callers have stable shared semantics or an
+  invariant, and place it at the narrowest existing domain boundary.
+- For unfamiliar libraries, identify the installed version and verify the
+  exact API in versioned official documentation before implementing it.
+- Treat schemas, migrations, generated clients, snapshots, and other generated
+  artifacts as derived output: change the source of truth, regenerate, inspect
+  the diff, and validate the generated result. Never hand-edit generated
+  output to hide a source-of-truth problem.
+- Investigate databases read-only first. Inspect the target schema, indexes,
+  constraints, representative bounded data, and query plans before changing
+  database code or migrations.
+- Investigate browser and runtime behavior against the running application.
+  Correlate reproduction steps with console errors, network requests, DOM
+  state, and computed styles instead of relying on static code inspection.
+- Reproduce bugs before fixing them, state a falsifiable root-cause
+  hypothesis, and add a regression check for the repaired behavior.
+- Review changes for authorization, input validation, injection, secret
+  exposure, sensitive-data leakage, dangerous process execution, and
+  dependency risk. Do not print sensitive values while investigating.
+- Keep validation evidence compact: run the narrowest useful command, preserve
+  complete logs in an artifact when needed, and report failures separately
+  from known baseline failures.
+- Emit structured observability at the use-case or work-unit boundary with
+  typed fields, correlation identifiers, bounded payloads, and redaction.
+  Avoid duplicate audit events and adapter-level logging that obscures
+  ownership.
+
 ## Effect
 
 - Read the Effect reference repository under `~/.references/effect` for API examples.
