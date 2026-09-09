@@ -1,0 +1,5 @@
+id: no-direct-json-parse-tsx
+valid:
+  - "const value = Schema.decodeUnknownSync(Json)(input)"
+invalid:
+  - "const value = JSON.parse(input)"

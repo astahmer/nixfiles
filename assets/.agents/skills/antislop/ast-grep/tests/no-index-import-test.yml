@@ -1,0 +1,7 @@
+id: no-index-import
+valid:
+  - "import { value } from './value.ts';"
+  - "import { value } from './value.export.ts';"
+invalid:
+  - "import { value } from './index.ts';"
+  - "import './index.ts';"

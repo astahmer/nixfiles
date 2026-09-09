@@ -1,0 +1,15 @@
+id: no-local-effect-provide-wrapper
+valid:
+  - |
+    const databaseLayer = makeDatabaseLayer();
+    const program = Effect.provide(readConversation(), databaseLayer);
+  - |
+    const program = Effect.gen(function* () {
+      const database = yield* ConversationDatabase;
+      return yield* database.read();
+    });
+invalid:
+  - |
+    const provideDatabase = <A>(effect: Effect.Effect<A>) => Effect.provide(effect, databaseLayer);
+  - |
+    const provideContext = (effect: Effect.Effect<unknown>) => Effect.provideContext(effect, context);

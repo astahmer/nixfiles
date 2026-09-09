@@ -1,0 +1,13 @@
+id: require-explicit-schema-declare-type-guard
+language: TypeScript
+message: Schema.declare predicates must explicitly narrow to their declared type.
+severity: error
+rule:
+  pattern: Schema.declare<$TYPE>(($VALUE) => $BODY)
+---
+id: require-explicit-schema-declare-type-guard-tsx
+language: Tsx
+message: Schema.declare predicates must explicitly narrow to their declared type.
+severity: error
+rule:
+  pattern: Schema.declare<$TYPE>(($VALUE) => $BODY)

@@ -1,0 +1,11 @@
+id: no-internal-forwarding-class
+valid:
+  - |
+    class Domain {
+      static create() { return 1; }
+    }
+invalid:
+  - |
+    class Wrapper {
+      static readonly create = Domain.create;
+    }

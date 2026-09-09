@@ -1,0 +1,5 @@
+id: no-wildcard-export
+valid:
+  - "import { value } from './value.ts'; export { value };"
+invalid:
+  - "export * from './value.ts';"

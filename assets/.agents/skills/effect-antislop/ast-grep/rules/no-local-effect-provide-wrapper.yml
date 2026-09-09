@@ -1,0 +1,11 @@
+id: no-local-effect-provide-wrapper
+language: TypeScript
+message: Do not hide repeated Effect.provide or Effect.provideContext calls behind local database/context helper functions.
+severity: error
+rule:
+  any:
+    - pattern: const provideDatabase = $$$VALUE
+    - pattern: const provideDb = $$$VALUE
+    - pattern: const provideLayer = $$$VALUE
+    - pattern: const provideRuntime = $$$VALUE
+    - pattern: const provideContext = $$$VALUE

@@ -226,10 +226,12 @@ in
       nixfilesCheck = pkgs.writeShellApplication {
         name = "nixfiles-check";
         runtimeInputs = [
+          pkgs."ast-grep"
           pkgs.deadnix
           pkgs.git
           pkgs.nix
           pkgs.nixfmt
+          pkgs.oxlint
         ];
         text = builtins.readFile ../scripts/check.sh;
       };

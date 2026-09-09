@@ -39,6 +39,28 @@ errors. Module mocking is intentionally opt-in because some test harnesses
 require it. Effect-specific rules live in the separately selectable
 effect-antislop skill.
 
+## Executable implementations
+
+The rule names in REFERENCE.md have checked-in implementations beside this
+skill:
+
+- `oxlint/index.ts` is the self-contained Oxlint JavaScript/TypeScript plugin;
+  its rules and shared AST helpers are under `oxlint/rules/` and
+  `oxlint/shared/`.
+- `ast-grep/rules/` contains the structural rules, with project-specific file
+  globs deliberately removed. Invoke only the rules and paths that fit the
+  repository, and configure public boundary exceptions in the project.
+
+After `nixapply`, `oxlint` and `ast-grep` are available globally. A project can
+load the plugin from `$HOME/.agents/skills/antislop/oxlint/index.ts` through
+its `.oxlintrc.json` `jsPlugins` entry, then enable rules under the
+`antislop/` namespace. Use `ast-grep scan` or `ast-grep test` with the rules
+under `$HOME/.agents/skills/antislop/ast-grep/rules`.
+
+The plugin intentionally has no dependency on a source repository's
+`node_modules`; its small Oxlint compatibility helpers are vendored beside
+the implementation.
+
 ## Workflow
 
 1. Identify the anti-pattern and write the avoid/prefer/reason statement.

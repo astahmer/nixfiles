@@ -1,0 +1,14 @@
+id: no-unnecessary-effect-provider-wrapper
+valid:
+  - |
+    const program = Effect.gen(function* () {
+      const service = yield* Service;
+      return yield* service.read();
+    }).pipe(Effect.provide(serviceLayer));
+  - |
+    const program = Effect.fail(new Error("failed"));
+invalid:
+  - |
+    const program = Effect.provide(Effect.succeed(value), serviceLayer);
+  - |
+    const program = Effect.provide(Effect.provide(read(), innerLayer), outerLayer);

@@ -1,0 +1,13 @@
+id: no-variadic-effect-schema-literal
+language: TypeScript
+message: Use Schema.Literals([...]) for multiple Effect Schema literal values.
+severity: error
+rule:
+  pattern: Schema.Literal($FIRST, $$$REST)
+---
+id: no-variadic-effect-schema-literal-tsx
+language: Tsx
+message: Use Schema.Literals([...]) for multiple Effect Schema literal values.
+severity: error
+rule:
+  pattern: Schema.Literal($FIRST, $$$REST)

@@ -4,6 +4,11 @@ These are generic rule candidates extracted from the project-owned Oxlint
 plugins. They are deliberately framework-neutral and should be enabled by a
 project's own lint configuration, not assumed to fit every codebase.
 
+The executable sources now live beside this catalog: Oxlint rules are under
+`oxlint/`, structural rules are under `ast-grep/rules/`, and focused fixtures
+are under the corresponding `tests/` directories. The catalog remains
+selectable policy; the implementations are globally deployed with the skill.
+
 ## Adoption policy
 
 Use the generic rules in this catalog as selectable Oxlint and ast-grep

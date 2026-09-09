@@ -1,0 +1,7 @@
+id: no-internal-export-boundary-import
+valid:
+  - "import { value } from './value.ts';"
+  - "import { value } from '../value.ts';"
+  - "import { value } from './value.export.ts';"
+invalid:
+  - "import { value } from './mod.ts';"

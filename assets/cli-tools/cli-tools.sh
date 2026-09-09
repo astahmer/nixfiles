@@ -77,6 +77,7 @@ list_term() {
 
   print_section "Languages & runtimes"
   print_row "node / pnpm / bun / uv" "" "JS + Python toolchains"
+  print_row "oxlint / ast-grep" "" "Executable TypeScript and structural anti-slop checks"
   print_row "nvim / zed / code" "" "Editors"
   print_row "nixd / nixfmt / deadnix" "" "Nix LSP + format + dead code"
 

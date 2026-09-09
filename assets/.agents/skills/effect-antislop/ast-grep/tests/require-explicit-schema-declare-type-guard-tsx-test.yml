@@ -1,0 +1,5 @@
+id: require-explicit-schema-declare-type-guard-tsx
+valid:
+  - "const value = Schema.declare<string>((input): input is string => typeof input === 'string');"
+invalid:
+  - "const value = Schema.declare<string>((input) => typeof input === 'string');"

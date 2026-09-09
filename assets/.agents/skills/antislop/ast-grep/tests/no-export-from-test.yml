@@ -1,0 +1,6 @@
+id: no-export-from
+valid:
+  - "const value = 1; export { value };"
+invalid:
+  - "export { value } from './value.ts';"
+  - "export type { Value } from './value.ts';"

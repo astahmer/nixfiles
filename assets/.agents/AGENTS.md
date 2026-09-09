@@ -237,6 +237,9 @@ When the user asks "any [other] questions?" or "need anything from me?" — coll
 - Do not spread database rows or caller-controlled transport data into output
   objects; enumerate the fields that cross the boundary.
 - Keep generated schemas, clients, and migrations as the source of truth.
+- The `antislop` and `effect-antislop` skills include executable Oxlint and
+  ast-grep implementations; reuse those sources instead of recreating a rule
+  from its name or duplicating it in both checkers.
 
 ## Effect
 

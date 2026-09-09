@@ -1,0 +1,6 @@
+id: no-variadic-effect-schema-literal
+valid:
+  - "const status = Schema.Literal('ready');"
+  - "const status = Schema.Literals(['ready', 'pending']);"
+invalid:
+  - "const status = Schema.Literal('ready', 'pending');"

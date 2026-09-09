@@ -1,0 +1,5 @@
+id: no-raw-response-json-assertion
+valid:
+  - "const data = Schema.decodeUnknownSync(Response)(await response.json());"
+invalid:
+  - "const data = (await response.json()) as { ok: boolean };"

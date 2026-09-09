@@ -1,0 +1,9 @@
+id: no-unnecessary-effect-provider-wrapper
+language: TypeScript
+message: Do not provide a layer to a pure effect or nest provider wrappers; compose the required layer once at the boundary.
+severity: error
+rule:
+  any:
+    - pattern: Effect.provide(Effect.succeed($VALUE), $$$LAYERS)
+    - pattern: Effect.provide(Effect.fail($ERROR), $$$LAYERS)
+    - pattern: Effect.provide(Effect.provide($EFFECT, $INNER), $$$OUTER)

@@ -32,6 +32,7 @@ in
         plannotator
         pkgs.comma
         pkgs.delta
+        pkgs."ast-grep"
         hunk
         pkgs.deadnix
         pkgs.ffmpeg
@@ -50,6 +51,7 @@ in
         pkgs.neovim
         pkgs.nixd
         pkgs.nixfmt
+        pkgs.oxlint
         nub
         pi-watchdog
         qmd

@@ -1,0 +1,5 @@
+id: no-direct-json-parse
+valid:
+  - "Schema.decodeUnknownSync(Json)(value)"
+invalid:
+  - "JSON.parse(value)"

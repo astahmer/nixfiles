@@ -1,0 +1,6 @@
+id: no-deeply-nested-ternary-tsx
+valid:
+  - "const value = first ? second : third;"
+  - "const value = first ? second : third ? fourth : fifth;"
+invalid:
+  - "const value = first ? second : third ? fourth : fifth ? sixth : seventh;"
