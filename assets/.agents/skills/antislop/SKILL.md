@@ -1,74 +1,54 @@
 ---
 name: antislop
-description: Anti-pattern rule tracker — when you fix or refactor crappy/sloppy code, file a rule so the agent knows to avoid that pattern in the future. Optionally attach a machine-checkable pattern (ast-grep, oxlint, grit) for deterministic prevention.
+description: Anti-pattern guidance for turning repeatable code-quality fixes into one deterministic Oxlint or ast-grep check.
 ---
 
 # Antislop
 
-When you fix or refactor sloppy code — a crappy pattern, an unnecessary abstraction, a verbose idiom, a footgun API
-usage — file an anti-slop rule before moving on:
+When fixing or refactoring a clear anti-pattern—a needless abstraction, verbose
+idiom, footgun API usage, or other form of code slop—capture the rule in plain
+language before moving on:
 
-```bash
-antislop add "<what to avoid and what to do instead>" --tag <area>
-```
+- What should be avoided?
+- What is the preferred alternative?
+- Why does the distinction matter?
 
-If the pattern is deterministically checkable, include a pattern:
+## Make repeatable rules deterministic
 
-```bash
-antislop add "Prefer Effect.fn over async/await" \
-  --pattern "async function" \
-  --pattern-lang ast-grep \
-  --prescription "Use Effect.fn instead" \
-  --severity major
-```
+Try to turn repeatable anti-slop guidance into an executable check. Choose one
+canonical implementation based on the shape of the rule:
 
-Severity: `minor` (default) for style nits, `major` for correctness risks, `blocker` for known bugs.
+- Use an Oxlint custom plugin or rule when the check benefits from lint
+  integration, semantic context, or a project-specific TypeScript/JavaScript
+  rule.
+- Use an ast-grep rule when matching the syntax tree is sufficient and a small,
+  structural rule is the better fit.
 
-## Commands
+There is no value in implementing the same rule in both Oxlint and ast-grep.
+Pick the checker that expresses the rule most directly, add a focused fixture
+or test, and document the preferred alternative alongside the check.
 
-```bash
-  antislop add [--global] <text> [--tag <area>] [--severity minor|major|blocker]
-  antislop add [--global] <text> --pattern <pattern> [--pattern-lang lang] [--prescription <text>] [--tag <area>] [--severity minor|major|blocker]
-  antislop list [--global] [--format json|md] [--all]
-  antislop resolve [--global] <id-prefix>
-  antislop supersede [--global] <id-prefix> "<reason it is no longer relevant>"
-  antislop apply [--global] <id-prefix> [--out <dir>]
-  antislop gen-rule [--global] <pattern> [--lang ast-grep|oxlint|grit] [--text <description>]
-  antislop clean [--global]
-  antislop schema
-```
-
-## Scope
-
-Use the repository's `.antislop.jsonl` only for anti-patterns specific to that repository's code,
-conventions, and stack. Keep language-level or tooling-level rules in the global file at
-`~/.antislop.jsonl`:
-
-```bash
-antislop add --global "<global rule>" --tag typescript
-```
+If a rule cannot be checked reliably, keep it as concise guidance rather than
+adding a brittle or noisy detector.
 
 ## Workflow
 
-1. Fix/refactor slop → `antislop add "Avoid X, prefer Y instead" --tag <area> --severity minor|major|blocker`
-2. If the pattern is mechanically detectable, add `--pattern <ast-grep/oxlint/grit pattern>` so it can be applied later
-3. Keep working — filing takes one line
-4. Periodically: `antislop list --format md` to review open rules
-5. When a rule is consistently followed, resolve it with `antislop resolve <id>`
-6. If a rule is no longer relevant, mark it with `antislop supersede <id> "<reason>"`
-7. To generate a rule file from a pattern: `antislop apply <id> --out .antislop/`
-8. Periodically prune resolved rules: `antislop clean`
+1. Identify the anti-pattern and write the avoid/prefer/reason statement.
+2. Search for an existing Oxlint or ast-grep rule before adding another one.
+3. If the pattern is deterministic, choose exactly one checker and implement
+   the rule there.
+4. Add a focused passing and failing example where the checker supports them.
+5. Run the focused checker and the relevant project validation.
+6. Keep the rule close to the tool configuration and explain any intentional
+   exceptions.
 
 ## For agents
 
-When fixing or refactoring code that contains a clear anti-pattern, file a rule:
+When you fix or refactor code containing a clear anti-pattern:
 
-1. `antislop add "description of what to avoid" --tag <area> --severity <level>`
-2. If the pattern could be caught by a linter or static analysis, include `--pattern` and `--pattern-lang`
-3. If you know the preferred alternative, include `--prescription`
-
-Check open anti-slop rules at the start of each session and avoid the listed patterns:
-
-```bash
-antislop list --format md
-```
+1. Preserve the intended behavior while removing the slop.
+2. State the durable rule as “avoid X; prefer Y because Z.”
+3. Try to enforce it with one Oxlint custom plugin/rule or one ast-grep rule.
+4. Do not duplicate the same rule across both systems.
+5. If deterministic enforcement would be noisy or fragile, leave concise
+   guidance and say why a checker was not added.
