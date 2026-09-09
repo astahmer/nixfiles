@@ -18,10 +18,15 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 ## Layout
 
 - `assets/.agents/` — global agent tree. `assets/.agents/skills/ast-outline/SKILL.md` — ast-outline code-exploration skill (tree-sitter-based CLI for outlines, digests, symbol extraction, and AST-aware grep). `show-me` is the shared visual-explanation skill; `calldiff` is overlaid with its managed CLI from `modules/agents.nix`. ast-outline is installed globally via `uv tool install` by `nixbootstrap`. Global MCP templates under `assets/.cursor/mcp.json`, `assets/vscode/mcp.json`, and `assets/.config/opencode/opencode.json`; Home Manager deploys them.
-- Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies from the deployed `~/.agents`, not the clone.
+- Agent config source of truth is `assets/.agents/` and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.codex/AGENTS.md`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies the deployed global `AGENTS.md`, not the clone.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently after `nixbootstrap` and when activation inputs change.
 - `readbro` is superseded by `ast-outline`. Its source remains in `assets/readbro/` for reference but is no longer deployed — neither as an MCP server nor as an agent skill. The readbro skill (`assets/.agents/skills/readbro/`) is excluded from Home Manager deployment via a source filter.
 - `~/.references/` contains globally-shared cloned reference repositories used for comparison and pattern mining. Per-project `.references/` is used only as an escape hatch.
+
+Global Codex instruction discovery uses CODEX_HOME/AGENTS.md (normally
+~/.codex/AGENTS.md), while user skills use ~/.agents/skills. The agents Home
+Manager module deploys both from the same machine-agnostic source tree; do not
+point other projects at the clone's absolute path.
 
 ## Reference Repos
 
@@ -36,6 +41,16 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 - Never use `with` expressions. Always prefer explicit attribute references (for example: `pkgs.spotify`, `pkgs.git`, or `pkgs."name-with-hyphen"`) or fully-qualified attribute paths. This rule applies everywhere in modules, package lists, and functions — not just to `pkgs`.
 - Keep NixOS and Home Manager concerns split when the repo already has separate modules.
 - Use thin host/profile files that only wire modules together.
+
+## Data and type boundaries
+
+- Decode external data once at the boundary; internal APIs use named validated
+  types.
+- Avoid chained assertions, broad object or unknown contracts, and raw
+  response JSON assertions.
+- Do not spread database rows or caller-controlled transport data into output
+  objects; enumerate the fields that cross the boundary.
+- Keep generated schemas, clients, and migrations as the source of truth.
 
 ## Apply Commands
 

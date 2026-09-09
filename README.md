@@ -33,7 +33,7 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 - `modules/` holds reusable modules. Some files export both Home Manager and NixOS modules when a concern spans both scopes.
 - `hosts/macbook/default.nix` wires the standalone Home Manager profile for macOS.
 - `hosts/workstation/default.nix` wires the NixOS host.
-- `assets/.agents/` contains global Copilot skills and is linked into `~/.agents` by Home Manager.
+- `assets/.agents/` contains the shared agent contract and skills. Home Manager deploys the skills to `~/.agents/` and the Codex global instructions to `~/.codex/AGENTS.md`, using the same home-relative paths on every machine.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.ts` seeds them idempotently after `nixbootstrap` or when the activation hash changes.
 - `assets/readbro/` contains the source for readbro (an IR read-cache MCP); it is currently disabled.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.

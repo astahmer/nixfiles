@@ -376,12 +376,22 @@
       initagentFunction = ''
         initagent() {
           local src_dir="''${HOME}/.agents"
-          if [[ ! -d "$src_dir" ]]; then
-            echo "initagent: source directory not found at $src_dir (run nixapply first)" >&2
+          local codex_home="''${CODEX_HOME:-$HOME/.codex}"
+          local source_file="$codex_home/AGENTS.md"
+          if [[ ! -f "$source_file" ]]; then
+            source_file="$src_dir/AGENTS.md"
+          fi
+          if [[ ! -f "$source_file" ]]; then
+            echo "initagent: global AGENTS.md not found (run nixapply first)" >&2
             return 1
           fi
-          cp "$src_dir/AGENTS.md" "$src_dir/effect.md" "$src_dir/typescript.md" .
-          echo "Copied AGENTS.md, effect.md, typescript.md to $(pwd)"
+          if [[ -e "$PWD/AGENTS.md" ]]; then
+            echo "initagent: $PWD/AGENTS.md already exists; refusing to overwrite" >&2
+            return 1
+          fi
+          cp "$source_file" "$PWD/AGENTS.md"
+          echo "Copied global AGENTS.md from $source_file to $PWD/AGENTS.md"
+          echo "Shared skills remain available at $src_dir/skills"
         }
       '';
 

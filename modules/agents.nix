@@ -88,6 +88,11 @@
     in
     {
       home.file.".agents".source = agentsWithSkillOverlays;
+      # Codex discovers global instructions from CODEX_HOME/AGENTS.md.
+      # Keep the source in the global agent tree while exposing the same
+      # content through Codex's machine-local default home.
+      home.sessionVariables.CODEX_HOME = "${config.home.homeDirectory}/.codex";
+      home.file.".codex/AGENTS.md".source = ../assets/.agents/AGENTS.md;
       home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
       home.file.".cursor/rules".source = ../assets/.cursor/rules;
       home.file.".claude/settings.json".source = ../assets/.claude/settings.json;

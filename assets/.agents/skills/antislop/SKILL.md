@@ -1,6 +1,6 @@
 ---
 name: antislop
-description: Anti-pattern guidance for turning repeatable code-quality fixes into one deterministic Oxlint or ast-grep check.
+description: Anti-pattern guidance and a portable baseline catalog for turning repeatable code-quality fixes into one deterministic Oxlint or ast-grep check. Use when reviewing or fixing recurring TypeScript or JavaScript anti-patterns, type assertions, reflective calls, broad boundaries, or test mocking.
 ---
 
 # Antislop
@@ -31,6 +31,14 @@ or test, and document the preferred alternative alongside the check.
 If a rule cannot be checked reliably, keep it as concise guidance rather than
 adding a brittle or noisy detector.
 
+## Portable catalog
+
+Start from the generic rule catalog in REFERENCE.md. Enable rules in groups
+that match the repository's contracts, then add fixtures before making them
+errors. Module mocking is intentionally opt-in because some test harnesses
+require it. Effect-specific rules live in the separately selectable
+effect-antislop skill.
+
 ## Workflow
 
 1. Identify the anti-pattern and write the avoid/prefer/reason statement.
@@ -41,6 +49,10 @@ adding a brittle or noisy detector.
 5. Run the focused checker and the relevant project validation.
 6. Keep the rule close to the tool configuration and explain any intentional
    exceptions.
+
+The baseline rules use Oxlint when enabled because scope, alias resolution,
+global identity, and safety comments are semantic concerns. Do not copy the
+same checks into ast-grep just to have two implementations.
 
 ## For agents
 

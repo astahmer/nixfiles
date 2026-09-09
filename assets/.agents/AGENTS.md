@@ -7,6 +7,9 @@ description: Global agent instructions — caveman, ast-outline, rtk, code style
 - Always use `jj` instead of `git`; unless explicitly asked
 - Always split & describe your work using jj revisions when you make changes
 
+Codex loads this global contract from CODEX_HOME/AGENTS.md; the Nix setup
+mirrors it there while keeping the skills tree at ~/.agents/skills.
+
 ## Nix-backed debugging
 
 This workstation has Nix and `comma` available, so a command missing from
@@ -227,6 +230,13 @@ When the user asks "any [other] questions?" or "need anything from me?" — coll
   typed fields, correlation identifiers, bounded payloads, and redaction.
   Avoid duplicate audit events and adapter-level logging that obscures
   ownership.
+- Decode external data once at the boundary; internal APIs use named,
+  validated types.
+- Avoid chained assertions, broad object or unknown contracts, and raw
+  response JSON assertions.
+- Do not spread database rows or caller-controlled transport data into output
+  objects; enumerate the fields that cross the boundary.
+- Keep generated schemas, clients, and migrations as the source of truth.
 
 ## Effect
 
