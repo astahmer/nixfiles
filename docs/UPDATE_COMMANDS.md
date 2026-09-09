@@ -7,10 +7,17 @@ nix run .#update-pins -- --list
 nix run .#update-pins -- --dry-run
 nix run .#update-pins -- --only codex,iris,ryu
 nix run .#update-pins -- --validate fast
+nixupdateall
 ```
 
 The runner reads `scripts/update-pins.json`, skips entries marked manual, and
 filters system-specific entries using the host system reported by Nix.
+
+For the normal one-command workflow, use `nixupdateall`. It runs
+`.#update-pins --validate fast` for every enabled entry, then applies the
+macOS Home Manager profile with the usual `hm-backup` suffix. This keeps all
+updates pinned in `flake.lock` or the package definitions while avoiding a
+second independent update path.
 
 ## Routine `nix-update` packages
 

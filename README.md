@@ -164,6 +164,9 @@ nix run .#update-pins -- --only codex,iris,ryu,zed
 
 # Update and run the fast evaluation checks
 nix run .#update-pins -- --validate fast
+
+# Update every registered pin, validate, and apply Home Manager
+nixupdateall
 ```
 
 The full registry and platform caveats live in
@@ -171,6 +174,11 @@ The full registry and platform caveats live in
 packaged from upstream release archives, so normal profile updates do not
 compile their Go or Rust workspaces. Packages with coupled lockfiles or
 per-platform hashes remain explicitly manual in the registry.
+
+`nixupdateall` is the convenient daily command: it runs the complete enabled
+update registry (all flake inputs plus routine package releases), runs the fast
+checks, and then applies the macOS profile. Entries marked manual are reported
+by the registry and still require their coordinated update procedure.
 
 After updating, verify with:
 

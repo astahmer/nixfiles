@@ -7,11 +7,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "recordly";
-  version = "1.3.3";
+  version = "1.4.0";
 
   src = fetchurl {
     url = "https://github.com/webadderallorg/Recordly/releases/download/v${finalAttrs.version}/Recordly-arm64.zip";
-    hash = "sha256-9D+2qGc8L3pycxHgO1tjD3rKmokuP1xN9t0x/sK9acg=";
+    hash = "sha256-9fpPldjwkOj6cUFIzgpPSaFZL+N7/1+oJREnmqnF4Ik=";
   };
 
   strictDeps = true;

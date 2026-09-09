@@ -9,7 +9,12 @@ in
       {
         pkgs = import inputs.nixpkgs {
           system = config.nixfiles.macSystem;
-          config.allowUnfree = true;
+          config = {
+            allowUnfree = true;
+            # Beekeeper Studio currently bundles an EOL Electron runtime;
+            # permit only this explicitly managed app while nixpkgs catches up.
+            permittedInsecurePackages = [ "beekeeper-studio-6.0.5" ];
+          };
         };
 
         extraSpecialArgs = { inherit inputs; };

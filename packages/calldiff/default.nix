@@ -7,7 +7,7 @@
 let
   rev = "d58c48b33327c1c833b88df521f6838e9a5cc8c5";
 in
-stdenvNoCC.mkDerivation (finalAttrs: {
+stdenvNoCC.mkDerivation {
   pname = "calldiff";
   version = "0.6.0";
 
@@ -69,4 +69,4 @@ stdenvNoCC.mkDerivation (finalAttrs: {
       "x86_64-linux"
     ];
   };
-})
+}

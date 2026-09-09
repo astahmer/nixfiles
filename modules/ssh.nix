@@ -1,7 +1,12 @@
 { ... }:
 {
   config.flake.modules.homeManager.ssh =
-    { config, pkgs, lib, ... }:
+    {
+      config,
+      pkgs,
+      lib,
+      ...
+    }:
     {
       # Owns ~/.ssh/config: connection policy and peer aliases only — private
       # key materialization lives in the bitwarden module's activation step.

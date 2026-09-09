@@ -11,26 +11,26 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/Zed-aarch64.dmg";
-        hash = "sha256-cjj0DTcHhTaoS5SXLkQcIssg00m53SityEXg3G7B1LQ=";
+        hash = "sha256-bEiPxp1ThxXLW6KpnUpFiX6ErKGCEaMFSSkcuQ5LZUY=";
       };
       x86_64-darwin = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/Zed-x86_64.dmg";
-        hash = "sha256-dW8bfHsjQAwdYcys+j/LPf1tCD9m6efWfPlnthLVz5E=";
+        hash = "sha256-djdI6KavQf3gkcfQaQ9jpCB592lvyF0R4CKAAV+w1KM=";
       };
       aarch64-linux = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/zed-linux-aarch64.tar.gz";
-        hash = "sha256-T3UzKrgVWlpisM3Ec0c8+JOJWc880rAUXil1lp1+iSk=";
+        hash = "sha256-fuk7zRBZxPDXAFeMz6AK69pfxSHJQ/4/+/carEGggac=";
       };
       x86_64-linux = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/zed-linux-x86_64.tar.gz";
-        hash = "sha256-NoLdBYowXSskahTWRBn89C6GoG4ndV0jtaKGIu2a74U=";
+        hash = "sha256-7qYiaNjsX9NYffBvp24HLBBMyl4LCwq+y8KK5bh8C60=";
       };
     }
     .${system} or (throw "Unsupported platform for zed: ${system}");
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "zed";
-  version = "1.18.0";
+  version = "1.18.1";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
 

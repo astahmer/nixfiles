@@ -13,18 +13,18 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/nubjs/nub/releases/download/v${version}/nub-darwin-arm64.tar.gz";
-        hash = "sha256-9av/p7/htqm0/s9m1Pl9GbFJHfNaewW22lws/ElbJVw=";
+        hash = "sha256-CC5NMNNYsZdrIZQJ4I89hFA61gniNHJCPTBmDH77bTw=";
       };
       x86_64-linux = {
         url = "https://github.com/nubjs/nub/releases/download/v${version}/nub-linux-x64-musl.tar.gz";
-        hash = "sha256-SIB0L6SNd2FQrEcKbtCSdFubKqRconYbUqpaNidXHkA=";
+        hash = "sha256-Q/kuyS7DHVlkl5urw3vcxhkRUVfwYZWlqS7dSA8GZ4Y=";
       };
     }
     .${system} or (throw "Unsupported platform for nub: ${system}");
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "nub";
-  version = "0.6.0";
+  version = "0.9.0";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";

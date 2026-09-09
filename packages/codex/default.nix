@@ -13,18 +13,18 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-aarch64-apple-darwin.tar.gz";
-        hash = "sha256-kd/CcPDfuuwW2BTxqpDU8n503J43hOZABr7zt5/p4Jw=";
+        hash = "sha256-jPkR6mdlI7+yEh7FYYSNKrpWSJCtU2202KM1PyuYULE=";
       };
       x86_64-linux = {
         url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-unknown-linux-musl.tar.gz";
-        hash = "sha256-W6O5QFVDlTCB9mHQhU0mb3biq75R1BNJNVo23nZzd2o=";
+        hash = "sha256-9HlCTsoJJITcQNh64oxE9MxAI0pgBF1hMeSTgA2BSjA=";
       };
     }
     .${system} or (throw "Unsupported platform for codex: ${system}");
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "codex";
-  version = "0.153.2";
+  version = "0.153.4";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";

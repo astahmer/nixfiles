@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ ... }:
 {
   config.flake.modules.homeManager.codex-config =
     {
@@ -11,8 +11,6 @@
       codexHome = "${config.home.homeDirectory}/.codex";
       configFile = "${codexHome}/config.toml";
       configTemplate = "${../assets/codex/config.template.toml}";
-      jq = "${pkgs.jq}/bin/jq";
-      cmp = "${pkgs.diffutils}/bin/cmp";
     in
     {
       home.activation.codexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

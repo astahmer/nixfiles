@@ -9,18 +9,18 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/versenilvis/iris/releases/download/v${version}/iris_darwin_arm64.tar.gz";
-        hash = "sha256-zTqSIz+q22FGGSqYEnGIWvTGPYHasq7FU7jm2xC5yTM=";
+        hash = "sha256-KIqVN683Fkd2AMBJQHQHfh0JP/vOlYq5l1rJDtbcwwQ=";
       };
       x86_64-linux = {
         url = "https://github.com/versenilvis/iris/releases/download/v${version}/iris_linux_amd64.tar.gz";
-        hash = "sha256-akR4EF7zesaq2gamZzZo09ilf3+V3b1IdRSp39nlnac=";
+        hash = "sha256-GcsSikvhLI7UeSSAwQv9HGGnMt8yjm1SwUFHs7g+aBM=";
       };
     }
     .${system} or (throw "Unsupported platform for iris: ${system}");
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "iris";
-  version = "0.6.3";
+  version = "0.7.0";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";

@@ -474,6 +474,7 @@
         nixapply = "nh home switch -c macbook -b hm-backup";
         nixswitch = "nh home switch -c macbook -b hm-backup";
         nixupdate = "nh home switch -c macbook -b hm-backup -u";
+        nixupdateall = "nixfiles-update-all";
         nixbootstrap = "nixfiles-bootstrap";
         nixlint = "nixfiles-check";
         nixcheck = "nixfiles-check";

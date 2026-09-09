@@ -88,6 +88,7 @@ list_term() {
 
   print_section "Nix apply"
   print_row "nixapply" "" "nh home switch -c macbook (uses NH_FLAKE)"
+  print_row "nixupdateall" "" "Update all registered pins, validate, and apply"
   print_row "nixbootstrap" "" "Install optional external tools and seed Executor"
   print_row "nixcheck" "" "Format, dead-code, whitespace, and flake validation"
   print_row "nixfiles-here" "" "ln clone → ~/.config/nixfiles"

@@ -53,13 +53,10 @@
       # they stay writable at runtime. The assets tree wins on every apply;
       # promote lasting tweaks back into assets/pi/extensions.
       copyExtensionCmds = lib.concatStringsSep "\n" (
-        map (
-          name:
-          ''
-            ${pkgs.coreutils}/bin/rm -rf "$ext_dir/${name}"
-            ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/extensions + "/${name}"}" "$ext_dir/${name}"
-          ''
-        ) extensionNames
+        map (name: ''
+          ${pkgs.coreutils}/bin/rm -rf "$ext_dir/${name}"
+          ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/extensions + "/${name}"}" "$ext_dir/${name}"
+        '') extensionNames
       );
     in
     {
@@ -68,8 +65,7 @@
       # pi-subagents runtime config (assets win on every apply, same
       # philosophy as the extensions tree). The extension also writes this
       # file via /subagents settings; nixapply reverts those tweaks.
-      home.file.".pi/agent/extensions/subagent/config.json".source =
-        ../assets/pi/subagent-config.json;
+      home.file.".pi/agent/extensions/subagent/config.json".source = ../assets/pi/subagent-config.json;
 
       # pi stays fully mutable at runtime (pi install, model picks,
       # lastChangelogVersion). Nix only seeds ~/.pi/agent/npm and settings.json
@@ -77,31 +73,31 @@
       # store path of the built node_modules. Day-to-day pi tweaks survive
       # unrelated nixapply runs; bumping pins reseeds everything.
       home.activation.piSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        agent_dir="${config.home.homeDirectory}/.pi/agent"
-        npm_dir="$agent_dir/npm"
-        stamp_file="$npm_dir/.nix-stamp"
-        wanted="${piPackages}/node_modules"
+                agent_dir="${config.home.homeDirectory}/.pi/agent"
+                npm_dir="$agent_dir/npm"
+                stamp_file="$npm_dir/.nix-stamp"
+                wanted="${piPackages}/node_modules"
 
-        export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin"
-        ${pkgs.coreutils}/bin/mkdir -p "$npm_dir"
+                export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin"
+                ${pkgs.coreutils}/bin/mkdir -p "$npm_dir"
 
-        current_stamp="$(${pkgs.coreutils}/bin/cat "$stamp_file" 2>/dev/null || true)"
-        if [ "$current_stamp" != "$wanted" ]; then
-          ${pkgs.coreutils}/bin/rm -rf "$npm_dir/node_modules" "$agent_dir/settings.json" \
-            "$npm_dir/package.json" "$npm_dir/package-lock.json"
-          ${pkgs.coreutils}/bin/cp -R "$wanted" "$npm_dir/node_modules"
-          ${pkgs.coreutils}/bin/chmod -R u+w "$npm_dir/node_modules"
-          ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package.json}" "$npm_dir/package.json"
-          ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package-lock.json}" "$npm_dir/package-lock.json"
+                current_stamp="$(${pkgs.coreutils}/bin/cat "$stamp_file" 2>/dev/null || true)"
+                if [ "$current_stamp" != "$wanted" ]; then
+                  ${pkgs.coreutils}/bin/rm -rf "$npm_dir/node_modules" "$agent_dir/settings.json" \
+                    "$npm_dir/package.json" "$npm_dir/package-lock.json"
+                  ${pkgs.coreutils}/bin/cp -R "$wanted" "$npm_dir/node_modules"
+                  ${pkgs.coreutils}/bin/chmod -R u+w "$npm_dir/node_modules"
+                  ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package.json}" "$npm_dir/package.json"
+                  ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package-lock.json}" "$npm_dir/package-lock.json"
 
-          ${pkgs.coreutils}/bin/cat > "$agent_dir/settings.json" <<'PI_SETTINGS_EOF'
-${piSettingsJson}
-PI_SETTINGS_EOF
-          ${pkgs.coreutils}/bin/chmod 600 "$agent_dir/settings.json"
+                  ${pkgs.coreutils}/bin/cat > "$agent_dir/settings.json" <<'PI_SETTINGS_EOF'
+        ${piSettingsJson}
+        PI_SETTINGS_EOF
+                  ${pkgs.coreutils}/bin/chmod 600 "$agent_dir/settings.json"
 
-          printf '%s' "$wanted" > "$stamp_file"
-          echo "pi: seeded pinned packages and settings from $wanted" >&2
-        fi
+                  printf '%s' "$wanted" > "$stamp_file"
+                  echo "pi: seeded pinned packages and settings from $wanted" >&2
+                fi
       '';
 
       home.activation.piExtensions = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

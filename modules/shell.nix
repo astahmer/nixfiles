@@ -233,6 +233,16 @@ in
         ];
         text = builtins.readFile ../scripts/check.sh;
       };
+
+      nixfilesUpdateAll = pkgs.writeShellApplication {
+        name = "nixfiles-update-all";
+        runtimeInputs = [
+          pkgs.nix
+          pkgs.nix-output-monitor
+          inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
+        ];
+        text = builtins.readFile ../scripts/update-all.sh;
+      };
     in
     {
       imports = [ shellInteractive ];
@@ -246,6 +256,7 @@ in
         inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
         nixfilesBootstrap
         nixfilesCheck
+        nixfilesUpdateAll
         jjPrompt
         pkgs.nodejs_24
         pkgs.pnpm

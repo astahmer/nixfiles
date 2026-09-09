@@ -4,35 +4,35 @@ let
     if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
       {
         packageName = "hunkdiff-darwin-arm64";
-        hash = "sha256-TfHf5z6OCVkUpz4DjkurRcwXpVe13y0Eqxwwxp3h/Tc=";
+        hash = "sha256-gNNwZjGdXegaB9cQXPhxxQM8WvNxl9PGiykly8ZpzfM=";
       }
     else if pkgs.stdenv.hostPlatform.system == "x86_64-darwin" then
       {
         packageName = "hunkdiff-darwin-x64";
-        hash = "sha256-XblazdFlJ5ZtbJSCWKfRnZLcKdpxmepN8rweZ8+U3qc=";
+        hash = "sha256-GVJ3oi5okPMOFktN2a5F2L0+NfKqo5GgtbdEnwnlu70=";
       }
     else if pkgs.stdenv.hostPlatform.system == "aarch64-linux" then
       {
         packageName = "hunkdiff-linux-arm64";
-        hash = "sha256-9dYknbOV9BA3unR9WKEAeU8CgI7gjpGCIg7QHhrH8Aw=";
+        hash = "sha256-a3Fe2QYCCrkrnJUFjtd2afLE/Naetwl+K+ka7Nld7hQ=";
       }
     else if pkgs.stdenv.hostPlatform.system == "x86_64-linux" then
       {
         packageName = "hunkdiff-linux-x64";
-        hash = "sha256-nZycFQ8aEZLkU01qYOln0FLnHH+oI97ZxA4EgNpylE4=";
+        hash = "sha256-1BOgR1+9OutYtXgfIU6BXyeVkCMaAMrFyqh6LLRAnFE=";
       }
     else
       throw "Unsupported platform for hunk";
 in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "hunk";
-  version = "0.17.7";
+  version = "0.21.1";
 
   src = pkgs.fetchFromGitHub {
     owner = "modem-dev";
     repo = "hunk";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-0i1k5ktVfhmN30gOSAFZrrjzGW61vwTOZ3gw5aS+fd8=";
+    hash = "sha256-8faDOqDXSdp5j8WP07rTW0L44keCPpv9mWoXGKXgvpY=";
   };
 
   nativeBuildInputs = [ pkgs.makeWrapper ];

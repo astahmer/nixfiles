@@ -29,6 +29,7 @@
         vscodeTasksToZed
       ];
       xdg.configFile."cli-tools/overview.html".source = ../assets/cli-tools/overview.html;
-      xdg.configFile."cli-tools/vscode-tasks-to-zed.mjs".source = ../assets/cli-tools/vscode-tasks-to-zed.mjs;
+      xdg.configFile."cli-tools/vscode-tasks-to-zed.mjs".source =
+        ../assets/cli-tools/vscode-tasks-to-zed.mjs;
     };
 }
