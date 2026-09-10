@@ -61,8 +61,9 @@ in
               home.homeDirectory = "/Users/${username}";
               home.username = username;
 
-              # Keep existing copied app bundles untouched. Updating them
-              # requires macOS App Management permission; CLI tools do not.
+              # macosApps owns explicit copies in ~/Applications; keep the
+              # native copier disabled because GUI packages stay out of the
+              # profile to avoid duplicate app discovery.
               targets.darwin.copyApps.enable = false;
             }
           )

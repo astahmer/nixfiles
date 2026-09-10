@@ -13,7 +13,7 @@
       {
         programs.ghostty = {
           enable = true;
-          # The macOS app is linked into ~/Applications by macosApps. Keep
+          # The macOS app is copied into ~/Applications by macosApps. Keep
           # only a CLI launcher in the profile so Raycast sees one app.
           package = if isDarwin then null else ghosttyPackage;
           installBatSyntax = false;

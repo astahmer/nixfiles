@@ -17,9 +17,8 @@
       '';
     in
     {
-      # Keep the GUI bundle in ~/Applications and expose only the CLI in the
-      # profile, so app discovery does not see the same bundle twice.
-      home.file."Applications/shiftshift.app".source = "${shiftshift}/Applications/shiftshift.app";
+      # macosApps copies the GUI bundle into ~/Applications; expose only the
+      # CLI here so app discovery does not see the same bundle twice.
       home.packages = [ shiftCli ];
 
       # The app writes these files itself, so a home.file symlink would make

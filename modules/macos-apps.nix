@@ -8,6 +8,7 @@
       ...
     }:
     let
+      system = pkgs.stdenv.hostPlatform.system;
       crisp = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.crisp;
       thaw = pkgs.thaw;
       notunes = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.notunes;
@@ -21,6 +22,7 @@
       tldrawOffline = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tldraw-offline;
       whatsappBin = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.whatsapp-bin;
       zed = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.zed;
+      shiftshift = inputs.self.packages.${system}.shiftshift;
       googleChrome = pkgs."google-chrome";
       visualStudioCode = pkgs.vscode;
       cursor = pkgs."code-cursor";
@@ -40,6 +42,105 @@
       '';
       zeditorCli = pkgs.writeShellScriptBin "zeditor" ''
         exec "${zed}/bin/zeditor" "$@"
+      '';
+      macosAppSources = {
+        "AltTab.app" = "${pkgs."alt-tab-macos"}/Applications/AltTab.app";
+        "Beekeeper Studio.app" = "${beekeeperStudio}/Applications/Beekeeper Studio.app";
+        "ChatGPT.app" = "${chatgpt}/Applications/ChatGPT.app";
+        "Claude.app" = "${claudeDesktop}/Applications/Claude.app";
+        "Crisp.app" = "${crisp}/Applications/Crisp.app";
+        "Cursor.app" = "${cursor}/Applications/Cursor.app";
+        "Discord.app" = "${discordBin}/Applications/Discord.app";
+        "Ghostty.app" = "${ghosttyBin}/Applications/Ghostty.app";
+        "Google Chrome.app" = "${googleChrome}/Applications/Google Chrome.app";
+        "Linear.app" = "${linear}/Applications/Linear.app";
+        "MonitorControl.app" = "${monitorControl}/Applications/MonitorControl.app";
+        "OrbStack.app" = "${pkgs.orbstack}/Applications/OrbStack.app";
+        "Pencil.app" = "${penDev}/Applications/Pencil.app";
+        "Raycast.app" = "${pkgs.raycast}/Applications/Raycast.app";
+        "Recordly.app" = "${recordly}/Applications/Recordly.app";
+        "SecretBar.app" = "${secretbar}/Applications/SecretBar.app";
+        "Shottr.app" = "${pkgs.shottr}/Applications/Shottr.app";
+        "Slack.app" = "${pkgs.slack}/Applications/Slack.app";
+        "Spotify.app" = "${pkgs.spotify}/Applications/Spotify.app";
+        "T3 Code (Alpha).app" = "${t3codeBin}/Applications/T3 Code (Alpha).app";
+        "Thaw.app" = "${thaw}/Applications/Thaw.app";
+        "Tidy Ports.app" = "${tidyports}/Applications/Tidy Ports.app";
+        "Visual Studio Code.app" = "${visualStudioCode}/Applications/Visual Studio Code.app";
+        "WhatsApp.app" = "${whatsappBin}/Applications/WhatsApp.app";
+        "Zed.app" = "${zed}/Applications/Zed.app";
+        "noTunes.app" = "${notunes}/Applications/noTunes.app";
+        "shiftshift.app" = "${shiftshift}/Applications/shiftshift.app";
+        "tldraw offline.app" = "${tldrawOffline}/Applications/tldraw offline.app";
+      };
+      macosAppInstallCommands = lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (
+          appName: sourcePath: "install_app ${lib.escapeShellArg appName} ${lib.escapeShellArg sourcePath}"
+        ) macosAppSources
+      );
+      macosAppInstaller = pkgs.writeShellScript "install-macos-apps" ''
+        set -eu
+
+        applicationsDirectory="$HOME/Applications"
+        stateDirectory="$HOME/.local/state/nixfiles/macos-apps"
+        ${pkgs.coreutils}/bin/mkdir -p "$applicationsDirectory" "$stateDirectory"
+
+        install_app() {
+          appName="$1"
+          sourcePath="$2"
+          targetPath="$applicationsDirectory/$appName"
+          stampPath="$stateDirectory/$appName.source"
+          previousSourcePath=""
+
+          if [ -f "$stampPath" ]; then
+            previousSourcePath="$(${pkgs.coreutils}/bin/cat "$stampPath")"
+          fi
+
+          if [ -d "$targetPath" ] && [ ! -L "$targetPath" ] && [ "$previousSourcePath" = "$sourcePath" ]; then
+            return 0
+          fi
+
+          if [ -L "$targetPath" ]; then
+            linkTarget="$(${pkgs.coreutils}/bin/readlink "$targetPath")"
+            case "$linkTarget" in
+              /nix/store/*)
+                ;;
+              *)
+                echo "warning: preserving unmanaged app symlink $targetPath" >&2
+                return 0
+                ;;
+            esac
+          elif [ -e "$targetPath" ] && [ -z "$previousSourcePath" ]; then
+            echo "warning: preserving unmanaged app bundle $targetPath" >&2
+            return 0
+          fi
+
+          temporaryDirectory="$(${pkgs.coreutils}/bin/mktemp -d "$applicationsDirectory/.nixfiles-app.XXXXXX")"
+          if ! ${lib.getExe pkgs.rsync} \
+            --recursive \
+            --checksum \
+            --perms \
+            --links \
+            --copy-unsafe-links \
+            --specials \
+            --chmod=+w \
+            "$sourcePath/" "$temporaryDirectory/$appName/"; then
+            ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
+            return 1
+          fi
+
+          if [ -L "$targetPath" ]; then
+            ${pkgs.coreutils}/bin/rm "$targetPath"
+          elif [ -e "$targetPath" ]; then
+            ${pkgs.coreutils}/bin/rm -rf "$targetPath"
+          fi
+          ${pkgs.coreutils}/bin/mv "$temporaryDirectory/$appName" "$targetPath"
+          ${pkgs.coreutils}/bin/rmdir "$temporaryDirectory"
+          printf '%s\n' "$sourcePath" > "$stampPath.tmp.$$"
+          ${pkgs.coreutils}/bin/mv -f "$stampPath.tmp.$$" "$stampPath"
+        }
+
+        ${macosAppInstallCommands}
       '';
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
         /usr/bin/pkill -TERM -f '/SecretBar\.app/Contents/MacOS/secretbar' 2>/dev/null || true
@@ -102,48 +203,16 @@
         $DRY_RUN_CMD /usr/bin/defaults delete dev.astahmer.secretbar "NSWindow Frame com_apple_SwiftUI_Settings_window" 2>/dev/null || true
       '';
 
-      # App linking (targets.darwin.linkApps/copyApps) is disabled at
-      # stateVersion 25.11, so link app bundles into ~/Applications
-      # explicitly. GUI packages stay out of home.packages; otherwise Raycast
-      # indexes both this link and the profile/store path.
-      home.file."Applications/Raycast.app".source = "${pkgs.raycast}/Applications/Raycast.app";
-      home.file."Applications/Google Chrome.app".source =
-        "${googleChrome}/Applications/Google Chrome.app";
-      home.file."Applications/Slack.app".source = "${pkgs.slack}/Applications/Slack.app";
-      home.file."Applications/Discord.app".source = "${discordBin}/Applications/Discord.app";
-      home.file."Applications/Spotify.app".source = "${pkgs.spotify}/Applications/Spotify.app";
-      home.file."Applications/Visual Studio Code.app".source =
-        "${visualStudioCode}/Applications/Visual Studio Code.app";
-      home.file."Applications/Cursor.app".source = "${cursor}/Applications/Cursor.app";
-      home.file."Applications/OrbStack.app".source = "${pkgs.orbstack}/Applications/OrbStack.app";
-      home.file."Applications/MonitorControl.app".source =
-        "${monitorControl}/Applications/MonitorControl.app";
-      home.file."Applications/Beekeeper Studio.app".source =
-        "${beekeeperStudio}/Applications/Beekeeper Studio.app";
-      home.file."Applications/ChatGPT.app".source = "${chatgpt}/Applications/ChatGPT.app";
-      home.file."Applications/Claude.app".source = "${claudeDesktop}/Applications/Claude.app";
-      home.file."Applications/Linear.app".source = "${linear}/Applications/Linear.app";
-      home.file."Applications/tldraw offline.app".source =
-        "${tldrawOffline}/Applications/tldraw offline.app";
-      home.file."Applications/Pencil.app".source = "${penDev}/Applications/Pencil.app";
-      home.file."Applications/Recordly.app".source = "${recordly}/Applications/Recordly.app";
-      home.file."Applications/T3 Code (Alpha).app".source =
-        "${t3codeBin}/Applications/T3 Code (Alpha).app";
-      home.file."Applications/WhatsApp.app".source = "${whatsappBin}/Applications/WhatsApp.app";
-      home.file."Applications/Shottr.app".source = "${pkgs.shottr}/Applications/Shottr.app";
-      home.file."Applications/AltTab.app".source = "${pkgs."alt-tab-macos"}/Applications/AltTab.app";
-      home.file."Applications/Ghostty.app".source = "${ghosttyBin}/Applications/Ghostty.app";
-      home.file."Applications/Crisp.app".source = "${crisp}/Applications/Crisp.app";
-      home.file."Applications/Thaw.app".source = "${thaw}/Applications/Thaw.app";
-      home.file."Applications/noTunes.app".source = "${notunes}/Applications/noTunes.app";
-      home.file."Applications/SecretBar.app".source = "${secretbar}/Applications/SecretBar.app";
-      home.file."Applications/Tidy Ports.app".source = "${tidyports}/Applications/Tidy Ports.app";
-      home.file."Applications/Zed.app".source = "${zed}/Applications/Zed.app";
+      # Copy app bundles into a writable directory so macOS metadata never
+      # mutates the Nix store.
+      home.activation.installMacosApps = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+        $DRY_RUN_CMD ${macosAppInstaller}
+      '';
 
       # The plist may be unchanged when only the app store path changes. Run
       # the same single-instance launcher during every activation so the live
       # menu-bar process always matches the current Home Manager generation.
-      home.activation.restartSecretbar = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+      home.activation.restartSecretbar = lib.hm.dag.entryAfter [ "installMacosApps" ] ''
         ${secretbarLauncher}
       '';
 
