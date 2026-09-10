@@ -1,55 +1,44 @@
 ---
 name: papercuts
-description: Agent complaint box — log friction (dead-end tools, wrong cwd, flaky commands, misleading docs) instead of silently pushing through. Use when you hit any workflow friction during a task.
+description: Short-lived action inbox for concrete, fixable workflow friction. Use only when a specific next action exists.
 ---
 
 # Papercuts
 
-When you hit friction during work — a dead-end tool call, a broken link, a misleading doc, a footgun config, a missing helper — file it before moving on:
+Record friction only when it has an exact target and a concrete next action. A papercut is not a backlog or a diary.
 
 ```bash
-papercuts add "<what you hit and what would have prevented it>" --tag <area>
+papercuts add --where <target> --fix "<next action>" [--ttl 24h|3d] "<observed evidence>"
 ```
 
-Don't stop working; file it and push through. Severity: `minor` (default) for annoyances, `major` for time sinks, `blocker` for hard walls.
+If the fix is not clear, do not record it. Fix it immediately, promote it to a real task, or let it disappear.
 
 ## Commands
 
 ```bash
-papercuts add [--global] <text> [--tag <area>] [--severity minor|major|blocker]
-papercuts list [--global] [--format json|md] [--all]
-papercuts resolve [--global] <id-prefix>
-papercuts unresolvable [--global] <id-prefix> "<reason it cannot be fixed here>"
-papercuts clean [--global]
-papercuts schema
+papercuts add --where <target> --fix "<next action>" [--ttl 24h|3d] "<observed evidence>"
+papercuts list [--format md|json]
+papercuts close <id-prefix>
 ```
 
-## Scope
+`close` deletes the entry. Use it after fixing the issue or after creating the real task that owns it.
 
-Use the repository's `.papercuts.jsonl` only for friction rooted in that repository's code,
-configuration, documentation, or workflow. Keep shell, agent, connector, editor, and other shared
-tooling issues in the global file at `~/.papercuts.jsonl`:
+## Admission
 
-```bash
-papercuts add --global "<global issue>" --tag tooling
-```
+Do not record one-off shell mistakes, guessed paths, known baseline failures, or external limitations without an owner. Record tooling friction only when it recurs or has a clear repository/tooling fix.
 
-When moving an existing cut to the global file, move its `cut` record and every matching terminal
-record (`resolve` or `unresolvable`) together. Older files may still contain `resolve` records;
-new resolutions remove the cut immediately. Do not copy project-specific cuts into the global file.
+Each entry must name:
 
-## Workflow
+- `where`: repository, file, command, or service
+- `why`: observed failure or evidence
+- `fix`: one concrete next action
 
-1. Hit friction → `papercuts add "..." --tag docs|tooling|config|api|other`
-2. Keep working — filing takes one line
-3. Periodically: `papercuts list --format md` to review
-4. Fix the easy ones, resolve with `papercuts resolve <id>`; this removes the cut line immediately
-   instead of appending a resolution record
-5. Mark an external or intentionally out-of-scope cut with `papercuts unresolvable <id> "<reason>"`.
-   It disappears from the open list but remains in `--all`; `clean` preserves it for future context.
+## Lifecycle
 
-`resolve` is intentionally destructive: it rewrites the JSONL file without the resolved `cut` record.
-`clean` removes legacy `cut`/`resolve` pairs left by older CLI versions and preserves
-`unresolvable` records.
+- Default TTL is 3 days; maximum TTL is 7 days.
+- Use a 24-hour TTL for a blocker that must be promoted quickly.
+- `list`, `add`, and `close` remove expired entries automatically.
+- Repeated entries are deduplicated and show an occurrence count.
+- The store is machine-local at `~/.local/state/papercuts.jsonl`; it must not dirty a repository or create a JJ commit.
 
-Each agent session should check open papercuts at the start and try to fix any that are quick wins.
+Each agent session may run `papercuts list --format md`; only live entries appear.

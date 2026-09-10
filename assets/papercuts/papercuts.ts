@@ -1,290 +1,352 @@
 #!/usr/bin/env -S node --experimental-strip-types
 
-let PAPERCUTS_FILE = process.env.PAPERCUTS_FILE || ".papercuts.jsonl";
-const AGENT = process.env.PAPERCUTS_AGENT || process.env.OPENCODE_AGENT || process.env.CLAUDE_CODE_AGENT || "unknown";
-const NOW = process.env.PAPERCUTS_NOW ? new Date(process.env.PAPERCUTS_NOW) : new Date();
+const { createHash } = require("node:crypto");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
-function iso(): string {
-  return NOW.toISOString();
-}
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const DEFAULT_TTL_MS = 3 * DAY_MS;
+const MAX_TTL_MS = 7 * DAY_MS;
+const LOCK_TIMEOUT_MS = 5 * 1000;
+const LOCK_STALE_MS = 30 * 1000;
+const LOCK_RETRY_MS = 25;
 
-function shortId(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let id = "pc_";
-  for (let i = 0; i < 12; i++) id += chars[Math.floor(Math.random() * chars.length)];
-  return id;
-}
+type Papercut = {
+  id: string;
+  repo: string;
+  where: string;
+  why: string;
+  fix: string;
+  expires: string;
+  seen?: number;
+};
 
-function readRecords(): any[] {
-  try {
-    const content = require("fs").readFileSync(PAPERCUTS_FILE, "utf-8");
-    return content.trim().split("\n").filter(Boolean).map((l: string) => {
-      try { return JSON.parse(l); } catch { return null; }
-    }).filter(Boolean);
-  } catch {
-    return [];
+type RecordInput = {
+  where: string;
+  why: string;
+  fix: string;
+  ttlMs: number;
+};
+
+type PapercutsApi = {
+  record: (input: RecordInput) => { status: "added" | "deduplicated"; record: Papercut };
+  list: () => Papercut[];
+  close: (idPrefix: string) => Papercut;
+};
+
+type ObjectRecord = Record<string, unknown>;
+
+const isObjectRecord = (value: unknown): value is ObjectRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const errorCode = (value: unknown): string | undefined => {
+  if (!isObjectRecord(value) || typeof value.code !== "string") return undefined;
+  return value.code;
+};
+
+const parseNow = (): Date => {
+  const now = process.env.PAPERCUTS_NOW
+    ? new Date(process.env.PAPERCUTS_NOW)
+    : new Date();
+  if (Number.isNaN(now.getTime())) throw new Error("PAPERCUTS_NOW must be an ISO timestamp");
+  return now;
+};
+
+const normalize = (value: string): string => value.trim().replace(/\s+/g, " ").toLowerCase();
+
+const requiredText = (value: string | null, name: string): string => {
+  const text = value?.trim() ?? "";
+  if (text.length === 0) throw new Error(`${name} must not be empty`);
+  return text;
+};
+
+const parseTtl = (value: string | null): number => {
+  if (value === null) return DEFAULT_TTL_MS;
+  const match = /^(\d+)(h|d)$/.exec(value.trim());
+  if (!match) throw new Error("--ttl must look like 24h or 3d");
+  const amount = Number(match[1]);
+  const ttlMs = amount * (match[2] === "d" ? DAY_MS : HOUR_MS);
+  if (ttlMs < HOUR_MS || ttlMs > MAX_TTL_MS) {
+    throw new Error("--ttl must be between 1h and 7d");
   }
-}
+  return ttlMs;
+};
 
-function appendRecord(record: any): void {
-  const fs = require("fs");
-  const dir = require("path").dirname(PAPERCUTS_FILE);
-  if (dir !== ".") fs.mkdirSync(dir, { recursive: true });
-  fs.appendFileSync(PAPERCUTS_FILE, JSON.stringify(record) + "\n", "utf-8");
-}
-
-function writeRecords(records: any[]): void {
-  const fs = require("fs");
-  const path = require("path");
-  const dir = path.dirname(PAPERCUTS_FILE);
-  if (dir !== ".") fs.mkdirSync(dir, { recursive: true });
-  const content = records.length > 0
-    ? records.map((record: any) => JSON.stringify(record)).join("\n") + "\n"
-    : "";
-  const temporaryFile = `${PAPERCUTS_FILE}.tmp-${process.pid}`;
-  fs.writeFileSync(temporaryFile, content, "utf-8");
-  fs.renameSync(temporaryFile, PAPERCUTS_FILE);
-}
-
-function removeCut(cutId: string): number {
-  const records = readRecords();
-  const keep = records.filter((record: any) => !(record.kind === "cut" && record.id === cutId));
-  writeRecords(keep);
-  return records.length - keep.length;
-}
-
-function terminalCutIds(records: any[]): Set<string> {
-  return new Set(
-    records
-      .filter((record: any) => record.kind === "resolve" || record.kind === "unresolvable")
-      .map((record: any) => record.cut_id)
-  );
-}
-
-function resolveId(prefix: string): string | null {
-  const records = readRecords();
-  const terminal = terminalCutIds(records);
-  const open = records.filter(
-    (r: any) => r.kind === "cut" && !terminal.has(r.id)
-  );
-  const match = open.filter((r: any) => r.id.startsWith(prefix));
-  if (match.length === 0) return null;
-  if (match.length > 1) return null;
-  return match[0].id;
-}
-
-function cmdAdd(text: string, tags: string[], severity: string): void {
-  const record = {
-    kind: "cut",
-    id: shortId(),
-    ts: iso(),
-    agent: AGENT,
-    text,
-    tags,
-    severity,
+const decodeRecord = (value: unknown): Papercut | null => {
+  if (!isObjectRecord(value)) return null;
+  if (
+    typeof value.id !== "string" ||
+    typeof value.repo !== "string" ||
+    typeof value.where !== "string" ||
+    typeof value.why !== "string" ||
+    typeof value.fix !== "string" ||
+    typeof value.expires !== "string"
+  ) return null;
+  if (value.seen !== undefined && (typeof value.seen !== "number" || value.seen < 2)) return null;
+  if (Number.isNaN(new Date(value.expires).getTime())) return null;
+  return {
+    id: value.id,
+    repo: value.repo,
+    where: value.where,
+    why: value.why,
+    fix: value.fix,
+    expires: value.expires,
+    ...(value.seen === undefined ? {} : { seen: value.seen }),
   };
-  appendRecord(record);
-  const out = { ok: true, data: { changed: true, record } };
-  process.stdout.write(JSON.stringify(out) + "\n");
-}
+};
 
-function cmdList(format: string, openOnly: boolean): void {
-  const records = readRecords();
-  const resolved = new Set(
-    records.filter((r: any) => r.kind === "resolve").map((r: any) => r.cut_id)
-  );
-  const unresolvable = new Map(
-    records
-      .filter((r: any) => r.kind === "unresolvable")
-      .map((r: any) => [r.cut_id, r.reason])
-  );
-  let cuts = records.filter((r: any) => r.kind === "cut");
-  if (openOnly) cuts = cuts.filter((r: any) => !resolved.has(r.id) && !unresolvable.has(r.id));
-  cuts.sort((a: any, b: any) => {
-    const order = { blocker: 0, major: 1, minor: 2 };
-    const sa = order[a.severity as keyof typeof order] ?? 2;
-    const sb = order[b.severity as keyof typeof order] ?? 2;
-    if (sa !== sb) return sa - sb;
-    return b.ts.localeCompare(a.ts);
-  });
-  if (format === "md") {
-    for (const c of cuts) {
-      const tags = c.tags?.length ? ` [${c.tags.join(", ")}]` : "";
-      const reason = unresolvable.get(c.id);
-      const status = resolved.has(c.id) ? "[x]" : reason ? "[!]" : "[ ]";
-      const outcome = reason ? " **unresolvable**" : "";
-      const detail = reason ? `\n  Reason: ${reason}` : "";
-      process.stdout.write(`${status} \`${c.id}\` **${c.severity}**${outcome}${tags} — ${c.ts}\n  ${c.text}${detail}\n\n`);
+const createApi = ({ file, now, repo }: { file: string; now: Date; repo: string }): PapercutsApi => {
+  const lockFile = `${file}.lock`;
+
+  const ensureParent = (): void => {
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  };
+
+  const readRecords = (): Papercut[] => {
+    let content: string;
+    try {
+      content = fs.readFileSync(file, "utf8");
+    } catch (error) {
+      if (errorCode(error) === "ENOENT") return [];
+      throw error;
     }
-  } else {
-    const out = { ok: true, data: { cuts, total: cuts.length } };
-    process.stdout.write(JSON.stringify(out) + "\n");
-  }
-}
-
-function cmdResolve(prefix: string): void {
-  const id = resolveId(prefix);
-  if (!id) {
-    const err = { ok: false, error: { code: "not_found", message: `No open papercut matches prefix "${prefix}"` } };
-    process.stderr.write(JSON.stringify(err) + "\n");
-    process.exit(66);
-  }
-  const removed = removeCut(id);
-  const out = { ok: true, data: { changed: removed > 0, cut_id: id } };
-  process.stdout.write(JSON.stringify(out) + "\n");
-}
-
-function cmdUnresolvable(prefix: string, reason: string): void {
-  const id = resolveId(prefix);
-  if (!id) {
-    const err = { ok: false, error: { code: "not_found", message: `No open papercut matches prefix "${prefix}"` } };
-    process.stderr.write(JSON.stringify(err) + "\n");
-    process.exit(66);
-  }
-  appendRecord({ kind: "unresolvable", id: shortId(), ts: iso(), cut_id: id, reason });
-  const out = { ok: true, data: { cut_id: id, reason } };
-  process.stdout.write(JSON.stringify(out) + "\n");
-}
-
-function cmdClean(): void {
-  const records = readRecords();
-  const resolved = new Set(
-    records.filter((r: any) => r.kind === "resolve").map((r: any) => r.cut_id)
-  );
-  const keep = records.filter(
-    (r: any) => !(r.kind === "cut" && resolved.has(r.id)) && !(r.kind === "resolve" && resolved.has(r.cut_id))
-  );
-  const removed = records.length - keep.length;
-  writeRecords(keep);
-  const out = { ok: true, data: { removed, remaining: keep.length } };
-  process.stdout.write(JSON.stringify(out) + "\n");
-}
-
-function cmdSchema(): void {
-  const schema = {
-    contract: 2,
-    commands: {
-      add: { args: ["text"], options: ["--global", "--tag", "--severity"], appends: true },
-      list: { options: ["--global", "--format", "--all"], appends: false },
-      resolve: { args: ["id"], options: ["--global"], appends: false, removes: true },
-      unresolvable: { args: ["id", "reason"], options: ["--global"], appends: true },
-      clean: { options: ["--global"], appends: false, removes: true },
-      schema: { appends: false },
-    },
-    env: { PAPERCUTS_FILE: { default: ".papercuts.jsonl" }, PAPERCUTS_AGENT: {}, PAPERCUTS_NOW: {} },
-    record_shapes: {
-      cut: { kind: "cut", id: "string", ts: "ISO8601", agent: "string", text: "string", tags: "string[]", severity: "minor|major|blocker" },
-      resolve: { kind: "resolve", id: "string", ts: "ISO8601", cut_id: "string" },
-      unresolvable: { kind: "unresolvable", id: "string", ts: "ISO8601", cut_id: "string", reason: "string" },
-    },
-    exit_codes: { ok: 0, usage: 2, bad_input: 65, not_found: 66, internal: 70 },
+    return content.split("\n").filter(Boolean).map((line, index) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        throw new Error(`invalid papercuts JSON at line ${index + 1}`);
+      }
+      const record = decodeRecord(parsed);
+      if (record === null) throw new Error(`invalid papercut record at line ${index + 1}`);
+      return record;
+    });
   };
-  process.stdout.write(JSON.stringify(schema, null, 2) + "\n");
-}
 
-const rawArgs = process.argv.slice(2);
-const isGlobal = rawArgs.includes("--global");
-const isHelp = rawArgs.includes("--help") || rawArgs.includes("-h");
-const args = rawArgs.filter((a: string) => a !== "--global" && a !== "--help" && a !== "-h");
-const cmd = args[0] || "help";
-
-if (isGlobal && !process.env.PAPERCUTS_FILE) {
-  PAPERCUTS_FILE = require("path").join(require("os").homedir(), ".papercuts.jsonl");
-}
-
-if (isHelp && cmd !== "help" && cmd !== "schema") {
-  const helps: Record<string, string> = {
-    add: "Usage: papercuts add [--global] <text> [--tag <tag>] [--severity minor|major|blocker]",
-    list: "Usage: papercuts list [--global] [--format json|md] [--all]",
-    resolve: "Usage: papercuts resolve [--global] <id>",
-    unresolvable: "Usage: papercuts unresolvable [--global] <id> <reason>",
-    clean: "Usage: papercuts clean [--global]",
-  };
-  const usage = helps[cmd];
-  if (usage) {
-    process.stdout.write(usage + "\n");
-    process.exit(0);
-  }
-}
-
-switch (cmd) {
-  case "add":
-  case "log": {
-    const textIdx = args.findIndex((a: string) => !a.startsWith("-"));
-    const text = textIdx > 0 ? args[textIdx] : args[1];
-    if (!text || text.startsWith("-")) {
-      const err = { ok: false, error: { code: "bad_input", message: "Usage: papercuts add <text> [--tag <tag>] [--severity minor|major|blocker]" } };
-      process.stderr.write(JSON.stringify(err) + "\n");
-      process.exit(65);
+  const writeRecords = (records: Papercut[]): void => {
+    if (records.length === 0) {
+      fs.rmSync(file, { force: true });
+      return;
     }
-    const tags: string[] = [];
-    for (let i = 0; i < args.length; i++) {
-      if (args[i] === "--tag" && args[i + 1]) {
-        tags.push(args[i + 1]);
-        i++;
+    ensureParent();
+    const temporaryFile = `${file}.tmp-${process.pid}`;
+    fs.writeFileSync(temporaryFile, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    fs.renameSync(temporaryFile, file);
+    fs.chmodSync(file, 0o600);
+  };
+
+  const wait = (): void => {
+    const buffer = new SharedArrayBuffer(4);
+    Atomics.wait(new Int32Array(buffer), 0, 0, LOCK_RETRY_MS);
+  };
+
+  const withLock = <Result>(operation: () => Result): Result => {
+    ensureParent();
+    const startedAt = Date.now();
+    while (true) {
+      try {
+        const descriptor = fs.openSync(lockFile, "wx", 0o600);
+        fs.closeSync(descriptor);
+        break;
+      } catch (error) {
+        if (errorCode(error) !== "EEXIST") throw error;
+        let stale = false;
+        try {
+          stale = Date.now() - fs.statSync(lockFile).mtimeMs > LOCK_STALE_MS;
+        } catch (statError) {
+          if (errorCode(statError) !== "ENOENT") throw statError;
+        }
+        if (stale) {
+          fs.rmSync(lockFile, { force: true });
+          continue;
+        }
+        if (Date.now() - startedAt > LOCK_TIMEOUT_MS) {
+          throw new Error("papercuts state is locked; retry shortly");
+        }
+        wait();
       }
     }
-    const sevIdx = args.indexOf("--severity");
-    const severity = sevIdx >= 0 && args[sevIdx + 1] ? args[sevIdx + 1] : "minor";
-    cmdAdd(text, tags, severity);
-    break;
-  }
-  case "list": {
-    const formatIdx = args.indexOf("--format");
-    const format = formatIdx >= 0 && args[formatIdx + 1] ? args[formatIdx + 1] : "json";
-    const openOnly = !args.includes("--all");
-    cmdList(format, openOnly);
-    break;
-  }
-  case "resolve": {
-    const id = args[1];
-    if (!id) {
-      const err = { ok: false, error: { code: "bad_input", message: "Usage: papercuts resolve <id>" } };
-      process.stderr.write(JSON.stringify(err) + "\n");
-      process.exit(65);
+    try {
+      return operation();
+    } finally {
+      fs.rmSync(lockFile, { force: true });
     }
-    cmdResolve(id);
-    break;
-  }
-  case "unresolvable": {
-    const id = args[1];
-    const reason = args.slice(2).join(" ");
-    if (!id || !reason) {
-      const err = { ok: false, error: { code: "bad_input", message: "Usage: papercuts unresolvable <id> <reason>" } };
-      process.stderr.write(JSON.stringify(err) + "\n");
-      process.exit(65);
+  };
+
+  const removeExpired = (records: Papercut[]): Papercut[] => {
+    const live = records.filter((record) => new Date(record.expires).getTime() > now.getTime());
+    if (live.length !== records.length) writeRecords(live);
+    return live;
+  };
+
+  const fingerprint = (record: Pick<Papercut, "repo" | "where" | "why">): string =>
+    `${record.repo}\u0000${normalize(record.where)}\u0000${normalize(record.why)}`;
+
+  const makeId = (record: Pick<Papercut, "repo" | "where" | "why">): string =>
+    `p_${createHash("sha256").update(fingerprint(record)).digest("hex").slice(0, 10)}`;
+
+  const record = (input: RecordInput): { status: "added" | "deduplicated"; record: Papercut } =>
+    withLock(() => {
+      const records = removeExpired(readRecords());
+      const where = requiredText(input.where, "--where");
+      const why = requiredText(input.why, "why");
+      const fix = requiredText(input.fix, "--fix");
+      const candidate: Papercut = {
+        id: makeId({ repo, where, why }),
+        repo,
+        where,
+        why,
+        fix,
+        expires: new Date(now.getTime() + input.ttlMs).toISOString(),
+      };
+      const existingIndex = records.findIndex((item) => fingerprint(item) === fingerprint(candidate));
+      if (existingIndex >= 0) {
+        const existing = records[existingIndex];
+        const updated: Papercut = {
+          ...existing,
+          fix: candidate.fix,
+          expires: new Date(
+            Math.max(new Date(existing.expires).getTime(), new Date(candidate.expires).getTime()),
+          ).toISOString(),
+          seen: (existing.seen ?? 1) + 1,
+        };
+        records[existingIndex] = updated;
+        writeRecords(records);
+        return { status: "deduplicated", record: updated };
+      }
+      records.push(candidate);
+      writeRecords(records);
+      return { status: "added", record: candidate };
+    });
+
+  const list = (): Papercut[] =>
+    withLock(() => removeExpired(readRecords()).sort((left, right) => left.expires.localeCompare(right.expires)));
+
+  const close = (idPrefix: string): Papercut =>
+    withLock(() => {
+      const records = removeExpired(readRecords());
+      const matches = records.filter((record) => record.id.startsWith(idPrefix));
+      if (matches.length === 0) throw new Error(`no open papercut matches "${idPrefix}"`);
+      if (matches.length > 1) throw new Error(`papercut prefix "${idPrefix}" is ambiguous`);
+      const [closed] = matches;
+      writeRecords(records.filter((record) => record.id !== closed.id));
+      return closed;
+    });
+
+  return { record, list, close };
+};
+
+const detectRepositoryName = (): string => {
+  if (process.env.PAPERCUTS_REPO?.trim()) return process.env.PAPERCUTS_REPO.trim();
+  let directory = path.resolve(process.cwd());
+  while (true) {
+    const marker = path.join(directory, ".jj", "repo");
+    if (fs.existsSync(marker)) {
+      if (fs.statSync(marker).isDirectory()) return path.basename(directory);
+      const reference = fs.readFileSync(marker, "utf8").trim();
+      if (reference.length > 0) {
+        const repositoryDirectory = path.resolve(path.dirname(marker), reference);
+        return path.basename(path.dirname(path.dirname(repositoryDirectory)));
+      }
     }
-    cmdUnresolvable(id, reason);
-    break;
+    const parent = path.dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
   }
-  case "clean": {
-    cmdClean();
-    break;
-  }
-  case "schema": {
-    cmdSchema();
-    break;
-  }
-  default: {
-    process.stdout.write(`papercuts — agent complaint box
+  return path.basename(process.cwd()) || "unknown";
+};
+
+const stateFile = path.resolve(
+  process.env.PAPERCUTS_FILE || path.join(os.homedir(), ".local", "state", "papercuts.jsonl"),
+);
+const now = parseNow();
+const api = createApi({ file: stateFile, now, repo: detectRepositoryName() });
+
+const takeOption = (args: string[], name: string): string | null => {
+  const index = args.indexOf(name);
+  if (index < 0) return null;
+  if (args.indexOf(name, index + 1) >= 0) throw new Error(`${name} may only appear once`);
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) throw new Error(`${name} needs a value`);
+  args.splice(index, 2);
+  return value;
+};
+
+const formatRemaining = (milliseconds: number): string => {
+  const hours = Math.max(1, Math.ceil(milliseconds / HOUR_MS));
+  return `${hours}h`;
+};
+
+const printHelp = (): void => {
+  process.stdout.write(`papercuts — short-lived action inbox
 
 Usage:
-  papercuts add [--global] <text> [--tag <tag>] [--severity minor|major|blocker]
-  papercuts list [--global] [--format json|md] [--all]
-  papercuts resolve [--global] <id>
-  papercuts unresolvable [--global] <id> <reason>
-  papercuts clean [--global]
-  papercuts schema
-  papercuts help
+  papercuts add --where <target> --fix <action> [--ttl 24h|3d] <evidence>
+  papercuts list [--format md|json]
+  papercuts close <id>
 
-Flags:
-  --global        use ~/.papercuts.jsonl instead of .papercuts.jsonl
-
-Env:
-  PAPERCUTS_FILE   — path to JSONL file (default: .papercuts.jsonl, or ~/.papercuts.jsonl with --global)
-  PAPERCUTS_AGENT  — agent name (auto-detected)
-  PAPERCUTS_NOW    — ISO timestamp override (for reproducible runs)
+Entries expire automatically. Default TTL is 3d; maximum is 7d.
 `);
-    process.exit(cmd === "help" ? 0 : 2);
+};
+
+const run = (): void => {
+  const [command, ...commandArgs] = process.argv.slice(2);
+  if (!command || command === "help" || command === "--help" || command === "-h") {
+    printHelp();
+    return;
   }
+
+  if (command === "add") {
+    const args = [...commandArgs];
+    const where = takeOption(args, "--where");
+    const fix = takeOption(args, "--fix");
+    const ttl = takeOption(args, "--ttl");
+    if (args.length !== 1) {
+      throw new Error("Usage: papercuts add --where <target> --fix <action> [--ttl 24h|3d] <evidence>");
+    }
+    const result = api.record({ where: requiredText(where, "--where"), why: args[0], fix: requiredText(fix, "--fix"), ttlMs: parseTtl(ttl) });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    return;
+  }
+
+  if (command === "list") {
+    const args = [...commandArgs];
+    const format = takeOption(args, "--format") || "md";
+    if (args.length > 0 || (format !== "md" && format !== "json")) throw new Error("Usage: papercuts list [--format md|json]");
+    const records = api.list();
+    if (format === "json") {
+      process.stdout.write(`${JSON.stringify(records)}\n`);
+      return;
+    }
+    if (records.length === 0) {
+      process.stdout.write("Nothing open.\n");
+      return;
+    }
+    for (const record of records) {
+      const remaining = formatRemaining(new Date(record.expires).getTime() - now.getTime());
+      const recurrence = record.seen ? `; seen ${record.seen}x` : "";
+      process.stdout.write(`- \`${record.id}\` ${record.repo}:${record.where} — ${record.why} → ${record.fix} (expires ${remaining})${recurrence}\n`);
+    }
+    return;
+  }
+
+  if (command === "close") {
+    if (commandArgs.length !== 1) throw new Error("Usage: papercuts close <id>");
+    process.stdout.write(`${JSON.stringify({ closed: api.close(commandArgs[0]).id })}\n`);
+    return;
+  }
+
+  throw new Error(`unknown command "${command}"`);
+};
+
+try {
+  run();
+} catch (error) {
+  process.stderr.write(`papercuts: ${error instanceof Error ? error.message : "unexpected error"}\n`);
+  process.exitCode = 2;
 }

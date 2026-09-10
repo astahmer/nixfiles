@@ -277,22 +277,22 @@ Code should be self-documenting. If a comment is needed to explain WHAT the code
 
 
 <!-- papercuts:start -->
-# Papercuts — file friction when you hit it
+# Papercuts — short-lived action inbox
 
-When you hit friction — a dead-end tool call, a broken link, a misleading doc,
-a footgun config, a missing helper, anything that slows you down — file it
-before moving on:
+Record only concrete, fixable friction with an exact target and next action:
 
-    papercuts add [--global] "<what you hit and what would have prevented it>" --tag <area>
+    papercuts add --where <target> --fix "<next action>" [--ttl 24h|3d] "<observed evidence>"
 
-Severity: `minor` (default) for annoyances, `major` for time sinks, `blocker`
-for hard walls. Don't stop working; filing takes one line.
+Entries expire automatically. Default TTL is 3 days; blockers get 24 hours to be
+promoted to a real task. Otherwise they disappear.
 
-Check open papercuts at the start of each session and fix quick wins:
+Use the tiny lifecycle:
 
     papercuts list --format md
+    papercuts close <id>
 
-See the **papercuts** skill for full command reference.
+Do not log one-off agent mistakes, known baseline failures, or ownerless external
+limitations. See the **papercuts** skill for the admission rules.
 <!-- papercuts:end -->
 
 <!-- rtk-instructions v2 -->
