@@ -313,6 +313,75 @@
           "key": "$OPENCODEX_OPENCODE_GO_MANU_KEY"
         }
       ]
+    },
+    "opencode-go-alex": {
+      "adapter": "openai-chat",
+      "baseUrl": "https://opencode.ai/zen/go/v1",
+      "authMode": "key",
+      "apiKey": "$OPENCODEX_OPENCODE_GO_API_KEY",
+      "defaultModel": "kimi-k2.7-code",
+      "apiKeyPool": [
+        {
+          "id": "670bca3d",
+          "key": "$OPENCODEX_OPENCODE_GO_API_KEY"
+        }
+      ]
+    },
+    "opencode-free": {
+      "adapter": "openai-chat",
+      "baseUrl": "https://opencode.ai/zen/v1",
+      "authMode": "key",
+      "liveModels": true,
+      "modelContextWindows": {
+        "deepseek-v4-flash-vision-exp": 1048576
+      },
+      "modelInputModalities": {
+        "deepseek-v4-flash-vision-exp": [
+          "text",
+          "image"
+        ]
+      },
+      "modelReasoningEfforts": {
+        "deepseek-v4-flash-free": [
+          "low",
+          "high",
+          "max"
+        ]
+      },
+      "modelReasoningEffortMap": {
+        "deepseek-v4-flash-free": {
+          "low": "low",
+          "medium": "high",
+          "high": "high",
+          "xhigh": "high",
+          "max": "max"
+        }
+      },
+      "noVisionModels": [
+        "big-pickle",
+        "nemotron-3-ultra-free",
+        "ling-3.0-flash-free",
+        "north-mini-code-free",
+        "laguna-s-2.1-free",
+        "deepseek-v4-flash-free"
+      ],
+      "preserveReasoningContentModels": [
+        "deepseek-v4-flash-free"
+      ],
+      "keyOptional": true
+    },
+    "opencode-go-mathias": {
+      "adapter": "openai-chat",
+      "baseUrl": "https://opencode.ai/zen/go/v1",
+      "authMode": "key",
+      "apiKey": "$OPENCODEX_OPENCODE_GO_MATHIAS_KEY",
+      "defaultModel": "kimi-k2.7-code",
+      "apiKeyPool": [
+        {
+          "id": "5df27b48",
+          "key": "$OPENCODEX_OPENCODE_GO_MATHIAS_KEY"
+        }
+      ]
     }
   },
   "defaultProvider": "openai",
@@ -320,10 +389,35 @@
   "googleAntigravityStaticCatalogVersion": 2,
   "multiAgentGuidanceEnabled": true,
   "codexShimAutoRestore": true,
+  "accountPoolStrategy": "quota",
+  "codexAccountPickerEnabled": true,
   "codexAccountNamespaces": {
-    "codex-alex2": "@main",
-    "codex-perso": "@main"
+    "codex-perso": "@main",
+    "codex-work": "chatgpt-1786023688396",
+    "codex-alex2": "chatgpt-1788600942946"
   },
+  "codexAccounts": [
+    {
+      "id": "chatgpt-1786023688396",
+      "email": "$OPENCODEX_CODEX_WORK_EMAIL",
+      "plan": "plus",
+      "isMain": false,
+      "logLabel": "pb5d439",
+      "alias": "codex-work",
+      "planSource": "wham",
+      "planCredentialGeneration": 4
+    },
+    {
+      "id": "chatgpt-1788600942946",
+      "email": "$OPENCODEX_CODEX_ALEX2_EMAIL",
+      "plan": "plus",
+      "isMain": false,
+      "logLabel": "paf9132",
+      "alias": "codex-alex2",
+      "planSource": "wham",
+      "planCredentialGeneration": 1
+    }
+  ],
   "subagentModels": [
     "gpt-5.6-luna"
   ],
@@ -356,12 +450,10 @@
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.3-codex-spark",
-    "opencode/glm-5",
     "opencode/glm-5.1",
     "opencode/glm-5.2",
     "opencode/glm-5.3",
     "opencode/grok-4.5",
-    "opencode/hy3",
     "opencode/hy3-preview",
     "opencode/kimi-k2.5",
     "opencode/kimi-k2.6",
@@ -405,7 +497,94 @@
     "opencode-go-manu/qwen3.6-plus",
     "opencode-go-manu/qwen3.7-max",
     "opencode-go-manu/qwen3.7-plus",
-    "opencode-go-manu/qwen3.8-max"
+    "opencode-go-manu/qwen3.8-max",
+    "opencode/glm-5",
+    "opencode/muse-spark-1.2-contributor",
+    "opencode/hy3",
+    "opencode/longcat-2.0",
+    "opencode/deepseek-v4-pro",
+    "opencode/hy4-preview",
+    "opencode/qwen3.8-flash",
+    "opencode-go-alex/deepseek-v4-flash-vision-exp",
+    "opencode-go-alex/deepseek-v4-pro",
+    "opencode-go-alex/glm-5",
+    "opencode-go-alex/glm-5.1",
+    "opencode-go-alex/glm-5.2",
+    "opencode-go-alex/glm-5.3",
+    "opencode-go-alex/grok-4.5",
+    "opencode-go-alex/grok-4.6",
+    "opencode-go-alex/hy3",
+    "opencode-go-alex/hy3-preview",
+    "opencode-go-alex/hy4-preview",
+    "opencode-go-alex/kimi-k2.5",
+    "opencode-go-alex/kimi-k2.6",
+    "opencode-go-alex/kimi-k2.7-code",
+    "opencode-go-alex/kimi-k3",
+    "opencode-go-alex/longcat-2.0",
+    "opencode-go-alex/mimo-v2-omni",
+    "opencode-go-alex/mimo-v2-pro",
+    "opencode-go-alex/mimo-v2.5",
+    "opencode-go-alex/mimo-v2.5-pro",
+    "opencode-go-alex/minimax-m2.5",
+    "opencode-go-alex/minimax-m2.7",
+    "opencode-go-alex/minimax-m3",
+    "opencode-go-alex/muse-spark-1.2-contributor",
+    "opencode-go-alex/muse-spark-1.3-contributor",
+    "opencode-go-alex/omen-alpha",
+    "opencode-go-alex/qwen3.5-plus",
+    "opencode-go-alex/qwen3.6-plus",
+    "opencode-go-alex/qwen3.7-max",
+    "opencode-go-alex/qwen3.7-plus",
+    "opencode-go-alex/qwen3.8-flash",
+    "opencode-go-alex/qwen3.8-max",
+    "opencode-free/nemotron-3.5-lightning-free",
+    "opencode-free/nemotron-3-ultra-free",
+    "opencode-free/muse-spark-1.2-contributor-free",
+    "opencode-free/mimo-v2.5-free",
+    "opencode-free/ling-3.0-flash-fin-free",
+    "opencode-free/laguna-s-2.1-free",
+    "opencode-free/big-pickle",
+    "opencode-go-manu/hy4-preview",
+    "opencode-go-manu/longcat-2.0",
+    "opencode-go-manu/muse-spark-1.2-contributor",
+    "opencode-go-manu/muse-spark-1.3-contributor",
+    "opencode-go-manu/omen-alpha",
+    "opencode-go-manu/qwen3.8-flash",
+    "opencode-go-manu/grok-4.6",
+    "opencode-go-mathias/deepseek-v4-flash",
+    "opencode-go-mathias/deepseek-v4-flash-vision-exp",
+    "opencode-go-mathias/deepseek-v4-pro",
+    "opencode-go-mathias/glm-5",
+    "opencode-go-mathias/glm-5.1",
+    "opencode-go-mathias/glm-5.2",
+    "opencode-go-mathias/glm-5.3",
+    "opencode-go-mathias/gpt-5.6-luna",
+    "opencode-go-mathias/grok-4.5",
+    "opencode-go-mathias/grok-4.6",
+    "opencode-go-mathias/hy3",
+    "opencode-go-mathias/hy3-preview",
+    "opencode-go-mathias/hy4-preview",
+    "opencode-go-mathias/kimi-k2.5",
+    "opencode-go-mathias/kimi-k2.6",
+    "opencode-go-mathias/kimi-k2.7-code",
+    "opencode-go-mathias/kimi-k3",
+    "opencode-go-mathias/longcat-2.0",
+    "opencode-go-mathias/mimo-v2-omni",
+    "opencode-go-mathias/mimo-v2-pro",
+    "opencode-go-mathias/mimo-v2.5",
+    "opencode-go-mathias/mimo-v2.5-pro",
+    "opencode-go-mathias/minimax-m2.5",
+    "opencode-go-mathias/minimax-m2.7",
+    "opencode-go-mathias/minimax-m3",
+    "opencode-go-mathias/muse-spark-1.2-contributor",
+    "opencode-go-mathias/muse-spark-1.3-contributor",
+    "opencode-go-mathias/omen-alpha",
+    "opencode-go-mathias/qwen3.5-plus",
+    "opencode-go-mathias/qwen3.6-plus",
+    "opencode-go-mathias/qwen3.7-max",
+    "opencode-go-mathias/qwen3.7-plus",
+    "opencode-go-mathias/qwen3.8-flash",
+    "opencode-go-mathias/qwen3.8-max"
   ],
   "autoSwitchThreshold": 0
 }

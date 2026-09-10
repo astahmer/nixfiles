@@ -49,8 +49,9 @@
 
         # Primary source: the repo's Bitwarden-backed secret config. This
         # materializes all four provider keys (commandcode, opencode primary,
-        # opencode-go-manu, opencode-go-mathias) so a fresh machine gets the
-        # full runtime config without committing keys to the public repo.
+        # opencode-go-manu, opencode-go-mathias) so a fresh
+        # machine gets the full runtime config without committing keys to the
+        # public repo.
         read_secret() {
           local cfg="''${2:-${secretConfig}}"
           ${pkgs.coreutils}/bin/timeout 8s ${secretBin} get --config "$cfg" "$1" 2>/dev/null || true
@@ -63,7 +64,7 @@
         OPENCODEX_CODEX_WORK_EMAIL="$(read_secret opencodex-codex-work-email)"
 
         # Legacy fallback: ~/.config/opencodex/secrets.env overrides the vault
-        # for the two original keys (e.g. when Bitwarden is locked).
+        # for provider keys explicitly placed there (e.g. when Bitwarden is locked).
         if [ ! -f "$secrets_file" ] && [ -f "$example_file" ]; then
           ${pkgs.coreutils}/bin/cp "$example_file" "$secrets_file"
           ${pkgs.coreutils}/bin/chmod 600 "$secrets_file"
@@ -136,8 +137,9 @@
         # its values win so dashboard and `ocx` edits remain user-owned. Nix
         # still performs the small compatibility/key/selector migrations below.
         if [ -f "$config_file" ]; then
-          ${jq} '
-            . as $current
+          ${jq} --slurpfile template "$config_template" '
+            ($template[0]) as $defaults
+            | . as $current
             | ($current.providers // {}) as $currentProviders
             | ($currentProviders["opencode-go"] // null) as $legacyOpenCode
             | (if (($currentProviders | has("opencode")) | not) and ($legacyOpenCode != null)
@@ -146,6 +148,11 @@
                end) as $base
             | $base
             | del(.providers["opencode-go"])
+            # OpenRouter is intentionally not part of the global setup anymore;
+            # remove its old provider and visibility rows from existing configs.
+            | del(.providers.openrouter)
+            | .disabledModels = (($base.disabledModels // [])
+               | map(select((startswith("openrouter/")) | not)))
             | del(.providers.commandcode.disabled)
             # Selectors must always reach their bound account. Older templates
             # paused __main__ by default and OpenCodex auto-pauses drained
@@ -153,45 +160,83 @@
             # a persisted pause must never defeat the bindings below. Pauses
             # are therefore cleared on every activation (rebuild re-enables).
             | del(.pausedCodexAccountIds)
-            # Resolve pool selectors from private secret aliases, never from
-            # hardcoded account ids or public identity values. Missing aliases
-            # preserve existing runtime bindings and fall back to @main.
-            | (($base.codexAccounts // [])
-               | map(select((env.OPENCODEX_CODEX_ALEX2_EMAIL // "") != ""
-                  and (((.email // "") | ascii_downcase)
-                  == ((env.OPENCODEX_CODEX_ALEX2_EMAIL // "") | ascii_downcase)))) | .[0].id
-               // ($base.codexAccountNamespaces["codex-alex2"] // "@main")) as $alex2Id
-            | (($base.codexAccounts // [])
-               | map(select((env.OPENCODEX_CODEX_WORK_EMAIL // "") != ""
-                  and (((.email // "") | ascii_downcase)
-                  == ((env.OPENCODEX_CODEX_WORK_EMAIL // "") | ascii_downcase)))) | .[0].id
-               // ($base.codexAccountNamespaces["codex-work"] // "@main")) as $workId
+            # Merge the stable account identities from the public template
+            # without deleting extra accounts added through the dashboard.
+            | (($base.codexAccounts // []) as $existingAccounts
+               | ($defaults.codexAccounts // []) as $managedAccounts
+               | .codexAccounts = (
+                   ($managedAccounts | map(
+                     . as $managed
+                     | ($existingAccounts | map(select(.id == $managed.id)) | .[0]) as $existing
+                     | if $existing == null then $managed else ($managed * $existing) end
+                   ))
+                   + ($existingAccounts | map(
+                       . as $existing
+                       | select(($managedAccounts | map(.id) | index($existing.id)) == null)
+                     ))
+                 ))
+            # Account ids are stable provider identities, not machine-local
+            # credential-store ids. The email remains secret-backed below.
+            | .codexAccountPickerEnabled = true
             | .codexAccountNamespaces = (($base.codexAccountNamespaces // {})
-               + {"codex-alex2": $alex2Id, "codex-perso": "@main", "codex-work": $workId})
+               + ($defaults.codexAccountNamespaces // {}))
+            # Seed the complete checked-in model-visibility snapshot only when
+            # an older runtime config has no visibility list. A present list,
+            # including [], is dashboard-owned so UI toggles remain persistent.
+            | if ($base.disabledModels == null)
+              then .disabledModels = ($defaults.disabledModels // [])
+              else .
+              end
           ' "$config_file" > "$candidate_config"
         else
-          ${jq} '
-            .codexAccountNamespaces = {
-              "codex-perso": "@main",
-              "codex-work": "chatgpt-1786023688396",
-              "codex-alex2": "chatgpt-1788600942946"
-            }
-          ' "$config_template" > "$candidate_config"
+          ${pkgs.coreutils}/bin/cp "$config_template" "$candidate_config"
         fi
 
-        # Materialize configured secrets only for providers that exist. With
-        # no secret value, keep the user's existing key fields exactly as-is.
+        # Materialize configured secrets only for providers and accounts that
+        # exist. With no secret value, keep existing values; first-run email
+        # placeholders are removed rather than persisted literally.
         ${jq} '
-          if (env.OPENCODEX_COMMANDCODE_API_KEY // "") != ""
+          if (env.OPENCODEX_CODEX_WORK_EMAIL // "") != ""
+          then .codexAccounts = ((.codexAccounts // []) | map(
+            if .id == "chatgpt-1786023688396"
+            then .email = env.OPENCODEX_CODEX_WORK_EMAIL
+            else .
+            end))
+          elif ((.codexAccounts // []) | any(.[]; .id == "chatgpt-1786023688396" and .email == "$OPENCODEX_CODEX_WORK_EMAIL"))
+          then .codexAccounts = ((.codexAccounts // []) | map(
+            if .id == "chatgpt-1786023688396" then del(.email) else . end))
+          else .
+          end
+          | if (env.OPENCODEX_CODEX_ALEX2_EMAIL // "") != ""
+            then .codexAccounts = ((.codexAccounts // []) | map(
+              if .id == "chatgpt-1788600942946"
+              then .email = env.OPENCODEX_CODEX_ALEX2_EMAIL
+              else .
+              end))
+            elif ((.codexAccounts // []) | any(.[]; .id == "chatgpt-1788600942946" and .email == "$OPENCODEX_CODEX_ALEX2_EMAIL"))
+            then .codexAccounts = ((.codexAccounts // []) | map(
+              if .id == "chatgpt-1788600942946" then del(.email) else . end))
+            else .
+            end
+          | if (env.OPENCODEX_COMMANDCODE_API_KEY // "") != ""
              and ((.providers // {}) | has("commandcode"))
           then .providers.commandcode.apiKey = env.OPENCODEX_COMMANDCODE_API_KEY
              | .providers.commandcode.apiKeyPool[0].key = env.OPENCODEX_COMMANDCODE_API_KEY
           else .
           end
           | if (env.OPENCODEX_OPENCODE_GO_API_KEY // "") != ""
-               and ((.providers // {}) | has("opencode"))
-            then .providers.opencode.apiKey = env.OPENCODEX_OPENCODE_GO_API_KEY
-               | .providers.opencode.apiKeyPool[0].key = env.OPENCODEX_OPENCODE_GO_API_KEY
+               and (((.providers // {}) | has("opencode"))
+                 or ((.providers // {}) | has("opencode-go-alex")))
+            then (if ((.providers // {}) | has("opencode"))
+                  then .providers.opencode.apiKey = env.OPENCODEX_OPENCODE_GO_API_KEY
+                     | .providers.opencode.apiKeyPool[0].key = env.OPENCODEX_OPENCODE_GO_API_KEY
+                  else .
+                  end)
+               | (if ((.providers // {}) | has("opencode-go-alex"))
+                  then .providers["opencode-go-alex"].apiKey = env.OPENCODEX_OPENCODE_GO_API_KEY
+                     | .providers["opencode-go-alex"].apiKeyPool[0].key = env.OPENCODEX_OPENCODE_GO_API_KEY
+                  else .
+                  end)
             else .
             end
           | if (env.OPENCODEX_OPENCODE_GO_MANU_KEY // "") != ""
@@ -207,8 +252,15 @@
             else .
             end
           | if (env.OPENCODEX_OPENCODE_GO_MATHIAS_KEY // "") != ""
-               and ((((.providers.opencode.apiKeyPool // []) | length) > 2))
-            then .providers.opencode.apiKeyPool[2].key = env.OPENCODEX_OPENCODE_GO_MATHIAS_KEY
+            then (if ((.providers // {}) | has("opencode-go-mathias"))
+                  then .providers["opencode-go-mathias"].apiKey = env.OPENCODEX_OPENCODE_GO_MATHIAS_KEY
+                     | .providers["opencode-go-mathias"].apiKeyPool[0].key = env.OPENCODEX_OPENCODE_GO_MATHIAS_KEY
+                  else .
+                  end)
+               | (if ((((.providers.opencode.apiKeyPool // []) | length) > 2))
+                  then .providers.opencode.apiKeyPool[2].key = env.OPENCODEX_OPENCODE_GO_MATHIAS_KEY
+                  else .
+                  end)
             else .
             end
         ' "$candidate_config" > "$candidate_with_secrets"

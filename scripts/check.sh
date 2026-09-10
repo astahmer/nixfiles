@@ -19,6 +19,48 @@ if [ -n "$nix_files" ]; then
   done <<< "$nix_files"
 fi
 
+if command -v jq >/dev/null 2>&1; then
+  jq -e '
+    .accountPoolStrategy == "quota"
+    and .codexAccountPickerEnabled == true
+    and (.providers | keys | contains([
+      "opencode-go-alex",
+      "opencode-free",
+      "opencode-go-mathias"
+    ]))
+    and .providers["opencode-go-alex"].apiKey == "$OPENCODEX_OPENCODE_GO_API_KEY"
+    and .providers["opencode-go-mathias"].apiKey == "$OPENCODEX_OPENCODE_GO_MATHIAS_KEY"
+    and .codexAccountNamespaces == {
+      "codex-perso": "@main",
+      "codex-work": "chatgpt-1786023688396",
+      "codex-alex2": "chatgpt-1788600942946"
+    }
+    and ([.codexAccounts[].id] | sort == [
+      "chatgpt-1786023688396",
+      "chatgpt-1788600942946"
+    ])
+    and ([.codexAccounts[].isMain] | all(. == false))
+    and ([.codexAccounts[].email] | all(startswith("$OPENCODEX_CODEX_")))
+    # This is the checked-in OpenCodex 2.42.0 visibility snapshot for the
+    # configured providers. A catalog refresh that intentionally changes it
+    # should update the template and these assertions together.
+    and (.disabledModels | length == 161)
+    and ((.disabledModels | length) == (.disabledModels | unique | length))
+    and (.disabledModels | index("opencode-go-alex/deepseek-v4-flash-vision-exp") != null)
+    and (.disabledModels | index("opencode-go-manu/gpt-5.6-luna") != null)
+    and (.disabledModels | index("opencode-go-mathias/qwen3.8-max") != null)
+  ' assets/opencodex/config.template.json >/dev/null
+  jq -e '
+    .secrets["opencodex-codex-perso-email"].env == "OPENCODEX_CODEX_PERSO_EMAIL"
+    and .secrets["opencodex-codex-perso-email"].type == "login"
+    and .secrets["opencodex-codex-work-email"].env == "OPENCODEX_CODEX_WORK_EMAIL"
+    and .secrets["opencodex-codex-alex2-email"].env == "OPENCODEX_CODEX_ALEX2_EMAIL"
+  ' .secret.json >/dev/null
+  if command -v ocx >/dev/null 2>&1; then
+    ocx config validate assets/opencodex/config.template.json --json >/dev/null
+  fi
+fi
+
 if command -v ast-grep >/dev/null 2>&1 && command -v oxlint >/dev/null 2>&1; then
   (
     cd assets/.agents/skills/antislop
