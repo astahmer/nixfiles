@@ -234,6 +234,18 @@
       ]
     },
     {
+      "name": "tokitoki",
+      "type": "flake-input",
+      "description": "Pinned Tokitoki source, Bun CLI package, and macOS menu-bar client",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "tokitoki"
+      ]
+    },
+    {
       "name": "hunk",
       "type": "manual",
       "description": "Version, source, and platform npm binary hashes move together",

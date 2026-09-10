@@ -43,6 +43,13 @@
       url = "git+ssh://git@github.com/astahmer/shiftshift-app.git?ref=main";
     };
 
+    # Tokitoki's source flake provides the reproducible Bun/CLI package. The
+    # local Home Manager module below adds secret-backed config and the macOS
+    # menu-bar LaunchAgent on top of that package.
+    tokitoki = {
+      url = "github:astahmer/tokitoki";
+    };
+
   };
 
   outputs =
@@ -117,6 +124,9 @@
             plannotator = pkgs'.callPackage ./packages/plannotator { pkgs = pkgs'; };
             ryu = pkgs'.callPackage ./packages/ryu { };
             secret = pkgs'.callPackage ./packages/secret { };
+            tokitoki = pkgs'.callPackage ./packages/tokitoki {
+              tokitokiSource = inputs.tokitoki;
+            };
             zed = pkgs'.callPackage ./packages/zed { };
           }
           // pkgs.lib.optionalAttrs (system == "aarch64-darwin") {
@@ -141,6 +151,9 @@
                 inherit version;
               };
             t3code-bin = pkgs'.callPackage ./packages/t3code-bin { };
+            tokitoki-menubar = pkgs'.callPackage ./packages/tokitoki-menubar {
+              tokitokiSource = inputs.tokitoki;
+            };
             tidyports = pkgs'.callPackage ./packages/tidyports { };
             tldraw-offline = pkgs'.callPackage ./packages/tldraw-offline { };
             whatsapp-bin = pkgs'.callPackage ./packages/whatsapp-bin { };

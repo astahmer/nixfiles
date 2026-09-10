@@ -265,6 +265,22 @@
         "type": "github"
       }
     },
+    "nixpkgs_5": {
+      "locked": {
+        "lastModified": 1787940818,
+        "narHash": "sha256-vFzVv78WlyEbTyV5BbrnicnV159wC0YPOcBe3QagyBI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f6107e546a5012172d93e79f1f7950da02ad798f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-26.05-darwin",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "qmd": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -293,7 +309,8 @@
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs_2",
         "qmd": "qmd",
-        "shiftshift": "shiftshift"
+        "shiftshift": "shiftshift",
+        "tokitoki": "tokitoki"
       }
     },
     "rust-overlay": {
@@ -380,6 +397,24 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "tokitoki": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_5"
+      },
+      "locked": {
+        "lastModified": 1788900335,
+        "narHash": "sha256-KEhNK6ugoQowcnrG+YycYiZXjRtOivZSzNx0+P0c35w=",
+        "owner": "astahmer",
+        "repo": "tokitoki",
+        "rev": "6674206630a5c63a6be66205a599c2e0ddced899",
+        "type": "github"
+      },
+      "original": {
+        "owner": "astahmer",
+        "repo": "tokitoki",
         "type": "github"
       }
     },

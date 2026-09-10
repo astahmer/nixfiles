@@ -34,6 +34,7 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 - `hosts/macbook/default.nix` wires the standalone Home Manager profile for macOS.
 - `hosts/workstation/default.nix` wires the NixOS host.
 - `assets/.agents/` contains the shared agent contract and skills. Home Manager deploys the skills to `~/.agents/` and the Codex global instructions to `~/.codex/AGENTS.md`, using the same home-relative paths on every machine.
+- `assets/tokitoki/` contains the value-free Tokitoki configuration template; secret-backed runtime projection and macOS startup are documented in [`docs/tokitoki.md`](docs/tokitoki.md).
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.ts` seeds them idempotently after `nixbootstrap` or when the activation hash changes.
 - `assets/readbro/` contains the source for readbro (an IR read-cache MCP); it is currently disabled.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
@@ -65,6 +66,9 @@ The default user is `astahmer`. Change `nixfiles.username` in `modules/global-op
 ### Secrets and MCP credentials
 
 The global `secret` command, project-local `.secret.json` files, Bitwarden, and the explicit `.env` projection flow are documented in [`docs/bitwarden.md`](docs/bitwarden.md). Home Manager does not contact Bitwarden during activation. The full secrets system (backends, biometric cache, leak-guarded `secret run`, CI checks, SecretBar) is documented in [`docs/secrets.md`](docs/secrets.md).
+
+Tokitoki's secret-backed configuration and automatic macOS menu-bar startup are
+documented in [`docs/tokitoki.md`](docs/tokitoki.md).
 
 The ModLens Gemini (AI Studio) key setup — get, store, project, rotate — is
 documented in [`docs/gemini-api-key.md`](docs/gemini-api-key.md).
@@ -123,6 +127,7 @@ Nix invocation directly.
 - `modules/bitwarden.nix` for Bitwarden, `rbw`, and the scoped `secret` CLI; see [`docs/bitwarden.md`](docs/bitwarden.md)
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
 - `modules/opencodex.nix` for `opencodex` (`ocx`) on both macOS and NixOS
+- `modules/tokitoki.nix` for Tokitoki usage analytics, secret-backed quota keys, and the macOS menu-bar LaunchAgent
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
 The coding profile also installs `modlens`, an image-to-structured-evidence CLI for text-only agents, and `modsearch`, its web-search/page-fetch sibling. Their skills are merged into the deployed `~/.agents/skills` tree. Both previously used the Google Antigravity CLI (`agy`) as a no-key provider; that integration was removed because it breached the Antigravity Additional Terms of Service (Section 6 bans using third-party tools against the Service via Antigravity OAuth). Configure a provider API key per tool instead; API keys and credentials stay out of the repository.

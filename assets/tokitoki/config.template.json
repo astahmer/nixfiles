@@ -1,0 +1,114 @@
+{
+  "budgets": {
+    "accounts": {
+      "codex*": {
+        "monthly": 200
+      },
+      "opencode-go": {
+        "monthly": 50
+      },
+      "openai:plus": {
+        "monthly": 200
+      },
+      "default*": {
+        "monthly": 200
+      }
+    },
+    "monthly": 700
+  },
+  "ui": {
+    "hidden": {
+      "dashboard": [],
+      "menubar": [
+        "codex:base_model_inference",
+        "codex:premium",
+        "opencode:opencode",
+        "pi:openai-codex",
+        "pi:opencode-go"
+      ]
+    },
+    "menubarCards": [
+      "limits",
+      "usage",
+      "spend",
+      "harness",
+      "activity",
+      "anomalies",
+      "repos",
+      "tools"
+    ],
+    "previewHidden": [
+      "copilot"
+    ],
+    "menubarAccountOrder": [
+      "codex@openai:plus",
+      "codex@codex:chatgpt-1786023688396",
+      "codex@codex:chatgpt-1788600942946",
+      "claude-code@default",
+      "commandcode@default",
+      "copilot@default",
+      "opencode@opencode-go-mathias",
+      "opencode@opencode-go-manu",
+      "opencode@opencode-go-alex"
+    ],
+    "menubarPreviewMode": "inline",
+    "stripMetric": "smart",
+    "menubarTabs": [
+      "overview",
+      "quotas",
+      "tokens",
+      "reports",
+      "sources",
+      "mcp",
+      "settings"
+    ],
+    "sideNotchEnabled": true,
+    "sideNotchPlacement": "right",
+    "sideNotchEdge": "right",
+    "sideNotchMetric": "percent",
+    "sideNotchMode": "quota",
+    "sideNotchWindow": "smart"
+  },
+  "poll": {
+    "enabled": true,
+    "intervalMinutes": 5,
+    "extraKeys": [
+      {
+        "provider": "opencode-go",
+        "key": "__TOKITOKI_SECRET_OPENCODE_GO_MATHIAS__",
+        "label": "opencode-go-mathias",
+        "id": "opencode-go-mathias"
+      },
+      {
+        "provider": "opencode-go",
+        "key": "__TOKITOKI_SECRET_OPENCODE_GO_MANU__",
+        "label": "opencode-go-manu",
+        "id": "opencode-go-manu"
+      },
+      {
+        "provider": "opencode-go",
+        "key": "__TOKITOKI_SECRET_OPENCODE_GO_ALEX__",
+        "label": "opencode-go-alex",
+        "id": "opencode-go-alex"
+      }
+    ]
+  },
+  "experimental": {
+    "zeroStateCards": true
+  },
+  "notifications": {
+    "burnWarningRatio": 0.8,
+    "disabled": [
+      "budget",
+      "burnRate",
+      "quotaCritical",
+      "quotaReset"
+    ]
+  },
+  "sync": {
+    "backend": "git"
+  },
+  "privacy": {
+    "hideIdentities": false
+  }
+}

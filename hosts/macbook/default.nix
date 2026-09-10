@@ -32,6 +32,7 @@ in
           hm.ryu
           hm.drydock
           hm.opencodex
+          hm.tokitoki
           hm.t3code
           hm.coding
           hm.zed

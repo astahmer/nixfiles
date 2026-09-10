@@ -56,6 +56,22 @@ if command -v jq >/dev/null 2>&1; then
     and .secrets["opencodex-codex-work-email"].env == "OPENCODEX_CODEX_WORK_EMAIL"
     and .secrets["opencodex-codex-alex2-email"].env == "OPENCODEX_CODEX_ALEX2_EMAIL"
   ' .secret.json >/dev/null
+  jq -e '
+    .poll.enabled == true
+    and ([.poll.extraKeys[].id] | sort == [
+      "opencode-go-alex",
+      "opencode-go-manu",
+      "opencode-go-mathias"
+    ])
+    and ([.poll.extraKeys[].provider] | all(. == "opencode-go"))
+    and ([.poll.extraKeys[].key] | sort == [
+      "__TOKITOKI_SECRET_OPENCODE_GO_ALEX__",
+      "__TOKITOKI_SECRET_OPENCODE_GO_MANU__",
+      "__TOKITOKI_SECRET_OPENCODE_GO_MATHIAS__"
+    ])
+    and ((.budgets.accounts // {}) | has("openrouter") | not)
+    and ((.ui.previewHidden // []) | index("openrouter") | not)
+  ' assets/tokitoki/config.template.json >/dev/null
   if command -v ocx >/dev/null 2>&1; then
     ocx config validate assets/opencodex/config.template.json --json >/dev/null
   fi
