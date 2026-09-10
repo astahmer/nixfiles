@@ -33,8 +33,34 @@ Useful checks:
 ```sh
 tokitoki --version
 tokitoki menubar --status
-launchctl print "gui/$(id -u)/dev.tokitoki.menubar"
+launchctl print "gui/$(id -u)/org.nix-community.home.tokitoki"
 ```
+
+## Cross-Mac sync through iCloud Drive
+
+The macOS profile configures Tokitoki's directory sync backend to use:
+
+```text
+~/Library/Mobile Documents/com~apple~CloudDocs/tokitoki
+```
+
+Each Mac writes only its own append-only `<hostname>.jsonl` file. The local
+SQLite cache is never placed in iCloud; it is rebuilt from the local log plus
+the pulled remote log and deduplicates events by stable event id. A second
+Nix-managed LaunchAgent runs `tokitoki sync --backend dir --both` at login and
+every five minutes. If iCloud Drive is not mounted yet, that run exits cleanly
+and waits for the next interval.
+
+One-time setup on each Mac:
+
+1. Enable iCloud Drive and let `com~apple~CloudDocs` appear.
+2. Apply this Home Manager profile (`nh home switch -c macbook`).
+3. Verify `launchctl print "gui/$(id -u)/org.nix-community.home.tokitoki-sync"`.
+4. Force the first round with `tokitoki sync --backend dir --both`.
+
+The two Macs must use the same iCloud account. Do not sync `cache.db`, its WAL
+files, or the whole `~/.local/share/tokitoki` directory; only the per-machine
+JSONL files belong in iCloud.
 
 The Linux profile installs the CLI and configuration path, but does not enable
 the macOS-only native menu-bar client.

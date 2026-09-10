@@ -17,11 +17,22 @@
       secretConfig = "${../.secret.json}";
       configFile = "${config.home.homeDirectory}/.config/tokitoki/config.json";
       configTemplate = "${../assets/tokitoki/config.template.json}";
+      icloudRoot = "${config.home.homeDirectory}/Library/Mobile Documents/com~apple~CloudDocs";
+      icloudSyncDir = "${icloudRoot}/tokitoki";
       jq = "${pkgs.jq}/bin/jq";
       cmp = "${pkgs.diffutils}/bin/cmp";
       menubarLauncher = pkgs.writeShellScript "tokitoki-menubar-launcher" ''
         export TOKITOKI_BIN="${tokitoki}/bin/tokitoki"
         exec "${tokitokiMenubar}/bin/tokitoki-menubar" "$@"
+      '';
+      syncLauncher = pkgs.writeShellScript "tokitoki-sync" ''
+        set -eu
+        icloud_root="${icloudRoot}"
+        if [ ! -d "$icloud_root" ]; then
+          echo "tokitoki-sync: waiting for iCloud Drive at $icloud_root" >&2
+          exit 0
+        fi
+        exec "${tokitoki}/bin/tokitoki" sync --backend dir --both
       '';
     in
     {
@@ -59,7 +70,7 @@
         export TOKITOKI_OPENCODE_GO_MATHIAS TOKITOKI_OPENCODE_GO_MANU TOKITOKI_OPENCODE_GO_ALEX
 
         if [ -f "$config_file" ]; then
-          ${jq} --slurpfile template "$config_template" '
+          ${jq} --arg sync_path "${icloudSyncDir}" --slurpfile template "$config_template" '
             ($template[0].poll.extraKeys // []) as $managed
             | . as $current
             | (($current.poll.extraKeys // []) as $existing
@@ -74,9 +85,19 @@
                     | select(($managed | map(.id) | index($currentKey.id)) == null)
                   ))
                 ))
+            | .sync = (
+                if (.sync // null) == null then
+                  {backend: "dir", path: $sync_path}
+                elif .sync.backend == "git" and ((.sync.url // "") == "") then
+                  {backend: "dir", path: $sync_path}
+                elif .sync.backend == "dir" and ((.sync.path // "") == "") then
+                  .sync + {path: $sync_path}
+                else .sync end
+              )
           ' "$config_file" > "$candidate_config"
         else
-          ${pkgs.coreutils}/bin/cp "$config_template" "$candidate_config"
+          ${jq} --arg sync_path "${icloudSyncDir}" \
+            '.sync.path = $sync_path' "$config_template" > "$candidate_config"
         fi
 
         ${jq} '
@@ -153,6 +174,19 @@
           ProcessType = "Interactive";
           StandardOutPath = "${config.home.homeDirectory}/Library/Logs/tokitoki.log";
           StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/tokitoki.log";
+        };
+      };
+
+      launchd.agents.tokitoki-sync = lib.mkIf isDarwin {
+        enable = true;
+        config = {
+          ProgramArguments = [ "${syncLauncher}" ];
+          RunAtLoad = true;
+          StartInterval = 300;
+          ThrottleInterval = 30;
+          ProcessType = "Background";
+          StandardOutPath = "${config.home.homeDirectory}/Library/Logs/tokitoki-sync.log";
+          StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/tokitoki-sync.log";
         };
       };
     };
