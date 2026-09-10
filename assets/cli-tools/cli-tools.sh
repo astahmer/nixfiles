@@ -71,8 +71,6 @@ list_term() {
   print_row "modsearch" "" "plug-in web search & page fetch for text-only agents"
   print_row "pi-watchdog" "" "RSS timeline for pi agents + auto V8 heap snapshots"
   print_row "calldiff" "" "Call-stack diffs for agentic code review"
-  print_row "openusage" "" "AI usage and quota dashboard for the macOS menu bar"
-  print_row "codexbar" "" "AI provider usage limits in the macOS menu bar"
   print_row "plannotator / nub" "" "Plan review UI + agent utils"
 
   print_section "Languages & runtimes"

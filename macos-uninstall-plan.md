@@ -49,7 +49,7 @@ Pen.dev is a direct-release install and may need a separate manual check.
 ```bash
 for cask in \
   alt-tab background-music caffeine cleanshot discord google-chrome \
-  monitorcontrol openusage raycast shottr slack spotify whatsapp-for-mac \
+  monitorcontrol raycast shottr slack spotify whatsapp-for-mac \
   karabiner-elements orbstack visual-studio-code cursor beekeeper-studio \
   chatgpt claude ghostty linear tldraw recordly t3-code; do
   if brew list --cask --versions "$cask" >/dev/null 2>&1; then
@@ -78,7 +78,7 @@ If `where` shows `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, or any o
 remove that duplicate before relying on the Nix profile.
 
 ```bash
-for bin in bat code codexbar comma cursor deadnix docker ffmpeg fnm fzf gh ghostty htop hyperfine jj jj-starship jjui jq lazydocker ncdu neovim nixd nixfmt orb rg tokei tree tmux uv yt-dlp zed zeditor; do
+for bin in bat code comma cursor deadnix docker ffmpeg fnm fzf gh ghostty htop hyperfine jj jj-starship jjui jq lazydocker ncdu neovim nixd nixfmt orb rg tokei tree tmux uv yt-dlp zed zeditor; do
 	where "$bin"
 done
 ```

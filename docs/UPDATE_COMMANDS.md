@@ -25,6 +25,7 @@ These packages use release archives and the `finalAttrs` pattern:
 
 | Package | Upstream | Update command |
 | --- | --- | --- |
+| `whatsapp-bin` | Official signed WhatsApp desktop DMG | `bash scripts/update-whatsapp.sh` (included in `nixupdateall`) |
 | `codex` | OpenAI Codex release archive | `nix run nixpkgs#nix-update -- --flake codex --use-github-releases --github-releases-limit 100 --version-regex 'rust-v(.*)'` |
 | `iris` | IRIS release archive | `nix run nixpkgs#nix-update -- --flake iris` |
 | `lightjj` | lightjj release binary | `nix run nixpkgs#nix-update -- --flake lightjj` |
@@ -41,7 +42,10 @@ The macOS profile uses prebuilt nixpkgs packages for Raycast, Google Chrome,
 Slack, Spotify, VS Code, Cursor, OrbStack, MonitorControl, Beekeeper Studio,
 ChatGPT, Linear, and Ghostty (`ghostty-bin`). Discord uses the pinned signed
 upstream DMG in `discord-bin` because the nixpkgs package reconstructs its
-bundle and Gatekeeper rejects it. Update nixpkgs-managed apps by updating the
+bundle and Gatekeeper rejects it. WhatsApp uses the pinned signed official DMG
+in `whatsapp-bin` because the nixpkgs package can lag WhatsApp's expiry
+window. `nixupdateall` resolves and verifies the official WhatsApp DMG through
+`scripts/update-whatsapp.sh`. Update nixpkgs-managed apps by updating the
 `nixpkgs` flake input; update `discord-bin` as a manual package. Do not add
 separate Homebrew installs. Their bundles are linked once into `~/Applications`,
 while the profile keeps only the CLI launchers needed by the shell.
@@ -49,8 +53,10 @@ while the profile keeps only the CLI launchers needed by the shell.
 ## Manual package updates
 
 `hunk`, `opencodex`, `plannotator`, `ghui`, `modlens`, `modsearch`,
-`claude-desktop`, `discord-bin`, `pen-dev`, `recordly`, `t3code-bin`, and
-`tldraw-offline` remain in the registry as disabled manual entries. The GUI
+`claude-desktop`, `discord-bin`, `pen-dev`, `recordly`, `t3code-bin`,
+`tldraw-offline` remain in the registry as disabled manual entries.
+`pi-packages` is also manual because its package.json, npm lockfile,
+the exact settings pins, and `npmDepsHash` must move together. The GUI
 packages pin upstream release archives and app-bundle names; Claude also pins
 a build revision. Update those values together, then run the package build and
 `--validate fast`. ModLens updates must verify both npm tarballs, the published

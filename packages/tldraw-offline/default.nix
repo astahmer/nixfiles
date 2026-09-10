@@ -7,11 +7,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "tldraw-offline";
-  version = "1.16.0";
+  version = "1.18.0";
 
   src = fetchurl {
     url = "https://github.com/tldraw/tldraw-offline/releases/download/v${finalAttrs.version}/tldraw-offline-mac-arm64.zip";
-    hash = "sha256-uaMtCeYCzBMFn15cAeTCIQn0OZ79Yh9Hjt4rthRwID0=";
+    hash = "sha256-ftiURihYJgcb8A5SPrk0/OMI0tvkOpxeH802W89weVE=";
   };
 
   strictDeps = true;

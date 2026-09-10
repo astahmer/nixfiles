@@ -2996,10 +2996,10 @@ private struct SecretBarMenuBarApp: App {
     @StateObject private var model = SecretBarModel.shared
 
     var body: some Scene {
-        // The status item owns the only user-facing panel in this mode. An
-        // empty Settings scene keeps SwiftUI's App contract without creating
-        // the optional main window.
-        Settings { EmptyView() }
+        // The status item owns the only user-facing panel in this mode. The
+        // empty scene keeps SwiftUI's App contract without registering a
+        // Settings scene, whose default window can appear unexpectedly.
+        _EmptyScene()
     }
 }
 

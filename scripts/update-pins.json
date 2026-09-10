@@ -36,24 +36,6 @@
       ]
     },
     {
-      "name": "codexbar",
-      "type": "nix-update",
-      "description": "CodexBar macOS menu bar app release archive",
-      "command": [
-        "nix",
-        "run",
-        "nixpkgs#nix-update",
-        "--",
-        "--flake",
-        "codexbar",
-        "--use-github-releases",
-        "--github-releases-limit",
-        "100",
-        "--version-regex",
-        "v(.*)"
-      ]
-    },
-    {
       "name": "discord-bin",
       "type": "manual",
       "description": "Discord signed macOS DMG release archive",
@@ -68,6 +50,19 @@
         "--",
         "--flake",
         "discord-bin"
+      ]
+    },
+    {
+      "name": "whatsapp-bin",
+      "type": "official-binary",
+      "description": "Resolve, pin, build, and verify the official WhatsApp DMG",
+      "enabled": true,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "bash",
+        "scripts/update-whatsapp.sh"
       ]
     },
     {
@@ -395,6 +390,24 @@
         "--flake",
         "tldraw-offline",
         "--use-github-releases"
+      ]
+    },
+    {
+      "name": "pi-packages",
+      "type": "manual",
+      "description": "Pi extension package pins, npm lockfile, and npmDepsHash move together",
+      "enabled": false,
+      "systems": [
+        "aarch64-darwin"
+      ],
+      "command": [
+        "npm",
+        "install",
+        "--package-lock-only",
+        "--ignore-scripts",
+        "--legacy-peer-deps",
+        "--prefix",
+        "assets/pi/npm"
       ]
     }
   ],

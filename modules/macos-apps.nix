@@ -8,7 +8,6 @@
       ...
     }:
     let
-      codexbar = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.codexbar;
       crisp = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.crisp;
       thaw = pkgs.thaw;
       notunes = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.notunes;
@@ -20,6 +19,7 @@
       recordly = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.recordly;
       t3codeBin = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.t3code-bin;
       tldrawOffline = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tldraw-offline;
+      whatsappBin = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.whatsapp-bin;
       zed = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.zed;
       googleChrome = pkgs."google-chrome";
       visualStudioCode = pkgs.vscode;
@@ -35,9 +35,6 @@
       orbCli = pkgs.writeShellScriptBin "orb" ''
         exec "${pkgs.orbstack}/bin/orb" "$@"
       '';
-      codexbarCli = pkgs.writeShellScriptBin "codexbar" ''
-        exec "${codexbar}/bin/codexbar" "$@"
-      '';
       zedCli = pkgs.writeShellScriptBin "zed" ''
         exec "${zed}/bin/zed" "$@"
       '';
@@ -45,7 +42,7 @@
         exec "${zed}/bin/zeditor" "$@"
       '';
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
-        /usr/bin/pkill -TERM -f '/Applications/SecretBar.app/Contents/MacOS/secretbar' 2>/dev/null || true
+        /usr/bin/pkill -TERM -f '/SecretBar\.app/Contents/MacOS/secretbar' 2>/dev/null || true
         /bin/sleep 1
         # SECRETBAR_AUTOSTART makes the app hide its window after launch; it
         # is a background resident at login/activation time only.
@@ -101,6 +98,10 @@
         fi
       '';
 
+      home.activation.clearSecretbarSettingsWindowFrame = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        $DRY_RUN_CMD /usr/bin/defaults delete dev.astahmer.secretbar "NSWindow Frame com_apple_SwiftUI_Settings_window" 2>/dev/null || true
+      '';
+
       # App linking (targets.darwin.linkApps/copyApps) is disabled at
       # stateVersion 25.11, so link app bundles into ~/Applications
       # explicitly. GUI packages stay out of home.packages; otherwise Raycast
@@ -128,13 +129,10 @@
       home.file."Applications/Recordly.app".source = "${recordly}/Applications/Recordly.app";
       home.file."Applications/T3 Code (Alpha).app".source =
         "${t3codeBin}/Applications/T3 Code (Alpha).app";
-      home.file."Applications/WhatsApp.app".source =
-        "${pkgs."whatsapp-for-mac"}/Applications/WhatsApp.app";
+      home.file."Applications/WhatsApp.app".source = "${whatsappBin}/Applications/WhatsApp.app";
       home.file."Applications/Shottr.app".source = "${pkgs.shottr}/Applications/Shottr.app";
       home.file."Applications/AltTab.app".source = "${pkgs."alt-tab-macos"}/Applications/AltTab.app";
-      home.file."Applications/OpenUsage.app".source = "${pkgs.openusage}/Applications/OpenUsage.app";
       home.file."Applications/Ghostty.app".source = "${ghosttyBin}/Applications/Ghostty.app";
-      home.file."Applications/CodexBar.app".source = "${codexbar}/Applications/CodexBar.app";
       home.file."Applications/Crisp.app".source = "${crisp}/Applications/Crisp.app";
       home.file."Applications/Thaw.app".source = "${thaw}/Applications/Thaw.app";
       home.file."Applications/noTunes.app".source = "${notunes}/Applications/noTunes.app";
@@ -185,7 +183,6 @@
       home.packages = [
         cursorCli
         orbCli
-        codexbarCli
         zedCli
         zeditorCli
       ];
