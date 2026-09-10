@@ -21,10 +21,6 @@
       icloudSyncDir = "${icloudRoot}/tokitoki";
       jq = "${pkgs.jq}/bin/jq";
       cmp = "${pkgs.diffutils}/bin/cmp";
-      menubarLauncher = pkgs.writeShellScript "tokitoki-menubar-launcher" ''
-        export TOKITOKI_BIN="${tokitoki}/bin/tokitoki"
-        exec "${tokitokiMenubar}/bin/tokitoki-menubar" "$@"
-      '';
       syncLauncher = pkgs.writeShellScript "tokitoki-sync" ''
         set -eu
         icloud_root="${icloudRoot}"
@@ -34,6 +30,39 @@
         fi
         exec "${tokitoki}/bin/tokitoki" sync --backend dir --both
       '';
+      menubarLabel = "org.nix-community.home.tokitoki";
+      syncLabel = "org.nix-community.home.tokitoki-sync";
+      menubarPlist = pkgs.writeText "${menubarLabel}.plist" (
+        lib.generators.toPlist { escape = true; } {
+          Label = menubarLabel;
+          ProgramArguments = [ "${tokitokiMenubar}/bin/tokitoki-menubar" ];
+          EnvironmentVariables = {
+            TOKITOKI_BIN = "${tokitoki}/bin/tokitoki";
+          };
+          RunAtLoad = true;
+          KeepAlive = true;
+          ThrottleInterval = 5;
+          ProcessType = "Interactive";
+          StandardOutPath = "${config.home.homeDirectory}/Library/Logs/tokitoki.log";
+          StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/tokitoki.log";
+        }
+      );
+      syncPlist = pkgs.writeText "${syncLabel}.plist" (
+        lib.generators.toPlist { escape = true; } {
+          Label = syncLabel;
+          ProgramArguments = [
+            "/bin/sh"
+            "-c"
+            "/bin/wait4path /nix/store && exec ${lib.escapeShellArgs [ "${syncLauncher}" ]}"
+          ];
+          RunAtLoad = true;
+          StartInterval = 300;
+          ThrottleInterval = 30;
+          ProcessType = "Background";
+          StandardOutPath = "${config.home.homeDirectory}/Library/Logs/tokitoki-sync.log";
+          StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/tokitoki-sync.log";
+        }
+      );
     in
     {
       home.packages = [ tokitoki ] ++ lib.optionals isDarwin [ tokitokiMenubar ];
@@ -164,30 +193,42 @@
         ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$candidate_with_secrets" "$current_sorted" "$candidate_sorted"
       '';
 
-      launchd.agents.tokitoki = lib.mkIf isDarwin {
-        enable = true;
-        config = {
-          ProgramArguments = [ "${menubarLauncher}" ];
-          RunAtLoad = true;
-          KeepAlive = true;
-          ThrottleInterval = 5;
-          ProcessType = "Interactive";
-          StandardOutPath = "${config.home.homeDirectory}/Library/Logs/tokitoki.log";
-          StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/tokitoki.log";
-        };
-      };
+      home.activation.tokitokiLaunchd = lib.mkIf isDarwin (
+        lib.hm.dag.entryAfter [ "tokitokiConfig" ] ''
+          agents_dir="${config.home.homeDirectory}/Library/LaunchAgents"
+          uid="$(/usr/bin/id -u)"
+          ${pkgs.coreutils}/bin/mkdir -p "$agents_dir"
 
-      launchd.agents.tokitoki-sync = lib.mkIf isDarwin {
-        enable = true;
-        config = {
-          ProgramArguments = [ "${syncLauncher}" ];
-          RunAtLoad = true;
-          StartInterval = 300;
-          ThrottleInterval = 30;
-          ProcessType = "Background";
-          StandardOutPath = "${config.home.homeDirectory}/Library/Logs/tokitoki-sync.log";
-          StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/tokitoki-sync.log";
-        };
-      };
+          bootout_agent() {
+            /bin/launchctl bootout "gui/$uid/$1" >/dev/null 2>&1 || true
+          }
+
+          install_agent() {
+            label="$1"
+            source="$2"
+            destination="$agents_dir/$label.plist"
+            bootout_agent "$label"
+            ${pkgs.coreutils}/bin/install -m 600 "$source" "$destination.next.$$"
+            ${pkgs.coreutils}/bin/mv -f "$destination.next.$$" "$destination"
+            /bin/launchctl bootstrap "gui/$uid" "$destination"
+          }
+
+          # Replace the legacy hand-installed agent so it cannot run beside
+          # the Nix-managed process or resurrect itself at the next login.
+          legacy_label="dev.tokitoki.menubar"
+          legacy_plist="$agents_dir/$legacy_label.plist"
+          if [ -e "$legacy_plist" ]; then
+            bootout_agent "$legacy_label"
+            legacy_backup="$legacy_plist.hm-backup"
+            if [ -e "$legacy_backup" ]; then
+              legacy_backup="$legacy_plist.hm-backup.$(/bin/date +%Y%m%d%H%M%S)"
+            fi
+            ${pkgs.coreutils}/bin/mv "$legacy_plist" "$legacy_backup"
+          fi
+
+          install_agent "${menubarLabel}" "${menubarPlist}"
+          install_agent "${syncLabel}" "${syncPlist}"
+        ''
+      );
     };
 }

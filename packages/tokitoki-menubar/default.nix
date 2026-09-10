@@ -44,6 +44,16 @@ stdenv.mkDerivation {
     runHook postInstall
   '';
 
+  # nixpkgs' Swift toolchain may link stdlib dylibs from its own corelibs
+  # store runtime. macOS kills this GUI binary during launchd startup when
+  # those libraries are mixed with the system Swift runtime, so repoint the
+  # store dylibs to the ABI-compatible dyld-cache copies.
+  postFixup = lib.optionalString stdenv.hostPlatform.isDarwin ''
+    for dylib in $(/usr/bin/otool -L "$out/bin/tokitoki-menubar" | awk '/\/nix\/store\/.*\/lib\/swift\// { print $1 }'); do
+      /usr/bin/install_name_tool -change "$dylib" "/usr/lib/swift/$(basename "$dylib")" "$out/bin/tokitoki-menubar"
+    done
+  '';
+
   meta = {
     description = "Tokitoki macOS menu-bar client";
     homepage = "https://github.com/astahmer/tokitoki";
