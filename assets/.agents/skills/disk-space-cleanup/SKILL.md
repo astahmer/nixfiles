@@ -82,3 +82,21 @@ df -h /            # host free space
 du -sh <cleaned paths>
 docker --context <ctx> ps   # everything still running?
 ```
+
+
+## Nix store maintenance
+
+Run this occasionally—monthly, or when the Nix store has grown unusually
+large—to remove old profile generations, collect unreachable paths, and
+deduplicate the remaining store. The first command is intentionally first:
+deleting old generations can make more paths collectible.
+
+```bash
+# Remove generations older than seven days and collect what becomes unreachable.
+sudo nix-collect-garbage --delete-older-than 7d
+
+# Run an explicit store GC with the feature enabled for the elevated Nix command.
+sudo nix --extra-experimental-features nix-command store gc
+
+# Deduplicate identical files in the remaining store (can be CPU/IO intensive).
+sudo nix --extra-experimental-features nix-command store optimise
