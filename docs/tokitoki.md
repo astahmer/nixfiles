@@ -32,9 +32,14 @@ Useful checks:
 
 ```sh
 tokitoki --version
-tokitoki menubar --status
+tokitoki-status
+tokitoki-restart
 launchctl print "gui/$(id -u)/org.nix-community.home.tokitoki"
 ```
+
+`tokitoki-restart` uses the Nix-managed launchd job, so it starts or restarts
+the menu bar process. The upstream `tokitoki menubar --status` command checks
+Tokitoki's legacy self-managed launchd label and is not authoritative here.
 
 ## Cross-Mac sync through iCloud Drive
 

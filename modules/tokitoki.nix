@@ -67,6 +67,11 @@
     {
       home.packages = [ tokitoki ] ++ lib.optionals isDarwin [ tokitokiMenubar ];
 
+      home.shellAliases = lib.mkIf isDarwin {
+        tokitoki-status = "launchctl print \"gui/$(id -u)/org.nix-community.home.tokitoki\"";
+        tokitoki-restart = "launchctl kickstart -k \"gui/$(id -u)/org.nix-community.home.tokitoki\"";
+      };
+
       home.activation.tokitokiConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         config_dir="${config.home.homeDirectory}/.config/tokitoki"
         config_file="${configFile}"
