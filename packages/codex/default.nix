@@ -21,12 +21,26 @@ let
       };
     }
     .${system} or (throw "Unsupported platform for codex: ${system}");
+  codeModeHostSourceFor =
+    system: version:
+    {
+      aarch64-darwin = {
+        url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-code-mode-host-aarch64-apple-darwin.tar.gz";
+        hash = "sha256-UA7ioC6lmK5RkFLn19jiAdHbAZhvMMIU70FDZF3Ib60=";
+      };
+      x86_64-linux = {
+        url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz";
+        hash = "sha256-po33zKI8bafN4XVnfffeYcc6I0rdEzOhJUuG1kGvAfc=";
+      };
+    }
+    .${system} or (throw "Unsupported platform for codex: ${system}");
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "codex";
   version = "0.154.0";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
+  codeModeHostSrc = fetchurl (codeModeHostSourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";
 
   nativeBuildInputs = [
@@ -38,6 +52,9 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook preInstall
 
     install -Dm755 codex-* "$out/bin/codex"
+    tar -xzf "${finalAttrs.codeModeHostSrc}" -C "$out/bin"
+    mv "$out/bin"/codex-code-mode-host-* "$out/bin/codex-code-mode-host"
+    chmod 755 "$out/bin/codex-code-mode-host"
     wrapProgram "$out/bin/codex" --prefix PATH : ${
       lib.makeBinPath ([ ripgrep ] ++ lib.optionals stdenvNoCC.hostPlatform.isLinux [ bubblewrap ])
     }
