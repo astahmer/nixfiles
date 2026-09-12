@@ -1,10 +1,7 @@
 { stdenvNoCC, tokitokiSource }:
 
 let
-  upstream =
-    (tokitokiSource.packages.${stdenvNoCC.hostPlatform.system}.default).overrideAttrs (oldAttrs: {
-      patches = (oldAttrs.patches or [ ]) ++ [ ./fix-native-codex-email.patch ];
-    });
+  upstream = tokitokiSource.packages.${stdenvNoCC.hostPlatform.system}.default;
   packageJson = builtins.fromJSON (builtins.readFile "${tokitokiSource}/package.json");
 in
 # Keep the package exposed from this flake while delegating the reproducible

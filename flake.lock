@@ -405,11 +405,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1789061493,
-        "narHash": "sha256-7s+LRzbBZL9s3EXhGGzUgrVlLhZZ969KS3Uq6rk+5qk=",
+        "lastModified": 1789378849,
+        "narHash": "sha256-4IfgcZnJG6gTrMA6sg4P1JqsxD2nB3DWI1y37t6FbWo=",
         "owner": "astahmer",
         "repo": "tokitoki",
-        "rev": "87561186bcd81cf033ec37332cfbb5dfeb4e2d9a",
+        "rev": "99245f7fbd8bf6f693a5a306e04c0f81f3baf0d6",
         "type": "github"
       },
       "original": {

@@ -80,6 +80,10 @@ let
     src = rustSrc;
     sourceRoot = "shiftshift-src/src-tauri";
 
+    # Tauri's CLI enables the dependency feature that switches codegen from
+    # dev mode to the custom protocol used for embedded frontend assets.
+    cargoBuildFlags = [ "--features" "tauri/custom-protocol" ];
+
     cargoLock.lockFile = "${shiftshiftSource}/src-tauri/Cargo.lock";
     nativeBuildInputs = [
       shiftPkgs.perl

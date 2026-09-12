@@ -1,6 +1,0 @@
-diff --git a/src/cli.ts b/src/cli.ts
---- a/src/cli.ts
-+++ b/src/cli.ts
-@@ -2495,1 +2495,1 @@
--        if (l.provider !== "codex") return l;
-+        if (l.provider !== "codex" || !l.accountKey.startsWith("codex:")) return l;

@@ -9,6 +9,7 @@
     }:
     let
       system = pkgs.stdenv.hostPlatform.system;
+      isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
       shiftshift = inputs.self.packages.${system}.shiftshift;
       configTemplate = ../assets/shiftshift/config.json;
       appDataDir = "${config.home.homeDirectory}/Library/Application Support/dev.shiftshift.tauri";
@@ -20,6 +21,11 @@
       # macosApps copies the GUI bundle into ~/Applications; expose only the
       # CLI here so app discovery does not see the same bundle twice.
       home.packages = [ shiftCli ];
+
+      home.shellAliases = lib.mkIf isDarwin {
+        shiftshift-status = "launchctl print \"gui/$(id -u)/shiftshift\"";
+        shiftshift-restart = "launchctl kickstart -k \"gui/$(id -u)/shiftshift\"";
+      };
 
       # The app writes these files itself, so a home.file symlink would make
       # settings writes target the read-only Nix store. Seed each file once
