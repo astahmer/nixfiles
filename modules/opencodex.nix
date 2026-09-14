@@ -47,6 +47,27 @@
         export PATH="${pkgs.bun}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${gettext}:${pkgs.jq}/bin:/usr/bin:/bin:$PATH"
         ${pkgs.coreutils}/bin/mkdir -p "$opencodex_home" "$secrets_dir"
 
+        # ${secretBin} is the raw CLI: unlike the `secret` shell alias from
+        # the bitwarden module, it does not recover a Keychain-stored
+        # Bitwarden session on its own. Activation runs outside that
+        # interactive shell, so recover the same way here or every lookup
+        # below silently returns empty.
+        if [ -z "''${BW_SESSION:-}" ]; then
+          # Keychain access can transiently fail right after the profile
+          # swap above; a couple of retries smooths over that race instead
+          # of silently leaving every secret lookup below empty.
+          stored_bw_session=""
+          keychain_attempt=1
+          while [ -z "$stored_bw_session" ] && [ "$keychain_attempt" -le 3 ]; do
+            stored_bw_session="$(${pkgs.coreutils}/bin/timeout 5s /usr/bin/security find-generic-password -a bitwarden-session -s secret-cli -w 2>/dev/null || true)"
+            [ -n "$stored_bw_session" ] || ${pkgs.coreutils}/bin/sleep 1
+            keychain_attempt=$((keychain_attempt + 1))
+          done
+          if [ -n "$stored_bw_session" ]; then
+            export BW_SESSION="$stored_bw_session"
+          fi
+        fi
+
         # Primary source: the repo's Bitwarden-backed secret config. This
         # materializes all four provider keys (commandcode, opencode primary,
         # opencode-go-manu, opencode-go-mathias) so a fresh
