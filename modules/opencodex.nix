@@ -164,6 +164,10 @@
         # still performs the small compatibility/key/selector migrations below.
         if [ -f "$config_file" ]; then
           ${jq} --slurpfile template "$config_template" '
+            def is_removed_gpt_model:
+              type == "string"
+              and test("(^|/)gpt-[^-]+-(astra|sol|terra)([-:]|$)"; "i");
+
             ($template[0]) as $defaults
             | . as $current
             | ($current.providers // {}) as $currentProviders
@@ -184,8 +188,25 @@
             # OpenRouter is intentionally not part of the global setup anymore;
             # remove its old provider and visibility rows from existing configs.
             | del(.providers.openrouter)
+            | .subagentModels = (($base.subagentModels // [])
+               | map(select((is_removed_gpt_model | not))))
+            | if ($base.customModels != null)
+              then .customModels = ($base.customModels
+                | map(select(((.modelId // "") | is_removed_gpt_model | not))))
+              else .
+              end
             | .disabledModels = (($base.disabledModels // [])
-               | map(select((startswith("openrouter/")) | not)))
+               | map(select((startswith("openrouter/") or is_removed_gpt_model) | not)))
+            | if ($base.modelDiscovery != null)
+              then .modelDiscovery.knownModels = (($base.modelDiscovery.knownModels // {})
+                | with_entries(
+                    if (.value.ids? | type) == "array"
+                    then .value.ids |= map(select((is_removed_gpt_model | not)))
+                    else .
+                    end
+                  ))
+              else .
+              end
             | del(.providers.commandcode.disabled)
             # Selectors must always reach their bound account. Older templates
             # paused __main__ by default and OpenCodex auto-pauses drained
