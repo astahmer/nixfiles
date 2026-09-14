@@ -6,11 +6,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "whatsapp-bin";
-  version = "2.26.36.18";
+  version = "2.26.37.15";
 
   src = fetchurl {
     url = "https://web.whatsapp.com/desktop/mac_native/release/?version=${finalAttrs.version}&extension=dmg&configuration=Release&branch=master";
-    hash = "sha256-SxBqAF+dYTqfojU+1vaWol3XToYDDbDSWmlH+dE6kwM=";
+    hash = "sha256-w436EaI1GlIs4dUMnEsVECXFWAHZlnh5bH3dynuNrVQ=";
   };
 
   dontUnpack = true;
