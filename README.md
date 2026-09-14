@@ -56,8 +56,14 @@ EOF
 ```bash
 # 2) Point the stable flake symlink at this clone, then apply
 ln -sfn "$(pwd)" ~/.config/nixfiles
+nix run ~/.config/nixfiles#configure-nix-cache
 nh home switch . -c macbook -b hm-backup
 ```
+
+The cache setup asks for the macOS administrator password once. It configures
+the Nix daemon to use the Numtide, devenv, and Cachix binary caches, enables
+parallel jobs, and makes the extra cache keys trusted. Rerun the command after
+changing Nix daemon settings or moving to a new machine; it is idempotent.
 
 After that, `nixapply` works from any directory (`NH_FLAKE=~/.config/nixfiles`).
 
