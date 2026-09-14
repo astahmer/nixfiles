@@ -167,23 +167,6 @@
             # a persisted pause must never defeat the bindings below. Pauses
             # are therefore cleared on every activation (rebuild re-enables).
             | del(.pausedCodexAccountIds)
-            # Merge the stable account identities from the public template
-            # without deleting extra accounts added through the dashboard.
-            | (($base.codexAccounts // []) as $existingAccounts
-               | ($defaults.codexAccounts // []) as $managedAccounts
-               | .codexAccounts = (
-                   ($managedAccounts | map(
-                     . as $managed
-                     | ($existingAccounts | map(select(.id == $managed.id)) | .[0]) as $existing
-                     | if $existing == null then $managed else ($managed * $existing) end
-                   ))
-                   + ($existingAccounts | map(
-                       . as $existing
-                       | select(($managedAccounts | map(.id) | index($existing.id)) == null)
-                     ))
-                 ))
-            # Account ids are stable provider identities, not machine-local
-            # credential-store ids. The email remains secret-backed below.
             | .codexAccountPickerEnabled = true
             | .codexAccountNamespaces = (($base.codexAccountNamespaces // {})
                + ($defaults.codexAccountNamespaces // {}))
@@ -200,31 +183,27 @@
         fi
 
         # Materialize configured secrets only for providers and accounts that
-        # exist. With no secret value, keep existing values; first-run email
-        # placeholders are removed rather than persisted literally.
+        # exist. With no secret value, keep existing values.
         ${jq} '
-          if (env.OPENCODEX_CODEX_WORK_EMAIL // "") != ""
-          then .codexAccounts = ((.codexAccounts // []) | map(
-            if .id == "chatgpt-1786023688396"
-            then .email = env.OPENCODEX_CODEX_WORK_EMAIL
-            else .
-            end))
-          elif ((.codexAccounts // []) | any(.[]; .id == "chatgpt-1786023688396" and .email == "$OPENCODEX_CODEX_WORK_EMAIL"))
-          then .codexAccounts = ((.codexAccounts // []) | map(
-            if .id == "chatgpt-1786023688396" then del(.email) else . end))
-          else .
-          end
-          | if (env.OPENCODEX_CODEX_ALEX2_EMAIL // "") != ""
-            then .codexAccounts = ((.codexAccounts // []) | map(
-              if .id == "chatgpt-1788600942946"
-              then .email = env.OPENCODEX_CODEX_ALEX2_EMAIL
-              else .
-              end))
-            elif ((.codexAccounts // []) | any(.[]; .id == "chatgpt-1788600942946" and .email == "$OPENCODEX_CODEX_ALEX2_EMAIL"))
-            then .codexAccounts = ((.codexAccounts // []) | map(
-              if .id == "chatgpt-1788600942946" then del(.email) else . end))
-            else .
-            end
+          # Label whichever live account currently owns each known email,
+          # rather than a hardcoded chatgpt-<id>: ocx mints a fresh id on
+          # every browser re-auth, and ids differ per machine entirely.
+          # This self-heals after a re-login or on a new machine, as soon
+          # as an account with that email exists.
+          (if (env.OPENCODEX_CODEX_WORK_EMAIL // "") != ""
+           then .codexAccounts = ((.codexAccounts // []) | map(
+                  if .email == env.OPENCODEX_CODEX_WORK_EMAIL then . + {alias: "codex-work"} else . end
+                ))
+              | (((.codexAccounts // []) | map(select(.email == env.OPENCODEX_CODEX_WORK_EMAIL)) | .[0].id) // null) as $workId
+              | if $workId != null then .codexAccountNamespaces["codex-work"] = $workId else . end
+           else . end)
+          | (if (env.OPENCODEX_CODEX_ALEX2_EMAIL // "") != ""
+             then .codexAccounts = ((.codexAccounts // []) | map(
+                    if .email == env.OPENCODEX_CODEX_ALEX2_EMAIL then . + {alias: "codex-alex2"} else . end
+                  ))
+                | (((.codexAccounts // []) | map(select(.email == env.OPENCODEX_CODEX_ALEX2_EMAIL)) | .[0].id) // null) as $alex2Id
+                | if $alex2Id != null then .codexAccountNamespaces["codex-alex2"] = $alex2Id else . end
+             else . end)
           | if (env.OPENCODEX_COMMANDCODE_API_KEY // "") != ""
              and ((.providers // {}) | has("commandcode"))
           then .providers.commandcode.apiKey = env.OPENCODEX_COMMANDCODE_API_KEY

@@ -392,32 +392,8 @@
   "accountPoolStrategy": "quota",
   "codexAccountPickerEnabled": true,
   "codexAccountNamespaces": {
-    "codex-perso": "@main",
-    "codex-work": "chatgpt-1786023688396",
-    "codex-alex2": "chatgpt-1788600942946"
+    "codex-perso": "@main"
   },
-  "codexAccounts": [
-    {
-      "id": "chatgpt-1786023688396",
-      "email": "$OPENCODEX_CODEX_WORK_EMAIL",
-      "plan": "plus",
-      "isMain": false,
-      "logLabel": "pb5d439",
-      "alias": "codex-work",
-      "planSource": "wham",
-      "planCredentialGeneration": 4
-    },
-    {
-      "id": "chatgpt-1788600942946",
-      "email": "$OPENCODEX_CODEX_ALEX2_EMAIL",
-      "plan": "plus",
-      "isMain": false,
-      "logLabel": "paf9132",
-      "alias": "codex-alex2",
-      "planSource": "wham",
-      "planCredentialGeneration": 1
-    }
-  ],
   "subagentModels": [
     "gpt-5.6-luna"
   ],
