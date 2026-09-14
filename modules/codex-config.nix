@@ -21,7 +21,7 @@
         current_sorted="$config_file.current.sorted"
         candidate_sorted="$candidate_config.sorted"
 
-        export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${pkgs.jq}/bin:/usr/bin:/bin"
+        export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${pkgs.jq}/bin:/usr/bin:/bin:$PATH"
         ${pkgs.coreutils}/bin/mkdir -p "$codex_home"
 
         # Use the template only for first-run defaults. Once a config exists,

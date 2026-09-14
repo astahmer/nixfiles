@@ -44,7 +44,7 @@
         current_sorted="$config_file.current.sorted"
         candidate_sorted="$candidate_config.sorted"
 
-        export PATH="${pkgs.bun}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${gettext}:${pkgs.jq}/bin:/usr/bin:/bin"
+        export PATH="${pkgs.bun}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${gettext}:${pkgs.jq}/bin:/usr/bin:/bin:$PATH"
         ${pkgs.coreutils}/bin/mkdir -p "$opencodex_home" "$secrets_dir"
 
         # Primary source: the repo's Bitwarden-backed secret config. This

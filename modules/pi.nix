@@ -78,7 +78,7 @@
                 stamp_file="$npm_dir/.nix-stamp"
                 wanted="${piPackages}/node_modules"
 
-                export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin"
+                export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:$PATH"
                 ${pkgs.coreutils}/bin/mkdir -p "$npm_dir"
 
                 current_stamp="$(${pkgs.coreutils}/bin/cat "$stamp_file" 2>/dev/null || true)"
