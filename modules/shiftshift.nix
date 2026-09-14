@@ -11,11 +11,14 @@
       system = pkgs.stdenv.hostPlatform.system;
       isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
       shiftshift = inputs.self.packages.${system}.shiftshift;
+      # macOS TCC grants belong to the writable bundle that the user enables
+      # in System Settings, not the immutable store path used to build it.
+      shiftshiftApp = "${config.home.homeDirectory}/Applications/shiftshift.app";
       configTemplate = ../assets/shiftshift/config.json;
       appDataDir = "${config.home.homeDirectory}/Library/Application Support/dev.shiftshift.tauri";
       shiftshiftLauncher = pkgs.writeShellScript "shiftshift-launcher" ''
         export SHIFTSHIFT_MANAGED_LAUNCHD=1
-        exec "${shiftshift}/Applications/shiftshift.app/Contents/MacOS/shiftshift-tauri" "$@"
+        exec "${shiftshiftApp}/Contents/MacOS/shiftshift-tauri" "$@"
       '';
       shiftshiftPlist = pkgs.writeText "shiftshift.plist" ''
         <?xml version="1.0" encoding="UTF-8"?>
@@ -50,7 +53,7 @@
       };
 
       home.activation.shiftshiftLaunchd = lib.mkIf isDarwin (
-        lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+        lib.hm.dag.entryAfter [ "installMacosApps" ] ''
           agents_dir="${config.home.homeDirectory}/Library/LaunchAgents"
           uid="$(/usr/bin/id -u)"
           destination="$agents_dir/shiftshift.plist"
