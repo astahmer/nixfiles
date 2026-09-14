@@ -223,6 +223,9 @@ in
         '';
       };
 
+      nixfilesConfigureNixCache =
+        inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.configure-nix-cache;
+
       nixfilesCheck = pkgs.writeShellApplication {
         name = "nixfiles-check";
         runtimeInputs = [
@@ -241,6 +244,7 @@ in
         runtimeInputs = [
           pkgs.nix
           pkgs.nix-output-monitor
+          nixfilesConfigureNixCache
           inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
         ];
         text = builtins.readFile ../scripts/update-all.sh;
@@ -269,6 +273,7 @@ in
         pkgs.nix-output-monitor
         inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
         nixfilesBootstrap
+        nixfilesConfigureNixCache
         nixfilesCheck
         nixfilesUpdateAll
         jjWorkspaceAudit

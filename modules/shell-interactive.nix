@@ -481,9 +481,9 @@
 
       home.shellAliases = {
         # Uses NH_FLAKE (~/.config/nixfiles → clone). No need to cd into the repo.
-        nixapply = "nh home switch -c macbook -b hm-backup";
-        nixswitch = "nh home switch -c macbook -b hm-backup";
-        nixupdate = "nh home switch -c macbook -b hm-backup -u";
+        nixapply = "nixfiles-configure-nix-cache && nh home switch -c macbook -b hm-backup";
+        nixswitch = "nixfiles-configure-nix-cache && nh home switch -c macbook -b hm-backup";
+        nixupdate = "nixfiles-configure-nix-cache && nh home switch -c macbook -b hm-backup -u";
         nixupdateall = "nixfiles-update-all";
         nixbootstrap = "nixfiles-bootstrap";
         nixlint = "nixfiles-check";

@@ -105,6 +105,17 @@
               program = "${runner}/bin/${name}";
               meta.description = "Run the ${name} maintenance app";
             };
+
+          nixfilesConfigureNixCache = pkgs'.writeShellApplication {
+            name = "nixfiles-configure-nix-cache";
+            runtimeInputs = [
+              pkgs'.coreutils
+              pkgs'.gawk
+              pkgs'.gnugrep
+              pkgs'.nix
+            ];
+            text = builtins.readFile ./scripts/configure-nix-cache.sh;
+          };
         in
         {
           formatter = pkgs.nixfmt;
@@ -119,6 +130,7 @@
           packages = {
             calldiff = pkgs'.callPackage ./packages/calldiff { };
             codex = pkgs'.callPackage ./packages/codex { };
+            configure-nix-cache = nixfilesConfigureNixCache;
             # The upstream flake patches nixpkgs as an evaluation input. That
             # output cannot be realised for a foreign system during cross-checks
             # (for example, evaluating the Linux host from this Mac). The
@@ -176,6 +188,11 @@
             tidyports = pkgs'.callPackage ./packages/tidyports { };
             tldraw-offline = pkgs'.callPackage ./packages/tldraw-offline { };
             whatsapp-bin = pkgs'.callPackage ./packages/whatsapp-bin { };
+          };
+          apps.configure-nix-cache = {
+            type = "app";
+            program = "${nixfilesConfigureNixCache}/bin/nixfiles-configure-nix-cache";
+            meta.description = "Configure macOS Nix binary caches before an apply";
           };
           apps.update-pins = mkBunApp "update-pins" ./scripts/update-pins.ts;
         };

@@ -1,5 +1,7 @@
 set -euo pipefail
 
+nixfiles-configure-nix-cache
+
 flake="${NH_FLAKE:-}"
 if [ -z "$flake" ] || [ ! -f "$flake/flake.nix" ]; then
   echo "nixfiles-update-all: NH_FLAKE is missing or does not point to a flake" >&2

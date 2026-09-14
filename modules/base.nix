@@ -52,6 +52,7 @@ in
         "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
         "cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM="
       ];
+      nix.settings.max-jobs = "auto";
       # Permit the normal login user to use the additional substituter on this
       # single-user machine; root remains trusted for system operations.
       nix.settings.trusted-users = [
