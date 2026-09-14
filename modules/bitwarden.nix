@@ -98,7 +98,7 @@
           # Idempotent append: pre-existing entries are preserved.
           touch "$sshDir/authorized_keys"
           chmod 600 "$sshDir/authorized_keys"
-          if ! ${pkgs.coreutils}/bin/grep -qxF "$(cat ${sshPublicKey})" "$sshDir/authorized_keys"; then
+          if ! ${pkgs.gnugrep}/bin/grep -qxF "$(cat ${sshPublicKey})" "$sshDir/authorized_keys"; then
             ${pkgs.coreutils}/bin/cat "${sshPublicKey}" >> "$sshDir/authorized_keys"
             echo "secret: added id_ed25519 to authorized_keys" >&2
           fi
