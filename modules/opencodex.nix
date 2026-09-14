@@ -147,6 +147,13 @@
                else $current
                end) as $base
             | $base
+            # Backfill provider blocks the template has gained since this
+            # config was first created (e.g. a new opencode-go teammate
+            # account). Existing provider blocks are left untouched so
+            # dashboard edits still win; only wholly-missing keys are added.
+            | .providers = (($base.providers // {}) as $currentProviders
+               | $currentProviders + (($defaults.providers // {})
+                  | with_entries(select(.key as $k | ($currentProviders | has($k)) | not))))
             | del(.providers["opencode-go"])
             # OpenRouter is intentionally not part of the global setup anymore;
             # remove its old provider and visibility rows from existing configs.
