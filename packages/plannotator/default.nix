@@ -4,29 +4,29 @@ let
     if pkgs.stdenv.hostPlatform.system == "aarch64-darwin" then
       {
         name = "plannotator-darwin-arm64";
-        hash = "sha256-OKDmu4OUhqGfUQvVI+wW1iFkaUxri3Hq0EsfzEhnTNc="; # executable=true NAR hash
+        hash = "sha256-aeKn/3Rr9ZmTrYt6dE8u3zWPTeiW7tER34rVjqr2kn8="; # executable=true NAR hash
       }
     else if pkgs.stdenv.hostPlatform.system == "x86_64-darwin" then
       {
         name = "plannotator-darwin-x64";
-        hash = "sha256-+a2fEZ42g77um/nDT1RTAweN4/SlMGEfp80tiIVv5b4=";
+        hash = "sha256-78OZQhxiMVlRrkC+Y/ykh1V1XItQuAYIYoGxMAX3r5A=";
       }
     else if pkgs.stdenv.hostPlatform.system == "aarch64-linux" then
       {
         name = "plannotator-linux-arm64";
-        hash = "sha256-NQnJ7ms02mGo0yeZQgyGmnl049BZR+PG2P+tJDFk0UA=";
+        hash = "sha256-68nRINcGC8/k+QdFa1Q4+po4zWdrsxTvLwE9IV1jAUo=";
       }
     else if pkgs.stdenv.hostPlatform.system == "x86_64-linux" then
       {
         name = "plannotator-linux-x64";
-        hash = "sha256-mKL07Ktu/QPdnsT+qfopVgr2hKzbyG/GR1ByfZuAuAo=";
+        hash = "sha256-VLaBja3G7zjSz0C4fCP3eIbJ8Ot+KoNHC5lNACb6rWE=";
       }
     else
       throw "Unsupported platform for plannotator";
 in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "plannotator";
-  version = "0.27.13";
+  version = "0.27.15";
 
   src = pkgs.fetchurl {
     url = "https://github.com/backnotprop/plannotator/releases/download/v${finalAttrs.version}/${hostBinary.name}";
