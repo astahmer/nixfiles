@@ -215,7 +215,21 @@
             bootout_agent "$label"
             ${pkgs.coreutils}/bin/install -m 600 "$source" "$destination.next.$$"
             ${pkgs.coreutils}/bin/mv -f "$destination.next.$$" "$destination"
-            /bin/launchctl bootstrap "gui/$uid" "$destination"
+
+            # bootout deregisters asynchronously: launchd can still briefly
+            # refuse a same-label bootstrap ("Input/output error") right
+            # after. Retry instead of failing the whole activation on that race.
+            attempt=1
+            while ! /bin/launchctl bootstrap "gui/$uid" "$destination" 2>/tmp/tokitoki-bootstrap-err.$$; do
+              if [ "$attempt" -ge 5 ]; then
+                ${pkgs.coreutils}/bin/cat /tmp/tokitoki-bootstrap-err.$$ >&2
+                ${pkgs.coreutils}/bin/rm -f /tmp/tokitoki-bootstrap-err.$$
+                return 1
+              fi
+              ${pkgs.coreutils}/bin/sleep 1
+              attempt=$((attempt + 1))
+            done
+            ${pkgs.coreutils}/bin/rm -f /tmp/tokitoki-bootstrap-err.$$
           }
 
           # Replace the legacy hand-installed agent so it cannot run beside
