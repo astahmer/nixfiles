@@ -13,6 +13,28 @@
       shiftshift = inputs.self.packages.${system}.shiftshift;
       configTemplate = ../assets/shiftshift/config.json;
       appDataDir = "${config.home.homeDirectory}/Library/Application Support/dev.shiftshift.tauri";
+      shiftshiftLauncher = pkgs.writeShellScript "shiftshift-launcher" ''
+        export SHIFTSHIFT_MANAGED_LAUNCHD=1
+        exec "${shiftshift}/Applications/shiftshift.app/Contents/MacOS/shiftshift-tauri" "$@"
+      '';
+      shiftshiftPlist = pkgs.writeText "shiftshift.plist" ''
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>Label</key>
+          <string>shiftshift</string>
+          <key>ProcessType</key>
+          <string>Interactive</string>
+          <key>ProgramArguments</key>
+          <array>
+            <string>${shiftshiftLauncher}</string>
+          </array>
+          <key>RunAtLoad</key>
+          <true/>
+        </dict>
+        </plist>
+      '';
       shiftCli = pkgs.writeShellScriptBin "shift" ''
         exec "${shiftshift}/bin/shift" "$@"
       '';
@@ -26,6 +48,19 @@
         shiftshift-status = "launchctl print \"gui/$(id -u)/shiftshift\"";
         shiftshift-restart = "launchctl kickstart -k \"gui/$(id -u)/shiftshift\"";
       };
+
+      home.activation.shiftshiftLaunchd = lib.mkIf isDarwin (
+        lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+          agents_dir="${config.home.homeDirectory}/Library/LaunchAgents"
+          uid="$(/usr/bin/id -u)"
+          destination="$agents_dir/shiftshift.plist"
+          ${pkgs.coreutils}/bin/mkdir -p "$agents_dir"
+          /bin/launchctl bootout "gui/$uid/shiftshift" >/dev/null 2>&1 || true
+          ${pkgs.coreutils}/bin/install -m 600 "${shiftshiftPlist}" "$destination.next.$$"
+          ${pkgs.coreutils}/bin/mv -f "$destination.next.$$" "$destination"
+          /bin/launchctl bootstrap "gui/$uid" "$destination"
+        ''
+      );
 
       # The app writes these files itself, so a home.file symlink would make
       # settings writes target the read-only Nix store. Seed each file once
