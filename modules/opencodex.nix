@@ -83,6 +83,11 @@
         OPENCODEX_OPENCODE_GO_MATHIAS_KEY="$(read_secret opencode-go-mathias "${globalSecretConfig}")"
         OPENCODEX_CODEX_ALEX2_EMAIL="$(read_secret opencodex-codex-alex2-email)"
         OPENCODEX_CODEX_WORK_EMAIL="$(read_secret opencodex-codex-work-email)"
+        # The jq pass below reads these through `env.*`, which only sees
+        # exported variables.
+        export OPENCODEX_COMMANDCODE_API_KEY OPENCODEX_OPENCODE_GO_API_KEY \
+          OPENCODEX_OPENCODE_GO_MANU_KEY OPENCODEX_OPENCODE_GO_MATHIAS_KEY \
+          OPENCODEX_CODEX_ALEX2_EMAIL OPENCODEX_CODEX_WORK_EMAIL
 
         # Legacy fallback: ~/.config/opencodex/secrets.env overrides the vault
         # for provider keys explicitly placed there (e.g. when Bitwarden is locked).
