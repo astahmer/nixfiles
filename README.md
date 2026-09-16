@@ -198,17 +198,18 @@ apply the profile — the updated nixpkgs revision provides the latest versions.
 
 ### Binary cache
 
-The flake declares Numtide's cache for the `llm-agents.nix` packages and the
-NixOS module persists it for the local login user. On a standalone macOS or
-Linux Home Manager install, the Nix daemon may need the same cache configured
-once in `/etc/nix/nix.conf`; if Nix reports that the user is not trusted, add
-the cache and the login user there before applying again. The relevant values
-are:
+The flake declares Numtide's cache for the `llm-agents.nix` packages and
+Devenv's Cachix caches for the prebuilt `devenv` CLI. The NixOS module persists
+them for the local login user. On a standalone macOS or Linux Home Manager
+install, the Nix daemon must have the same caches configured once in
+`/etc/nix/nix.conf`; a flake's `nixConfig` is ignored for restricted settings
+when the client is not trusted. Add the cache and the login user there before
+applying:
 
 ```ini
 trusted-users = root astahmer
-extra-substituters = https://cache.numtide.com
-extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=
+extra-substituters = https://cache.numtide.com https://devenv.cachix.org https://cachix.cachix.org
+extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g= devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw= cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM=
 ```
 
 ## Conventions

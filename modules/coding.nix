@@ -8,6 +8,7 @@ in
     let
       packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
       calldiff = packages.calldiff;
+      devenv = packages.devenv;
       nub = packages.nub;
       cursorAgent = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."cursor-agent";
       ghui = packages.ghui;
@@ -66,10 +67,11 @@ in
         opencode
         pkgs.htop
         pkgs.btop
-        pkgs.devenv
+        devenv
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
         pkgs.bun
+        pkgs.docker
         ghui
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
