@@ -31,6 +31,16 @@ Prefer these ephemeral paths for diagnostics. Keep profile changes and
 configuration edits deliberate, and report the exact Nix/comma failure when a
 tool genuinely cannot be resolved.
 
+When adding a CLI to a Nix profile, prefer an official prebuilt release archive
+or upstream binary cache over compiling a Rust/Go workspace. Pin the source or
+cache in the flake, expose it through the repository's package outputs, and
+verify platform coverage, source provenance, and cache trust before applying.
+Use source builds only when no compatible prebuilt artifact exists. For
+standalone Home Manager, a flake's `nixConfig` cannot override restricted
+daemon settings for an untrusted client; add each configured binary cache and
+its public key to `/etc/nix/nix.conf`, and include the login user in
+`trusted-users`, before applying a cache-backed package.
+
 ## Machine-setup fixes go in Nix
 
 Any fix to this machine's setup — a missing CLI, a config change, a service

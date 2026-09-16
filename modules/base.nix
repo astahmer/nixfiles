@@ -40,11 +40,17 @@ in
         "nix-command"
         "flakes"
       ];
-      # Keep the Numtide cache available for the pinned binary packages from
-      # llm-agents.nix when this host applies the configuration.
-      nix.settings.extra-substituters = [ "https://cache.numtide.com" ];
+      # Keep upstream binary caches available so profile switches do not
+      # rebuild large Rust workspaces locally.
+      nix.settings.extra-substituters = [
+        "https://cache.numtide.com"
+        "https://devenv.cachix.org"
+        "https://cachix.cachix.org"
+      ];
       nix.settings.extra-trusted-public-keys = [
         "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+        "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
+        "cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM="
       ];
       # Permit the normal login user to use the additional substituter on this
       # single-user machine; root remains trusted for system operations.
