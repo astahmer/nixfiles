@@ -119,7 +119,13 @@
           packages = {
             calldiff = pkgs'.callPackage ./packages/calldiff { };
             codex = pkgs'.callPackage ./packages/codex { };
-            devenv = inputs.devenv.packages.${system}.devenv;
+            # The upstream flake patches nixpkgs as an evaluation input. That
+            # output cannot be realised for a foreign system during cross-checks
+            # (for example, evaluating the Linux host from this Mac). The
+            # standalone macOS profile is the target that needs the cache-backed
+            # binary; keep the nixpkgs package for the foreign Linux check.
+            devenv =
+              if system == "aarch64-darwin" then inputs.devenv.packages.${system}.devenv else pkgs'.devenv;
             drydock = pkgs'.callPackage ./packages/drydock { };
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
             iris = pkgs'.callPackage ./packages/iris { };
