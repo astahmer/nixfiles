@@ -29,6 +29,10 @@ Global Codex instruction discovery uses CODEX_HOME/AGENTS.md (normally
 Manager module deploys both from the same machine-agnostic source tree; do not
 point other projects at the clone's absolute path.
 
+## Critical binary-first build policy
+
+- **Very important: always try to download a compatible prebuilt binary or use a trusted binary cache before compiling from source.** This applies to Nix packages, CLI tools, and their dependencies. Check official release archives, upstream caches, and the repository's existing package pattern first. Source builds are the last resort: use them only when no compatible artifact exists or the user explicitly asks for a source build. Never start a large compilation silently; report the missing artifact or cache when it blocks the task because builds are slow and consume substantial disk space for little routine-tooling benefit.
+
 ## Reference Repos
 
 - Reference repos are cloned to `~/.references/<name>` by default (shared globally). Use the `reference-repository` skill to add or read them.

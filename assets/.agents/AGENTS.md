@@ -31,6 +31,17 @@ Prefer these ephemeral paths for diagnostics. Keep profile changes and
 configuration edits deliberate, and report the exact Nix/comma failure when a
 tool genuinely cannot be resolved.
 
+## Critical binary-first rule
+
+**Very important:** Before any source build, first try to download a compatible
+prebuilt binary or use a trusted binary cache. This applies to Nix packages,
+CLI tools, and their dependencies. Check official release archives, upstream
+caches, and the repository's existing package pattern first. Source builds are
+the last resort: use them only when no compatible artifact exists or the user
+explicitly asks for a source build. Never start a large compilation silently;
+report the missing artifact or cache when it blocks the task because builds are
+slow and consume substantial disk space for little routine-tooling benefit.
+
 When adding a CLI to a Nix profile, prefer an official prebuilt release archive
 or upstream binary cache over compiling a Rust/Go workspace. Pin the source or
 cache in the flake, expose it through the repository's package outputs, and
