@@ -34,3 +34,12 @@ enabled = false
 
 [apps.connector_openai_safety_settings]
 enabled = false
+
+# Computer use (screen + browser control). The Codex app defaults this to
+# disabled; enabled so the unified-computer-use plugin's cua_repl attaches on
+# a fresh machine without a manual flip in Settings.
+[mcp_servers.computer-use]
+command = "./Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient"
+args = [ "mcp" ]
+cwd = "."
+enabled = true

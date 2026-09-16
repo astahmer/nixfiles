@@ -1,6 +1,6 @@
 { ... }:
 {
-  config.flake.modules.homeManager.codex-config =
+  config.flake.modules.homeManager.codexConfig =
     {
       config,
       pkgs,
