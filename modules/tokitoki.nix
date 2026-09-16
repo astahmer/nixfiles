@@ -81,7 +81,9 @@
         current_sorted="$candidate_config.current.sorted"
         candidate_sorted="$candidate_config.sorted"
 
-        export PATH="${pkgs.bitwarden-cli}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${pkgs.jq}/bin:/usr/bin:/bin:$PATH"
+        # /usr/bin last: macOS find lacks -printf, which home-manager's
+        # own activation steps rely on.
+        export PATH="${pkgs.bitwarden-cli}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${pkgs.jq}/bin:$PATH:/usr/bin:/bin"
         export TOKITOKI_OPENCODE_GO_MATHIAS=""
         export TOKITOKI_OPENCODE_GO_MANU=""
         export TOKITOKI_OPENCODE_GO_ALEX=""
