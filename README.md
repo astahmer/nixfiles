@@ -129,6 +129,10 @@ workspaces and Git worktrees without deleting or forgetting anything:
 jj-workspace-audit --root "$HOME/dev" --older-than-days 30 | column -t -s $'\t'
 ```
 
+The audit invokes `jj status` to detect dirty workspaces, so JJ may create
+ordinary snapshot operations while it runs; it never rewrites or deletes
+commits.
+
 Rows marked `review` are only candidates: age and cleanliness do not prove
 that a workspace is unused. `protected-root` is the main checkout,
 `protected-dirty` has uncommitted changes, and `recent` is younger than the
