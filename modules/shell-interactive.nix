@@ -488,6 +488,7 @@
         nixbootstrap = "nixfiles-bootstrap";
         nixlint = "nixfiles-check";
         nixcheck = "nixfiles-check";
+        jjworkspaceaudit = "jj-workspace-audit";
         #
         zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";

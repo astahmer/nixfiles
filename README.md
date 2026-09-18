@@ -109,7 +109,53 @@ sudo nix --extra-experimental-features nix-command store optimise
 Check available space before and after with `df -h /`. `nh clean all` may fail
 on a standalone macOS install if root's `/etc/nix/nix.conf` does not enable
 `nix-command`; the explicit commands above pass the feature to the elevated
-Nix invocation directly.
+Nix invocation directly. If you prefer `nh`, pass the setting through the
+environment and give root its own home directory:
+
+```bash
+sudo -H env NIX_CONFIG='extra-experimental-features = nix-command' nh clean all
+```
+
+Do not append `--extra-experimental-features` to `nh clean all`; that option is
+accepted by `nix`, not by `nh`.
+
+## Workspace disk audit
+
+Old JJ workspaces and Git worktrees can retain duplicate `node_modules`, build
+outputs, and repository objects. The Nix-managed audit command reports JJ
+workspaces and Git worktrees without deleting or forgetting anything:
+
+```bash
+jj-workspace-audit --root "$HOME/dev" --older-than-days 30 | column -t -s $'\t'
+```
+
+Rows marked `review` are only candidates: age and cleanliness do not prove
+that a workspace is unused. `protected-root` is the main checkout,
+`protected-dirty` has uncommitted changes, and `recent` is younger than the
+chosen threshold. The date is the checked-out commit date, not proof of last
+human use.
+
+Before reclaiming a `review` row, inspect the exact path and workspace name,
+check that no process has it open, and verify its branch/bookmarks are not
+needed:
+
+```bash
+lsof +D /path/to/workspace
+jj -R /path/to/workspace status
+jj -R /path/to/workspace workspace list
+```
+
+For a JJ workspace, run `jj workspace forget <name>` from another workspace,
+then move or delete the exact directory only after review. For a Git worktree,
+use `git -C /path/to/main worktree remove /path/to/worktree` only after the
+same checks. To find only stale Git worktree metadata without deleting it, use
+the dry run first:
+
+```bash
+git -C /path/to/main worktree prune --dry-run
+```
+
+There is intentionally no automated deletion mode.
 
 ## Modules worth reusing
 
