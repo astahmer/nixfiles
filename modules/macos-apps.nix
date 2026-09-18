@@ -173,7 +173,10 @@
           case "$installedApps" in
             *"${cleanMyKeyboardId}"*) ;;
             *)
-              $DRY_RUN_CMD "${mas}" install ${cleanMyKeyboardId}
+              # mas install escalates to sudo, which an unattended activation
+              # cannot answer; a failed install must not abort the whole switch.
+              $DRY_RUN_CMD "${mas}" install ${cleanMyKeyboardId} 2>/dev/null ||
+                echo "warning: could not install CleanMyKeyboard; run mas install ${cleanMyKeyboardId} manually" >&2
               ;;
           esac
         else
