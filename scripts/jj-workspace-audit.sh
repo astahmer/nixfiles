@@ -65,7 +65,7 @@ while IFS= read -r -d '' jj_dir; do
     continue
   fi
   printf '%s\t%s\n' "$repo_ref" "${jj_dir%/.jj}" >> "$repo_candidates"
-done < <(find "$scan_root" -mindepth 2 -maxdepth 2 -type d -name .jj -print0)
+done < <(find "$scan_root" -mindepth 1 -maxdepth 2 -type d -name .jj -print0)
 
 while IFS=$'\t' read -r repo_ref workspace_root; do
   [ -n "$repo_ref" ] || continue
@@ -121,7 +121,7 @@ while IFS= read -r -d '' git_dir; do
       if (path != "") printf "%s\t%s\t%s\n", root, path, head
     }
   '
-done < <(find "$scan_root" -mindepth 2 -maxdepth 2 -type d -name .git -print0) | sort -u > "$git_candidates"
+done < <(find "$scan_root" -mindepth 1 -maxdepth 2 -type d -name .git -print0) | sort -u > "$git_candidates"
 
 while IFS=$'\t' read -r repo_root workspace_path commit_id; do
   [ -n "$workspace_path" ] || continue
