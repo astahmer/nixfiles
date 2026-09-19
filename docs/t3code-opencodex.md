@@ -18,27 +18,39 @@ store at `~/.local/share/opencode/auth.json`.
 ## OpenCodex config
 
 `~/.opencodex/config.json` is bootstrapped from
-`assets/opencodex/config.template.json`, which is the full merged runtime
-config (providers, model routing, disabled models, account selectors) with
-`$VAR` key references instead of API keys. The template is the source of
-truth for the config shape; activation materializes the four provider keys
-and the two account emails from the repo's Bitwarden-backed `secret` config,
-so fresh machines get the complete setup without committing credentials or
-email identities to the public repo. The pool account ids in the template are
-the stable provider account ids shown by OpenCodex; OAuth tokens and the local
-credential records remain machine-local.
+`assets/opencodex/config.template.json`. The template is the source of truth
+for providers, model visibility, picker state, routing defaults, the Luna
+sub-agent roster, and the current 173-entry disabled-model snapshot. It uses
+`$VAR` references instead of committing API keys.
 
-The activation still handles the legacy provider migration, public account
-selectors, and explicit secret injection. It only writes when initialization
-or one of those migrations actually changes the file. Dashboard and `ocx`
-edits that add new runtime state (custom models, extra key pools, accounts)
-persist because the config is re-imported from the merged candidate.
-The checked-in template also carries the 161-entry OpenCodex 2.42.0 model
-visibility snapshot for the configured providers, including
-provider/account-qualified rows. Activation
-seeds that snapshot only when an older config has no `disabledModels` field;
-an existing list, including an intentionally empty one, remains dashboard-owned
-so later UI toggles are not silently reverted by `nixapply`.
+Every `nixapply` reconciles that managed config again. It stops the proxy when
+needed, rebuilds the candidate from the template, injects available provider
+keys, and imports it only when it differs. This intentionally resets stale
+enabled/disabled model changes and stale active-account routing. The current
+connected account metadata is carried forward so this is not an OAuth logout:
+`~/.opencodex/auth.json` and `~/.opencodex/codex-accounts.json` remain in place,
+and their credentials are not invalidated.
+
+The account metadata is relabeled from the private email aliases on every
+apply. Account ids are not hardcoded because OpenCodex creates a new id after
+reauthentication. The known selectors are rebuilt as follows:
+
+| Selector | OpenCodex route | Purpose |
+| --- | --- | --- |
+| `codex-perso` | native `openai` `@main` account | Main personal Codex login |
+| `codex-work` | connected pool account matching the work email | Work Codex login |
+| `codex-alex2` | connected pool account matching the Alex2 email | Second personal Codex login |
+
+The native personal account is already represented by Codex's own
+`~/.codex/auth.json`; it does not need an email secret or a `codexAccounts` row.
+The pool account credentials stay in the local OCX account store. Nix can keep
+already-connected accounts labeled correctly, but a new machine still needs
+each OAuth login once because OAuth tokens must not be copied through Nix.
+
+The stale `activeCodexAccountId` is not carried into the rebuilt config. That
+removes the old persisted `codex-work` preference; the native Codex template
+defaults to `codex-perso/gpt-5.6-luna`, and explicit account-qualified model
+selectors remain available when another account is intentionally chosen.
 
 The four provider keys are read by activation via the project or global
 `secret` config; the local `~/.config/opencodex/secrets.env` remains a fallback
@@ -52,14 +64,11 @@ when Bitwarden is locked:
 | `opencode-go-mathias` | `OPENCODEX_OPENCODE_GO_MATHIAS_KEY` | OpenCode pool entry |
 
 The two pool-account rows use private `secret` aliases for their email fields:
-`opencodex-codex-alex2-email` and `opencodex-codex-work-email`. The native
-`codex-perso` route uses OpenCodex's machine-local `@main` credential and has
-no `codexAccounts` row; its identity is kept separately in the private
-`opencodex-codex-perso-email` alias. None of the three values are stored in
-this repository. Create or update them with hidden prompts:
+`opencodex-codex-alex2-email` and `opencodex-codex-work-email`. None of those
+values are stored in this repository. Create or update them with hidden
+prompts:
 
 ```sh
-secret set opencodex-codex-perso-email
 secret set opencodex-codex-alex2-email
 secret set opencodex-codex-work-email
 ```
@@ -74,47 +83,26 @@ OPENCODEX_OPENCODE_GO_MANU_KEY=...
 OPENCODEX_OPENCODE_GO_MATHIAS_KEY=...
 ```
 
-The configured providers and public account selectors are:
-
-| Selector | OpenCodex route | Purpose |
-| --- | --- | --- |
-| `commandcode` | CommandCode provider | CommandCode API-key provider (`cmdcode`) |
-| `codex-perso` | native `openai` `@main` account | Main personal Codex login |
-| `codex-work` | `openai` pool account with the stable configured account id | Work Codex login |
-| `codex-alex2` | `openai` pool account with the stable configured account id | Second personal Codex login |
-| `opencode` | OpenCode Go endpoint | OpenCode provider |
-| `opencode-free` | OpenCode free endpoint | Key-optional free model catalog |
-
 `codex-alex2`, `codex-perso`, and `codex-work` are model-routing selectors;
-they are not provider or account names to add in the dashboard. `codex-perso`
-always uses native `@main`, while the pool selectors target the stable account
-ids in the template. `@main` is the deterministic native-login target;
-`__main__` is an internal credential sentinel and must not be added as a pool
-row. The
-activation migration clears all persisted account pauses on every rebuild
-(older templates paused `__main__` by default, and OpenCodex auto-pauses
-drained accounts), so a quota window can never surface as a misleading 401
-while the account still has weekly headroom. Pauses are runtime state and
-rebuilds re-enable every account.
-
-On a new machine, apply Home Manager first, then complete the OpenAI OAuth
-login inside OpenCodex. OAuth tokens and credential records stay in the
-user-owned OpenCodex runtime and are never copied through Nix. Run `nixapply`
-again after the login so the secret-backed email fields are refreshed while
-the deterministic pool selectors remain bound to the configured account ids;
-then refresh the catalog with `ocx sync`.
+they are not provider names to add in the dashboard. `@main` is the
+deterministic native-login target; `__main__` is an internal credential
+sentinel and must not be added as a pool row.
 
 OpenCodex does not use a separate static `allowedModels` field per account.
 Its Models page persists visibility in the top-level `disabledModels` list:
 routed providers use IDs such as `opencode-go-alex/<model>` and
 `opencode-go-manu/<model>`, while native Codex rows can use either a bare model
-id (all eligible accounts) or an account-qualified id. The template preserves
-those exact IDs, so per-provider/account toggles are part of the Nix bootstrap;
-`ocx sync` still discovers the native entitlement roster locally and may add
-new rows without copying OAuth state into Nix.
+id (all eligible accounts) or an account-qualified id. The template owns those
+exact IDs, so dashboard model-toggle edits are intentionally reapplied by
+`nixapply`.
+
+`syncResumeHistory = false` is also deliberate. The installed Codex state uses
+paginated history and is live-owned by Codex; OpenCodex must leave that history
+alone while updating the model catalog. Use `ocx sync` after an apply. Do not
+use legacy history-recovery commands for this setup.
 
 For an existing machine whose selector is missing or whose account list looks
-stale, restart the proxy first so it reloads the on-disk account state:
+stale, refresh the proxy and catalog:
 
 ```sh
 ocx restart
@@ -126,21 +114,10 @@ Do not add an account or provider named `codex-perso`; that name is reserved
 by the selector above.
 
 The activation preserves extra accounts added through the OpenCodex dashboard,
-while the two managed selectors remain bound to their deterministic ids. If a
-secret alias is unavailable, an existing local email is preserved and a
-first-run placeholder is removed rather than written literally. Add or switch
-accounts through the OpenCodex dashboard or `ocx account`, then run `nixapply`
-after updating the aliases.
-
-The per-machine secret template is deployed at
-`~/.config/opencodex/secrets.env.example`:
-
-```sh
-OPENCODEX_COMMANDCODE_API_KEY=...
-OPENCODEX_OPENCODE_GO_API_KEY=...
-OPENCODEX_OPENCODE_GO_MANU_KEY=...
-OPENCODEX_OPENCODE_GO_MATHIAS_KEY=...
-```
+while the two managed selectors remain bound to the matching email identities.
+If an email alias is unavailable, the existing local account metadata remains
+untouched. Add or switch accounts through the OpenCodex dashboard or `ocx
+account`, then run `nixapply` after updating the aliases.
 
 The OpenCodex activation also installs or repairs the upstream `ocx service`
 launchd service, so the proxy starts at login and restarts after a crash.

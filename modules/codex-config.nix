@@ -13,7 +13,7 @@
       configTemplate = "${../assets/codex/config.template.toml}";
     in
     {
-      home.activation.codexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      home.activation.codexConfig = lib.hm.dag.entryAfter [ "opencodexConfig" ] ''
         codex_home="${codexHome}"
         config_file="${configFile}"
         config_template="${configTemplate}"
@@ -34,6 +34,15 @@
           ${pkgs.coreutils}/bin/cp "$candidate_config" "$config_file"
           ${pkgs.coreutils}/bin/chmod 600 "$config_file"
           echo "codex: initialized $config_file from template" >&2
+        fi
+
+        # OpenCodex restores the native file when it stops. Keep the selected
+        # native model explicit so a service restart cannot fall back to the
+        # client's implicit default or a stale routed model.
+        if ${pkgs.gnugrep}/bin/grep -qE '^model[[:space:]]*=' "$config_file"; then
+          ${pkgs.gnused}/bin/sed -i -E 's|^model[[:space:]]*=.*$|model = "codex-perso/gpt-5.6-luna"|' "$config_file"
+        else
+          ${pkgs.gnused}/bin/sed -i '1i model = "codex-perso/gpt-5.6-luna"' "$config_file"
         fi
 
         ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$current_sorted" "$candidate_sorted"

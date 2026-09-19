@@ -161,71 +161,62 @@
           unset OPENCODEX_OPENCODE_GO_MATHIAS_KEY
         fi
 
-        # Use the template only for first-run defaults. Once a config exists,
-        # its values win so dashboard and `ocx` edits remain user-owned. Nix
-        # still performs the small compatibility/key/selector migrations below.
+        # If Bitwarden is temporarily unavailable, do not replace a working
+        # provider credential with the template placeholder. The value stays
+        # in the local OCX config and is never printed by this activation.
+        if [ -f "$config_file" ]; then
+          if [ -z "''${OPENCODEX_COMMANDCODE_API_KEY:-}" ]; then
+            old_secret="$(${jq} -r '.providers.commandcode.apiKey // empty' "$config_file" 2>/dev/null || true)"
+            case "$old_secret" in
+              ""|replace-me|\$*) ;;
+              *) export OPENCODEX_COMMANDCODE_API_KEY="$old_secret" ;;
+            esac
+          fi
+          if [ -z "''${OPENCODEX_OPENCODE_GO_API_KEY:-}" ]; then
+            old_secret="$(${jq} -r '.providers["opencode-go-alex"].apiKey // .providers.opencode.apiKey // empty' "$config_file" 2>/dev/null || true)"
+            case "$old_secret" in
+              ""|replace-me|\$*) ;;
+              *) export OPENCODEX_OPENCODE_GO_API_KEY="$old_secret" ;;
+            esac
+          fi
+          if [ -z "''${OPENCODEX_OPENCODE_GO_MANU_KEY:-}" ]; then
+            old_secret="$(${jq} -r '.providers["opencode-go-manu"].apiKey // .providers.opencode.apiKeyPool[1].key // empty' "$config_file" 2>/dev/null || true)"
+            case "$old_secret" in
+              ""|replace-me|\$*) ;;
+              *) export OPENCODEX_OPENCODE_GO_MANU_KEY="$old_secret" ;;
+            esac
+          fi
+          if [ -z "''${OPENCODEX_OPENCODE_GO_MATHIAS_KEY:-}" ]; then
+            old_secret="$(${jq} -r '.providers["opencode-go-mathias"].apiKey // .providers.opencode.apiKeyPool[2].key // empty' "$config_file" 2>/dev/null || true)"
+            case "$old_secret" in
+              ""|replace-me|\$*) ;;
+              *) export OPENCODEX_OPENCODE_GO_MATHIAS_KEY="$old_secret" ;
+            esac
+          fi
+        fi
+
+        # Stop the proxy before replacing its config so the running process
+        # cannot write stale routing state back over the managed snapshot.
+        proxy_running="$(${ocx} status --json 2>/dev/null | ${jq} -r '.proxy.running // false' 2>/dev/null || echo false)"
+        if [ "$proxy_running" = true ]; then
+          if ! ${ocx} stop; then
+            echo "opencodex: could not stop the proxy before config reconciliation" >&2
+            exit 1
+          fi
+        fi
+
+        # The checked-in template owns OpenCodex's providers, model visibility,
+        # picker state, and routing defaults on every apply. Preserve only the
+        # connected account metadata from the current config: pool credentials
+        # live in codex-accounts.json and must not be invalidated by Nix.
         if [ -f "$config_file" ]; then
           ${jq} --slurpfile template "$config_template" '
-            def is_removed_gpt_model:
-              type == "string"
-              and test("(^|/)gpt-[^-]+-(astra|sol|terra)([-:]|$)"; "i");
-
             ($template[0]) as $defaults
             | . as $current
-            | ($current.providers // {}) as $currentProviders
-            | ($currentProviders["opencode-go"] // null) as $legacyOpenCode
-            | (if (($currentProviders | has("opencode")) | not) and ($legacyOpenCode != null)
-               then ($current | .providers.opencode = $legacyOpenCode)
-               else $current
-               end) as $base
-            | $base
-            # Backfill provider blocks the template has gained since this
-            # config was first created (e.g. a new opencode-go teammate
-            # account). Existing provider blocks are left untouched so
-            # dashboard edits still win; only wholly-missing keys are added.
-            | .providers = (($base.providers // {}) as $currentProviders
-               | $currentProviders + (($defaults.providers // {})
-                  | with_entries(select(.key as $k | ($currentProviders | has($k)) | not))))
-            | del(.providers["opencode-go"])
-            # OpenRouter is intentionally not part of the global setup anymore;
-            # remove its old provider and visibility rows from existing configs.
-            | del(.providers.openrouter)
-            | .subagentModels = (($base.subagentModels // [])
-               | map(select((is_removed_gpt_model | not))))
-            | if ($base.customModels != null)
-              then .customModels = ($base.customModels
-                | map(select(((.modelId // "") | is_removed_gpt_model | not))))
-              else .
-              end
-            | .disabledModels = (($base.disabledModels // [])
-               | map(select((startswith("openrouter/") or is_removed_gpt_model) | not)))
-            | if ($base.modelDiscovery != null)
-              then .modelDiscovery.knownModels = (($base.modelDiscovery.knownModels // {})
-                | with_entries(
-                    if (.value.ids? | type) == "array"
-                    then .value.ids |= map(select((is_removed_gpt_model | not)))
-                    else .
-                    end
-                  ))
-              else .
-              end
-            | del(.providers.commandcode.disabled)
-            # Selectors must always reach their bound account. Older templates
-            # paused __main__ by default and OpenCodex auto-pauses drained
-            # accounts, which turns quota exhaustion into a misleading 401;
-            # a persisted pause must never defeat the bindings below. Pauses
-            # are therefore cleared on every activation (rebuild re-enables).
-            | del(.pausedCodexAccountIds)
-            | .codexAccountPickerEnabled = true
-            | .codexAccountNamespaces = (($base.codexAccountNamespaces // {})
-               + ($defaults.codexAccountNamespaces // {}))
-            # Seed the complete checked-in model-visibility snapshot only when
-            # an older runtime config has no visibility list. A present list,
-            # including [], is dashboard-owned so UI toggles remain persistent.
-            | if ($base.disabledModels == null)
-              then .disabledModels = ($defaults.disabledModels // [])
-              else .
-              end
+            | $defaults
+            | .codexAccounts = ($current.codexAccounts // [])
+            | .codexAccountNamespaces = (($defaults.codexAccountNamespaces // {})
+               + ($current.codexAccountNamespaces // {}))
           ' "$config_file" > "$candidate_config"
         else
           ${pkgs.coreutils}/bin/cp "$config_template" "$candidate_config"
@@ -317,7 +308,7 @@
         if [ "$config_changed" -eq 1 ]; then
           ${ocx} config import "$candidate_config" --yes --json > /dev/null
           ${pkgs.coreutils}/bin/chmod 600 "$config_file"
-          echo "opencodex: initialized or migrated $config_file" >&2
+          echo "opencodex: reconciled managed config and preserved connected accounts" >&2
         fi
 
         ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$candidate_with_secrets" "$current_sorted" "$candidate_sorted"
@@ -326,12 +317,6 @@
         # Nix-store Bun/CLI paths into it. Repair existing installs; reinstall
         # when a Nix update makes the old service environment stale.
         service_installed="$(${ocx} status --json 2>/dev/null | ${jq} -r '.startup.serviceInstalled // false' 2>/dev/null || echo false)"
-        proxy_running="$(${ocx} status --json 2>/dev/null | ${jq} -r '.proxy.running // false' 2>/dev/null || echo false)"
-        if [ "$proxy_running" = true ] && [ "$service_installed" != true ]; then
-          ${ocx} stop || true
-          service_installed=false
-        fi
-
         if [ "$service_installed" = true ]; then
           if ! ${ocx} service repair; then
             ${ocx} service uninstall

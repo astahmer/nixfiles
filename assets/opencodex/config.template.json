@@ -2,6 +2,7 @@
   "port": 10100,
   "managementUsageMaxReadBytes": 67108864,
   "appOwnedMemoryBudgetMb": 256,
+  "syncResumeHistory": false,
   "providers": {
     "openai": {
       "adapter": "openai-responses",
@@ -397,6 +398,16 @@
   "subagentModels": [
     "gpt-5.6-luna"
   ],
+  "subagentModelsVersion": 1,
+  "fastRows": true,
+  "customModels": [
+    {
+      "id": "8d4e3daf-f8e5-419e-bda8-7958b090faf8",
+      "provider": "commandcode",
+      "modelId": "gpt-5.6-luna",
+      "addedAt": "2026-08-04T13:44:59.962Z"
+    }
+  ],
   "websockets": false,
   "codexAutoStart": true,
   "disabledModels": [
@@ -426,6 +437,9 @@
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.3-codex-spark",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "gpt-6-astra",
     "opencode/glm-5.1",
     "opencode/glm-5.2",
     "opencode/glm-5.3",
@@ -446,6 +460,11 @@
     "opencode/qwen3.7-max",
     "opencode/qwen3.7-plus",
     "opencode/qwen3.8-max",
+    "opencode/omen-alpha",
+    "opencode/deepseek-v4-flash",
+    "opencode/deepseek-flash",
+    "opencode/grok-4.6",
+    "opencode/kimi-k2.7-code",
     "commandcode/deepseek-deepseek-v4-flash",
     "commandcode/gpt-5.3-codex",
     "commandcode/gpt-5.6-luna",
@@ -456,6 +475,8 @@
     "opencode-go-manu/glm-5.3",
     "opencode-go-manu/gpt-5.6-luna",
     "opencode-go-manu/grok-4.5",
+    "opencode-go-manu/deepseek-flash",
+    "opencode-go-manu/deepseek-v4-flash",
     "opencode-go-manu/hy3",
     "opencode-go-manu/hy3-preview",
     "opencode-go-manu/kimi-k2.5",
@@ -482,6 +503,7 @@
     "opencode/hy4-preview",
     "opencode/qwen3.8-flash",
     "opencode-go-alex/deepseek-v4-flash-vision-exp",
+    "opencode-go-alex/deepseek-flash",
     "opencode-go-alex/deepseek-v4-pro",
     "opencode-go-alex/glm-5",
     "opencode-go-alex/glm-5.1",
@@ -535,6 +557,7 @@
     "opencode-go-mathias/glm-5.2",
     "opencode-go-mathias/glm-5.3",
     "opencode-go-mathias/gpt-5.6-luna",
+    "opencode-go-mathias/deepseek-flash",
     "opencode-go-mathias/grok-4.5",
     "opencode-go-mathias/grok-4.6",
     "opencode-go-mathias/hy3",
