@@ -62,7 +62,7 @@
       "mcp",
       "settings"
     ],
-    "sideNotchEnabled": true,
+    "sideNotchEnabled": false,
     "sideNotchPlacement": "right",
     "sideNotchEdge": "right",
     "sideNotchMetric": "percent",
