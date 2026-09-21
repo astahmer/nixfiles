@@ -8,10 +8,14 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-SUmNwLzKWLTi92LIRJn6MVyBsF1edUmTatlCdKcqoRE=";
   };
 
+  patches = [
+    ./main-account-identity.patch
+  ];
+
   bunLock = ../../assets/opencodex/bun.lock;
 
   # Pins the bun-installed node_modules tree (no lockfile in the npm tarball).
-  outputHash = "sha256-/uW5GWi1dzeXNb0MjJZ2NtPLSyVhzrleaPrATyvBNu4=";
+  outputHash = "sha256-yG1z/J+GF4MpXY/t373zST9i1TgU2hWdQo1RLmV6WCE=";
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   dontFixup = true;
