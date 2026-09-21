@@ -11,6 +11,7 @@
       opencodex = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.opencodex;
       opencodexHome = "${config.home.homeDirectory}/.opencodex";
       configFile = "${opencodexHome}/config.json";
+      codexConfigFile = "${config.home.homeDirectory}/.codex/config.toml";
       configTemplate = "${../assets/opencodex/config.template.json}";
       secretsEnv = "${config.home.homeDirectory}/.config/opencodex/secrets.env";
       secretBin = "${inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret}/bin/secret";
@@ -197,11 +198,37 @@
 
         # Stop the proxy before replacing its config so the running process
         # cannot write stale routing state back over the managed snapshot.
-        proxy_running="$(${ocx} status --json 2>/dev/null | ${jq} -r '.proxy.running // false' 2>/dev/null || echo false)"
+        ocx_status="$(${ocx} status --json 2>/dev/null || printf '%s' '{}')"
+        proxy_running="$(printf '%s\n' "$ocx_status" | ${jq} -r '.proxy.running // false' 2>/dev/null || printf '%s' false)"
+        service_version_skewed="$(printf '%s\n' "$ocx_status" | ${jq} -r '.versionSkew.skewed // false' 2>/dev/null || printf '%s' false)"
         if [ "$proxy_running" = true ]; then
           if ! ${ocx} stop; then
             echo "opencodex: could not stop the proxy before config reconciliation" >&2
             exit 1
+          fi
+        fi
+
+        # The old Codex template seeded this exact loopback URL. Remove only
+        # an unmarked copy so OpenCodex can own routing injection; preserve
+        # a URL already marked as OpenCodex-managed.
+        if [ -f "${codexConfigFile}" ]; then
+          legacy_codex_config="${codexConfigFile}.legacy.$$"
+          ${pkgs.gawk}/bin/awk '
+            {
+              is_legacy_proxy = $0 ~ /^[[:space:]]*openai_base_url[[:space:]]*=[[:space:]]*"http:\/\/127\.0\.0\.1:10100\/v1"[[:space:]]*$/
+              is_opencodex_marker = previous_line ~ /^[[:space:]]*# Auto-injected by opencodex[[:space:]]*$/
+              if (is_legacy_proxy && !is_opencodex_marker) {
+                previous_line = ""
+                next
+              }
+              print
+              previous_line = $0
+            }
+          ' "${codexConfigFile}" > "$legacy_codex_config"
+          if ! ${cmp} -s "$legacy_codex_config" "${codexConfigFile}"; then
+            ${pkgs.coreutils}/bin/mv "$legacy_codex_config" "${codexConfigFile}"
+          else
+            ${pkgs.coreutils}/bin/rm -f "$legacy_codex_config"
           fi
         fi
 
@@ -314,11 +341,16 @@
         ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$candidate_with_secrets" "$current_sorted" "$candidate_sorted"
 
         # The upstream service owns its launchd plist and bakes the current
-        # Nix-store Bun/CLI paths into it. Repair existing installs; reinstall
-        # when a Nix update makes the old service environment stale.
+        # Nix-store Bun/CLI paths into it. Repair definitions normally, but
+        # restart when the profile symlink advanced while the old proxy lived.
         service_installed="$(${ocx} status --json 2>/dev/null | ${jq} -r '.startup.serviceInstalled // false' 2>/dev/null || echo false)"
         if [ "$service_installed" = true ]; then
-          if ! ${ocx} service repair; then
+          if [ "$service_version_skewed" = true ]; then
+            if ! ${ocx} service restart; then
+              ${ocx} service uninstall
+              ${ocx} service install
+            fi
+          elif ! ${ocx} service repair; then
             ${ocx} service uninstall
             ${ocx} service install
           fi

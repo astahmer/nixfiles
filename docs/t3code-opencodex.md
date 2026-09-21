@@ -23,6 +23,13 @@ for providers, model visibility, picker state, routing defaults, the Luna
 sub-agent roster, and the current 173-entry disabled-model snapshot. It uses
 `$VAR` references instead of committing API keys.
 
+The native Codex config is initialized separately from
+`assets/codex/config.template.toml`. That template deliberately omits the
+loopback `openai_base_url`: OpenCodex injects and marks its routing line when
+the proxy starts, so the value is recognized as managed rather than as a
+user-owned override. Existing configs carrying the old Nix-seeded URL are
+migrated during activation.
+
 Every `nixapply` reconciles that managed config again. It stops the proxy when
 needed, rebuilds the candidate from the template, injects available provider
 keys, and imports it only when it differs. This intentionally resets stale
