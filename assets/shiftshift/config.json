@@ -16,7 +16,7 @@
     "toast_custom_y": 1084,
     "toast_duration_ms": 1800,
     "toast_font_scale": 100,
-    "dock_enabled": true,
+    "dock_enabled": false,
     "dock_position": "bottom_right",
     "dock_custom_x": 2730,
     "dock_custom_y": 1746,
