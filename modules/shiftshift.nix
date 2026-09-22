@@ -69,6 +69,9 @@
       # settings writes target the read-only Nix store. Seed each file once
       # from the versioned portable backup instead, then leave it user-owned.
       home.file.".config/shiftshift/config.json".source = configTemplate;
+      # Bundle copies share this app-data folder, so manual launches also
+      # defer login-item ownership to the Nix LaunchAgent.
+      home.file."Library/Application Support/dev.shiftshift.tauri/.nix-launchd-managed".text = "";
       home.activation.shiftshiftConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         app_data_dir="${appDataDir}"
         backup_file="${configTemplate}"

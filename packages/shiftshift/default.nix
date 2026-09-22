@@ -60,7 +60,9 @@ let
 
   # Tauri embeds ../dist at compile time, so assemble a source tree with
   # src-tauri/ and the built frontend as siblings.
-  rustSrc = shiftPkgs.runCommand "shiftshift-src" { } ''
+  rustSrc = shiftPkgs.runCommand "shiftshift-src" {
+    nativeBuildInputs = [ shiftPkgs.gnugrep shiftPkgs.patch ];
+  } ''
     mkdir -p $out
     cp -r ${shiftshiftSource}/.cargo $out/.cargo
     mkdir -p $out/src-tauri
@@ -71,6 +73,11 @@ let
     cp -r ${shiftshiftSource}/src-tauri/src $out/src-tauri/
     cp -r ${shiftshiftSource}/src-tauri/icons $out/src-tauri/
     cp -r ${shiftshiftSource}/src-tauri/capabilities $out/src-tauri/
+    chmod -R u+w "$out/src-tauri"
+    if [ ! -f "$out/src-tauri/src/instance.rs" ] || \
+      ! ${shiftPkgs.gnugrep}/bin/grep -Fq 'const NIX_LAUNCHD_MARKER' "$out/src-tauri/src/instance.rs"; then
+      ${shiftPkgs.patch}/bin/patch -p1 -d "$out" < ${./managed-single-instance.patch}
+    fi
     cp -r ${frontendDist} $out/dist
   '';
 
