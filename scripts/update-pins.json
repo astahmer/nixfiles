@@ -224,24 +224,22 @@
     {
       "name": "agents",
       "type": "flake-input",
-      "description": "Portable agent contract and reusable skill source",
+      "description": "Reusable project instructions and skill source",
       "command": [
         "nix",
         "flake",
-        "lock",
-        "--update-input",
+        "update",
         "agents"
       ]
     },
     {
       "name": "emilint",
       "type": "flake-input",
-      "description": "Executable Oxlint and ast-grep rule source",
+      "description": "Executable lint rules and companion skill source",
       "command": [
         "nix",
         "flake",
-        "lock",
-        "--update-input",
+        "update",
         "emilint"
       ]
     },

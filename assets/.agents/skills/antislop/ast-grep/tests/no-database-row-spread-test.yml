@@ -1,5 +1,0 @@
-id: no-database-row-spread
-valid:
-  - "return { id: row.id, title: row.title };"
-invalid:
-  - "return { ...row, rank: 0 };"

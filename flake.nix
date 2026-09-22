@@ -62,8 +62,8 @@
       url = "github:astahmer/tokitoki";
     };
 
-    # Portable agent contract and skills. This is a plain source repository;
-    # the agents module assembles it with machine-local overlays.
+    # Reusable project skills from a plain source repository; Home Manager
+    # assembles them with the machine-local skill overlay.
     agents = {
       url = "github:astahmer/agents";
       flake = false;

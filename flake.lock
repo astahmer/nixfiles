@@ -3,11 +3,11 @@
     "agents": {
       "flake": false,
       "locked": {
-        "lastModified": 1779883555,
-        "narHash": "sha256-8wXYGYJQtBBNaIu8onRCN0SH9+/EPJ/Kcpv3/kwFszM=",
+        "lastModified": 1790102994,
+        "narHash": "sha256-26URfqo2dWhu5EF8HtQAeNAFO5oqVUGQaQK5NV5VqUc=",
         "owner": "astahmer",
         "repo": "agents",
-        "rev": "4d1c514ed8ff3e966182f83735c7207da7bd3196",
+        "rev": "d4b4bcf161d73ca1f9cef1b3ee65eb8c39adfa82",
         "type": "github"
       },
       "original": {
@@ -131,11 +131,11 @@
     "emilint": {
       "flake": false,
       "locked": {
-        "lastModified": 1790084150,
-        "narHash": "sha256-zmHP7zGPwVClK1WLUQx0XlzbLqLWxNeQuotaaWhWBOY=",
+        "lastModified": 1790114688,
+        "narHash": "sha256-n9VyzHbi93+l+9H60iSChCfng+APvA5tk9Amk80L0RU=",
         "owner": "astahmer",
         "repo": "emilint",
-        "rev": "1440026f6b620e4b9b6f8545d695abf74d0a558e",
+        "rev": "f4e442ebc003a2661a6cce98f738672e84b1c2d8",
         "type": "github"
       },
       "original": {

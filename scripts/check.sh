@@ -84,40 +84,42 @@ if command -v jq >/dev/null 2>&1; then
 fi
 
 if command -v ast-grep >/dev/null 2>&1 && command -v oxlint >/dev/null 2>&1; then
-  (
-    cd assets/.agents/skills/antislop
-    ast-grep test -c sgconfig.yml --skip-snapshot-tests
-  )
-  (
-    cd assets/.agents/skills/effect-antislop
-    ast-grep test -c sgconfig.yml --skip-snapshot-tests
-  )
+  if [ -z "${EMILINT_SOURCE:-}" ] || [ ! -d "$EMILINT_SOURCE" ]; then
+    echo "nixfiles-check: pinned emilint source is unavailable" >&2
+    exit 1
+  fi
 
-  oxlint_fixture() {
-    local config="$1"
-    local valid="$2"
-    local invalid="$3"
-    oxlint --config "$config" --quiet "$valid"
-    if oxlint --config "$config" --quiet "$invalid"; then
-      echo "nixfiles-check: expected Oxlint failure for $invalid" >&2
-      return 1
-    fi
-  }
+  (
+    cd "$EMILINT_SOURCE"
+    ast-grep test -c sgconfig.yml --skip-snapshot-tests
+    ast-grep test -c profiles/effect/sgconfig.yml --skip-snapshot-tests
 
-  oxlint_fixture \
-    assets/.agents/skills/antislop/oxlint.test.config.json \
-    assets/.agents/skills/antislop/tests/oxlint/valid-reflect.ts \
-    assets/.agents/skills/antislop/tests/oxlint/invalid-reflect.ts
-  oxlint_fixture \
-    assets/.agents/skills/antislop/oxlint.test.config.json \
-    assets/.agents/skills/antislop/tests/oxlint/valid-broad-object.ts \
-    assets/.agents/skills/antislop/tests/oxlint/invalid-broad-object.ts
-  oxlint_fixture \
-    assets/.agents/skills/effect-antislop/oxlint.test.config.json \
-    assets/.agents/skills/effect-antislop/tests/oxlint/adapters/valid-run.ts \
-    assets/.agents/skills/effect-antislop/tests/oxlint/domain/invalid-run.ts
+    oxlint_fixture() {
+      local config="$1"
+      local valid="$2"
+      local invalid="$3"
+      oxlint --config "$config" --quiet "$valid"
+      if oxlint --config "$config" --quiet "$invalid"; then
+        echo "nixfiles-check: expected Oxlint failure for $invalid" >&2
+        return 1
+      fi
+    }
+
+    oxlint_fixture \
+      oxlint.test.config.json \
+      tests/oxlint/valid-reflect.ts \
+      tests/oxlint/invalid-reflect.ts
+    oxlint_fixture \
+      oxlint.test.config.json \
+      tests/oxlint/valid-broad-object.ts \
+      tests/oxlint/invalid-broad-object.ts
+    oxlint_fixture \
+      profiles/effect/oxlint.test.config.json \
+      profiles/effect/tests/oxlint/adapters/valid-run.ts \
+      profiles/effect/tests/oxlint/domain/invalid-run.ts
+  )
 else
-  echo "nixfiles-check: skipping antislop fixtures (ast-grep or oxlint not on PATH)" >&2
+  echo "nixfiles-check: skipping lint fixtures (ast-grep or oxlint not on PATH)" >&2
 fi
 
 git diff --check

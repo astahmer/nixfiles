@@ -38,8 +38,7 @@
         # of assets/.agents.
         cp -R --no-preserve=mode "${inputs.agents}/.agents/skills/." "$out/skills/"
 
-        # emilint owns executable lint assets; keep the deployed skill layout
-        # compatible with the global antislop and effect-antislop contracts.
+        # emilint owns executable lint assets and their companion guidance.
         mkdir -p "$out/skills/antislop" "$out/skills/effect-antislop"
         cp -R --no-preserve=mode "${inputs.emilint}/ast-grep" "$out/skills/antislop/"
         cp -R --no-preserve=mode "${inputs.emilint}/oxlint" "$out/skills/antislop/"
@@ -52,18 +51,9 @@
         cp "${inputs.emilint}/profiles/effect/sgconfig.yml" "$out/skills/effect-antislop/"
         cp "${inputs.emilint}/profiles/effect/oxlint.test.config.json" "$out/skills/effect-antislop/"
 
-        # These companion docs land with the next published emilint source.
-        # Keep the local compatibility copies usable while the lock still
-        # points at the pre-migration remote revision.
-        if [ -f "${inputs.emilint}/skills/antislop/SKILL.md" ]; then
-          cp "${inputs.emilint}/skills/antislop/SKILL.md" "$out/skills/antislop/"
-        fi
-        if [ -f "${inputs.emilint}/skills/effect-antislop/SKILL.md" ]; then
-          cp "${inputs.emilint}/skills/effect-antislop/SKILL.md" "$out/skills/effect-antislop/"
-        fi
-        if [ -f "${inputs.emilint}/CATALOG.md" ]; then
-          cp "${inputs.emilint}/CATALOG.md" "$out/skills/antislop/"
-        fi
+        cp "${inputs.emilint}/skills/antislop/SKILL.md" "$out/skills/antislop/"
+        cp "${inputs.emilint}/skills/effect-antislop/SKILL.md" "$out/skills/effect-antislop/"
+        cp "${inputs.emilint}/CATALOG.md" "$out/skills/antislop/"
 
         cp -R "${modlens}/share/modlens/skills/modlens" "$out/skills/"
         cp -R "${modsearch}/share/modsearch/skills/modsearch" "$out/skills/"

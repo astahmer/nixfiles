@@ -17,7 +17,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Layout
 
-- `inputs.agents` is the portable project contract and reusable skill source. `assets/.agents/` remains the Nix-local global contract and overlay for machine-specific skills, hooks, instructions, and memory. Home Manager combines their skill trees into the deployed `~/.agents` tree.
+- `inputs.agents` supplies reusable skills and an optional project `AGENTS.md` baseline. `assets/.agents/` remains the Nix-local global contract and overlay for machine-specific skills, hooks, instructions, and memory. Home Manager combines the skill trees into the deployed `~/.agents` tree.
 - `inputs.emilint` owns the executable Oxlint and ast-grep rule sources and fixtures that the agents module overlays into `antislop/` and `effect-antislop/`. `modules/coding.nix` installs the matching `oxlint` and `ast-grep` CLIs globally.
 - Agent deployment source is the pinned `agents` input plus `assets/.agents/` overlays and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.codex/AGENTS.md`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies the deployed global `AGENTS.md`, not the clone.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently after `nixbootstrap` and when activation inputs change.
@@ -35,7 +35,7 @@ point other projects at the clone's absolute path.
 
 ## Reference Repos
 
-- Reference repos are cloned to `~/.references/<name>` by default (shared globally). Use the `reference-repository` skill to add or read them.
+- Reference repos are cloned to `~/.references/<name>` by default (shared globally). Use `add-reference-repository` to clone one and `read-reference-repository` to inspect it.
 - To keep a clone local to a project (escape hatch), explicitly ask to "add locally" — it goes into `<project>/.references/<name>`.
 - Each project tracks its references in `reference-repos.md` at the project root.
 - Read the clone's `AGENTS.md` before inspecting implementation details.

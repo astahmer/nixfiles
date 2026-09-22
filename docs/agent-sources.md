@@ -1,39 +1,43 @@
 # Agent sources
 
-The deployed agent tree is assembled from three ownership layers:
+The deployed agent tree is assembled from three sources:
 
-1. `inputs.agents` supplies the portable project contract and reusable skills.
-2. `inputs.emilint` supplies executable antislop and Effect rule assets.
-3. `assets/.agents/` supplies the Nix-local global contract and overlays such
-   as machine skills, hooks, instructions, and memory.
+1. `inputs.agents` supplies reusable project skills.
+2. `inputs.emilint` supplies executable antislop and Effect rules, their
+   companion skills, configs, and fixtures.
+3. `assets/.agents/` supplies the Nix-local global contract, machine-specific
+   skills, hooks, instructions, and memory.
 
 `modules/agents.nix` assembles those layers before Home Manager deploys them
 to `~/.agents`. Projects outside Nix should consume `agents` directly and add
-`emilint` as a package dependency.
+`emilint` with pnpm:
 
-## Transition state
+```bash
+pnpm add --save-dev astahmer/emilint#main
+```
 
-The inputs currently point at the remote commits that existed before this
-local migration. The local `agents` and `emilint` worktrees contain the next
-source versions but have not been pushed.
+The consumer's pnpm lockfile records the exact emilint commit.
 
-After those source commits are published:
+## Updating the sources
 
-1. refresh both inputs in one lockfile change:
+After changing either source repository, publish its source commit and refresh
+both Nix inputs together:
 
    ```bash
-   rtk nix flake lock --update-input agents --update-input emilint
+   rtk nix flake update agents emilint
    ```
 
-2. run the Home Manager agent-tree check and inspect the assembled skill list;
-3. remove duplicate portable skill directories from `assets/.agents/skills`;
-4. keep only machine-specific overlays and compatibility fixtures in
-   `nixfiles`.
+Then check and realize the Home Manager configuration:
 
-Until that lock update, `nixfiles-check` still exercises the checked-in
-antislop and Effect compatibility fixtures. Once the published emilint source
-is pinned, point that check at the package-owned fixtures or remove the
-duplicate snapshots.
+```bash
+rtk nixfiles-check
+rtk nix build --no-link '.#homeConfigurations.macbook.activationPackage'
+```
+
+`nixfiles-check` runs the lint fixtures from the pinned `inputs.emilint`
+source. The checked-in `.agents` tree keeps only the Nix-local contract and
+machine-specific skill overlays; portable skills and lint rules have one
+maintained source each.
 
 Do not add a Git submodule. The lockfile pins the source revisions, while this
 module owns the small amount of composition needed for machine deployment.

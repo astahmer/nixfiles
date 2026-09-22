@@ -236,6 +236,9 @@ in
           pkgs.nixfmt
           pkgs.oxlint
         ];
+        runtimeEnv = {
+          EMILINT_SOURCE = inputs.emilint;
+        };
         text = builtins.readFile ../scripts/check.sh;
       };
 
