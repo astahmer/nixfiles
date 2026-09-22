@@ -150,6 +150,9 @@ workspaces and Git worktrees without deleting or forgetting anything:
 jj-workspace-audit --root "$HOME/dev" --older-than-days 30 | column -t -s $'\t'
 ```
 
+The default JJ workspace is omitted from the report. Pass `--with-default` to
+include it.
+
 The audit invokes `jj status` to detect dirty workspaces, so JJ may create
 ordinary snapshot operations while it runs; it never rewrites or deletes
 commits.

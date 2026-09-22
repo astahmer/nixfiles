@@ -3,6 +3,7 @@ set -euo pipefail
 
 scan_root="${JJ_WORKSPACE_ROOT:-$HOME/dev}"
 older_than_days="${JJ_WORKSPACE_OLDER_THAN_DAYS:-30}"
+with_default=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -16,11 +17,16 @@ while [ "$#" -gt 0 ]; do
       older_than_days="$2"
       shift 2
       ;;
+    --with-default)
+      with_default=1
+      shift
+      ;;
     -h|--help)
       printf '%s\n' \
-        'Usage: jj-workspace-audit [--root PATH] [--older-than-days DAYS]' \
+        'Usage: jj-workspace-audit [--root PATH] [--older-than-days DAYS] [--with-default]' \
         '' \
-        'Reports JJ workspaces without deleting or forgetting anything.'
+        'Reports JJ workspaces without deleting or forgetting anything.' \
+        'The default JJ workspace is omitted unless --with-default is supplied.'
       exit 0
       ;;
     *)
@@ -74,6 +80,9 @@ while IFS=$'\t' read -r repo_ref workspace_root; do
   while IFS= read -r workspace_line; do
     [ -n "$workspace_line" ] || continue
     workspace_name="${workspace_line%%:*}"
+    if [ "$workspace_name" = 'default' ] && [ "$with_default" -eq 0 ]; then
+      continue
+    fi
     details="${workspace_line#*: }"
     workspace_relative_path="${details%% *}"
     details="${details#* }"
