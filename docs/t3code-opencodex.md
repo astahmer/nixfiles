@@ -19,8 +19,8 @@ store at `~/.local/share/opencode/auth.json`.
 
 `~/.opencodex/config.json` is bootstrapped from
 `assets/opencodex/config.template.json`. The template is the source of truth
-for providers, model visibility, picker state, routing defaults, the Luna
-sub-agent roster, and the current 173-entry disabled-model snapshot. It uses
+for providers, model visibility, picker state, routing defaults, the GPT-6 Luna
+sub-agent roster, and the current 171-entry disabled-model snapshot. It uses
 `$VAR` references instead of committing API keys.
 
 The native Codex config is initialized separately from

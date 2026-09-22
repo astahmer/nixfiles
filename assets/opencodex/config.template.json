@@ -19,9 +19,10 @@
       "models": [
         "deepseek/deepseek-v4-flash",
         "gpt-5.3-codex",
-        "gpt-5.6-luna"
+        "gpt-6-luna",
+        "gpt-6-sol"
       ],
-      "defaultModel": "gpt-5.6-luna",
+      "defaultModel": "gpt-6-luna",
       "apiKeyPool": [
         {
           "id": "commandcode-primary",
@@ -396,7 +397,7 @@
     "codex-perso": "@main"
   },
   "subagentModels": [
-    "gpt-5.6-luna"
+    "gpt-6-luna"
   ],
   "subagentModelsVersion": 1,
   "fastRows": true,
@@ -404,7 +405,7 @@
     {
       "id": "8d4e3daf-f8e5-419e-bda8-7958b090faf8",
       "provider": "commandcode",
-      "modelId": "gpt-5.6-luna",
+      "modelId": "gpt-6-luna",
       "addedAt": "2026-08-04T13:44:59.962Z"
     }
   ],
@@ -437,7 +438,6 @@
     "gpt-5.4",
     "gpt-5.4-mini",
     "gpt-5.3-codex-spark",
-    "gpt-5.6-sol",
     "gpt-5.6-terra",
     "gpt-6-astra",
     "opencode/glm-5.1",
@@ -467,7 +467,6 @@
     "opencode/kimi-k2.7-code",
     "commandcode/deepseek-deepseek-v4-flash",
     "commandcode/gpt-5.3-codex",
-    "commandcode/gpt-5.6-luna",
     "opencode-go-manu/deepseek-v4-pro",
     "opencode-go-manu/glm-5",
     "opencode-go-manu/glm-5.1",
