@@ -1,69 +1,33 @@
 { pkgs }:
+let
+  sourceFor =
+    system: version:
+    {
+      aarch64-darwin = {
+        url = "https://github.com/lidge-jun/opencodex/releases/download/v${version}/ocx-${version}-bun-darwin-arm64.tar.gz";
+        hash = "sha256-Cx6wx5pcq9pP357MW4OfAekKKPa7Y8J/C+j9Yy43t4s=";
+      };
+      x86_64-linux = {
+        url = "https://github.com/lidge-jun/opencodex/releases/download/v${version}/ocx-${version}-bun-linux-x64.tar.gz";
+        hash = "sha256-r2B8JLd3npCns9zrfNLoxQ8MrIAIi16zvOTJtfHCVkw=";
+      };
+    }
+    .${system} or (throw "Unsupported platform for opencodex: ${system}");
+in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "opencodex";
-  version = "2.56.0";
+  version = "2.63.0-preview.20260923";
 
-  src = pkgs.fetchurl {
-    url = "https://registry.npmjs.org/@bitkyc08/opencodex/-/opencodex-${finalAttrs.version}.tgz";
-    hash = "sha256-SUmNwLzKWLTi92LIRJn6MVyBsF1edUmTatlCdKcqoRE=";
-  };
+  src = pkgs.fetchurl (sourceFor pkgs.stdenvNoCC.hostPlatform.system finalAttrs.version);
+  sourceRoot = ".";
 
-  patches = [
-    ./main-account-identity.patch
-  ];
-
-  bunLock = ../../assets/opencodex/bun.lock;
-
-  # Pins the bun-installed node_modules tree (no lockfile in the npm tarball).
-  outputHash = "sha256-yG1z/J+GF4MpXY/t373zST9i1TgU2hWdQo1RLmV6WCE=";
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  dontFixup = true;
-
-  nativeBuildInputs = [
-    pkgs.bun
-    pkgs.jq
-  ];
-
-  sourceRoot = "package";
-
-  buildPhase = ''
-        runHook preBuild
-
-        export HOME="/tmp/opencodex-home"
-        export XDG_CACHE_HOME="/tmp/opencodex-cache"
-        export BUN_TMPDIR="/tmp/opencodex-tmp"
-        export BUN_INSTALL="/tmp/opencodex-bun"
-        mkdir -p "$HOME" "$XDG_CACHE_HOME" "$BUN_TMPDIR" "$BUN_INSTALL"
-
-    # The published package.json has an unterminated description string.
-        # Normalize it before jq and bun parse the manifest.
-        ${pkgs.gnused}/bin/sed -i '4c\  "description": "Universal provider proxy for OpenAI Codex and Claude Code",' package.json
-
-        # Runtime uses nixpkgs bun; skip the npm `bun` dependency download.
-        jq 'del(.dependencies.bun) | del(.trustedDependencies)' package.json > package.json.new
-        mv package.json.new package.json
-
-        # Use a vendored lockfile so the resolved dependency tree is deterministic.
-        cp "${finalAttrs.bunLock}" bun.lock
-        bun install --production --frozen-lockfile --ignore-scripts
-
-        runHook postBuild
-  '';
+  nativeBuildInputs = pkgs.lib.optional pkgs.stdenvNoCC.hostPlatform.isLinux pkgs.autoPatchelfHook;
+  buildInputs = pkgs.lib.optional pkgs.stdenvNoCC.hostPlatform.isLinux pkgs.glibc;
 
   installPhase = ''
     runHook preInstall
 
-    mkdir -p "$out/lib/node_modules/@bitkyc08"
-    cp -R . "$out/lib/node_modules/@bitkyc08/opencodex"
-
-    mkdir -p "$out/bin"
-    cat > "$out/bin/ocx" <<'EOF'
-      #!/bin/sh
-      script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-      exec bun "$script_dir/../lib/node_modules/@bitkyc08/opencodex/src/cli/index.ts" "$@"
-    EOF
-    chmod +x "$out/bin/ocx"
+    install -Dm755 ocx "$out/bin/ocx"
     ln -s ocx "$out/bin/opencodex"
 
     runHook postInstall

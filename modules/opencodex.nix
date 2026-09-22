@@ -25,9 +25,8 @@
       gettext = "${pkgs.gettext}/bin";
     in
     {
-      # `ocx` wrapper execs `bun` from PATH (same pattern as ghui).
+      # OpenCodex is a standalone upstream binary; no separate Bun runtime is needed.
       home.packages = [
-        pkgs.bun
         opencodex
       ];
 
@@ -47,7 +46,7 @@
 
         # /usr/bin last: macOS find lacks -printf, which home-manager's
         # own activation steps rely on.
-        export PATH="${pkgs.bun}/bin:${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${gettext}:${pkgs.jq}/bin:$PATH:/usr/bin:/bin"
+        export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:${gettext}:${pkgs.jq}/bin:$PATH:/usr/bin:/bin"
         ${pkgs.coreutils}/bin/mkdir -p "$opencodex_home" "$secrets_dir"
 
         # ${secretBin} is the raw CLI: unlike the `secret` shell alias from
@@ -367,7 +366,6 @@
     in
     {
       environment.systemPackages = [
-        pkgs.bun
         opencodex
       ];
     };

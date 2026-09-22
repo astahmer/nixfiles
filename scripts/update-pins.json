@@ -286,7 +286,7 @@
     {
       "name": "opencodex",
       "type": "manual",
-      "description": "NPM tarball, Bun lockfile, and recursive dependency hash move together",
+      "description": "Pinned OpenCodex release archive and per-platform binary hashes move together",
       "enabled": false,
       "command": [
         "nix",

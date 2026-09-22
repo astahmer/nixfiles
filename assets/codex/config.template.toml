@@ -2,7 +2,7 @@
 # This template provides the native Codex defaults for a fresh machine.
 # Existing app settings remain user-owned after initialization.
 
-model = "codex-perso/gpt-5.6-luna"
+model = "codex-perso/gpt-6-luna"
 model_catalog_json = "HOME_DIR/.codex/opencodex-catalog.json"
 model_reasoning_effort = "high"
 service_tier = "fast"

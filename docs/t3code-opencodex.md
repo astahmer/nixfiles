@@ -19,8 +19,9 @@ store at `~/.local/share/opencode/auth.json`.
 
 `~/.opencodex/config.json` is bootstrapped from
 `assets/opencodex/config.template.json`. The template is the source of truth
-for providers, model visibility, picker state, routing defaults, the GPT-6 Luna
-sub-agent roster, and the current 171-entry disabled-model snapshot. It uses
+for providers, model visibility, picker state, routing defaults, the native
+GPT-6 Sol/Luna model roster, and the current 170-entry disabled-model
+snapshot. It uses
 `$VAR` references instead of committing API keys.
 
 The native Codex config is initialized separately from
@@ -56,8 +57,9 @@ each OAuth login once because OAuth tokens must not be copied through Nix.
 
 The stale `activeCodexAccountId` is not carried into the rebuilt config. That
 removes the old persisted `codex-work` preference; the native Codex template
-defaults to `codex-perso/gpt-5.6-luna`, and explicit account-qualified model
-selectors remain available when another account is intentionally chosen.
+defaults to `codex-perso/gpt-6-luna`; the matching Sol model and explicit
+account-qualified model selectors remain available when another account is
+intentionally chosen.
 
 The four provider keys are read by activation via the project or global
 `secret` config; the local `~/.config/opencodex/secrets.env` remains a fallback

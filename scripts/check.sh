@@ -41,11 +41,17 @@ if command -v jq >/dev/null 2>&1; then
     ])
     and ([.codexAccounts[].isMain] | all(. == false))
     and ([.codexAccounts[].email] | all(startswith("$OPENCODEX_CODEX_")))
-    # This is the checked-in OpenCodex 2.42.0 visibility snapshot for the
+    # This is the checked-in OpenCodex 2.63.0 visibility snapshot for the
     # configured providers. A catalog refresh that intentionally changes it
     # should update the template and these assertions together.
-    and (.disabledModels | length == 161)
+    and (.disabledModels | length == 170)
     and ((.disabledModels | length) == (.disabledModels | unique | length))
+    and (.providers.commandcode.defaultModel == "gpt-6-luna")
+    and (.providers.commandcode.models | contains(["gpt-6-luna", "gpt-6-sol"]))
+    and (.subagentModels | index("gpt-6-luna") != null)
+    and (.disabledModels | index("gpt-6-astra") == null)
+    and (.disabledModels | index("gpt-6-sol") == null)
+    and (.disabledModels | index("gpt-6-luna") == null)
     and (.disabledModels | index("opencode-go-alex/deepseek-v4-flash-vision-exp") != null)
     and (.disabledModels | index("opencode-go-manu/gpt-5.6-luna") != null)
     and (.disabledModels | index("opencode-go-mathias/qwen3.8-max") != null)
