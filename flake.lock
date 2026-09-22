@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "agents": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779883555,
+        "narHash": "sha256-8wXYGYJQtBBNaIu8onRCN0SH9+/EPJ/Kcpv3/kwFszM=",
+        "owner": "astahmer",
+        "repo": "agents",
+        "rev": "4d1c514ed8ff3e966182f83735c7207da7bd3196",
+        "type": "github"
+      },
+      "original": {
+        "owner": "astahmer",
+        "repo": "agents",
+        "type": "github"
+      }
+    },
     "bun2nix": {
       "inputs": {
         "flake-parts": [
@@ -109,6 +125,22 @@
         "owner": "cachix",
         "ref": "v2.3.1",
         "repo": "devenv",
+        "type": "github"
+      }
+    },
+    "emilint": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790084150,
+        "narHash": "sha256-zmHP7zGPwVClK1WLUQx0XlzbLqLWxNeQuotaaWhWBOY=",
+        "owner": "astahmer",
+        "repo": "emilint",
+        "rev": "1440026f6b620e4b9b6f8545d695abf74d0a558e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "astahmer",
+        "repo": "emilint",
         "type": "github"
       }
     },
@@ -561,7 +593,9 @@
     },
     "root": {
       "inputs": {
+        "agents": "agents",
         "devenv": "devenv",
+        "emilint": "emilint",
         "flake-parts": "flake-parts_2",
         "home-manager": "home-manager",
         "import-tree": "import-tree",

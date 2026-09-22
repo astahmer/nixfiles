@@ -62,6 +62,20 @@
       url = "github:astahmer/tokitoki";
     };
 
+    # Portable agent contract and skills. This is a plain source repository;
+    # the agents module assembles it with machine-local overlays.
+    agents = {
+      url = "github:astahmer/agents";
+      flake = false;
+    };
+
+    # Executable Oxlint and ast-grep rules. This is a plain source repository;
+    # the agents module overlays its rule assets into the deployed skill tree.
+    emilint = {
+      url = "github:astahmer/emilint";
+      flake = false;
+    };
+
   };
 
   outputs =

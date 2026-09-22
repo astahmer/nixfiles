@@ -17,21 +17,54 @@
 
       # Exclude deprecated readbro skill from the deployed .agents directory.
       # The source tree itself is kept under assets/ for reference.
-      agentsFilter =
+      localAgentsFilter =
         path: _type:
         let
           relPath = lib.removePrefix (toString ../assets/.agents) (toString path);
         in
         !(lib.hasPrefix "/skills/readbro" relPath);
 
-      agentsSrc = lib.cleanSourceWith {
+      localAgentsSrc = lib.cleanSourceWith {
         src = lib.cleanSource ../assets/.agents;
-        filter = agentsFilter;
+        filter = localAgentsFilter;
       };
 
       agentsWithSkillOverlays = pkgs.runCommandLocal "agents-with-skill-overlays" { } ''
         mkdir -p "$out"
-        cp -R --no-preserve=mode "${agentsSrc}/." "$out/"
+        cp -R --no-preserve=mode "${localAgentsSrc}/." "$out/"
+
+        # Portable skills come from the pinned agents source. Keep the local
+        # tree as an overlay until every machine-specific skill has moved out
+        # of assets/.agents.
+        cp -R --no-preserve=mode "${inputs.agents}/.agents/skills/." "$out/skills/"
+
+        # emilint owns executable lint assets; keep the deployed skill layout
+        # compatible with the global antislop and effect-antislop contracts.
+        mkdir -p "$out/skills/antislop" "$out/skills/effect-antislop"
+        cp -R --no-preserve=mode "${inputs.emilint}/ast-grep" "$out/skills/antislop/"
+        cp -R --no-preserve=mode "${inputs.emilint}/oxlint" "$out/skills/antislop/"
+        cp -R --no-preserve=mode "${inputs.emilint}/tests" "$out/skills/antislop/"
+        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/ast-grep" "$out/skills/effect-antislop/"
+        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/oxlint" "$out/skills/effect-antislop/"
+        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/tests" "$out/skills/effect-antislop/"
+        cp "${inputs.emilint}/sgconfig.yml" "$out/skills/antislop/"
+        cp "${inputs.emilint}/oxlint.test.config.json" "$out/skills/antislop/"
+        cp "${inputs.emilint}/profiles/effect/sgconfig.yml" "$out/skills/effect-antislop/"
+        cp "${inputs.emilint}/profiles/effect/oxlint.test.config.json" "$out/skills/effect-antislop/"
+
+        # These companion docs land with the next published emilint source.
+        # Keep the local compatibility copies usable while the lock still
+        # points at the pre-migration remote revision.
+        if [ -f "${inputs.emilint}/skills/antislop/SKILL.md" ]; then
+          cp "${inputs.emilint}/skills/antislop/SKILL.md" "$out/skills/antislop/"
+        fi
+        if [ -f "${inputs.emilint}/skills/effect-antislop/SKILL.md" ]; then
+          cp "${inputs.emilint}/skills/effect-antislop/SKILL.md" "$out/skills/effect-antislop/"
+        fi
+        if [ -f "${inputs.emilint}/CATALOG.md" ]; then
+          cp "${inputs.emilint}/CATALOG.md" "$out/skills/antislop/"
+        fi
+
         cp -R "${modlens}/share/modlens/skills/modlens" "$out/skills/"
         cp -R "${modsearch}/share/modsearch/skills/modsearch" "$out/skills/"
         cp -R "${calldiff}/share/calldiff/skills/calldiff" "$out/skills/"

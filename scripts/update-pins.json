@@ -222,6 +222,30 @@
       ]
     },
     {
+      "name": "agents",
+      "type": "flake-input",
+      "description": "Portable agent contract and reusable skill source",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "agents"
+      ]
+    },
+    {
+      "name": "emilint",
+      "type": "flake-input",
+      "description": "Executable Oxlint and ast-grep rule source",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "emilint"
+      ]
+    },
+    {
       "name": "shiftshift",
       "type": "flake-input",
       "description": "Pinned shiftshift app source and reproducible Tauri build",
