@@ -62,9 +62,23 @@ nh home switch . -c macbook -b hm-backup
 ```
 
 The cache setup asks for the macOS administrator password once. It configures
-the Nix daemon to use the Numtide, devenv, and Cachix binary caches, enables
-parallel jobs, and makes the extra cache keys trusted. Rerun the command after
-changing Nix daemon settings or moving to a new machine; it is idempotent.
+the Nix daemon to enable `nix-command` and `flakes`, use the Numtide, devenv,
+and Cachix binary caches, enable parallel jobs, and trust the extra cache keys.
+Rerun the command after changing Nix daemon settings or moving to a new machine;
+it is idempotent.
+
+If an already-deployed older helper fails with `nix-command is disabled`, add
+the feature to the main daemon config once before retrying. Put it in
+`/etc/nix/nix.conf` so the older helper cannot overwrite it in its managed
+include:
+
+```bash
+if ! sudo /usr/bin/grep -Fqx 'extra-experimental-features = nix-command flakes' /etc/nix/nix.conf; then
+  printf '%s\n' 'extra-experimental-features = nix-command flakes' | sudo /usr/bin/tee -a /etc/nix/nix.conf >/dev/null
+fi
+sudo /bin/launchctl kickstart -k system/org.nixos.nix-daemon
+nixapply
+```
 
 After that, `nixapply` works from any directory (`NH_FLAKE=~/.config/nixfiles`).
 
@@ -261,10 +275,12 @@ them for the local login user. On a standalone macOS or Linux Home Manager
 install, the Nix daemon must have the same caches configured once in
 `/etc/nix/nix.conf`; a flake's `nixConfig` is ignored for restricted settings
 when the client is not trusted. Add the cache and the login user there before
-applying:
+applying. The `nixfiles-configure-nix-cache` helper configures these settings,
+including `nix-command` and `flakes`, on macOS:
 
 ```ini
 trusted-users = root astahmer
+extra-experimental-features = nix-command flakes
 extra-substituters = https://cache.numtide.com https://devenv.cachix.org https://cachix.cachix.org
 extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g= devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw= cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM=
 ```

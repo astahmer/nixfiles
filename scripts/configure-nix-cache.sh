@@ -21,7 +21,7 @@ if [[ ! "$login_user" =~ ^[A-Za-z0-9._-]+$ ]]; then
 fi
 
 if [[ "$nix_conf" == "/etc/nix/nix.conf" && "$EUID" -ne 0 ]]; then
-  exec /usr/bin/sudo -- "$0" "$@"
+  exec /usr/bin/sudo -H -- "$0" "$@"
 fi
 
 cache_substituters="https://cache.numtide.com https://devenv.cachix.org https://cachix.cachix.org"
@@ -41,6 +41,7 @@ trap cleanup EXIT
 printf '%s\n' \
   "# Managed by nixfiles-configure-nix-cache; edit the nixfiles source instead." \
   "trusted-users = root $login_user" \
+  "extra-experimental-features = nix-command flakes" \
   "extra-substituters = $cache_substituters" \
   "extra-trusted-public-keys = $cache_keys" \
   "max-jobs = auto" > "$managed_tmp"
@@ -62,6 +63,24 @@ fi
 
 if [[ "${NIXFILES_SKIP_VERIFY:-0}" != "1" ]]; then
   effective_config="$(nix config show)"
+  effective_features=""
+  while IFS= read -r config_line; do
+    if [[ "$config_line" == "experimental-features = "* ]]; then
+      effective_features="${config_line#experimental-features = }"
+      break
+    fi
+  done <<< "$effective_config"
+
+  for feature in nix-command flakes; do
+    case " $effective_features " in
+      *" $feature "*) ;;
+      *)
+        echo "nixfiles-configure-nix-cache: daemon did not enable $feature" >&2
+        exit 1
+        ;;
+    esac
+  done
+
   for cache in https://cache.numtide.com https://devenv.cachix.org https://cachix.cachix.org; do
     if ! printf '%s\n' "$effective_config" | grep -Fq "$cache"; then
       echo "nixfiles-configure-nix-cache: daemon did not report $cache" >&2
@@ -70,4 +89,4 @@ if [[ "${NIXFILES_SKIP_VERIFY:-0}" != "1" ]]; then
   done
 fi
 
-echo "nixfiles-configure-nix-cache: configured binary caches and max-jobs=auto"
+echo "nixfiles-configure-nix-cache: configured Nix CLI features, binary caches, and max-jobs=auto"
