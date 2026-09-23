@@ -327,9 +327,28 @@
           # Stop only before an actual config import. A package-only apply can
           # otherwise trigger native Codex restoration for no config change.
           if [ "$proxy_running" = true ]; then
-            if ! ${ocx} stop; then
-              echo "opencodex: could not stop the proxy before config reconciliation" >&2
-              exit 1
+            stop_status=0
+            if stop_summary="$(${ocx} stop --json)"; then
+              stop_status=0
+            else
+              stop_status=$?
+            fi
+
+            if [ "$stop_status" -ne 0 ]; then
+              if [ "$stop_status" -eq 79 ] && printf '%s' "$stop_summary" | ${jq} -e '
+                .schema == "ocx-stop/1"
+                and .ok == false
+                and .outcome == "history-incomplete"
+                and .runtimeDown == true
+                and .service == "stopped"
+                and .proxy == "stopped"
+                and .sharedTeardown == "restored"
+              ' > /dev/null 2>&1; then
+                echo "opencodex: proxy stopped and shared teardown restored; continuing despite incomplete history cleanup" >&2
+              else
+                echo "opencodex: could not safely stop the proxy before config reconciliation" >&2
+                exit 1
+              fi
             fi
           fi
           ${ocx} config import "$candidate_config" --yes --json > /dev/null
