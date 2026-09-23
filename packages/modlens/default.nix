@@ -18,6 +18,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     hash = "sha256-1XA7ooUzbW1thv7Pep8GTiSIeUl9mMzJjKhJpi40gio=";
   };
 
+  undici = fetchurl {
+    url = "https://registry.npmjs.org/undici/-/undici-8.10.0.tgz";
+    hash = "sha256-nXLFbBetKz1m8AbVOUU3TMDSvGjzIkOUlblyJp9N5rw=";
+  };
+
   sourceRoot = "package";
   dontBuild = true;
   dontFixup = true;
@@ -37,6 +42,11 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     tar -xzf "$commander" -C "$package_dir/node_modules"
     mv "$package_dir/node_modules/package" "$commander_dir"
 
+    undici_dir="$package_dir/node_modules/undici"
+    mkdir -p "$(dirname "$undici_dir")"
+    tar -xzf "$undici" -C "$package_dir/node_modules"
+    mv "$package_dir/node_modules/package" "$undici_dir"
+
     mkdir -p "$out/share/modlens/skills"
     cp -R skills/modlens "$out/share/modlens/skills/"
 
@@ -46,6 +56,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     exec ${nodejs_24}/bin/node "$package_dir/dist/main.js" "\$@"
     EOF
     chmod 755 "$out/bin/modlens"
+    "$out/bin/modlens" --version > /dev/null
 
     runHook postInstall
   '';
