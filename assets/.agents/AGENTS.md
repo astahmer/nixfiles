@@ -31,6 +31,12 @@ Prefer these ephemeral paths for diagnostics. Keep profile changes and
 configuration edits deliberate, and report the exact Nix/comma failure when a
 tool genuinely cannot be resolved.
 
+## Image inspection
+
+- Use native vision when the active model and harness can receive the image. In Codex, inspect attachments directly and use the local image viewer for image paths; a path alone is not a reason to send the image to ModLens.
+- ModLens sends image data to its configured provider. Use it only when this harness cannot expose the pixels natively, and honor its model guard. Do not bypass a denial or send an unknown model's image to an external provider without the user's explicit direction.
+- A failed or uncertain image check means the asset is unverified. Do not remove or relabel it based only on that failure.
+
 ## Critical binary-first rule
 
 **Very important:** Before any source build, first try to download a compatible

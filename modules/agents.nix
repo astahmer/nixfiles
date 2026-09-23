@@ -14,6 +14,22 @@
       modsearch = packages.modsearch;
       calldiff = packages.calldiff;
       executorScopeDir = executorDir;
+      opencodexConfigTemplate = builtins.fromJSON (
+        builtins.readFile ../assets/opencodex/config.template.json
+      );
+      # Keep ModLens' allowlist aligned with the providers' declared capabilities.
+      modlensNoVisionModelIds = lib.unique (
+        lib.concatMap (provider: provider.noVisionModels or [ ]) (
+          builtins.attrValues opencodexConfigTemplate.providers
+        )
+      );
+      modlensDefaultGuardsJson = builtins.toJSON {
+        allowModels = lib.concatMap (model: [
+          model
+          "*/${model}"
+        ]) modlensNoVisionModelIds;
+        denyWhenUnknown = true;
+      };
 
       # Exclude deprecated readbro skill from the deployed .agents directory.
       # The source tree itself is kept under assets/ for reference.
@@ -129,6 +145,42 @@
       home.file.".cursor/mcp.json".text = builtins.toJSON cursorMcp;
       home.file.".vscode/mcp.json".text = builtins.toJSON vscodeMcp;
       home.file."Library/Application Support/Code/User/mcp.json".text = builtins.toJSON vscodeMcp;
+
+      home.activation.modlensVisionGuard = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        modlens_config_directory="${config.home.homeDirectory}/.modlens"
+        modlens_config_file="$modlens_config_directory/config.json"
+        modlens_candidate_file="$modlens_config_file.next.$$"
+        modlens_default_guards_json=${lib.escapeShellArg modlensDefaultGuardsJson}
+
+        umask 077
+        ${pkgs.coreutils}/bin/mkdir -p "$modlens_config_directory"
+
+        if [ -L "$modlens_config_file" ]; then
+          echo "modlens: config is symlinked; leaving its guard policy unchanged" >&2
+        else
+          if [ ! -e "$modlens_config_file" ]; then
+            printf '{}\n' > "$modlens_config_file"
+          fi
+
+          if ! ${pkgs.jq}/bin/jq empty "$modlens_config_file" > /dev/null 2>&1; then
+            echo "modlens: config is invalid JSON; leaving it unchanged" >&2
+          elif ${pkgs.jq}/bin/jq --argjson defaults "$modlens_default_guards_json" '
+            if .guards == null then .guards = $defaults else . end
+          ' "$modlens_config_file" > "$modlens_candidate_file"; then
+            ${pkgs.coreutils}/bin/chmod 600 "$modlens_candidate_file"
+            if ${pkgs.diffutils}/bin/cmp -s "$modlens_config_file" "$modlens_candidate_file"; then
+              ${pkgs.coreutils}/bin/rm -f "$modlens_candidate_file"
+            else
+              ${pkgs.coreutils}/bin/mv "$modlens_candidate_file" "$modlens_config_file"
+              ${pkgs.coreutils}/bin/chmod 600 "$modlens_config_file"
+              echo "modlens: seeded a native-vision-safe guard for configured text-only models" >&2
+            fi
+          else
+            ${pkgs.coreutils}/bin/rm -f "$modlens_candidate_file"
+            echo "modlens: could not update the guard; preserving the existing config" >&2
+          fi
+        fi
+      '';
 
       # opencode2 config: use activation script to preserve user edits from app updates
       home.activation.opencode2Config = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

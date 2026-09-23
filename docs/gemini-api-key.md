@@ -96,14 +96,19 @@ also set `provider` to `gemini-api`; nothing else in the profile reads
 
 ## Related keys
 
-- ModLens is currently set to default to `openai` (`provider` in
-  `~/.modlens/config.json`, plus `openai.baseUrl` =
-  `https://api.openai.com/v1` and `openai.model` = `gpt-4.1-mini`). The
-  `openai-key` alias in `.secret.json` projects `OPENAI_API_KEY`; run ModLens
-  through `secret run --optional openai-key -- modlens ...` (or `secret env
-  --output .env`) so the key never lands in the config file. Switch to
-  `gemini-api` with this doc's key instead if you'd rather not depend on
-  OpenAI.
+- ModLens provider selection and credentials live in the runtime-only
+  `~/.modlens/config.json`; Nix does not store provider keys. Run `modlens
+  doctor` to see the selected provider, failover chain, and guard verdict
+  without exposing keys. Nix seeds a fail-closed `guards.allowModels` default
+  from OpenCodex's explicit `noVisionModels` metadata only when no guard is
+  configured. To enable another text-only model, add its bare and namespaced
+  forms (for example, `model-name` and `*/model-name`) to
+  `guards.allowModels`.
+- For the OpenAI-compatible provider, the `openai-key` alias in `.secret.json`
+  projects `OPENAI_API_KEY`; run ModLens through `secret run --optional
+  openai-key -- modlens ...` (or `secret env --output .env`) so the key never
+  lands in the config file. To use Gemini instead, select `gemini-api` and
+  configure the key described above.
 - ModLens can also use Anthropic (`ANTHROPIC_API_KEY`); that alias is not
   declared in `.secret.json` — add it there if you use it.
 - `modsearch` has no configured auth path anymore: it previously rode the agy
