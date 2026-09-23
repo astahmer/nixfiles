@@ -284,7 +284,7 @@
     {
       "name": "opencodex",
       "type": "manual",
-      "description": "Pinned OpenCodex release archive and per-platform binary hashes move together",
+      "description": "Pinned OpenCodex release binary and matching prebuilt dashboard bundle move together",
       "enabled": false,
       "command": [
         "nix",

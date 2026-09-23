@@ -19,9 +19,17 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   version = "2.63.0-preview.20260923";
 
   src = pkgs.fetchurl (sourceFor pkgs.stdenvNoCC.hostPlatform.system finalAttrs.version);
+  guiSrc = pkgs.fetchurl {
+    url = "https://registry.npmjs.org/@bitkyc08/opencodex/-/opencodex-${finalAttrs.version}.tgz";
+    hash = "sha256-GtFnVkvIzyoYrM36cOF8FCJHBdvwST3oy3OVEHpmWYU=";
+  };
   sourceRoot = ".";
 
-  nativeBuildInputs = pkgs.lib.optional pkgs.stdenvNoCC.hostPlatform.isLinux pkgs.autoPatchelfHook;
+  nativeBuildInputs =
+    pkgs.lib.optional pkgs.stdenvNoCC.hostPlatform.isLinux pkgs.autoPatchelfHook
+    ++ [
+      pkgs.gnutar
+    ];
   buildInputs = pkgs.lib.optional pkgs.stdenvNoCC.hostPlatform.isLinux pkgs.glibc;
 
   installPhase = ''
@@ -29,6 +37,9 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
 
     install -Dm755 ocx "$out/bin/ocx"
     ln -s ocx "$out/bin/opencodex"
+    mkdir -p "$out/bin/gui/dist" "$TMPDIR/opencodex-gui"
+    ${pkgs.gnutar}/bin/tar -xzf "${finalAttrs.guiSrc}" -C "$TMPDIR/opencodex-gui" package/gui/dist
+    cp -R "$TMPDIR/opencodex-gui/package/gui/dist/." "$out/bin/gui/dist/"
 
     runHook postInstall
   '';

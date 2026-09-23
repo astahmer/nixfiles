@@ -66,6 +66,10 @@ from the pinned tarball, rebuild for the new recursive output hash, and refresh
 the pinned upstream skill commit plus its archive hash. Provider sign-in
 remains a runtime concern.
 
+OpenCodex combines per-platform standalone release binaries with `gui/dist`
+from the matching published npm tarball. Update its binary hashes and dashboard
+tarball hash together.
+
 ## Flake inputs
 
 The registry includes `nixpkgs`, `flake-parts`, `import-tree`, `home-manager`,
