@@ -195,17 +195,9 @@
           fi
         fi
 
-        # Stop the proxy before replacing its config so the running process
-        # cannot write stale routing state back over the managed snapshot.
         ocx_status="$(${ocx} status --json 2>/dev/null || printf '%s' '{}')"
         proxy_running="$(printf '%s\n' "$ocx_status" | ${jq} -r '.proxy.running // false' 2>/dev/null || printf '%s' false)"
         service_version_skewed="$(printf '%s\n' "$ocx_status" | ${jq} -r '.versionSkew.skewed // false' 2>/dev/null || printf '%s' false)"
-        if [ "$proxy_running" = true ]; then
-          if ! ${ocx} stop; then
-            echo "opencodex: could not stop the proxy before config reconciliation" >&2
-            exit 1
-          fi
-        fi
 
         # The old Codex template seeded this exact loopback URL. Remove only
         # an unmarked copy so OpenCodex can own routing injection; preserve
@@ -332,6 +324,14 @@
         fi
 
         if [ "$config_changed" -eq 1 ]; then
+          # Stop only before an actual config import. A package-only apply can
+          # otherwise trigger native Codex restoration for no config change.
+          if [ "$proxy_running" = true ]; then
+            if ! ${ocx} stop; then
+              echo "opencodex: could not stop the proxy before config reconciliation" >&2
+              exit 1
+            fi
+          fi
           ${ocx} config import "$candidate_config" --yes --json > /dev/null
           ${pkgs.coreutils}/bin/chmod 600 "$config_file"
           echo "opencodex: reconciled managed config and preserved connected accounts" >&2
