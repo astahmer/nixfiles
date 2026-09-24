@@ -12,6 +12,7 @@
     "base_keymap": "VSCode",
     // nh/Nix owns the Zed bundle, so updates arrive through the flake.
     "auto_update": false,
+    "disable_ai": true,
 
     // Preserve the current Zed appearance while adopting the editor behavior.
     "theme": {
