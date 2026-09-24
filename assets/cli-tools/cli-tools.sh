@@ -59,6 +59,7 @@ list_term() {
 
   print_section "VCS & agents"
   print_row "jj / jjui / lightjj / ryu" "git UI" "Jujutsu stack + helpers"
+  print_row "jjw" "" "Workspace age report, filters, and confirmed cleanup UI"
   print_row "lazygit / lazydocker" "" "TUI for git and docker"
   print_row "drydock" "" "Live TUI for uncommitted/unpushed work across every repo"
   print_row "gh / ghui" "" "GitHub CLI + TUI"

@@ -142,48 +142,36 @@ accepted by `nix`, not by `nh`.
 
 ## Workspace disk audit
 
-Old JJ workspaces and Git worktrees can retain duplicate `node_modules`, build
-outputs, and repository objects. The Nix-managed audit command reports JJ
-workspaces and Git worktrees without deleting or forgetting anything:
+`jjw` reports JJ workspaces and Git worktrees in a readable table by default.
+Choose a structured output format when another command needs the report:
 
 ```bash
-jj-workspace-audit --root "$HOME/dev" --older-than-days 30 | column -t -s $'\t'
+jjw list
+jjw list --format json > workspaces.json
+jjw list --format tsv
+jjw list --age-basis created --older-than-days 30
 ```
 
-The default JJ workspace is omitted from the report. Pass `--with-default` to
-include it.
+Age is based on the workspace's last change by default. Use
+`--age-basis created` to compare workspace creation age instead. JJ last-change
+dates come from the workspace commit; Git dates come from `HEAD`. They do not
+prove last human use. Creation dates use filesystem birth time where supported
+and marker modification time as a fallback. The default JJ workspace is
+omitted unless `--with-default` is supplied. A path shared by JJ and Git is
+listed once with source `jj+git`.
 
-The audit invokes `jj status` to detect dirty workspaces, so JJ may create
-ordinary snapshot operations while it runs; it never rewrites or deletes
-commits.
+Rows marked `review` are clean workspaces at or beyond `--older-than-days`;
+`protected-root`, `protected-current`, `protected-dirty`, and
+`protected-unknown` rows cannot be removed by the cleanup command. Run
+`jjw cleanup` to filter and select rows with `fzf`. The
+command shows the selected paths and requires typing `delete` before it forgets
+JJ workspaces and removes their directories or asks Git to remove its worktree.
+It never forces removal.
 
-Rows marked `review` are only candidates: age and cleanliness do not prove
-that a workspace is unused. `protected-root` is the main checkout,
-`protected-dirty` has uncommitted changes, and `recent` is younger than the
-chosen threshold. The date is the checked-out commit date, not proof of last
-human use.
-
-Before reclaiming a `review` row, inspect the exact path and workspace name,
-check that no process has it open, and verify its branch/bookmarks are not
-needed:
-
-```bash
-lsof +D /path/to/workspace
-jj -R /path/to/workspace status
-jj -R /path/to/workspace workspace list
-```
-
-For a JJ workspace, run `jj workspace forget <name>` from another workspace,
-then move or delete the exact directory only after review. For a Git worktree,
-use `git -C /path/to/main worktree remove /path/to/worktree` only after the
-same checks. To find only stale Git worktree metadata without deleting it, use
-the dry run first:
-
-```bash
-git -C /path/to/main worktree prune --dry-run
-```
-
-There is intentionally no automated deletion mode.
+The audit runs `jj status` to inspect JJ workspaces, which can create normal JJ
+snapshot operations. It does not rewrite commits. Before cleanup, confirm that
+the selected path is no longer needed, has no process using it, and has no
+uncommitted work you need to keep.
 
 ## Modules worth reusing
 

@@ -155,6 +155,7 @@
             drydock = pkgs'.callPackage ./packages/drydock { };
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
             iris = pkgs'.callPackage ./packages/iris { };
+            jjw = pkgs'.callPackage ./packages/jjw { };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
             mise = pkgs'.callPackage ./packages/mise { };
             modlens = pkgs'.callPackage ./packages/modlens { };

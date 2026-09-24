@@ -13,6 +13,7 @@ in
       cursorAgent = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."cursor-agent";
       ghui = packages.ghui;
       hunk = packages.hunk;
+      jjw = packages.jjw;
       lightjj = packages.lightjj;
       modlens = packages.modlens;
       modsearch = packages.modsearch;
@@ -35,6 +36,7 @@ in
         pkgs.delta
         pkgs."ast-grep"
         hunk
+        jjw
         pkgs.deadnix
         pkgs.ffmpeg
         pkgs.fzf

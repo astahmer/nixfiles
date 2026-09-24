@@ -253,17 +253,6 @@ in
         text = builtins.readFile ../scripts/update-all.sh;
       };
 
-      jjWorkspaceAudit = pkgs.writeShellApplication {
-        name = "jj-workspace-audit";
-        runtimeInputs = [
-          jjPackage
-          pkgs.coreutils
-          pkgs.findutils
-          pkgs.git
-          pkgs.gawk
-        ];
-        text = builtins.readFile ../scripts/jj-workspace-audit.sh;
-      };
     in
     {
       imports = [ shellInteractive ];
@@ -279,7 +268,6 @@ in
         nixfilesConfigureNixCache
         nixfilesCheck
         nixfilesUpdateAll
-        jjWorkspaceAudit
         jjPrompt
         pkgs.nodejs_24
         pkgs.pnpm
