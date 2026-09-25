@@ -10,6 +10,10 @@ description: Global agent instructions — caveman, ast-outline, rtk, code style
 Codex loads this global contract from CODEX_HOME/AGENTS.md; the Nix setup
 mirrors it there while keeping the skills tree at ~/.agents/skills.
 
+Read `~/.agents/USER_PREFERENCES.md` (source:
+`assets/.agents/USER_PREFERENCES.md`) for durable scope, evidence,
+product-boundary, and privacy preferences that apply across repositories.
+
 ## Nix-backed debugging
 
 This workstation has Nix and `comma` available, so a command missing from

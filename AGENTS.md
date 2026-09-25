@@ -17,7 +17,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Layout
 
-- `inputs.agents` supplies reusable skills and an optional project `AGENTS.md` baseline. `assets/.agents/` remains the Nix-local global contract and overlay for machine-specific skills, hooks, instructions, and memory. Home Manager combines the skill trees into the deployed `~/.agents` tree.
+- `inputs.agents` supplies portable skills and an optional project `AGENTS.md` baseline. `assets/.agents/` is the Nix-owned source for machine-specific overlays and user-global guidance explicitly versioned here. Home Manager combines both skill trees into the deployed `~/.agents` tree.
 - `inputs.emilint` owns the executable Oxlint and ast-grep rule sources and fixtures that the agents module overlays into `antislop/` and `effect-antislop/`. `modules/coding.nix` installs the matching `oxlint` and `ast-grep` CLIs globally.
 - Agent deployment source is the pinned `agents` input plus `assets/.agents/` overlays and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.codex/AGENTS.md`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies the deployed global `AGENTS.md`, not the clone.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently after `nixbootstrap` and when activation inputs change.
@@ -70,7 +70,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 ## Notes for Agents
 
 - Global-scope secret aliases (the `secret` CLI's global config) live in the git-synced file `assets/secret/global.json`; Home Manager symlinks `~/.config/secret/config.json` to it through the `~/.config/nixfiles` stable pointer, so `secret set --global` edits land in the working copy and jj snapshots them — push so other machines see new aliases. Machine-specific overrides belong in `.secret.local.json`.
-- Update portable skills in the `agents` repository. Keep only machine-specific overlays in `assets/.agents` and run `nixapply` to deploy them.
+- Keep cross-user portable skills in the `agents` repository. Store user-global skills and preferences explicitly requested for this setup in `assets/.agents`; keep project-specific skills in their project repositories. Run `nixapply` to deploy the Nix-owned guidance.
 - Agent-made `jj` revisions carry a session deeplink and a short summary of the initial prompt in the description body (after the first line), prefixed with `prompt_summary:`; keep the first line a lowercase concise title. Use the harness active at request time, not a fixed one: Codex desktop links `codex://threads/<thread-id>` via `$CODEX_THREAD_ID`; T3 Code/OpenCode and other harnesses use their own session id/link from their session store. Summarize the prompt in 1-2 lines after `prompt_summary:`; the deeplink preserves full context.
 
   ```text
