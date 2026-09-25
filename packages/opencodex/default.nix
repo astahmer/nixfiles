@@ -5,23 +5,23 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/lidge-jun/opencodex/releases/download/v${version}/ocx-${version}-bun-darwin-arm64.tar.gz";
-        hash = "sha256-Cx6wx5pcq9pP357MW4OfAekKKPa7Y8J/C+j9Yy43t4s=";
+        hash = "sha256-+mo5dYEhoU891ZrnHCjLcb55SU4McXuMV3lScJcJx8w=";
       };
       x86_64-linux = {
         url = "https://github.com/lidge-jun/opencodex/releases/download/v${version}/ocx-${version}-bun-linux-x64.tar.gz";
-        hash = "sha256-r2B8JLd3npCns9zrfNLoxQ8MrIAIi16zvOTJtfHCVkw=";
+        hash = "sha256-WflvJPMfRJG0qXVpc4+TFv3emgDJCzkBDHIwga910tY=";
       };
     }
     .${system} or (throw "Unsupported platform for opencodex: ${system}");
 in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "opencodex";
-  version = "2.63.0-preview.20260923";
+  version = "2.65.0";
 
   src = pkgs.fetchurl (sourceFor pkgs.stdenvNoCC.hostPlatform.system finalAttrs.version);
   guiSrc = pkgs.fetchurl {
     url = "https://registry.npmjs.org/@bitkyc08/opencodex/-/opencodex-${finalAttrs.version}.tgz";
-    hash = "sha256-GtFnVkvIzyoYrM36cOF8FCJHBdvwST3oy3OVEHpmWYU=";
+    hash = "sha256-9N1u1wcB5uKCWqz277/XminWyVxy5bIqSPYWT2KcGOo=";
   };
   sourceRoot = ".";
 

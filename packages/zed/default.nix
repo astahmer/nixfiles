@@ -15,15 +15,15 @@ let
       };
       x86_64-darwin = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/Zed-x86_64.dmg";
-        hash = "sha256-djdI6KavQf3gkcfQaQ9jpCB592lvyF0R4CKAAV+w1KM=";
+        hash = "sha256-ED7XWNnGXRd+gG+MMzQxgpqd0ygeVhmnFNK002x0FAw=";
       };
       aarch64-linux = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/zed-linux-aarch64.tar.gz";
-        hash = "sha256-fuk7zRBZxPDXAFeMz6AK69pfxSHJQ/4/+/carEGggac=";
+        hash = "sha256-ae/1GyIgO+ek0P2d8IZKir1NUYPo+5qvoq9X881CuaM=";
       };
       x86_64-linux = {
         url = "https://github.com/zed-industries/zed/releases/download/v${version}/zed-linux-x86_64.tar.gz";
-        hash = "sha256-7qYiaNjsX9NYffBvp24HLBBMyl4LCwq+y8KK5bh8C60=";
+        hash = "sha256-t5qZLpYO1AZ8srUNZnie2GGO6xeA7WoPjx5x3YD3QgA=";
       };
     }
     .${system} or (throw "Unsupported platform for zed: ${system}");

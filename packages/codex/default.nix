@@ -17,7 +17,7 @@ let
       };
       x86_64-linux = {
         url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-unknown-linux-musl.tar.gz";
-        hash = "sha256-PUnZryWlFoz8UeUOUgqyOLIwg8JZrnwU+JsAfLJUXHs=";
+        hash = "sha256-2z/jrao1xQ7ftoqYihF3gv40kpYPtj1wA+tnSMzAZXs=";
       };
     }
     .${system} or (throw "Unsupported platform for codex: ${system}");
@@ -26,11 +26,11 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-code-mode-host-aarch64-apple-darwin.tar.gz";
-        hash = "sha256-d+R+nwCCBWay1uJb/MGJDBpusQqKCwoXjcwLNxJ3Oe4=";
+        hash = "sha256-pbM/9selATTQiF+78ZTK8c4nRbxXlGRFy2ZBZbBtI1c=";
       };
       x86_64-linux = {
         url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz";
-        hash = "sha256-g4PHmwtrT3fwGhylSP4dVQrZam6RufwRgLtppEnK5Ts=";
+        hash = "sha256-R9MkGeiVyc3btmSiiQv7JQ7w4/3tPacOXyvGFHnxmJw=";
       };
     }
     .${system} or (throw "Unsupported platform for codex: ${system}");

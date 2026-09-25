@@ -13,7 +13,7 @@ let
       };
       x86_64-linux = {
         url = "https://github.com/yetidevworks/drydock/releases/download/v${version}/drydock-linux-x86_64.tar.gz";
-        hash = "sha256-KKLbgsHa9fSLhljjWrOlFPHnR6N9JiF4miRTuMliVTo=";
+        hash = "sha256-5q1ev2psJHKnX8WAc7jNvZQHWpEB9jwMPDCPxLw8bGk=";
       };
     }
     .${system} or (throw "Unsupported platform for drydock: ${system}");

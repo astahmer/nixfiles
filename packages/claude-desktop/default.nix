@@ -7,12 +7,12 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "claude-desktop";
-  version = "1.49585.0";
-  revision = "41ad1dff5275eedc8af25989f59f33c5efe14063";
+  version = "2.9939.2";
+  revision = "d3e50475d5d6bb0c317560310200249dd61b87d8";
 
   src = fetchurl {
     url = "https://downloads.claude.ai/releases/darwin/universal/${finalAttrs.version}/Claude-${finalAttrs.revision}.zip";
-    hash = "sha256-fVJGNRT1Ba654W+opSpv8lvRPIOVQJi8L4aNOr4HkvQ=";
+    hash = "sha256-as+MQqYO2iEoQbpmpkOccUDFnEAiIgoXfZzUS1qUkTw=";
   };
 
   strictDeps = true;

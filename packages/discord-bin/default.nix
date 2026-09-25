@@ -6,11 +6,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "discord-bin";
-  version = "0.0.411";
+  version = "0.0.413";
 
   src = fetchurl {
-    url = "https://stable.dl2.discordapp.net/apps/osx/${finalAttrs.version}/Discord.dmg";
-    hash = "sha256-0kqeKV9LbZJ+IbDEB/m9V9LOke+nPafG4rLMb3nQa30=";
+    url = "https://stable.dl2.discordapp.net/distro/app/stable/osx/universal/${finalAttrs.version}/Discord.dmg";
+    hash = "sha256-6fWXe52xp32QAlMoakOJ2oEt7oLTO3NVgcEFaAdhIDM=";
   };
 
   dontUnpack = true;

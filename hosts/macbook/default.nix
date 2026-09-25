@@ -11,9 +11,9 @@ in
           system = config.nixfiles.macSystem;
           config = {
             allowUnfree = true;
-            # Beekeeper Studio currently bundles an EOL Electron runtime;
-            # permit only this explicitly managed app while nixpkgs catches up.
-            permittedInsecurePackages = [ "beekeeper-studio-6.0.5" ];
+            # Beekeeper Studio 6.1.1 bundles EOL Electron 39.8.1 with known CVEs;
+            # permit only this exact version until it ships a supported runtime.
+            permittedInsecurePackages = [ "beekeeper-studio-6.1.1" ];
           };
         };
 
