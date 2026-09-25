@@ -54,6 +54,9 @@
         # of assets/.agents.
         cp -R --no-preserve=mode "${inputs.agents}/.agents/skills/." "$out/skills/"
 
+        # Do not deploy the taste-maintenance skill from the shared agent source.
+        rm -rf "$out/skills/taste-from-sessions"
+
         # emilint owns executable lint assets and their companion guidance.
         mkdir -p "$out/skills/antislop" "$out/skills/effect-antislop"
         cp -R --no-preserve=mode "${inputs.emilint}/ast-grep" "$out/skills/antislop/"
