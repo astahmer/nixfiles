@@ -26,6 +26,7 @@ type workspace struct {
 	LastChange string `json:"last_change"`
 	Created    string `json:"created"`
 	AgeDays    *int   `json:"age_days"`
+	SizeBytes  *int64 `json:"size_bytes,omitempty"`
 	State      string `json:"state"`
 	Action     string `json:"action"`
 	jjName     string `json:"-"`

@@ -155,7 +155,27 @@ jjw list --check-state
 jjw list --format json > workspaces.json
 jjw list --format tsv
 jjw list --age-basis created --older-than-days 30
+jjw list --sort last-change
+jjw list --sort age --age-basis created --reverse
+jjw list --sort size
+jjw list --size --format json
 ```
+
+`--sort` supports `last-change`, `age`, `created`, `size`, `name`,
+`repository`, `state`, and `action`. Last-change and created sorts show newest
+first; age shows oldest first; size shows largest first; state puts dirty and
+unknown workspaces first; action puts review candidates first. `--reverse`
+flips that order. Ties use repository and path for stable output. Sorting by
+age follows `--age-basis`. Sorting by state or action enables `--check-state`
+and its slower status checks.
+
+Workspace size is opt-in because it walks each selected workspace. `--size`
+adds a human-readable table column and `size_bytes` to structured output;
+`--sort size` measures automatically. The count sums regular-file byte lengths,
+skips `.jj` and `.git` metadata, and does not follow symlinks. Table sizes use
+decimal units; structured output keeps exact bytes. It describes checked-out
+workspace contents, not shared repository storage or exact disk space reclaimed
+by deleting the workspace.
 
 Age is based on the workspace's last change by default. Use
 `--age-basis created` to compare workspace creation age instead. JJ last-change

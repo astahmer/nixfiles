@@ -45,9 +45,9 @@ func renderReport(writer io.Writer, rows []workspace, opts options) error {
 	case "json":
 		return renderJSON(writer, rows, opts)
 	case "tsv":
-		return renderDelimited(writer, rows, '\t', opts.ageBasis)
+		return renderDelimited(writer, rows, '\t', opts)
 	case "csv":
-		return renderDelimited(writer, rows, ',', opts.ageBasis)
+		return renderDelimited(writer, rows, ',', opts)
 	default:
 		return renderTable(writer, rows, opts)
 	}
@@ -67,14 +67,19 @@ func renderJSON(writer io.Writer, rows []workspace, opts options) error {
 	})
 }
 
-func renderDelimited(writer io.Writer, rows []workspace, delimiter rune, ageBasis string) error {
+func renderDelimited(writer io.Writer, rows []workspace, delimiter rune, opts options) error {
 	csvWriter := csv.NewWriter(writer)
 	csvWriter.Comma = delimiter
-	if err := csvWriter.Write([]string{"source", "name", "repository", "path", "commit", "last_change", "created", "age_basis", "age_days", "state", "action"}); err != nil {
+	fields := []string{"source", "name", "repository", "path", "commit", "last_change", "created", "age_basis", "age_days"}
+	if opts.withSize {
+		fields = append(fields, "size_bytes")
+	}
+	fields = append(fields, "state", "action")
+	if err := csvWriter.Write(fields); err != nil {
 		return err
 	}
 	for _, row := range rows {
-		if err := csvWriter.Write(workspaceFields(row, ageBasis)); err != nil {
+		if err := csvWriter.Write(workspaceFields(row, opts.ageBasis, opts.withSize)); err != nil {
 			return err
 		}
 	}
@@ -86,13 +91,18 @@ func renderTable(writer io.Writer, rows []workspace, opts options) error {
 	ageHeader := strings.ToUpper("age_days_" + strings.ReplaceAll(opts.ageBasis, "-", "_"))
 	tabWriter := tabwriter.NewWriter(writer, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tabWriter, "AGE BASIS: %s · REVIEW AFTER %d DAYS\n\n", opts.ageBasis, opts.olderThanDays)
-	fmt.Fprintf(tabWriter, "SOURCE\tNAME\tREPOSITORY\tPATH\tCOMMIT\tLAST CHANGE\tCREATED\t%s\tSTATE\tACTION\n", ageHeader)
+	headers := []string{"SOURCE", "NAME", "REPOSITORY", "PATH", "COMMIT", "LAST CHANGE", "CREATED", ageHeader}
+	if opts.withSize {
+		headers = append(headers, "SIZE")
+	}
+	headers = append(headers, "STATE", "ACTION")
+	fmt.Fprintln(tabWriter, strings.Join(headers, "\t"))
 	for _, row := range rows {
 		age := "?"
 		if row.AgeDays != nil {
 			age = fmt.Sprint(*row.AgeDays)
 		}
-		fmt.Fprintf(tabWriter, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		fields := []string{
 			row.Source,
 			displayValue(row.Name),
 			displayValue(row.Repository),
@@ -101,19 +111,22 @@ func renderTable(writer io.Writer, rows []workspace, opts options) error {
 			dateOrUnknown(row.LastChange),
 			dateOrUnknown(row.Created),
 			age,
-			row.State,
-			row.Action,
-		)
+		}
+		if opts.withSize {
+			fields = append(fields, formatWorkspaceSize(row.SizeBytes))
+		}
+		fields = append(fields, row.State, row.Action)
+		fmt.Fprintln(tabWriter, strings.Join(fields, "\t"))
 	}
 	return tabWriter.Flush()
 }
 
-func workspaceFields(row workspace, ageBasis string) []string {
+func workspaceFields(row workspace, ageBasis string, withSize bool) []string {
 	age := ""
 	if row.AgeDays != nil {
 		age = fmt.Sprint(*row.AgeDays)
 	}
-	return []string{
+	fields := []string{
 		row.Source,
 		row.Name,
 		row.Repository,
@@ -123,9 +136,15 @@ func workspaceFields(row workspace, ageBasis string) []string {
 		row.Created,
 		ageBasis,
 		age,
-		row.State,
-		row.Action,
 	}
+	if withSize {
+		sizeBytes := ""
+		if row.SizeBytes != nil {
+			sizeBytes = fmt.Sprint(*row.SizeBytes)
+		}
+		fields = append(fields, sizeBytes)
+	}
+	return append(fields, row.State, row.Action)
 }
 
 func displayValue(value string) string {

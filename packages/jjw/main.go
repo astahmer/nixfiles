@@ -19,6 +19,9 @@ type options struct {
 	withDefault   bool
 	ageBasis      string
 	format        string
+	sortBy        string
+	reverse       bool
+	withSize      bool
 	filter        string
 	kind          string
 	state         string
@@ -77,6 +80,10 @@ func run(args []string) error {
 	}
 	printWarnings(warnings)
 	rows = filterWorkspaces(rows, parsedOptions)
+	if parsedOptions.withSize {
+		printWarnings(populateWorkspaceSizes(rows))
+	}
+	sortWorkspaces(rows, parsedOptions)
 	return renderReport(os.Stdout, rows, parsedOptions)
 }
 
@@ -111,7 +118,12 @@ func parseOptions(command string, args []string) (options, error) {
 	flags.IntVar(&parsedOptions.olderThanDays, "older-than-days", parsedOptions.olderThanDays, "mark workspaces for review at this age")
 	flags.BoolVar(&parsedOptions.withDefault, "with-default", false, "include the default JJ workspace")
 	flags.StringVar(&parsedOptions.ageBasis, "age-basis", parsedOptions.ageBasis, "age by last-change (default) or created")
-	flags.StringVar(&parsedOptions.format, "format", parsedOptions.format, "list output: table, json, tsv, or csv")
+	if command == "list" {
+		flags.StringVar(&parsedOptions.format, "format", parsedOptions.format, "list output: table, json, tsv, or csv")
+		flags.StringVar(&parsedOptions.sortBy, "sort", "", "sort by last-change, age, created, size, name, repository, state, or action")
+		flags.BoolVar(&parsedOptions.reverse, "reverse", false, "reverse the selected sort order")
+		flags.BoolVar(&parsedOptions.withSize, "size", false, "measure workspace contents and show their size (slower)")
+	}
 	flags.StringVar(&parsedOptions.filter, "filter", "", "case-insensitive substring filter across name, repository, and path")
 	flags.StringVar(&parsedOptions.kind, "kind", "", "filter by source: jj or git")
 	flags.StringVar(&parsedOptions.state, "state", "", "filter by state: clean, dirty, or unknown")
@@ -133,8 +145,24 @@ func parseOptions(command string, args []string) (options, error) {
 	if parsedOptions.ageBasis != "last-change" && parsedOptions.ageBasis != "created" {
 		return options{}, errors.New("--age-basis must be last-change or created")
 	}
-	if parsedOptions.format != "table" && parsedOptions.format != "json" && parsedOptions.format != "tsv" && parsedOptions.format != "csv" {
+	if command == "list" && parsedOptions.format != "table" && parsedOptions.format != "json" && parsedOptions.format != "tsv" && parsedOptions.format != "csv" {
 		return options{}, errors.New("--format must be table, json, tsv, or csv")
+	}
+	if command == "list" {
+		switch parsedOptions.sortBy {
+		case "", "last-change", "age", "created", "size", "name", "repository", "state", "action":
+		default:
+			return options{}, errors.New("--sort must be last-change, age, created, size, name, repository, state, or action")
+		}
+		if parsedOptions.reverse && parsedOptions.sortBy == "" {
+			return options{}, errors.New("--reverse requires --sort")
+		}
+		if parsedOptions.sortBy == "size" {
+			parsedOptions.withSize = true
+		}
+		if parsedOptions.sortBy == "state" || parsedOptions.sortBy == "action" {
+			parsedOptions.checkState = true
+		}
 	}
 	if parsedOptions.kind != "" && parsedOptions.kind != "jj" && parsedOptions.kind != "git" {
 		return options{}, errors.New("--kind must be jj or git")
@@ -182,6 +210,9 @@ func printCommandUsage(writer io.Writer, command string) {
 	fmt.Fprintln(writer, "  --with-default           Include the default JJ workspace")
 	if command == "list" {
 		fmt.Fprintln(writer, "  --format FORMAT          table (default), json, tsv, or csv")
+		fmt.Fprintln(writer, "  --sort FIELD             last-change, age, created, size, name, repository, state, or action")
+		fmt.Fprintln(writer, "  --reverse                Reverse selected sort order")
+		fmt.Fprintln(writer, "  --size                   Measure workspace contents and show size (slower)")
 	}
 	fmt.Fprintln(writer, "  --filter TEXT            Case-insensitive filter across name, repository, and path")
 	fmt.Fprintln(writer, "  --kind SOURCE            jj or git")
