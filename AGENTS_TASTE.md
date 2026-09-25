@@ -10,3 +10,4 @@
 - Prefer iterative improvement passes when they are directly useful, especially for tooling and startup performance.
 - When a Nix activation fails, repair the source configuration and rerun the activation before handing off.
 - For repository investigations, report exact file paths and line numbers with enough context to verify each finding.
+- Keep `jjw` below one second on the usual workspace set.
