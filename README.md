@@ -143,10 +143,15 @@ accepted by `nix`, not by `nh`.
 ## Workspace disk audit
 
 `jjw` reports JJ workspaces and Git worktrees in a readable table by default.
+The default report skips filesystem status checks so it stays fast. Its
+`STATE` column says `unchecked`; `review` means the workspace is old enough to
+inspect, not that it is clean. Use `--check-state` for a full dirty-state
+report. `--state` and `--action` filters enable those checks automatically.
 Choose a structured output format when another command needs the report:
 
 ```bash
 jjw list
+jjw list --check-state
 jjw list --format json > workspaces.json
 jjw list --format tsv
 jjw list --age-basis created --older-than-days 30
@@ -160,18 +165,19 @@ and marker modification time as a fallback. The default JJ workspace is
 omitted unless `--with-default` is supplied. A path shared by JJ and Git is
 listed once with source `jj+git`.
 
-Rows marked `review` are clean workspaces at or beyond `--older-than-days`;
-`protected-root`, `protected-current`, `protected-dirty`, and
-`protected-unknown` rows cannot be removed by the cleanup command. Run
-`jjw cleanup` to filter and select rows with `fzf`. The
-command shows the selected paths and requires typing `delete` before it forgets
-JJ workspaces and removes their directories or asks Git to remove its worktree.
-It never forces removal.
+With `--check-state`, rows marked `review` are clean workspaces at or beyond
+`--older-than-days`; `protected-root`, `protected-current`, `protected-dirty`,
+and `protected-unknown` rows cannot be removed. Run `jjw cleanup` to filter and
+select old-enough candidates with `fzf`. It checks each selected workspace's
+current status and age after confirmation, then forgets JJ workspaces and
+removes their directories or asks Git to remove its worktree. It never forces
+removal.
 
-The audit runs `jj status` to inspect JJ workspaces, which can create normal JJ
-snapshot operations. It does not rewrite commits. Before cleanup, confirm that
-the selected path is no longer needed, has no process using it, and has no
-uncommitted work you need to keep.
+`--check-state` runs `jj status` to inspect JJ workspaces, which can create
+normal JJ snapshot operations. It does not rewrite commits. Cleanup runs the
+same check only for selected workspaces immediately before removal. Before
+cleanup, confirm that the selected path is no longer needed and has no process
+using it.
 
 ## Modules worth reusing
 

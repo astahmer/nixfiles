@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -57,16 +59,68 @@ func scanWorkspaces(opts options) ([]workspace, []string, error) {
 		currentDirectory = resolvedDirectory
 	}
 
-	jjRows, jjWarnings := scanJJWorkspaces(root, opts)
-	gitRows, gitWarnings := scanGitWorktrees(root)
+	var jjRows, gitRows []workspace
+	var jjWarnings, gitWarnings []string
+	var scans sync.WaitGroup
+	scans.Add(2)
+	go func() {
+		defer scans.Done()
+		jjRows, jjWarnings = scanJJWorkspaces(root, opts)
+	}()
+	go func() {
+		defer scans.Done()
+		gitRows, gitWarnings = scanGitWorktrees(root)
+	}()
+	scans.Wait()
 	rows := mergeWorkspaces(append(jjRows, gitRows...))
+	var stateWarnings []string
+	if opts.checkState {
+		stateWarnings = populateWorkspaceStates(rows)
+	} else {
+		for index := range rows {
+			rows[index].State = "unchecked"
+		}
+	}
 	now := time.Now()
 	for index := range rows {
 		rows[index].AgeDays = ageInDays(rows[index].LastChange, rows[index].Created, opts.ageBasis, now)
 		rows[index].Action = workspaceAction(rows[index], currentDirectory, opts.olderThanDays)
 	}
 	warnings := append(jjWarnings, gitWarnings...)
+	warnings = append(warnings, stateWarnings...)
 	return rows, warnings, nil
+}
+
+func parallelFor(count int, task func(int)) {
+	if count == 0 {
+		return
+	}
+	workerCount := runtime.NumCPU() * 8
+	if workerCount < 4 {
+		workerCount = 4
+	}
+	if workerCount > 64 {
+		workerCount = 64
+	}
+	if workerCount > count {
+		workerCount = count
+	}
+	jobs := make(chan int)
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for workerIndex := 0; workerIndex < workerCount; workerIndex++ {
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				task(index)
+			}
+		}()
+	}
+	for index := 0; index < count; index++ {
+		jobs <- index
+	}
+	close(jobs)
+	workers.Wait()
 }
 
 func discoverRepositories(root string, markerName string) ([]repositoryCandidate, []string) {
@@ -77,6 +131,13 @@ func discoverRepositories(root string, markerName string) ([]repositoryCandidate
 	}
 	for _, entry := range entries {
 		candidatePath := filepath.Join(root, entry.Name())
+		if entry.Type().IsDir() {
+			paths = append(paths, candidatePath)
+			continue
+		}
+		if entry.Type()&os.ModeSymlink == 0 && entry.Type() != 0 {
+			continue
+		}
 		info, infoErr := os.Stat(candidatePath)
 		if infoErr != nil || !info.IsDir() {
 			continue
@@ -99,7 +160,11 @@ func discoverRepositories(root string, markerName string) ([]repositoryCandidate
 
 func scanJJWorkspaces(root string, opts options) ([]workspace, []string) {
 	candidates, warnings := discoverRepositories(root, ".jj")
-	rows := make([]workspace, 0)
+	type repository struct {
+		path      string
+		storePath string
+	}
+	repositories := make([]repository, 0)
 	seenStores := make(map[string]struct{})
 	for _, candidate := range candidates {
 		storePath, err := resolveJJStore(candidate.path)
@@ -110,19 +175,28 @@ func scanJJWorkspaces(root string, opts options) ([]workspace, []string) {
 		if _, exists := seenStores[storePath]; exists {
 			continue
 		}
+		seenStores[storePath] = struct{}{}
+		repositories = append(repositories, repository{path: candidate.path, storePath: storePath})
+	}
 
+	type result struct {
+		rows     []workspace
+		warnings []string
+	}
+	results := make([]result, len(repositories))
+	parallelFor(len(repositories), func(index int) {
+		candidate := repositories[index]
 		output, err := runCommand("jj", "--ignore-working-copy", "-R", candidate.path, "workspace", "list", "--template", jjWorkspaceTemplate)
 		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("list JJ workspaces for %s: %v", candidate.path, err))
-			continue
+			results[index].warnings = []string{fmt.Sprintf("list JJ workspaces for %s: %v", candidate.path, err)}
+			return
 		}
 		records, parseErr := parseJJWorkspaceRecords(output)
 		if parseErr != nil {
-			warnings = append(warnings, fmt.Sprintf("parse JJ workspace list for %s: %v", candidate.path, parseErr))
-			continue
+			results[index].warnings = []string{fmt.Sprintf("parse JJ workspace list for %s: %v", candidate.path, parseErr)}
+			return
 		}
-		seenStores[storePath] = struct{}{}
-		repository := filepath.Dir(filepath.Dir(storePath))
+		repositoryPath := filepath.Dir(filepath.Dir(candidate.storePath))
 		for _, record := range records {
 			if record.Name == "default" && !opts.withDefault {
 				continue
@@ -131,28 +205,31 @@ func scanJJWorkspaces(root string, opts options) ([]workspace, []string) {
 			if pathErr != nil || !pathWithin(root, workspacePath, true) {
 				continue
 			}
+			workspaceInfo, workspaceErr := os.Stat(workspacePath)
+			if workspaceErr != nil || !workspaceInfo.IsDir() {
+				continue
+			}
 			created, createErr := filesystemCreatedAt(jjCreationMarker(workspacePath))
 			createdDate := ""
 			if createErr == nil {
 				createdDate = created.Format("2006-01-02")
 			}
-			state, stateErr := jjWorkspaceState(workspacePath)
-			if stateErr != nil {
-				warnings = append(warnings, fmt.Sprintf("check JJ workspace %s: %v", workspacePath, stateErr))
-			}
-			row := workspace{
+			results[index].rows = append(results[index].rows, workspace{
 				Source:     "jj",
 				Name:       record.Name,
-				Repository: repository,
+				Repository: repositoryPath,
 				Path:       workspacePath,
 				Commit:     shortCommit(record.Commit),
 				LastChange: record.LastChange,
 				Created:    createdDate,
-				State:      state,
 				jjName:     record.Name,
-			}
-			rows = append(rows, row)
+			})
 		}
+	})
+	rows := make([]workspace, 0)
+	for _, result := range results {
+		rows = append(rows, result.rows...)
+		warnings = append(warnings, result.warnings...)
 	}
 	return rows, warnings
 }
@@ -243,81 +320,155 @@ func parseJJWorkspaceRecords(output []byte) ([]jjWorkspaceRecord, error) {
 
 func scanGitWorktrees(root string) ([]workspace, []string) {
 	candidates, warnings := discoverRepositories(root, ".git")
-	rows := make([]workspace, 0)
-	seenRepos := make(map[string]repositoryCandidate)
-	for _, candidate := range candidates {
-		commonOutput, err := runCommand("git", "-C", candidate.path, "rev-parse", "--git-common-dir")
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("resolve Git repository for %s: %v", candidate.path, err))
-			continue
-		}
-		commonDir := strings.TrimSpace(string(commonOutput))
-		if !filepath.IsAbs(commonDir) {
-			commonDir = filepath.Join(candidate.path, commonDir)
-		}
-		commonDir, err = filepath.Abs(commonDir)
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("resolve Git directory for %s: %v", candidate.path, err))
-			continue
-		}
-		if resolved, resolveErr := filepath.EvalSymlinks(commonDir); resolveErr == nil {
-			commonDir = resolved
-		}
-		if _, exists := seenRepos[commonDir]; !exists {
-			seenRepos[commonDir] = candidate
-		}
+	type gitRepository struct {
+		candidate repositoryCandidate
+		commonDir string
 	}
+	type discoveryResult struct {
+		commonDir string
+		warning   string
+	}
+	discoveries := make([]discoveryResult, len(candidates))
+	parallelFor(len(candidates), func(index int) {
+		candidate := candidates[index]
+		commonDir, err := resolveGitCommonDir(candidate.path)
+		if err != nil {
+			discoveries[index].warning = fmt.Sprintf("resolve Git repository for %s: %v", candidate.path, err)
+			return
+		}
+		discoveries[index].commonDir = commonDir
+	})
 
-	repositoryKeys := make([]string, 0, len(seenRepos))
-	for key := range seenRepos {
-		repositoryKeys = append(repositoryKeys, key)
+	seenRepos := make(map[string]gitRepository)
+	for index, discovery := range discoveries {
+		if discovery.warning != "" {
+			warnings = append(warnings, discovery.warning)
+			continue
+		}
+		if _, exists := seenRepos[discovery.commonDir]; !exists {
+			seenRepos[discovery.commonDir] = gitRepository{candidate: candidates[index], commonDir: discovery.commonDir}
+		}
 	}
-	sort.Strings(repositoryKeys)
-	for _, commonDir := range repositoryKeys {
-		candidate := seenRepos[commonDir]
-		output, err := runCommand("git", "-C", candidate.path, "worktree", "list", "--porcelain", "-z")
-		if err != nil {
-			warnings = append(warnings, fmt.Sprintf("list Git worktrees for %s: %v", candidate.path, err))
-			continue
+	repositories := make([]gitRepository, 0, len(seenRepos))
+	for _, repository := range seenRepos {
+		repositories = append(repositories, repository)
+	}
+	sort.Slice(repositories, func(left int, right int) bool { return repositories[left].commonDir < repositories[right].commonDir })
+	type scanResult struct {
+		rows     []workspace
+		warnings []string
+	}
+	results := make([]scanResult, len(repositories))
+	parallelFor(len(repositories), func(index int) {
+		entry := repositories[index]
+		candidate := entry.candidate
+		commonDir := entry.commonDir
+		var worktrees []gitWorktreeRecord
+		lastChanges := make(map[string]string)
+		adminEntries, adminErr := os.ReadDir(filepath.Join(commonDir, "worktrees"))
+		if adminErr != nil && !errors.Is(adminErr, os.ErrNotExist) {
+			results[index].warnings = []string{fmt.Sprintf("read Git worktree metadata for %s: %v", candidate.path, adminErr)}
+			return
 		}
-		worktrees, parseErr := parseGitWorktreeRecords(output)
-		if parseErr != nil {
-			warnings = append(warnings, fmt.Sprintf("parse Git worktrees for %s: %v", candidate.path, parseErr))
-			continue
+		if adminErr == nil && len(adminEntries) > 0 {
+			output, err := runCommand("git", "-C", candidate.path, "worktree", "list", "--porcelain", "-z")
+			if err != nil {
+				results[index].warnings = []string{fmt.Sprintf("list Git worktrees for %s: %v", candidate.path, err)}
+				return
+			}
+			worktrees, err = parseGitWorktreeRecords(output)
+			if err != nil {
+				results[index].warnings = []string{fmt.Sprintf("parse Git worktrees for %s: %v", candidate.path, err)}
+				return
+			}
+			lastChanges, err = gitCommitDates(candidate.path, worktrees)
+			if err != nil {
+				results[index].warnings = append(results[index].warnings, fmt.Sprintf("read Git commit dates for %s: %v", candidate.path, err))
+			}
+		} else {
+			worktree, lastChange, err := gitHeadRecord(candidate.path)
+			if err != nil {
+				results[index].warnings = []string{fmt.Sprintf("read Git HEAD for %s: %v", candidate.path, err)}
+				worktree.Path = candidate.path
+			}
+			worktrees = []gitWorktreeRecord{worktree}
+			if worktree.Commit != "" {
+				lastChanges[worktree.Commit] = lastChange
+			}
 		}
-		repository := filepath.Dir(commonDir)
+		repositoryPath := filepath.Dir(commonDir)
 		for _, worktree := range worktrees {
 			workspacePath, pathErr := normalizeWorkspacePath(worktree.Path)
 			if pathErr != nil || !pathWithin(root, workspacePath, true) {
 				continue
 			}
-			lastChange, dateErr := gitLastChange(workspacePath)
-			if dateErr != nil {
-				warnings = append(warnings, fmt.Sprintf("read Git HEAD date for %s: %v", workspacePath, dateErr))
+			workspaceInfo, workspaceErr := os.Stat(workspacePath)
+			if workspaceErr != nil || !workspaceInfo.IsDir() {
+				continue
 			}
 			createdDate := ""
 			if created, createErr := filesystemCreatedAt(filepath.Join(workspacePath, ".git")); createErr == nil {
 				createdDate = created.Format("2006-01-02")
 			}
-			state, stateErr := gitWorkspaceState(workspacePath)
-			if stateErr != nil {
-				warnings = append(warnings, fmt.Sprintf("check Git worktree %s: %v", workspacePath, stateErr))
-			}
 			row := workspace{
 				Source:     "git",
 				Name:       filepath.Base(workspacePath),
-				Repository: repository,
+				Repository: repositoryPath,
 				Path:       workspacePath,
 				Commit:     shortCommit(worktree.Commit),
-				LastChange: lastChange,
+				LastChange: lastChanges[worktree.Commit],
 				Created:    createdDate,
-				State:      state,
-				gitRepo:    repository,
+				gitRepo:    repositoryPath,
 			}
-			rows = append(rows, row)
+			results[index].rows = append(results[index].rows, row)
 		}
+	})
+	rows := make([]workspace, 0)
+	for _, result := range results {
+		rows = append(rows, result.rows...)
+		warnings = append(warnings, result.warnings...)
 	}
 	return rows, warnings
+}
+
+func resolveGitCommonDir(workspacePath string) (string, error) {
+	marker := filepath.Join(workspacePath, ".git")
+	info, err := os.Stat(marker)
+	if err != nil {
+		return "", err
+	}
+	if info.IsDir() {
+		resolved, err := filepath.EvalSymlinks(marker)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Abs(resolved)
+	}
+	contents, err := os.ReadFile(marker)
+	if err != nil {
+		return "", err
+	}
+	gitDir := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(contents)), "gitdir:"))
+	if gitDir == "" {
+		return "", fmt.Errorf("invalid .git pointer in %s", workspacePath)
+	}
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(workspacePath, gitDir)
+	}
+	gitDir, err = filepath.Abs(gitDir)
+	if err != nil {
+		return "", err
+	}
+	gitDir, err = filepath.EvalSymlinks(gitDir)
+	if err != nil {
+		return "", err
+	}
+	adminParent := filepath.Dir(gitDir)
+	commonDir := gitDir
+	if filepath.Base(adminParent) == "worktrees" {
+		commonDir = filepath.Dir(adminParent)
+	}
+	return filepath.Abs(commonDir)
 }
 
 func parseGitWorktreeRecords(output []byte) ([]gitWorktreeRecord, error) {
@@ -359,6 +510,50 @@ func gitLastChange(workspacePath string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+func gitCommitDates(repositoryPath string, worktrees []gitWorktreeRecord) (map[string]string, error) {
+	commits := make([]string, 0, len(worktrees))
+	seenCommits := make(map[string]struct{}, len(worktrees))
+	for _, worktree := range worktrees {
+		if worktree.Commit == "" {
+			continue
+		}
+		if _, exists := seenCommits[worktree.Commit]; exists {
+			continue
+		}
+		seenCommits[worktree.Commit] = struct{}{}
+		commits = append(commits, worktree.Commit)
+	}
+	if len(commits) == 0 {
+		return map[string]string{}, nil
+	}
+	args := []string{"-C", repositoryPath, "log", "--no-walk", "--format=%H%x09%cs"}
+	args = append(args, commits...)
+	output, err := runCommand("git", args...)
+	if err != nil {
+		return nil, err
+	}
+	commitDates := make(map[string]string, len(commits))
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		fields := strings.SplitN(line, "\t", 2)
+		if len(fields) == 2 {
+			commitDates[fields[0]] = fields[1]
+		}
+	}
+	return commitDates, nil
+}
+
+func gitHeadRecord(repositoryPath string) (gitWorktreeRecord, string, error) {
+	output, err := runCommand("git", "-C", repositoryPath, "log", "-1", "--format=%H%x09%cs", "HEAD")
+	if err != nil {
+		return gitWorktreeRecord{}, "", err
+	}
+	fields := strings.SplitN(strings.TrimSpace(string(output)), "\t", 2)
+	if len(fields) != 2 || fields[0] == "" {
+		return gitWorktreeRecord{}, "", errors.New("Git returned an invalid HEAD record")
+	}
+	return gitWorktreeRecord{Path: repositoryPath, Commit: fields[0]}, fields[1], nil
+}
+
 func jjWorkspaceState(workspacePath string) (string, error) {
 	output, err := runCommand("jj", "-R", workspacePath, "status")
 	if err != nil {
@@ -375,7 +570,7 @@ func jjWorkspaceState(workspacePath string) (string, error) {
 }
 
 func gitWorkspaceState(workspacePath string) (string, error) {
-	output, err := runCommand("git", "-C", workspacePath, "status", "--porcelain=v1", "--untracked-files=all")
+	output, err := runCommand("git", "-C", workspacePath, "status", "--porcelain=v1", "--untracked-files=normal")
 	if err != nil {
 		return "unknown", err
 	}
@@ -385,6 +580,26 @@ func gitWorkspaceState(workspacePath string) (string, error) {
 	return "dirty", nil
 }
 
+func populateWorkspaceStates(rows []workspace) []string {
+	if len(rows) == 0 {
+		return nil
+	}
+	stateErrors := make([]error, len(rows))
+	parallelFor(len(rows), func(index int) {
+		state, err := workspaceState(rows[index])
+		rows[index].State = state
+		stateErrors[index] = err
+	})
+
+	warnings := make([]string, 0)
+	for index, stateErr := range stateErrors {
+		if stateErr != nil {
+			warnings = append(warnings, fmt.Sprintf("check %s workspace %s: %v", rows[index].Source, rows[index].Path, stateErr))
+		}
+	}
+	return warnings
+}
+
 func workspaceAction(row workspace, currentDirectory string, olderThanDays int) string {
 	if samePath(row.Path, row.Repository) {
 		return "protected-root"
@@ -392,7 +607,7 @@ func workspaceAction(row workspace, currentDirectory string, olderThanDays int) 
 	if directoryContains(row.Path, currentDirectory) {
 		return "protected-current"
 	}
-	if row.State != "clean" {
+	if row.State != "clean" && row.State != "unchecked" {
 		return "protected-" + row.State
 	}
 	if row.AgeDays == nil {

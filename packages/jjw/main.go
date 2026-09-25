@@ -23,6 +23,7 @@ type options struct {
 	kind          string
 	state         string
 	action        string
+	checkState    bool
 	version       bool
 }
 
@@ -107,7 +108,7 @@ func parseOptions(command string, args []string) (options, error) {
 	flags.SetOutput(os.Stderr)
 	flags.Usage = func() { printCommandUsage(os.Stderr, command) }
 	flags.StringVar(&parsedOptions.root, "root", parsedOptions.root, "directory to scan (default: $HOME/dev)")
-	flags.IntVar(&parsedOptions.olderThanDays, "older-than-days", parsedOptions.olderThanDays, "mark clean workspaces for review at this age")
+	flags.IntVar(&parsedOptions.olderThanDays, "older-than-days", parsedOptions.olderThanDays, "mark workspaces for review at this age")
 	flags.BoolVar(&parsedOptions.withDefault, "with-default", false, "include the default JJ workspace")
 	flags.StringVar(&parsedOptions.ageBasis, "age-basis", parsedOptions.ageBasis, "age by last-change (default) or created")
 	flags.StringVar(&parsedOptions.format, "format", parsedOptions.format, "list output: table, json, tsv, or csv")
@@ -115,6 +116,7 @@ func parseOptions(command string, args []string) (options, error) {
 	flags.StringVar(&parsedOptions.kind, "kind", "", "filter by source: jj or git")
 	flags.StringVar(&parsedOptions.state, "state", "", "filter by state: clean, dirty, or unknown")
 	flags.StringVar(&parsedOptions.action, "action", "", "filter by action: recent, review, or protected")
+	flags.BoolVar(&parsedOptions.checkState, "check-state", false, "check every workspace for dirty files (slower)")
 	flags.BoolVar(&parsedOptions.version, "version", false, "print version")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -143,6 +145,9 @@ func parseOptions(command string, args []string) (options, error) {
 	if parsedOptions.action != "" && parsedOptions.action != "recent" && parsedOptions.action != "review" && parsedOptions.action != "protected" {
 		return options{}, errors.New("--action must be recent, review, or protected")
 	}
+	if parsedOptions.state != "" || parsedOptions.action != "" {
+		parsedOptions.checkState = true
+	}
 	return parsedOptions, nil
 }
 
@@ -155,7 +160,7 @@ Usage:
 
 Commands:
   list      Show a table, JSON, TSV, or CSV report (default)
-  cleanup   Filter and remove selected stale, clean workspaces with fzf
+  cleanup   Filter and remove selected stale workspaces with fzf
   help      Show this help
 
 Run jjw list --help or jjw cleanup --help for command flags.
@@ -165,14 +170,14 @@ Run jjw list --help or jjw cleanup --help for command flags.
 func printCommandUsage(writer io.Writer, command string) {
 	if command == "cleanup" {
 		fmt.Fprintln(writer, "Usage: jjw cleanup [flags]")
-		fmt.Fprintln(writer, "Select entries with fzf. Only clean, stale, non-root entries can be removed.")
+		fmt.Fprintln(writer, "Select entries with fzf. Cleanliness and age are rechecked before removal.")
 	} else {
 		fmt.Fprintln(writer, "Usage: jjw [list] [flags]")
-		fmt.Fprintln(writer, "Prints a table by default. Use --format json, tsv, or csv for structured output.")
+		fmt.Fprintln(writer, "Prints a fast table by default. Use --check-state for full dirty-state checks.")
 	}
 	fmt.Fprintln(writer, "Flags:")
 	fmt.Fprintln(writer, "  --root PATH              Directory to scan (default: $HOME/dev)")
-	fmt.Fprintln(writer, "  --older-than-days N      Mark clean workspaces for review at this age (default: 30)")
+	fmt.Fprintln(writer, "  --older-than-days N      Mark workspaces for review at this age (default: 30)")
 	fmt.Fprintln(writer, "  --age-basis BASIS        last-change (default) or created")
 	fmt.Fprintln(writer, "  --with-default           Include the default JJ workspace")
 	if command == "list" {
@@ -182,6 +187,7 @@ func printCommandUsage(writer io.Writer, command string) {
 	fmt.Fprintln(writer, "  --kind SOURCE            jj or git")
 	fmt.Fprintln(writer, "  --state STATE            clean, dirty, or unknown")
 	fmt.Fprintln(writer, "  --action ACTION          recent, review, or protected")
+	fmt.Fprintln(writer, "  --check-state            Check every workspace for dirty files (slower)")
 	fmt.Fprintln(writer, "  --version                Print version")
 }
 

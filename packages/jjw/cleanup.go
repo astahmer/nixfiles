@@ -101,7 +101,7 @@ func selectWorkspaces(rows []workspace, opts options) ([]workspace, error) {
 		"--with-nth=2..",
 		"--delimiter=\t",
 		"--prompt=jjw cleanup> ",
-		fmt.Sprintf("--header=Age basis: %s · Tab selects · Enter confirms · review rows only", opts.ageBasis),
+		fmt.Sprintf("--header=Age basis: %s · Tab selects · Enter confirms · status checked before removal", opts.ageBasis),
 		"--header-first",
 	}
 	if opts.filter != "" {
