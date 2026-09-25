@@ -9,7 +9,7 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/yetidevworks/drydock/releases/download/v${version}/drydock-darwin-aarch64.tar.gz";
-        hash = "sha256-x1UHoCZHt0SPCbP7UbG3rR5kPY71nsCtK89VzvftH6Q=";
+        hash = "sha256-6siZLXk+FTGkSUTQ0PtA+zy3FtY8kzID/ARbtUzgjt0=";
       };
       x86_64-linux = {
         url = "https://github.com/yetidevworks/drydock/releases/download/v${version}/drydock-linux-x86_64.tar.gz";
@@ -20,7 +20,7 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "drydock";
-  version = "1.1.4";
+  version = "1.2.1";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";

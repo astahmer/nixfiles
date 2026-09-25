@@ -13,7 +13,7 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/nubjs/nub/releases/download/v${version}/nub-darwin-arm64.tar.gz";
-        hash = "sha256-eDutTkpLDm+/CXoYuapfXPJm2AeoHV+7s7AbYZg0wVk=";
+        hash = "sha256-ohR3ZIwSFoQE/hd9aQEe696XPRTXuXFAJtbQ5Xdu/Ok=";
       };
       x86_64-linux = {
         url = "https://github.com/nubjs/nub/releases/download/v${version}/nub-linux-x64-musl.tar.gz";
@@ -24,7 +24,7 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "nub";
-  version = "0.9.2";
+  version = "0.9.3";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";
