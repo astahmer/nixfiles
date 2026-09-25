@@ -12,9 +12,9 @@
 
       piPackages = pkgs.buildNpmPackage {
         pname = "pi-packages";
-        version = "0.84.2";
+        version = "0.87.1";
         src = ../assets/pi/npm;
-        npmDepsHash = "sha256-Qb+2p1QatqVXhoJEebqIOitX1SGhK2Q5HBevognSgUY=";
+        npmDepsHash = "sha256-055Z5n3uKjHG2JTJuvsog335OfUdX4xgIorHt/ZeJXI=";
         dontNpmBuild = true;
         # node-pty ships platform prebuilds inside the tarball; no install
         # scripts are needed and skipping them keeps the build hermetic.
@@ -34,12 +34,12 @@
         defaultModel = "ox-alpha-free";
         defaultThinkingLevel = "high";
         packages = [
-          "npm:@ff-labs/pi-fff@0.10.6"
-          "npm:@plannotator/pi-extension@0.27.15"
+          "npm:@ff-labs/pi-fff@0.11.0"
+          "npm:@plannotator/pi-extension@0.27.20"
           "npm:pi-memory@0.4.2"
           "npm:pi-simplify@0.2.3"
           "npm:pi-smart-copy@0.1.0"
-          "npm:pi-subagents@0.68.0"
+          "npm:pi-subagents@0.71.0"
           "npm:pi-goosedump@0.12.64"
         ];
         tuiMode = "fullscreen";

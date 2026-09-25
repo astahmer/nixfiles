@@ -6,11 +6,11 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "modlens";
-  version = "3.26.1";
+  version = "3.26.5";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@liustack/modlens/-/modlens-${finalAttrs.version}.tgz";
-    hash = "sha256-M3lMldC0FXrUu272tqIdsVfN2+z2Dgu65Z04fBOPkyM=";
+    hash = "sha256-u4fRodC4qhz2INqd8S10LyNdU9emo+IeZe2DUq7VB2I=";
   };
 
   commander = fetchurl {
@@ -19,8 +19,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   };
 
   undici = fetchurl {
-    url = "https://registry.npmjs.org/undici/-/undici-8.10.0.tgz";
-    hash = "sha256-nXLFbBetKz1m8AbVOUU3TMDSvGjzIkOUlblyJp9N5rw=";
+    url = "https://registry.npmjs.org/undici/-/undici-8.11.2.tgz";
+    hash = "sha256-xpv3lEDfsmLHpD41gDcxss/X5tJkz9psVEENYPWbuNc=";
   };
 
   sourceRoot = "package";

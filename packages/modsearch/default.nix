@@ -7,25 +7,25 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "modsearch";
-  version = "5.10.3";
+  version = "5.10.5";
 
   src = fetchurl {
     url = "https://registry.npmjs.org/@liustack/modsearch/-/modsearch-${finalAttrs.version}.tgz";
-    hash = "sha256-nsPHmUDTyc1txOTx2qFwbKoB/ZmMy4Opxd2cHkuSwSU=";
+    hash = "sha256-fFDQd4VIXkufX8ht4pAPlzrbdAoPNoCd4A/WIhrusMw=";
   };
 
   # Keep the agent skill pinned independently from the npm release.
   skillSrc = fetchFromGitHub {
     owner = "liustack";
     repo = "modsearch";
-    rev = "22acb7a08cc7d11dce036ddd3ef68bfe20ef4983";
-    hash = "sha256-ovZffpPd6wh94a4JIitKM0BcR+G5sGVy6g9vPWNrnAo=";
+    rev = "4529da69abab0abfdb24774c5126aa3b1ba4ba21";
+    hash = "sha256-HVdl2Z1/YYx3tezgcH4rVgKC4cm7ycRDy5yYehAVT2k=";
   };
 
   npmLock = ../../assets/modsearch/package-lock.json;
 
   # Pins the npm-installed node_modules tree (no lockfile in the npm tarball).
-  outputHash = "sha256-lhNUCp0hAl2mN3L5iK604ASsYd2kc7KusZxFXP+P1lI=";
+  outputHash = "sha256-jqVuBEldEYchXrk/vp/oxDaYKjYvN9JzpFP7TBkVE3U=";
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   dontFixup = true;
