@@ -142,12 +142,15 @@ accepted by `nix`, not by `nh`.
 
 ## Workspace disk audit
 
-`jjw` reports JJ workspaces and Git worktrees in a readable table by default.
-The default report skips filesystem status checks so it stays fast. Its
-`STATE` column says `unchecked`; `review` means the workspace is old enough to
-inspect, not that it is clean. Use `--check-state` for a full dirty-state
-report. `--state` and `--action` filters enable those checks automatically.
-Choose a structured output format when another command needs the report:
+`jjw` opens an interactive workspace browser in a terminal and prints a fast
+table when its output is piped or redirected. In the browser, `/` starts a live
+fuzzy filter, `s` cycles sort fields, `v` reverses the sort, `u` checks dirty
+state, `z` measures workspace size, and `ctrl+r` rescans. State and size checks
+run in the background. Use `jjw list` for reports and scripts; it skips status
+checks by default, so its `STATE` column says `unchecked`. `review` means the
+workspace is old enough to inspect, not that it is clean. `--state` and
+`--action` list filters enable status checks automatically. Choose a structured
+output format when another command needs the report:
 
 ```bash
 jjw list
@@ -175,7 +178,8 @@ adds a human-readable table column and `size_bytes` to structured output;
 skips `.jj` and `.git` metadata, and does not follow symlinks. Table sizes use
 decimal units; structured output keeps exact bytes. It describes checked-out
 workspace contents, not shared repository storage or exact disk space reclaimed
-by deleting the workspace.
+by deleting the workspace. The browser measures size on demand with `z` or when
+sorted by size.
 
 Age is based on the workspace's last change by default. Use
 `--age-basis created` to compare workspace creation age instead. JJ last-change

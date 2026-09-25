@@ -39,16 +39,19 @@ func main() {
 
 func run(args []string) error {
 	command := "list"
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+	explicitCommand := len(args) > 0 && !strings.HasPrefix(args[0], "-")
+	if explicitCommand {
 		command = args[0]
 		args = args[1:]
+	} else if terminalAvailable() && !requestsListOutput(args) {
+		command = "browse"
 	}
 
 	if command == "help" {
 		printUsage(os.Stdout)
 		return nil
 	}
-	if command != "list" && command != "cleanup" {
+	if command != "list" && command != "browse" && command != "cleanup" {
 		return fmt.Errorf("unknown command %q; use jjw help", command)
 	}
 	for _, argument := range args {
@@ -73,6 +76,9 @@ func run(args []string) error {
 		}
 		return cleanup(parsedOptions)
 	}
+	if command == "browse" {
+		return runBrowser(parsedOptions)
+	}
 
 	rows, warnings, err := scanWorkspaces(parsedOptions)
 	if err != nil {
@@ -85,6 +91,15 @@ func run(args []string) error {
 	}
 	sortWorkspaces(rows, parsedOptions)
 	return renderReport(os.Stdout, rows, parsedOptions)
+}
+
+func requestsListOutput(args []string) bool {
+	for _, argument := range args {
+		if argument == "--format" || strings.HasPrefix(argument, "--format=") {
+			return true
+		}
+	}
+	return false
 }
 
 func parseOptions(command string, args []string) (options, error) {
@@ -118,8 +133,10 @@ func parseOptions(command string, args []string) (options, error) {
 	flags.IntVar(&parsedOptions.olderThanDays, "older-than-days", parsedOptions.olderThanDays, "mark workspaces for review at this age")
 	flags.BoolVar(&parsedOptions.withDefault, "with-default", false, "include the default JJ workspace")
 	flags.StringVar(&parsedOptions.ageBasis, "age-basis", parsedOptions.ageBasis, "age by last-change (default) or created")
-	if command == "list" {
-		flags.StringVar(&parsedOptions.format, "format", parsedOptions.format, "list output: table, json, tsv, or csv")
+	if command == "list" || command == "browse" {
+		if command == "list" {
+			flags.StringVar(&parsedOptions.format, "format", parsedOptions.format, "list output: table, json, tsv, or csv")
+		}
 		flags.StringVar(&parsedOptions.sortBy, "sort", "", "sort by last-change, age, created, size, name, repository, state, or action")
 		flags.BoolVar(&parsedOptions.reverse, "reverse", false, "reverse the selected sort order")
 		flags.BoolVar(&parsedOptions.withSize, "size", false, "measure workspace contents and show their size (slower)")
@@ -148,7 +165,7 @@ func parseOptions(command string, args []string) (options, error) {
 	if command == "list" && parsedOptions.format != "table" && parsedOptions.format != "json" && parsedOptions.format != "tsv" && parsedOptions.format != "csv" {
 		return options{}, errors.New("--format must be table, json, tsv, or csv")
 	}
-	if command == "list" {
+	if command == "list" || command == "browse" {
 		switch parsedOptions.sortBy {
 		case "", "last-change", "age", "created", "size", "name", "repository", "state", "action":
 		default:
@@ -180,18 +197,19 @@ func parseOptions(command string, args []string) (options, error) {
 }
 
 func printUsage(writer io.Writer) {
-	fmt.Fprintf(writer, `jjw %s — audit JJ workspaces and Git worktrees
+	fmt.Fprintf(writer, `jjw %s — browse and audit JJ workspaces and Git worktrees
 
 Usage:
-  jjw [list] [flags]
+  jjw [browse|list] [flags]
   jjw cleanup [flags]
 
 Commands:
-  list      Show a table, JSON, TSV, or CSV report (default)
+  browse    Interactive workspace browser (default in a terminal)
+  list      Print a table, JSON, TSV, or CSV report (default without a terminal)
   cleanup   Filter and remove selected stale workspaces with fzf
   help      Show this help
 
-Run jjw list --help or jjw cleanup --help for command flags.
+Run jjw browse --help, jjw list --help, or jjw cleanup --help for command flags.
 `, version)
 }
 
@@ -199,8 +217,11 @@ func printCommandUsage(writer io.Writer, command string) {
 	if command == "cleanup" {
 		fmt.Fprintln(writer, "Usage: jjw cleanup [flags]")
 		fmt.Fprintln(writer, "Select entries with fzf. Cleanliness and age are rechecked before removal.")
+	} else if command == "browse" {
+		fmt.Fprintln(writer, "Usage: jjw browse [flags]")
+		fmt.Fprintln(writer, "Open an interactive workspace browser. Dirty state and sizes load on demand.")
 	} else {
-		fmt.Fprintln(writer, "Usage: jjw [list] [flags]")
+		fmt.Fprintln(writer, "Usage: jjw list [flags]")
 		fmt.Fprintln(writer, "Prints a fast table by default. Use --check-state for full dirty-state checks.")
 	}
 	fmt.Fprintln(writer, "Flags:")
@@ -208,8 +229,10 @@ func printCommandUsage(writer io.Writer, command string) {
 	fmt.Fprintln(writer, "  --older-than-days N      Mark workspaces for review at this age (default: 30)")
 	fmt.Fprintln(writer, "  --age-basis BASIS        last-change (default) or created")
 	fmt.Fprintln(writer, "  --with-default           Include the default JJ workspace")
-	if command == "list" {
-		fmt.Fprintln(writer, "  --format FORMAT          table (default), json, tsv, or csv")
+	if command == "list" || command == "browse" {
+		if command == "list" {
+			fmt.Fprintln(writer, "  --format FORMAT          table (default), json, tsv, or csv")
+		}
 		fmt.Fprintln(writer, "  --sort FIELD             last-change, age, created, size, name, repository, state, or action")
 		fmt.Fprintln(writer, "  --reverse                Reverse selected sort order")
 		fmt.Fprintln(writer, "  --size                   Measure workspace contents and show size (slower)")
