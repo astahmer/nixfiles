@@ -11,8 +11,10 @@ removing candidates.
 
 ## Workflow
 
-1. Measure overall pressure and rank large paths. Record the exact Docker
-   context, workspace, database, volume, cache, or VM image involved.
+1. Measure overall pressure and rank large paths. Include shared reference
+   clones and Codex session logs in the user-space scan; concrete commands are
+   in [RECIPES.md](RECIPES.md). Record the exact Docker context, workspace,
+   database, volume, cache, or VM image involved.
 2. Check current processes, ownership, configured storage, service references,
    and a usable backup where data could matter. A large size or old timestamp
    alone does not make something disposable.

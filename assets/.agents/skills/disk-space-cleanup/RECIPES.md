@@ -15,6 +15,19 @@ rtk jj workspace list
 rtk docker context ls
 ```
 
+Reference clones and Codex session logs can also account for substantial user
+storage. Rank their directories and individual session files before considering
+cleanup:
+
+```bash
+rtk du -h -d 2 "$HOME/.references" 2>/dev/null | sort -rh | head -30
+rtk du -ah -d 4 "$HOME/.codex/sessions" 2>/dev/null | sort -rh | head -30
+```
+
+Treat both as user data, not disposable caches. Check whether projects still
+use a reference clone and whether session history has a retention or recovery
+need before proposing removal.
+
 For an exact candidate, inspect its processes before proposing removal:
 
 ```bash
