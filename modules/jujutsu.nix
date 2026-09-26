@@ -253,5 +253,10 @@
           };
         };
       };
+
+      home.file.".local/bin/jj-rewrite-preflight" = {
+        source = ../assets/jujutsu/jj-rewrite-preflight.sh;
+        executable = true;
+      };
     };
 }

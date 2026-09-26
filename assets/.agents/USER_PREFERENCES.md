@@ -12,6 +12,9 @@ set a different scope.
   step before editing.
 - Check JJ workspace ownership before history edits. Keep revisions focused
   and leave other work intact.
+- Before rewriting JJ history, run `jj-rewrite-preflight <full-commit-id>`.
+  Run `jj status` in each relevant workspace first; the preflight does not
+  snapshot working copies.
 
 ## Evidence and operations
 
