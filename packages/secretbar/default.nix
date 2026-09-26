@@ -3,12 +3,13 @@
   stdenv,
   swift,
   swiftpm,
+  secretbarSource,
 }:
 stdenv.mkDerivation {
   pname = "secretbar";
   version = "0.1.0";
 
-  src = ./.;
+  src = secretbarSource;
 
   nativeBuildInputs = [
     swift

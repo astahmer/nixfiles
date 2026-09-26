@@ -4,8 +4,9 @@ Bitwarden Password Manager remains the source of truth. The profile installs
 `bw`, Bitwarden Desktop, optional agent-backed `rbw`, and a small global
 `secret` command for scoped retrieval.
 
-`secret` is a native Swift binary (`packages/secret`, v2) — no runtime
-dependencies beyond `bw` itself. It replaces the original bun/TypeScript
+`secret` is a native Swift binary (v2; source in
+[astahmer/secret-cli](https://github.com/astahmer/secret-cli/tree/main/secret))
+— no runtime dependencies beyond `bw` itself. It replaces the original bun/TypeScript
 runner (`assets/bitwarden/secret.ts`, still the reference spec and runnable
 with `SECRET_IMPL=ts` in the test suite). macOS biometric unlock goes through
 the built-in Touch ID keychain read (no extra binary); a future passkey
@@ -501,7 +502,7 @@ each.
 by default; `SECRET_IMPL=ts bash assets/bitwarden/test-secret.sh` runs the
 same suite against the TypeScript reference implementation. The daemon-mode
 assertions use a real unix-socket HTTP fixture (`test-daemon.ts`). The suite
-builds `packages/secret` with `swift build -c release` on first run.
+builds the CLI from the locked `secret-cli` flake input with `swift build -c release` on first run.
 `assets/bitwarden/tsconfig.json` typechecks `secret.ts` strictly (`bun run
 typecheck` from `assets/bitwarden`, after one `bun install`).
 `nixfiles-check` runs the suites when `bun`/`swift` are on `PATH`; the

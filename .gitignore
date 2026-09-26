@@ -8,5 +8,3 @@ node_modules
 assets/readbro/node_modules
 .readbro
 .composto
-packages/secret/.build
-packages/secretbar/.build

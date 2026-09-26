@@ -142,8 +142,9 @@ accepted by `nix`, not by `nh`.
 
 ## Workspace disk audit
 
-`jjw` opens an interactive workspace browser in a terminal and prints a fast
-table when its output is piped or redirected. In the browser, `/` starts a live
+The [jjw source repository](https://github.com/astahmer/jjw).
+Running `jjw` in a terminal opens an interactive workspace browser; redirected
+output uses a table. In the browser, `/` starts a live
 fuzzy filter, `s` cycles sort fields, `v` reverses the sort, `u` checks dirty
 state, `z` measures workspace size, and `ctrl+r` rescans. State and size checks
 run in the background. Use `jjw list` for reports and scripts; it skips status

@@ -1,9 +1,10 @@
 # Secrets system
 
 The `secret` CLI plus the SecretBar menu-bar/dock app manage machine-local
-access to secrets stored behind pluggable backends. Deployed via nixfiles
-(`modules/bitwarden.nix`, `modules/macos-apps.nix`,
-`packages/secret`, `packages/secretbar`).
+access to secrets stored behind pluggable backends. Source lives in
+[astahmer/secret-cli](https://github.com/astahmer/secret-cli), with separate
+Swift packages for the CLI and SecretBar. Nixfiles packages the binaries and
+owns machine integration (`modules/bitwarden.nix`, `modules/macos-apps.nix`).
 
 ## Mental model
 

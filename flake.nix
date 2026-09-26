@@ -49,6 +49,18 @@
       url = "github:tobi/qmd";
     };
 
+    # jjw and secret-cli are source-only repositories; Nixfiles owns their
+    # Nix packaging and machine integration.
+    jjw = {
+      url = "git+ssh://git@github.com/astahmer/jjw.git?ref=main";
+      flake = false;
+    };
+
+    secret-cli = {
+      url = "git+ssh://git@github.com/astahmer/secret-cli.git?ref=main";
+      flake = false;
+    };
+
     # shiftshift is a private, local-first app repo; SSH keeps the input
     # usable without putting GitHub credentials in the flake.
     shiftshift = {
@@ -155,7 +167,9 @@
             drydock = pkgs'.callPackage ./packages/drydock { };
             hunk = pkgs'.callPackage ./packages/hunk { pkgs = pkgs'; };
             iris = pkgs'.callPackage ./packages/iris { };
-            jjw = pkgs'.callPackage ./packages/jjw { };
+            jjw = pkgs'.callPackage ./packages/jjw {
+              jjwSource = inputs.jjw;
+            };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
             mise = pkgs'.callPackage ./packages/mise { };
             modlens = pkgs'.callPackage ./packages/modlens { };
@@ -169,7 +183,9 @@
             opencodex = pkgs'.callPackage ./packages/opencodex { pkgs = pkgs'; };
             plannotator = pkgs'.callPackage ./packages/plannotator { pkgs = pkgs'; };
             ryu = pkgs'.callPackage ./packages/ryu { };
-            secret = pkgs'.callPackage ./packages/secret { };
+            secret = pkgs'.callPackage ./packages/secret {
+              secretSource = "${inputs.secret-cli}/secret";
+            };
             tokitoki = pkgs'.callPackage ./packages/tokitoki {
               tokitokiSource = inputs.tokitoki;
             };
@@ -183,7 +199,9 @@
             notunes = pkgs'.callPackage ./packages/notunes { };
             pen-dev = pkgs'.callPackage ./packages/pen-dev { };
             recordly = pkgs'.callPackage ./packages/recordly { };
-            secretbar = pkgs'.callPackage ./packages/secretbar { };
+            secretbar = pkgs'.callPackage ./packages/secretbar {
+              secretbarSource = "${inputs.secret-cli}/secretbar";
+            };
             shiftshift =
               let
                 version = (builtins.fromJSON (builtins.readFile "${inputs.shiftshift}/package.json")).version;

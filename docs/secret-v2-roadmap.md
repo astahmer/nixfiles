@@ -40,7 +40,7 @@ openusage.ai was design inspiration only (popover layout, status dot, cards)
 binary (same session, keychain, daemon, configs, history) plus UI-native
 capabilities the CLI does not have.
 
-Shipped as `packages/secretbar` (SecretBar.app): status dot, fuzzy
+Shipped as SecretBar.app (source in [astahmer/secret-cli/secretbar](https://github.com/astahmer/secret-cli/tree/main/secretbar)): status dot, fuzzy
 cross-project search (indexes `~/dev/*/.secret.json` + global config),
 click-to-copy, Touch ID unlock / master-password unlock in-app, lock,
 recent re-copy from `history.json`, per-project health badges from

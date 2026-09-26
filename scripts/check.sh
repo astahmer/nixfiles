@@ -124,7 +124,8 @@ fi
 
 git diff --check
 if command -v swift >/dev/null 2>&1 && command -v bun >/dev/null 2>&1; then
-  assets/bitwarden/test-secret.sh
+  secret_cli_root="$(nix eval --raw --impure --expr 'builtins.toString ((builtins.getFlake (toString ./.)).inputs.secret-cli)')"
+  SECRET_SOURCE_ROOT="$secret_cli_root/secret" assets/bitwarden/test-secret.sh
   assets/bitwarden/test-completions.sh
   assets/bitwarden/test-shell.sh
   if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then

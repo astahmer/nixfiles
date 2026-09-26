@@ -3,7 +3,7 @@
 Status: **not started** (deliberately). This file records what we learned in
 the 2026-08-24 session so a future attempt doesn't re-litigate everything.
 
-The macOS app (`packages/secretbar`, Swift/AppKit) remains the primary
+The macOS app ([secret-cli/secretbar](https://github.com/astahmer/secret-cli/tree/main/secretbar), Swift/AppKit) remains the primary
 implementation. A Linux equivalent would be a **second frontend**, not a
 port: only the model logic (vault state machine + `bw`/`secret` CLI
 orchestration) transfers.
@@ -84,6 +84,6 @@ Layered, cheapest first:
 
 ## Related
 
-- macOS implementation: `packages/secretbar/Sources/secretbar/`
-- Vault CLI: `packages/secret/`
+- macOS implementation: [secret-cli/secretbar/Sources/secretbar](https://github.com/astahmer/secret-cli/tree/main/secretbar/Sources/secretbar)
+- Vault CLI: [secret-cli/secret](https://github.com/astahmer/secret-cli/tree/main/secret)
 - Roadmap context: `docs/secret-v2-roadmap.md`

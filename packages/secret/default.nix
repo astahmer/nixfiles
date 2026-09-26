@@ -3,12 +3,13 @@
   stdenv,
   swift,
   swiftpm,
+  secretSource,
 }:
 stdenv.mkDerivation {
   pname = "secret";
   version = "2.0.0";
 
-  src = ./.;
+  src = secretSource;
 
   nativeBuildInputs = [
     swift

@@ -5,12 +5,13 @@
   jujutsu,
   lib,
   makeWrapper,
+  jjwSource,
 }:
 buildGoModule (finalAttrs: {
   pname = "jjw";
   version = "0.1.0";
 
-  src = ./.;
+  src = jjwSource;
   vendorHash = "sha256-jy1gNKmLdPgzKQFlEJGWv1hQxRfpIbUZap2uKbmjTPY=";
 
   nativeBuildInputs = [ makeWrapper ];

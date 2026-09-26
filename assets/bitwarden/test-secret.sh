@@ -10,17 +10,22 @@ script="$root/assets/bitwarden/secret.ts"
 bun_bin="${BUN:-bun}"
 export FAKE_BUN_BIN="$bun_bin"
 impl="${SECRET_IMPL:-swift}"
+tmp="$(mktemp -d)"
+trap '[ -n "${KEEP_TMP:-}" ] || rm -rf "$tmp"' EXIT
 if [ "$impl" = "swift" ]; then
-  swift build -c release --package-path "$root/packages/secret" >/dev/null
-  swift_bin="$root/packages/secret/.build/release/secret"
+  secret_source_root="${SECRET_SOURCE_ROOT:-$root/packages/secret}"
+  if [ ! -f "$secret_source_root/Package.swift" ]; then
+    secret_cli_root="$(cd "$root" && nix eval --raw --impure --expr 'builtins.toString ((builtins.getFlake (toString ./.)).inputs.secret-cli)')"
+    secret_source_root="$secret_cli_root/secret"
+  fi
+  swift build -c release --package-path "$secret_source_root" --scratch-path "$tmp/swift-build" >/dev/null
+  swift_bin="$tmp/swift-build/release/secret"
   secret_bin0="$swift_bin"
   secret_bin1=""
 else
   secret_bin0="$bun_bin"
   secret_bin1="$script"
 fi
-tmp="$(mktemp -d)"
-trap '[ -n "${KEEP_TMP:-}" ] || rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/bin" "$tmp/config/secret" "$tmp/proj/sub"
 

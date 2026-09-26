@@ -333,6 +333,23 @@
         "type": "github"
       }
     },
+    "jjw": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790408254,
+        "narHash": "sha256-TRamZ7sldkeg2+Rky6Qb7LbOQHiYVM0eFpa47rhos48=",
+        "ref": "main",
+        "rev": "f8ad87973d2015ec7336290ef0aadae6aaa686ea",
+        "revCount": 1,
+        "type": "git",
+        "url": "ssh://git@github.com/astahmer/jjw.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "ssh://git@github.com/astahmer/jjw.git"
+      }
+    },
     "llm-agents": {
       "inputs": {
         "bun2nix": "bun2nix",
@@ -599,10 +616,12 @@
         "flake-parts": "flake-parts_2",
         "home-manager": "home-manager",
         "import-tree": "import-tree",
+        "jjw": "jjw",
         "llm-agents": "llm-agents",
         "nix-index-database": "nix-index-database",
         "nixpkgs": "nixpkgs_3",
         "qmd": "qmd",
+        "secret-cli": "secret-cli",
         "shiftshift": "shiftshift",
         "tokitoki": "tokitoki"
       }
@@ -647,6 +666,23 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
+      }
+    },
+    "secret-cli": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790408254,
+        "narHash": "sha256-OGmaR8wNa4EAV0pYeFOI+pcsj7q02sM3cdA+oT9wWWI=",
+        "ref": "main",
+        "rev": "fe4af4af2b9f7504600e37e373905f8b1b25727b",
+        "revCount": 1,
+        "type": "git",
+        "url": "ssh://git@github.com/astahmer/secret-cli.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "ssh://git@github.com/astahmer/secret-cli.git"
       }
     },
     "shiftshift": {
