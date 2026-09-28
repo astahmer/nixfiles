@@ -16,7 +16,6 @@
       tidyports = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tidyports;
       claudeDesktop = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.claude-desktop;
       discordBin = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.discord-bin;
-      penDev = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.pen-dev;
       recordly = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.recordly;
       t3codeBin = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.t3code-bin;
       tldrawOffline = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.tldraw-offline;
@@ -56,7 +55,6 @@
         "Linear.app" = "${linear}/Applications/Linear.app";
         "MonitorControl.app" = "${monitorControl}/Applications/MonitorControl.app";
         "OrbStack.app" = "${pkgs.orbstack}/Applications/OrbStack.app";
-        "Pencil.app" = "${penDev}/Applications/Pencil.app";
         "Raycast.app" = "${pkgs.raycast}/Applications/Raycast.app";
         "Recordly.app" = "${recordly}/Applications/Recordly.app";
         "SecretBar.app" = "${secretbar}/Applications/SecretBar.app";

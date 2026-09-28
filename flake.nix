@@ -197,7 +197,6 @@
             discord-bin = pkgs'.callPackage ./packages/discord-bin { };
             ghui = pkgs'.callPackage ./packages/ghui { pkgs = pkgs'; };
             notunes = pkgs'.callPackage ./packages/notunes { };
-            pen-dev = pkgs'.callPackage ./packages/pen-dev { };
             recordly = pkgs'.callPackage ./packages/recordly { };
             secretbar = pkgs'.callPackage ./packages/secretbar {
               secretbarSource = "${inputs.secret-cli}/secretbar";

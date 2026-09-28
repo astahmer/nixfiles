@@ -355,24 +355,6 @@
       ]
     },
     {
-      "name": "pen-dev",
-      "type": "manual",
-      "description": "pen.dev release ZIP and app name are pinned together",
-      "enabled": false,
-      "systems": [
-        "aarch64-darwin"
-      ],
-      "command": [
-        "nix",
-        "run",
-        "nixpkgs#nix-update",
-        "--",
-        "--flake",
-        "pen-dev",
-        "--use-github-releases"
-      ]
-    },
-    {
       "name": "recordly",
       "type": "manual",
       "description": "Recordly release ZIP and arm64 hash",

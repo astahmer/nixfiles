@@ -53,7 +53,7 @@ while the profile keeps only the CLI launchers needed by the shell.
 ## Manual package updates
 
 `hunk`, `opencodex`, `plannotator`, `ghui`, `modlens`, `modsearch`,
-`claude-desktop`, `discord-bin`, `pen-dev`, `recordly`, `t3code-bin`,
+`claude-desktop`, `discord-bin`, `recordly`, `t3code-bin`,
 `tldraw-offline` remain in the registry as disabled manual entries.
 `pi-packages` is also manual because its package.json, npm lockfile,
 the exact settings pins, and `npmDepsHash` must move together. The GUI
