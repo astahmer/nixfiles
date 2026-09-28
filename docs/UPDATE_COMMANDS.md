@@ -52,19 +52,14 @@ while the profile keeps only the CLI launchers needed by the shell.
 
 ## Manual package updates
 
-`hunk`, `opencodex`, `plannotator`, `ghui`, `modlens`, `modsearch`,
+`hunk`, `opencodex`, `plannotator`, `ghui`,
 `claude-desktop`, `discord-bin`, `recordly`, `t3code-bin`,
 `tldraw-offline` remain in the registry as disabled manual entries.
 `pi-packages` is also manual because its package.json, npm lockfile,
 the exact settings pins, and `npmDepsHash` must move together. The GUI
 packages pin upstream release archives and app-bundle names; Claude also pins
 a build revision. Update those values together, then run the package build and
-`--validate fast`. ModLens updates must verify both npm tarballs, the published
-CLI entry point, and the bundled `skills/modlens` references. ModSearch updates
-must refresh the npm tarball hash, regenerate `assets/modsearch/package-lock.json`
-from the pinned tarball, rebuild for the new recursive output hash, and refresh
-the pinned upstream skill commit plus its archive hash. Provider sign-in
-remains a runtime concern.
+`--validate fast`.
 
 OpenCodex combines per-platform standalone release binaries with `gui/dist`
 from the matching published npm tarball. Update its binary hashes and dashboard
@@ -87,5 +82,5 @@ OpenCode is consumed from that package set, so update it by updating the
 
 ```bash
 nix flake check --no-build --all-systems
-nix build .#codex .#iris .#modlens .#modsearch .#nub .#ryu --no-link
+nix build .#codex .#iris .#nub .#ryu --no-link
 ```

@@ -327,34 +327,6 @@
       ]
     },
     {
-      "name": "modlens",
-      "type": "manual",
-      "description": "ModLens and Commander npm tarballs plus bundled agent skill move together",
-      "enabled": false,
-      "command": [
-        "nix",
-        "run",
-        "nixpkgs#nix-update",
-        "--",
-        "--flake",
-        "modlens"
-      ]
-    },
-    {
-      "name": "modsearch",
-      "type": "manual",
-      "description": "ModSearch npm tarball, vendored npm lockfile/output hash, and pinned upstream skill commit move together",
-      "enabled": false,
-      "command": [
-        "nix",
-        "run",
-        "nixpkgs#nix-update",
-        "--",
-        "--flake",
-        "modsearch"
-      ]
-    },
-    {
       "name": "recordly",
       "type": "manual",
       "description": "Recordly release ZIP and arm64 hash",
@@ -469,7 +441,6 @@
           "build",
           ".#codex",
           ".#iris",
-          ".#modlens",
           ".#nub",
           ".#ryu",
           ".#zed",

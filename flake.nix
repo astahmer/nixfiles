@@ -172,8 +172,6 @@
             };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
             mise = pkgs'.callPackage ./packages/mise { };
-            modlens = pkgs'.callPackage ./packages/modlens { };
-            modsearch = pkgs'.callPackage ./packages/modsearch { };
             nub = pkgs'.callPackage ./packages/nub { };
             nh = pkgs'.callPackage ./packages/nh { };
             opencode = inputs.llm-agents.packages.${system}.opencode;

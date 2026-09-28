@@ -15,8 +15,6 @@ in
       hunk = packages.hunk;
       jjw = packages.jjw;
       lightjj = packages.lightjj;
-      modlens = packages.modlens;
-      modsearch = packages.modsearch;
       plannotator = packages.plannotator;
       codex = packages.codex;
       opencode = packages.opencode2;
@@ -43,8 +41,6 @@ in
         pkgs.hyperfine
         pkgs.fresh-editor
         lightjj
-        modlens
-        modsearch
         calldiff
         pkgs."jj-starship"
         pkgs.jq

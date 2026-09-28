@@ -516,7 +516,7 @@ The nixfiles repo declares the same scoped model in its root `.secret.json`:
   OpenCode pool keys (global aliases, used by the `opencode-go-manu` provider
   and the extra `opencode` pool entries).
 - `github-token` maps to the raw GitHub token projection consumed by Executor.
-- `gemini-api-key` maps to the `GEMINI_API_KEY` env var read by ModLens.
+- `gemini-api-key` maps to the `GEMINI_API_KEY` env var.
 - `ssh-private-key` maps to the multiline SSH private key stored in a
   Bitwarden Secure Note's notes field; Home Manager materializes it only during
   activation.

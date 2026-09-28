@@ -70,8 +70,6 @@ list_term() {
   print_row "tokitoki" "" "Usage analytics, quota polling, reports, and the macOS menu bar"
   print_row "cursor-agent" "" "Cursor Agent CLI for terminal and T3 Code"
   print_row "codex" "" "OpenAI Codex CLI for terminal and T3 Code"
-  print_row "modlens" "" "Image-to-structured-evidence for text-only agents"
-  print_row "modsearch" "" "plug-in web search & page fetch for text-only agents"
   print_row "pi-watchdog" "" "RSS timeline for pi agents + auto V8 heap snapshots"
   print_row "calldiff" "" "Call-stack diffs for agentic code review"
   print_row "plannotator / nub" "" "Plan review UI + agent utils"

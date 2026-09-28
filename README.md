@@ -91,9 +91,6 @@ The global `secret` command, project-local `.secret.json` files, Bitwarden, and 
 Tokitoki's secret-backed configuration and automatic macOS menu-bar startup are
 documented in [`docs/tokitoki.md`](docs/tokitoki.md).
 
-The ModLens Gemini (AI Studio) key setup — get, store, project, rotate — is
-documented in [`docs/gemini-api-key.md`](docs/gemini-api-key.md).
-
 The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` point at the local Executor instance (`executor mcp`).
 
 ## NixOS setup
@@ -224,7 +221,8 @@ using it.
 - `modules/tokitoki.nix` for Tokitoki usage analytics, secret-backed quota keys, and the macOS menu-bar LaunchAgent
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
-The coding profile also installs `modlens`, an image-to-structured-evidence CLI for text-only agents, and `modsearch`, its web-search/page-fetch sibling. Their skills are merged into the deployed `~/.agents/skills` tree. Both previously used the Google Antigravity CLI (`agy`) as a no-key provider; that integration was removed because it breached the Antigravity Additional Terms of Service (Section 6 bans using third-party tools against the Service via Antigravity OAuth). Configure a provider API key per tool instead; API keys and credentials stay out of the repository.
+The coding profile also installs `calldiff`, a call-stack diff CLI for agentic
+code review; its skill is merged into the deployed `~/.agents/skills` tree.
 
 ## Updating versions
 
