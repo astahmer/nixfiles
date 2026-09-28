@@ -5,7 +5,5 @@ result
 .secret.local.json
 node_modules
 .opencodex-secrets.env
-assets/readbro/node_modules
-.readbro
 .composto
 *.build

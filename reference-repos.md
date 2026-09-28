@@ -12,6 +12,5 @@ Local clones under `~/.references/` (globally shared). Refresh with the `referen
 | Christopher2K/NixConfig | https://github.com/Christopher2K/NixConfig | `~/.references/chris2-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
 | executor | https://github.com/UsefulSoftwareCo/executor | `~/.references/executor` | Agent integration layer — MCP/OpenAPI/GraphQL catalog with policies |
 | plannotator | https://github.com/backnotprop/plannotator | `~/.references/plannotator` | Interactive plan/code review UI with hook/bridge CLI protocol |
-| readbro | (local) `assets/readbro` | n/a (versioned) | IR read cache MCP + CLI — Effect, pnpm, Node native TS (currently disabled in favor of executor) |
 | herdr | https://github.com/ogulcancelik/herdr | `~/.references/herdr` | Agent multiplexer (tmux-for-AI), Rust TUI, flake.nix, supports opencode — pattern reference for agent-aware terminal tools |
 | ghostty | https://github.com/ghostty-org/ghostty | `~/.references/ghostty` | window-switcher integration research (AppleScript dictionary: windows→tabs w/ settable `selected`; no cross-space IPC) |

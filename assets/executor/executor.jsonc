@@ -43,15 +43,6 @@
       "command": "uvx",
       "args": ["mcp-nixos"]
     }
-    // readbro is disabled for now while we evaluate executor as the single
-    // integration layer. Re-enable by uncommenting this block if needed.
-    // {
-    //   "kind": "mcp",
-    //   "transport": "stdio",
-    //   "name": "readbro",
-    //   "slug": "readbro",
-    //   "command": "readbro"
-    // }
   ],
   "secrets": {
     "github-token": {
