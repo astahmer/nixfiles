@@ -1,11 +1,4 @@
 {
     "version": 1,
-    "hooks": {
-        "preToolUse": [
-            {
-                "matcher": "Shell",
-                "command": "rtk hook cursor"
-            }
-        ]
-    }
+    "hooks": {}
 }

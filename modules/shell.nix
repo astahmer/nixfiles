@@ -271,7 +271,6 @@ in
         jjPrompt
         pkgs.nodejs_24
         pkgs.pnpm
-        pkgs.rtk
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.llvmPackages.libcxxClang ];
 

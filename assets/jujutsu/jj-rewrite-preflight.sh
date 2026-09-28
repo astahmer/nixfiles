@@ -24,7 +24,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 jj_readonly() {
-  rtk proxy jj --ignore-working-copy "$@"
+  jj --ignore-working-copy "$@"
 }
 
 if ! repository_root="$(jj_readonly root 2>/dev/null)"; then

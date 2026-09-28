@@ -225,7 +225,6 @@
 
       home.file.".copilot/instructions/copilot.instructions.md".source =
         ../assets/.agents/instructions/copilot.instructions.md;
-      home.file.".copilot/hooks/rtk-rewrite.json".source = ../assets/.agents/hooks/rtk-rewrite.json;
 
       home.file.".local/bin/papercuts" = {
         source = mkExecutableFile "hm_papercuts.ts" ../assets/papercuts/papercuts.ts;

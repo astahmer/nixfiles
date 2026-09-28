@@ -24,14 +24,14 @@ After changing either source repository, publish its source commit and refresh
 both Nix inputs together:
 
    ```bash
-   rtk nix flake update agents emilint
+   nix flake update agents emilint
    ```
 
 Then check and realize the Home Manager configuration:
 
 ```bash
-rtk nixfiles-check
-rtk nix build --no-link '.#homeConfigurations.macbook.activationPackage'
+nixfiles-check
+nix build --no-link '.#homeConfigurations.macbook.activationPackage'
 ```
 
 `nixfiles-check` runs the lint fixtures from the pinned `inputs.emilint`

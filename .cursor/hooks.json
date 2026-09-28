@@ -5,12 +5,6 @@
             {
                 "command": "./hooks/caveman-thinking.sh"
             }
-        ],
-        "preToolUse": [
-            {
-                "matcher": "Shell",
-                "command": "rtk hook cursor"
-            }
         ]
     }
 }

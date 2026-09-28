@@ -1,7 +1,7 @@
 ---
 applyTo: '**'
 alwaysApply: true
-description: Global agent instructions — caveman, ast-outline, rtk, code style
+description: Global agent instructions — caveman, ast-outline, code style
 ---
 
 - Always use `jj` instead of `git`; unless explicitly asked
@@ -21,15 +21,13 @@ This workstation has Nix and `comma` available, so a command missing from
 anything into a profile or stopping at "command not found", try a one-shot
 Nix-backed invocation:
 
-- `rtk comma <command> [args...]` resolves and runs the executable from
-  nixpkgs without installing it; use `rtk comma -p <command>` or
-  `rtk comma -x <command>` to identify the package or store path.
-- `rtk nix run nixpkgs#<package> -- <args...>` runs a known package
-  explicitly.
-- `rtk nix shell nixpkgs#<package> --command <command> [args...]` provides a
+- `comma <command> [args...]` resolves and runs the executable from nixpkgs
+  without installing it.
+- `nix run nixpkgs#<package> -- <args...>` runs a known package explicitly.
+- `nix shell nixpkgs#<package> --command <command> [args...]` provides a
   temporary environment for multi-tool debugging.
-- `rtk nix develop` enters the repository's pinned development environment
-  when the flake provides one.
+- `nix develop` enters the repository's pinned development environment when
+  the flake provides one.
 
 Prefer these ephemeral paths for diagnostics. Keep profile changes and
 configuration edits deliberate, and report the exact Nix/comma failure when a
@@ -325,17 +323,3 @@ Use the tiny lifecycle:
 Do not log one-off agent mistakes, known baseline failures, or ownerless external
 limitations. See the **papercuts** skill for the admission rules.
 <!-- papercuts:end -->
-
-<!-- rtk-instructions v2 -->
-# RTK — Token-Optimized CLI
-
-Always prefix shell commands with `rtk`:
-
-```bash
-git status                 rtk git status
-git log -10                rtk git log -10
-cargo test                 rtk cargo test
-```
-
-Meta: `rtk gain`, `rtk gain --history`, `rtk discover`, `rtk proxy <cmd>`
-<!-- /rtk-instructions -->

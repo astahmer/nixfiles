@@ -86,7 +86,6 @@ list_term() {
   print_row "btop / htop / ncdu" "top / du" "Process + disk"
   print_row "httpie / curl / jq" "" "HTTP + JSON"
   print_row "tmux / tokei / hyperfine" "" "Sessions, LOC, benchmarks"
-  print_row "rtk" "" "Token-optimized shell wrapper"
 
   print_section "Nix apply"
   print_row "nixapply" "" "nh home switch -c macbook (uses NH_FLAKE)"
