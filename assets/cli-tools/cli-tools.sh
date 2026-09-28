@@ -53,6 +53,7 @@ list_term() {
 
   print_section "Shell & envs"
   print_row "zsh + starship" "" "Interactive shell + prompt"
+  print_row "atuin" "Ctrl+R" "Fuzzy shell history search, stored locally"
   print_row "mise" "" "Per-project toolchains (mise.toml → PATH)"
   print_row "direnv / nix-direnv" "" "Directory env hooks"
   print_row "nh" "" "Home Manager / NixOS apply helper (nixapply)"

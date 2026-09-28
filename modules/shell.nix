@@ -274,6 +274,20 @@ in
       ]
       ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [ pkgs.llvmPackages.libcxxClang ];
 
+      programs.atuin = {
+        enable = true;
+        enableBashIntegration = true;
+        enableZshIntegration = true;
+        flags = [ "--disable-up-arrow" ];
+        settings = {
+          auto_sync = false;
+          search_mode = "fuzzy";
+          filter_mode = "global";
+          enter_accept = false;
+          secrets_filter = true;
+        };
+      };
+
       programs.bash.enable = true;
       programs.zsh.enable = true;
       programs.zsh.dotDir = "${config.xdg.configHome}/zsh";

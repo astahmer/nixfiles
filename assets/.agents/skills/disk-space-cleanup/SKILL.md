@@ -22,9 +22,10 @@ removing candidates.
    impact. A broad request to audit does not authorize cleanup; follow the
    user's stated scope for cleanup actions and clarify only when that scope is
    ambiguous.
-4. Use confirmation prompts where available and review proposed removals. Do
-   not skip prompts with `--force`, combine unrelated cleanup targets, or
-   include volumes in a broad prune.
+4. Use confirmation prompts where available and review proposed removals. Use
+   `--force` only when the user explicitly authorized the exact scope and
+   daemon context. Do not combine unrelated targets or include volumes in a
+   broad prune.
 5. Measure the same paths again and check service, container, and workspace
    state. Report measured recovery separately from estimates.
 

@@ -102,11 +102,37 @@ docker --context "$dockerContext" system prune
 ```
 
 Choose an `until` cutoff for the task; do not treat age as proof that a
-container or image is disposable. Do not add `--force`. `system prune --all`
+container or image is disposable. Use `--force` only after the user explicitly authorizes the exact broad cleanup
+scope and daemon context. `system prune --all`
 removes unused images beyond dangling ones. `system prune --volumes` prunes
 anonymous volumes, and `volume prune --all` can also remove unused named
 volumes. Inspect exact volume ownership, mounts, and backups before any volume
 cleanup. Keep it separate from `system prune`.
+
+For explicitly approved broad cleanup, these variants include unused images
+or all unused build cache. Keep volumes out of this batch. Stopped containers
+are removed by system prune, including their writable layers; unused images
+and cache may need downloading or rebuilding later.
+
+```bash
+# Interactive broad cleanup first.
+rtk docker --context "$dockerContext" system prune --all
+rtk docker --context "$dockerContext" builder prune --all
+
+# Noninteractive equivalent, only when this exact scope is authorized.
+rtk docker --context "$dockerContext" system prune -af
+rtk docker --context "$dockerContext" builder prune -af
+
+# Separate Buildx builder: inspect the selected builder before pruning its cache.
+rtk docker --context "$dockerContext" buildx ls
+rtk docker --context "$dockerContext" buildx du
+rtk docker --context "$dockerContext" buildx prune --all
+```
+
+System prune already covers the daemon's unused containers, networks, images,
+and build cache. Do not run every prune command redundantly. Buildx builders
+can have separate caches, including remote builders; inspect their endpoint
+before cleanup. Never add `--volumes` to the broad command.
 
 Docker documents the scope of [`system prune`](https://docs.docker.com/reference/cli/docker/system/prune/),
 [`builder prune`](https://docs.docker.com/reference/cli/docker/builder/prune/),
