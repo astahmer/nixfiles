@@ -226,11 +226,6 @@
       home.file.".copilot/instructions/copilot.instructions.md".source =
         ../assets/.agents/instructions/copilot.instructions.md;
 
-      home.file.".local/bin/papercuts" = {
-        source = mkExecutableFile "hm_papercuts.ts" ../assets/papercuts/papercuts.ts;
-        executable = true;
-      };
-
       home.file.".local/bin/cursor" = {
         text = ''
           #!/usr/bin/env bash

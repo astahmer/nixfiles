@@ -304,22 +304,3 @@ pnpm fmt
 
 Code should be self-documenting. If a comment is needed to explain WHAT the code does, refactor instead.
 
-
-<!-- papercuts:start -->
-# Papercuts — short-lived action inbox
-
-Record only concrete, fixable friction with an exact target and next action:
-
-    papercuts add --where <target> --fix "<next action>" [--ttl 24h|3d] "<observed evidence>"
-
-Entries expire automatically. Default TTL is 3 days; blockers get 24 hours to be
-promoted to a real task. Otherwise they disappear.
-
-Use the tiny lifecycle:
-
-    papercuts list --format md
-    papercuts close <id>
-
-Do not log one-off agent mistakes, known baseline failures, or ownerless external
-limitations. See the **papercuts** skill for the admission rules.
-<!-- papercuts:end -->
