@@ -16,31 +16,18 @@
         builtins.readFile ../assets/opencodex/config.template.json
       );
 
-      # Exclude deprecated readbro skill from the deployed .agents directory.
-      # The source tree itself is kept under assets/ for reference.
-      localAgentsFilter =
-        path: _type:
-        let
-          relPath = lib.removePrefix (toString ../assets/.agents) (toString path);
-        in
-        !(lib.hasPrefix "/skills/readbro" relPath);
+      localAgentsSrc = lib.cleanSource ../assets/.agents;
 
-      localAgentsSrc = lib.cleanSourceWith {
-        src = lib.cleanSource ../assets/.agents;
-        filter = localAgentsFilter;
-      };
-
-      agentsWithSkillOverlays = pkgs.runCommandLocal "agents-with-skill-overlays" { } ''
-        mkdir -p "$out"
-        cp -R --no-preserve=mode "${localAgentsSrc}/." "$out/"
-
-        # Portable skills come from the pinned agents source. Keep the local
-        # tree as an overlay until every machine-specific skill has moved out
-        # of assets/.agents.
+      # Base = the pinned astahmer/AGENTS repo (global contract + portable
+      # skills); overlay = the Nix-local assets/.agents tree (machine-specific
+      # skills and preferences), then the emilint/calldiff rule sources.
+      agentsWithSkillOverlays = pkgs.runCommandLocal "agents-with-overlays" { } ''
+        mkdir -p "$out/skills"
+        cp "${inputs.agents}/AGENTS.md" "$out/AGENTS.md"
         cp -R --no-preserve=mode "${inputs.agents}/.agents/skills/." "$out/skills/"
 
-        # Do not deploy the taste-maintenance skill from the shared agent source.
-        rm -rf "$out/skills/taste-from-sessions"
+        # Machine-specific overlays win over the shared base.
+        cp -R --no-preserve=mode "${localAgentsSrc}/." "$out/"
 
         # emilint owns executable lint assets and their companion guidance.
         mkdir -p "$out/skills/antislop" "$out/skills/effect-antislop"
@@ -117,8 +104,7 @@
       # Keep the source in the global agent tree while exposing the same
       # content through Codex's machine-local default home.
       home.sessionVariables.CODEX_HOME = "${config.home.homeDirectory}/.codex";
-      home.file.".codex/AGENTS.md".source = ../assets/.agents/AGENTS.md;
-      home.file.".cursor/hooks.json".source = ../assets/.cursor/hooks.json;
+      home.file.".codex/AGENTS.md".source = "${agentsWithSkillOverlays}/AGENTS.md";
       home.file.".cursor/rules".source = ../assets/.cursor/rules;
       home.file.".claude/settings.json".source = ../assets/.claude/settings.json;
 
@@ -171,7 +157,11 @@
       '';
 
       home.file.".copilot/instructions/copilot.instructions.md".source =
-        ../assets/.agents/instructions/copilot.instructions.md;
+        "${agentsWithSkillOverlays}/AGENTS.md";
+      # Same global contract, wired into every harness that reads a
+      # machine-local instructions file.
+      home.file.".claude/CLAUDE.md".source = "${agentsWithSkillOverlays}/AGENTS.md";
+      home.file.".config/opencode/AGENTS.md".source = "${agentsWithSkillOverlays}/AGENTS.md";
 
       home.file.".local/bin/cursor" = {
         text = ''
@@ -184,8 +174,5 @@
 
       home.file.".copilot/skills".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/skills";
-
-      # readbro is disabled while we use executor as the single integration layer.
-      # The package source remains in assets/readbro for now.
     };
 }

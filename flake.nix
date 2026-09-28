@@ -77,7 +77,7 @@
     # Reusable project skills from a plain source repository; Home Manager
     # assembles them with the machine-local skill overlay.
     agents = {
-      url = "github:astahmer/agents";
+      url = "github:astahmer/AGENTS";
       flake = false;
     };
 

@@ -17,11 +17,10 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Layout
 
-- `inputs.agents` supplies portable skills and an optional project `AGENTS.md` baseline. `assets/.agents/` is the Nix-owned source for machine-specific overlays and user-global guidance explicitly versioned here. Home Manager combines both skill trees into the deployed `~/.agents` tree.
+- `inputs.agents` supplies the user-global `AGENTS.md` contract and portable skills. `assets/.agents/` is the Nix-owned source for machine-specific overlays only. Home Manager combines both trees into the deployed `~/.agents` directory.
 - `inputs.emilint` owns the executable Oxlint and ast-grep rule sources and fixtures that the agents module overlays into `antislop/` and `effect-antislop/`. `modules/coding.nix` installs the matching `oxlint` and `ast-grep` CLIs globally.
-- Agent deployment source is the pinned `agents` input plus `assets/.agents/` overlays and `assets/.cursor/`. Home Manager deploys to `~/.agents`, `~/.codex/AGENTS.md`, `~/.cursor/rules`, and `~/.cursor/hooks*`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies the deployed global `AGENTS.md`, not the clone.
+- Agent deployment source is the pinned `agents` input (base contract + portable skills) with the `assets/.agents/` machine overlay on top, plus `assets/.cursor/` rules. Home Manager deploys to `~/.agents`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`, `~/.copilot/instructions/`, and `~/.cursor/rules`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies the deployed global `AGENTS.md`, not the clone.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently after `nixbootstrap` and when activation inputs change.
-- `readbro` is superseded by `ast-outline`. Its source remains in `assets/readbro/` for reference but is no longer deployed — neither as an MCP server nor as an agent skill. The readbro skill (`assets/.agents/skills/readbro/`) is excluded from Home Manager deployment via a source filter.
 - `~/.references/` contains globally-shared cloned reference repositories used for comparison and pattern mining. Per-project `.references/` is used only as an escape hatch.
 
 Global Codex instruction discovery uses CODEX_HOME/AGENTS.md (normally
@@ -70,7 +69,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 ## Notes for Agents
 
 - Global-scope secret aliases (the `secret` CLI's global config) live in the git-synced file `assets/secret/global.json`; Home Manager symlinks `~/.config/secret/config.json` to it through the `~/.config/nixfiles` stable pointer, so `secret set --global` edits land in the working copy and jj snapshots them — push so other machines see new aliases. Machine-specific overrides belong in `.secret.local.json`.
-- Keep cross-user portable skills in the `agents` repository. Store user-global skills and preferences explicitly requested for this setup in `assets/.agents`; keep project-specific skills in their project repositories. Run `nixapply` to deploy the Nix-owned guidance.
+- Keep cross-user portable guidance and skills in the `agents` repository. Store user-global skills and preferences explicitly requested for this setup in `assets/.agents`; keep project-specific skills in their project repositories. Run `nixapply` to deploy the Nix-owned guidance.
 - Agent-made `jj` revisions carry a session deeplink and a short summary of the initial prompt in the description body (after the first line), prefixed with `prompt_summary:`; keep the first line a lowercase concise title. Use the harness active at request time, not a fixed one: Codex desktop links `codex://threads/<thread-id>` via `$CODEX_THREAD_ID`; T3 Code/OpenCode and other harnesses use their own session id/link from their session store. Summarize the prompt in 1-2 lines after `prompt_summary:`; the deeplink preserves full context.
 
   ```text
@@ -79,7 +78,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
   Session: codex://threads/<thread-id>
   prompt_summary: user wants an ssh multiplexer module shared by both hosts
   ```
-- `ast-outline` (installed via `nixbootstrap`) is the primary code-exploration tool, replacing readbro. The canonical agent snippet lives in `assets/.agents/AGENTS.md` inside `<!-- ast-outline:start -->` markers; a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
+- `ast-outline` (installed via `nixbootstrap`) is the primary code-exploration tool. The canonical agent snippet lives in the `agents` repository `AGENTS.md` inside `<!-- ast-outline:start -->` markers; a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
 - `jje <base>` is a shell function (defined in `modules/shell.nix`) that duplicates a commit range (`<base>::@`) then squashes the original — preserves evolution history while producing a single clean commit. Shell reload after applying.
 - To unify recent parallel work, rebase each branch and its descendants with `jj rebase -b <branch-head> -o <destination>`, stacking branches oldest to newest and using the previous tip as the next destination. Resolve conflicts from the oldest commit upward, inspect the resulting history and workspace heads, then leave the default workspace working copy above the unified tip. Check `jj workspace list` first and preserve work owned by other active workspaces.
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.

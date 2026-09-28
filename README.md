@@ -33,11 +33,10 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 - `modules/` holds reusable modules. Some files export both Home Manager and NixOS modules when a concern spans both scopes.
 - `hosts/macbook/default.nix` wires the standalone Home Manager profile for macOS.
 - `hosts/workstation/default.nix` wires the NixOS host.
-- The pinned `agents` flake input supplies reusable skills and an optional project `AGENTS.md` baseline. `assets/.agents/` contains the Nix-local global contract and machine overlays; Home Manager combines the skill trees and deploys the local contract to `~/.agents/` and `~/.codex/AGENTS.md` on every machine.
+- The pinned `agents` flake input is the base (user-global `AGENTS.md` contract + portable skills); `assets/.agents/` overlays machine-specific skills and preferences. Home Manager combines both and deploys the contract to `~/.agents/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`, and `~/.copilot/instructions/` on every machine.
 - The source split and migration procedure are documented in [`docs/agent-sources.md`](docs/agent-sources.md).
 - `assets/tokitoki/` contains the value-free Tokitoki configuration template; secret-backed runtime projection and macOS startup are documented in [`docs/tokitoki.md`](docs/tokitoki.md).
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.ts` seeds them idempotently after `nixbootstrap` or when the activation hash changes.
-- `assets/readbro/` contains the source for readbro (an IR read-cache MCP); it is currently disabled.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## macOS setup
