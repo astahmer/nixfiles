@@ -150,6 +150,34 @@ const AccountPage = () => {
   }, [selected?.id, selected?.email]);
 
   useEffect(() => {
+    if (!selected || selected.provider !== "codex" || selected.email || !draft.path) return;
+    let current = true;
+    let checking = false;
+    const checkForSignIn = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const result = await rpc.call("identity", { id: selected.id, path: draft.path });
+        const email = result.email;
+        if (!current || email === null) return;
+        setIdentityEmail(email);
+        setAccounts((profiles) => profiles.map((profile) => profile.id === selected.id ? { ...profile, email } : profile));
+        setNotice("Codex sign-in detected. Account identity refreshed.");
+      } catch {
+        // The account home may not exist until the sign-in command creates it.
+      } finally {
+        checking = false;
+      }
+    };
+    void checkForSignIn();
+    const timer = window.setInterval(() => void checkForSignIn(), 2500);
+    return () => {
+      current = false;
+      window.clearInterval(timer);
+    };
+  }, [selected?.id, selected?.provider, selected?.email, draft.path]);
+
+  useEffect(() => {
     if (!selected) return;
     setScopeMode(selectedHostId ? "machine" : "default");
     setScopeHostId(selectedHostId);
@@ -175,7 +203,7 @@ const AccountPage = () => {
       if (current) setCatalog([]);
     });
     return () => { current = false; };
-  }, [selected?.id, selectedHostId]);
+  }, [selected?.id, selected?.email, selectedHostId]);
 
   const persist = async (patch: Partial<NonNullable<typeof selected>>) => {
     if (!selected) return;

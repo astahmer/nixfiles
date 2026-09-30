@@ -11,6 +11,10 @@ command** on the machine that runs its provider. The Codex command creates the
 profile's `CODEX_HOME` before running `codex login`; sign in once for each
 separate Codex account, then refresh to read the email claim from its local
 `auth.json`. The command does not copy or expose credentials.
+While a Codex profile is selected and has no detected email, the page checks
+its account home periodically. Once the login writes `auth.json`, BB updates
+the email and reloads that profile's live model catalog; **Refresh** remains
+available for an immediate check.
 
 OpenCode Go uses a separate `XDG_DATA_HOME` and its `opencode auth login` flow.
 Credentials stay in OpenCode's own auth file.
