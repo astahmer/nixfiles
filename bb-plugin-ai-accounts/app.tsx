@@ -393,13 +393,18 @@ const AccountPage = () => {
     void persist({ favoriteModelIds: Array.from(favorites), modelOrder });
   };
 
-  const moveModel = (modelId: string, direction: -1 | 1) => {
+  const moveModel = (modelId: string, direction: -1 | 1, groupModels: typeof catalogModels) => {
     if (!selected) return;
+    const groupIndex = groupModels.findIndex((model) => model.id === modelId);
+    const neighbor = groupModels[groupIndex + direction];
+    if (groupIndex < 0 || !neighbor) return;
     const order = orderedModels.map((model) => model.id);
-    const index = order.indexOf(modelId);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
-    [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+    const modelIndex = order.indexOf(modelId);
+    if (modelIndex < 0) return;
+    order.splice(modelIndex, 1);
+    const neighborIndex = order.indexOf(neighbor.id);
+    if (neighborIndex < 0) return;
+    order.splice(neighborIndex + (direction > 0 ? 1 : 0), 0, modelId);
     void persist({ modelOrder: order });
   };
 
@@ -453,7 +458,7 @@ const AccountPage = () => {
     const isFavorite = selected?.favoriteModelIds.includes(model.id) ?? false;
     const isHidden = hiddenModelIds.has(model.id);
     const isCustom = selected?.customModels.some((custom) => custom.id === model.id) ?? false;
-    const globalIndex = orderedModels.findIndex((entry) => entry.id === model.id);
+    const groupIndex = models.findIndex((entry) => entry.id === model.id);
     return (
       <div className={"aa-model-row " + (isHidden ? "is-hidden" : "")} key={model.id}>
         <button className="aa-favorite" aria-label={isFavorite ? "Remove favorite" : "Add favorite"} onClick={() => updateFavorites(model.id)}>{isFavorite ? "★" : "☆"}</button>
@@ -462,7 +467,7 @@ const AccountPage = () => {
           <select className="aa-reasoning-default" aria-label={"Default reasoning effort for " + model.displayName} value={selected?.modelReasoningDefaults[model.id] ?? model.defaultReasoningEffort} onChange={(event) => { if (isReasoningEffort(event.currentTarget.value)) updateReasoningDefault(model.id, event.currentTarget.value); }}>
             {model.supportedReasoningEfforts.map((effort) => <option key={effort.reasoningEffort} value={effort.reasoningEffort}>{effort.description}</option>)}
           </select>
-          <button title="Move up" aria-label="Move up" disabled={globalIndex === 0} onClick={() => moveModel(model.id, -1)}>↑</button><button title="Move down" aria-label="Move down" disabled={globalIndex === orderedModels.length - 1} onClick={() => moveModel(model.id, 1)}>↓</button><label className="aa-model-switch" title={isHidden ? "Show in picker" : "Hide from picker"}><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span /></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}
+          <button title="Move up" aria-label="Move up" disabled={groupIndex === 0} onClick={() => moveModel(model.id, -1, models)}>↑</button><button title="Move down" aria-label="Move down" disabled={groupIndex === models.length - 1} onClick={() => moveModel(model.id, 1, models)}>↓</button><label className="aa-model-switch" title={isHidden ? "Show in picker" : "Hide from picker"}><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span /></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}
         </div>
       </div>
     );
