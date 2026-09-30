@@ -79,10 +79,27 @@ for (const entry of secrets) {
   writePrivateFile(authPath, `${JSON.stringify(document, null, 2)}\n`);
 }
 
+for (const account of accounts.accounts) {
+  if (account.provider !== "codex") continue;
+  mkdirSync(account.path, { recursive: true, mode: 0o700 });
+  for (const override of account.pathOverrides ?? []) mkdirSync(override.path, { recursive: true, mode: 0o700 });
+}
+
 ensurePrivateDirectory(profileDirectory);
 const configuredIds = new Set(accounts.accounts.map((account) => account.id));
 const mergedAccounts = [
-  ...accounts.accounts.map((account) => ({ ...account, ...existingById.get(account.id) })),
+  ...accounts.accounts.map((account) => ({
+    ...account,
+    ...existingById.get(account.id),
+    id: account.id,
+    provider: account.provider,
+    displayName: account.displayName,
+    path: account.path,
+    badge: account.badge,
+    accentColor: account.accentColor,
+    modelReasoningDefaults: account.modelReasoningDefaults,
+    enabled: account.enabled,
+  })),
   ...existing.filter((account) => !configuredIds.has(account.id)),
 ];
 const mergedPath = join(profileDirectory, `accounts-${randomUUID()}.json`);

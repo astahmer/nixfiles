@@ -19,6 +19,9 @@
             provider
             displayName
             path
+            badge
+            accentColor
+            modelReasoningDefaults
             ;
           enabled = account.enabled;
           pathOverrides = [ ];
@@ -50,6 +53,29 @@
                     ];
                   };
                   displayName = mkOption { type = types.str; };
+                  badge = mkOption {
+                    type = types.strMatching "^[A-Za-z0-9]{1,4}$";
+                    default = "AI";
+                  };
+                  accentColor = mkOption {
+                    type = types.strMatching "^#[0-9A-Fa-f]{6}$";
+                    default = "#2563EB";
+                  };
+                  modelReasoningDefaults = mkOption {
+                    type = types.attrsOf (
+                      types.enum [
+                        "none"
+                        "low"
+                        "medium"
+                        "high"
+                        "xhigh"
+                        "ultracode"
+                        "max"
+                        "ultra"
+                      ]
+                    );
+                    default = { };
+                  };
                   path = mkOption { type = types.str; };
                   enabled = mkOption {
                     type = types.bool;
@@ -75,24 +101,44 @@
               id = "codex";
               provider = "codex";
               displayName = "Codex";
+              badge = "EM";
+              accentColor = "#2563EB";
+              modelReasoningDefaults = {
+                "gpt-6-luna" = "max";
+                "gpt-6.1-sol" = "low";
+              };
               path = "${config.home.homeDirectory}/.codex";
             }
             {
               id = "codex-work";
               provider = "codex";
               displayName = "Codex Work";
+              badge = "CW";
+              accentColor = "#DC2626";
+              modelReasoningDefaults = {
+                "gpt-6-luna" = "max";
+                "gpt-6.1-sol" = "low";
+              };
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/codex/work";
             }
             {
               id = "codex-alex2";
               provider = "codex";
               displayName = "Codex Alex2";
+              badge = "CA";
+              accentColor = "#16A34A";
+              modelReasoningDefaults = {
+                "gpt-6-luna" = "max";
+                "gpt-6.1-sol" = "low";
+              };
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/codex/alex2";
             }
             {
               id = "opencode-go-alex";
               provider = "opencode-go";
               displayName = "OpenCode Go Alex";
+              badge = "OA";
+              accentColor = "#7C3AED";
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/alex";
               secretAlias = "opencode-go-alex";
             }
@@ -100,6 +146,8 @@
               id = "opencode-go-manu";
               provider = "opencode-go";
               displayName = "OpenCode Go Manu";
+              badge = "OM";
+              accentColor = "#C026D3";
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/manu";
               secretAlias = "opencode-go-manu";
               secretScope = "global";
@@ -108,6 +156,8 @@
               id = "opencode-go-mathias";
               provider = "opencode-go";
               displayName = "OpenCode Go Mathias";
+              badge = "OX";
+              accentColor = "#EA580C";
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/mathias";
               secretAlias = "opencode-go-mathias";
               secretScope = "global";

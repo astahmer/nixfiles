@@ -36,14 +36,14 @@
           echo "codex: initialized $config_file from template" >&2
         fi
 
-        # OpenCodex restores the native file when it stops. Keep the selected
-        # native model explicit so a service restart cannot fall back to the
-        # client's implicit default or a stale routed model.
+        # Keep the normal Codex model as the CLI default. Provider-specific
+        # model routing belongs in BB's account provider, not the shared home.
         if ${pkgs.gnugrep}/bin/grep -qE '^model[[:space:]]*=' "$config_file"; then
-          ${pkgs.gnused}/bin/sed -i -E 's|^model[[:space:]]*=.*$|model = "codex-perso/gpt-6-luna"|' "$config_file"
+          ${pkgs.gnused}/bin/sed -i -E 's|^model[[:space:]]*=[[:space:]]*"codex-perso/([^"]+)"$|model = "\1"|' "$config_file"
         else
-          ${pkgs.gnused}/bin/sed -i '1i model = "codex-perso/gpt-6-luna"' "$config_file"
+          ${pkgs.gnused}/bin/sed -i '1i model = "gpt-6-luna"' "$config_file"
         fi
+        ${pkgs.gnused}/bin/sed -i -E '/^model_catalog_json[[:space:]]*=/d' "$config_file"
 
         ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$current_sorted" "$candidate_sorted"
       '';
