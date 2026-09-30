@@ -1,24 +1,18 @@
 ---
 name: ai-accounts
-description: Manage separate Codex and OpenCode Go subscription logins in BB.
+description: Manage separate Codex ChatGPT and OpenCode Go subscription profiles in BB.
 ---
 
-# AI account profiles
+# BB AI Accounts
 
-Use `bb ai-accounts list` to see configured profiles. The active account is
-selected per provider with `bb ai-accounts use <codex|opencode-go> <name>`.
-The selection applies when BB starts or resumes a provider session; start a
-new thread after switching accounts.
+Use the **AI Accounts** page in BB to add profiles, edit their display names and
+machine-local runtime paths, refresh Codex email identity, and enable or hide a
+profile from BB's provider picker. Each enabled profile gets an independent
+provider and live model catalog.
 
-Add an account using a machine-local absolute path:
+Use \`bb ai-accounts list\` to inspect profile names and paths. Use
+\`bb ai-accounts login <account-id>\` to print its shell sign-in command.
 
-```sh
-bb ai-accounts add codex <name> <absolute-CODEX_HOME>
-bb ai-accounts add opencode-go <name> <absolute-XDG_DATA_HOME>
-```
-
-Then run `bb ai-accounts login <provider> <name>` and execute the printed
-command in a terminal on the target machine. Codex profiles use file-backed
-credentials. OpenCode Go credentials remain in OpenCode's own data directory.
-Never copy authentication files between profiles or include token contents in
-BB settings.
+Codex authentication is stored below the profile's \`CODEX_HOME\`. OpenCode Go
+is an API-key subscription and is stored by OpenCode below its profile's
+\`XDG_DATA_HOME\`. Do not copy provider auth files between profiles.

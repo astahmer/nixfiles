@@ -35,6 +35,7 @@ in
           hm.codexConfig
           hm.tokitoki
           hm.t3code
+          hm.aiAccounts
           hm.coding
           hm.zed
           hm.vscode

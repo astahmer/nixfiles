@@ -8,17 +8,25 @@
   },
   "bb": {
     "name": "AI Accounts",
-    "description": "Manage isolated Codex and OpenCode Go subscription logins from BB.",
-    "branding": { "icon": "UsersRound" },
+    "description": "Manage Codex and OpenCode Go accounts and their model picker entries from BB.",
+    "branding": {
+      "icon": "UsersRound"
+    },
     "server": "./server.ts",
-    "skills": ["skills"]
+    "host": "./host.ts",
+    "app": "./app.tsx",
+    "skills": [
+      "skills"
+    ]
   },
   "dependencies": {
+    "@get-bb/plugin-sdk": "0.5.29",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "0.5.29",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.3.0",
+    "react": "^19.3.0",
     "typescript": "^5.7.0"
   }
 }
