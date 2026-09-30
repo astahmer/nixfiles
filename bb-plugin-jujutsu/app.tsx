@@ -38,6 +38,7 @@ type Snapshot = {
 };
 
 type DiffTarget = { revision: string | null; path: string };
+type RevisionDiffFile = { path: string; status: string; patch: string };
 type PendingRebase = { source: Revision; destination: Revision; branch: Revision[] };
 type RevisionContextMenu = { x: number; y: number; revision: Revision };
 type DirectoryResult = {
@@ -126,6 +127,7 @@ const styles = `
 .jj-full-diff-header{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--jj-line);font-weight:600}
 .jj-full-diff-header span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jj-full-diff-body{min-height:0;flex:1;overflow:auto}.jj-full-diff-body>div{min-height:100%}
+.jj-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:8px}.jj-tabs{width:max-content;max-width:100%;margin:0}.jj-repository-controls{display:flex;min-width:0;align-items:center;gap:7px;flex-wrap:wrap}.jj-repository-controls .jj-host{flex:0 1 180px;width:auto}.jj-repository-controls .jj-path-picker{flex:1 1 180px}.jj-repository-controls .jj-path{width:100%;border-radius:6px}.jj-refresh{display:grid;width:34px;height:34px;flex:none;place-items:center;padding:0}.jj-revision-diff-file{border-bottom:1px solid var(--jj-line)}.jj-revision-diff-file h3{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;margin:0;padding:8px 12px;border-bottom:1px solid var(--jj-line);background:var(--card);font:600 12px var(--font-mono,monospace)}.jj-revision-diff-file h3 .jj-status{width:auto}.jj-revision-diff-renderer{padding:8px 10px}.jj-revision-diff-renderer>div{min-height:0}
 .jj-picker{width:min(620px,calc(100vw - 32px));max-height:min(520px,78vh);padding:8px 7px 0;border-radius:12px}.jj-picker-header{padding:0 7px 6px;gap:5px}.jj-picker-path input{height:36px;font-size:14px}.jj-picker-section{padding:8px 10px 4px;font-size:11px}.jj-picker-list{max-height:min(390px,60vh);min-height:0;padding:0 4px 5px}.jj-project-option{min-height:42px;gap:8px;padding:5px 7px;border-radius:6px}.jj-project-mark{width:20px;height:20px;border-radius:5px;font-size:9px}.jj-project-copy{gap:0;font-size:13px}.jj-project-copy small{font-size:10px}.jj-picker-entry{min-height:32px;padding:4px 8px;border-radius:6px}.jj-picker-footer{gap:10px;padding:7px 9px;font-size:10px}.jj-picker-footer kbd{padding:1px 4px}
 `;
 
@@ -322,6 +324,12 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [filesExpandedRevisionId, setFilesExpandedRevisionId] = useState<string | null>(null);
   const revisionDiffRequest = useRef(0);
   const [diffTarget, setDiffTarget] = useState<DiffTarget | null>(null);
+  const [revisionDiffView, setRevisionDiffView] = useState<{
+    revision: Revision;
+    files: RevisionDiffFile[];
+  } | null>(null);
+  const [revisionDiffLoading, setRevisionDiffLoading] = useState(false);
+  const [revisionDiffError, setRevisionDiffError] = useState<string | null>(null);
   const [diffPatch, setDiffPatch] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
@@ -853,16 +861,33 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setSelectedRevision(revision);
     setDescription(revision.description);
     setDiffTarget(null);
+    setRevisionDiffView({ revision, files: [] });
+    setRevisionDiffLoading(true);
+    setRevisionDiffError(null);
+    setFullDiffOpen(true);
     const requestId = ++revisionDiffRequest.current;
     try {
       const files = await rpc.call("revisionFiles", { path, hostId, revision: revision.commitId });
-      if (requestId === revisionDiffRequest.current && files[0]) {
-        setDiffTarget({ path: files[0].path, revision: revision.commitId });
-      }
+      const diffs = await Promise.all(
+        files.map(async (file) => ({
+          path: file.path,
+          status: file.status,
+          ...(await rpc.call("fileDiff", {
+            path,
+            hostId,
+            file: file.path,
+            revision: revision.commitId,
+          })),
+        })),
+      );
+      if (requestId === revisionDiffRequest.current)
+        setRevisionDiffView({ revision, files: diffs });
     } catch (cause) {
       if (requestId === revisionDiffRequest.current) {
-        setRevisionFilesError(cause instanceof Error ? cause.message : String(cause));
+        setRevisionDiffError(cause instanceof Error ? cause.message : String(cause));
       }
+    } finally {
+      if (requestId === revisionDiffRequest.current) setRevisionDiffLoading(false);
     }
   };
   const toggleSourceRevision = (revision: Revision) => {
@@ -879,6 +904,8 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setDiffTarget({ path: filePath, revision: revisionId });
   };
   const openFullDiff = (filePath: string, revisionId: string | null) => {
+    revisionDiffRequest.current += 1;
+    setRevisionDiffView(null);
     setDiffTarget({ path: filePath, revision: revisionId });
     setFullDiffOpen(true);
   };
@@ -991,6 +1018,19 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           >
             Describe
           </button>
+          {revision.commitId !== snapshot?.currentRevision && (
+            <button
+              className="jj-button"
+              disabled={busy}
+              onClick={() =>
+                void runAction(() =>
+                  rpc.call("edit", { path, hostId, revision: revision.commitId }),
+                )
+              }
+            >
+              Edit This Change
+            </button>
+          )}
           <button
             className="jj-button jj-button-squash"
             disabled={busy || revision.parents.length === 0}
@@ -1089,41 +1129,56 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             Source Control
           </button>
         </nav>
-        <select
-          className="jj-input jj-host"
-          aria-label="BB machine"
-          value={hostId}
-          onChange={(event) => setHostId(event.target.value)}
-        >
-          <option value="">Select machine</option>
-          {hosts.map((host) => (
-            <option key={host.id} value={host.id} disabled={host.status !== "connected"}>
-              {host.name}
-              {host.status === "connected" ? "" : " (disconnected)"}
-            </option>
-          ))}
-        </select>
-        <div className="jj-path-picker">
-          <input
-            className="jj-input jj-path"
-            aria-label="Project path"
-            placeholder="Choose a project folder…"
-            value={path}
-            readOnly
-            aria-haspopup="dialog"
-            onClick={openProjectPicker}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") openProjectPicker();
-            }}
-          />
+        <div className="jj-repository-controls">
+          {hosts.length > 1 && (
+            <select
+              className="jj-input jj-host"
+              aria-label="BB machine"
+              value={hostId}
+              onChange={(event) => setHostId(event.target.value)}
+            >
+              <option value="">Select machine</option>
+              {hosts.map((host) => (
+                <option key={host.id} value={host.id} disabled={host.status !== "connected"}>
+                  {host.name}
+                  {host.status === "connected" ? "" : " (disconnected)"}
+                </option>
+              ))}
+            </select>
+          )}
+          <div className="jj-path-picker">
+            <input
+              className="jj-input jj-path"
+              aria-label="Project path"
+              placeholder="Choose a project folder…"
+              value={path}
+              readOnly
+              aria-haspopup="dialog"
+              onClick={openProjectPicker}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") openProjectPicker();
+              }}
+            />
+          </div>
+          <button
+            className="jj-button jj-refresh"
+            aria-label={busy ? "Refreshing repository" : "Refresh repository"}
+            title={busy ? "Refreshing repository" : "Refresh repository"}
+            disabled={busy || !path || !hostId}
+            onClick={() => void refresh()}
+          >
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="15" height="15">
+              <path
+                d="M13.2 6A5.3 5.3 0 0 0 3.6 4.1L2.2 5.5M2.2 5.5V2.7m0 2.8H5M2.8 10a5.3 5.3 0 0 0 9.6 1.9l1.4-1.4m0 0v2.8m0-2.8H11"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </div>
-        <button
-          className="jj-button jj-refresh"
-          disabled={busy || !path || !hostId}
-          onClick={() => void refresh()}
-        >
-          {busy ? "Loading…" : "Refresh"}
-        </button>
       </header>
       {error && (
         <div role="alert" className="jj-error">
@@ -1298,6 +1353,18 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                   aria-current={isCurrent ? "true" : undefined}
                                   aria-expanded={isSelected}
                                   onClick={() => !isPreview && handleRevisionClick(revision)}
+                                  onDoubleClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (!isPreview)
+                                      void runAction(() =>
+                                        rpc.call("edit", {
+                                          path,
+                                          hostId,
+                                          revision: revision.commitId,
+                                        }),
+                                      );
+                                  }}
                                   onKeyDown={(event) => {
                                     if (
                                       !isPreview &&
@@ -1876,14 +1943,16 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           )}
         </>
       )}
-      {fullDiffOpen && diffTarget && (
+      {fullDiffOpen && (diffTarget || revisionDiffView) && (
         <div
           className="jj-full-diff-backdrop"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
+              revisionDiffRequest.current += 1;
               setFullDiffOpen(false);
               setDiffTarget(null);
+              setRevisionDiffView(null);
             }
           }}
         >
@@ -1891,28 +1960,69 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             className="jj-full-diff"
             role="dialog"
             aria-modal="true"
-            aria-label={`Diff for ${diffTarget.path}`}
+            aria-label={
+              revisionDiffView
+                ? `Diff for ${label(revisionDiffView.revision)}`
+                : `Diff for ${diffTarget?.path ?? "revision"}`
+            }
           >
             <header className="jj-full-diff-header">
-              <span>{diffTarget.path}</span>
+              <span>
+                {revisionDiffView
+                  ? `${label(revisionDiffView.revision)} · ${revisionDiffView.files.length} files`
+                  : diffTarget?.path}
+              </span>
               <button
                 className="jj-button"
                 aria-label="Close diff"
                 onClick={() => {
+                  revisionDiffRequest.current += 1;
                   setFullDiffOpen(false);
                   setDiffTarget(null);
+                  setRevisionDiffView(null);
                 }}
               >
                 Close
               </button>
             </header>
             <div className="jj-full-diff-body">
-              <DiffPreview
-                path={diffTarget.path}
-                patch={diffPatch}
-                loading={diffLoading}
-                error={diffError}
-              />
+              {revisionDiffView ? (
+                <>
+                  {revisionDiffLoading && (
+                    <div className="jj-selection-hint">Loading revision diff…</div>
+                  )}
+                  {revisionDiffError && (
+                    <div className="jj-error-inline" role="alert">
+                      {revisionDiffError}
+                    </div>
+                  )}
+                  {!revisionDiffLoading &&
+                    !revisionDiffError &&
+                    revisionDiffView.files.length === 0 && (
+                      <div className="jj-diff-empty">This revision has no changed files.</div>
+                    )}
+                  {revisionDiffView.files.map((file) => (
+                    <section className="jj-revision-diff-file" key={file.path}>
+                      <h3>
+                        <span className={`jj-status ${statusClass(file.status)}`}>
+                          {file.status}
+                        </span>
+                        {file.path}
+                      </h3>
+                      <div className="jj-revision-diff-renderer">
+                        <BbDiff patch={file.patch} path={file.path} />
+                      </div>
+                    </section>
+                  ))}
+                </>
+              ) : diffTarget ? (
+                <DiffPreview
+                  path={diffTarget.path}
+                  patch={diffPatch}
+                  loading={diffLoading}
+                  error={diffError}
+                />
+              ) : null}
             </div>
           </section>
         </div>
@@ -2100,19 +2210,21 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             >
               Describe…
             </button>
-            <button
-              role="menuitem"
-              disabled={busy}
-              onClick={() => {
-                const revision = revisionContextMenu.revision;
-                setRevisionContextMenu(null);
-                void runAction(() =>
-                  rpc.call("edit", { path, hostId, revision: revision.commitId }),
-                );
-              }}
-            >
-              Edit This Change
-            </button>
+            {revisionContextMenu.revision.commitId !== snapshot?.currentRevision && (
+              <button
+                role="menuitem"
+                disabled={busy}
+                onClick={() => {
+                  const revision = revisionContextMenu.revision;
+                  setRevisionContextMenu(null);
+                  void runAction(() =>
+                    rpc.call("edit", { path, hostId, revision: revision.commitId }),
+                  );
+                }}
+              >
+                Edit This Change
+              </button>
+            )}
             <button
               role="menuitem"
               disabled={busy}
@@ -2203,20 +2315,24 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
               Revert
             </button>
             <div className="jj-context-menu-separator" />
-            <button
-              role="menuitem"
-              disabled={busy || !revisions.some((revision) => revision.bookmarks.includes("main"))}
-              onClick={() => {
-                const revision = revisionContextMenu.revision;
-                const mainRevision = revisions.find((candidate) =>
-                  candidate.bookmarks.includes("main"),
-                );
-                setRevisionContextMenu(null);
-                if (mainRevision) beginRebasePreview(revision, mainRevision);
-              }}
-            >
-              Rebase on Main
-            </button>
+            {!revisionContextMenu.revision.bookmarks.includes("main") && (
+              <button
+                role="menuitem"
+                disabled={
+                  busy || !revisions.some((revision) => revision.bookmarks.includes("main"))
+                }
+                onClick={() => {
+                  const revision = revisionContextMenu.revision;
+                  const mainRevision = revisions.find((candidate) =>
+                    candidate.bookmarks.includes("main"),
+                  );
+                  setRevisionContextMenu(null);
+                  if (mainRevision) beginRebasePreview(revision, mainRevision);
+                }}
+              >
+                Rebase on Main
+              </button>
+            )}
             <button
               role="menuitem"
               onClick={() => {
