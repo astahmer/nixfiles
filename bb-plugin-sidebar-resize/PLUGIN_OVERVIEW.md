@@ -2,7 +2,7 @@
 
 ## What you get
 
-A keyboard-accessible horizontal separator between BB's sidebar navigation and its project/thread list. Drag or use arrow keys to change the split; double-click restores the default navigation height. At 76px and below, navigation becomes a horizontal icon row so the project/thread list can take almost all available height. The selected ratio persists locally. Navigation density is configurable as Compact or Comfortable in plugin settings.
+A keyboard-accessible horizontal separator between BB's sidebar navigation and its project/thread list. Drag or use arrow keys to change the split; double-click restores the default navigation height. At 76px and below, navigation becomes a horizontal icon row so the project/thread list can take almost all available height. The selected ratio persists locally. Settings control expanded navigation density and choose scrolling, overflow menu, or both when collapsed; the default keeps a fixed menu button after the scrollable icons.
 
 ## How it works
 

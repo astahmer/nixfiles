@@ -9,5 +9,12 @@ export default async (bb: BbPluginApi) => {
       options: ["Compact", "Comfortable"],
       default: "Compact",
     },
+    overflow: {
+      type: "select",
+      label: "Collapsed navigation overflow",
+      description: "Choose how navigation items are shown when the sidebar is collapsed.",
+      options: ["Scroll", "Overflow menu", "Scroll + menu"],
+      default: "Scroll + menu",
+    },
   });
 };

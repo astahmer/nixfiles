@@ -28,8 +28,8 @@
 }
 
 [data-sidebar-navigation-collapsed="true"] .sidebar-resize-navigation-icon {
-  height: 14px;
-  width: 14px;
+  height: 16px;
+  width: 16px;
 }
 
 .sidebar-resize-navigation-customize {
@@ -42,4 +42,18 @@
 .sidebar-resize-navigation-customize:hover,
 .sidebar-resize-navigation-customize:focus-visible {
   color: var(--sidebar-foreground);
+}
+
+.sidebar-resize-navigation-menu-item:hover,
+.sidebar-resize-navigation-menu-item:focus-visible {
+  background-color: var(--state-hover);
+  outline: none;
+}
+
+.sidebar-resize-navigation-menu-item {
+  background: transparent;
+}
+
+.sidebar-resize-navigation-menu-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
 }

@@ -6,6 +6,8 @@ The selected split is saved in browser local storage and scales with the sidebar
 
 Set **Navigation density** to **Compact** or **Comfortable** under Settings → Installed plugins → Sidebar Resize.
 
+Set **Collapsed navigation overflow** to **Scroll**, **Overflow menu**, or **Scroll + menu**. The default keeps a fixed menu button at the right while the icons scroll horizontally; its menu lists every visible destination. **Overflow menu** keeps only the items that fit and puts the rest in the menu.
+
 This is a companion plugin. It uses BB's public navigation slot and frontend content-script API, so the existing BB Sidebar plugin does not need to be forked or changed. The script uses the host's `Sidebar navigation` accessibility label to find its insertion point.
 
 ## Development

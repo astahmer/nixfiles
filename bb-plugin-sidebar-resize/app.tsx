@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import "./app.css";
 import {
@@ -196,11 +196,29 @@ const SidebarNavigation = () => {
   const { items, activeItemId, actions } = experimental_useSidebarNavigation();
   const { values } = useSettings();
   const navigationRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipTimer = useRef<number | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [navigationWidth, setNavigationWidth] = useState(0);
   const [tooltip, setTooltip] = useState<{ label: string; left: number; bottom: number } | null>(null);
+  const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);
   const density = values?.density === "Comfortable" ? "comfortable" : "compact";
   const rowHeight = density === "compact" ? 30 : 34;
+  const overflowMode = values?.overflow === "Scroll" || values?.overflow === "Overflow menu"
+    ? values.overflow
+    : "Scroll + menu";
+  const visibleItems = items.filter((item) => item.isVisible);
+  const collapsedButtonSize = 34;
+  const collapsedGap = 4;
+  const slots = Math.max(0, Math.floor((navigationWidth - collapsedButtonSize) / (collapsedButtonSize + collapsedGap)));
+  const visibleCollapsedItems = overflowMode === "Overflow menu"
+    ? visibleItems.slice(0, slots)
+    : visibleItems;
+  const menuItems = overflowMode === "Overflow menu"
+    ? visibleItems.slice(visibleCollapsedItems.length)
+    : visibleItems;
 
   const clearTooltip = () => {
     if (tooltipTimer.current !== null) window.clearTimeout(tooltipTimer.current);
@@ -229,6 +247,7 @@ const SidebarNavigation = () => {
 
     const observer = new ResizeObserver(([entry]) => {
       setIsCollapsed(entry.contentRect.height <= compactNavigationThreshold);
+      setNavigationWidth(entry.contentRect.width);
     });
     observer.observe(navigation);
     return () => {
@@ -237,6 +256,61 @@ const SidebarNavigation = () => {
     };
   }, []);
 
+  useLayoutEffect(() => {
+    const tooltipElement = tooltipRef.current;
+    if (!tooltip || !tooltipElement) return;
+    const tooltipWidth = tooltipElement.getBoundingClientRect().width;
+    const halfWidth = tooltipWidth / 2;
+    const left = clamp(tooltip.left, halfWidth + 8, window.innerWidth - halfWidth - 8);
+    if (left !== tooltip.left) setTooltip((current) => current ? { ...current, left } : null);
+  }, [tooltip?.label]);
+
+  useLayoutEffect(() => {
+    const dismissOnOutsidePointer = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (menuButtonRef.current?.contains(event.target)) return;
+      if (menuRef.current?.contains(event.target)) return;
+      setMenu(null);
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setMenu(null);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", dismissOnOutsidePointer);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOnOutsidePointer);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!menu) return;
+    menuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus();
+  }, [Boolean(menu)]);
+
+  const openMenu = () => {
+    const button = menuButtonRef.current;
+    if (!button) return;
+    const bounds = button.getBoundingClientRect();
+    const menuHeight = Math.min(360, (menuItems.length + 1) * rowHeight + 24);
+    const opensAbove = window.innerHeight - bounds.bottom < menuHeight && bounds.top > menuHeight;
+    setMenu({
+      left: clamp(bounds.left, 8, Math.max(8, window.innerWidth - 280)),
+      top: opensAbove
+        ? Math.max(8, bounds.top - menuHeight - 6)
+        : Math.min(bounds.bottom + 6, Math.max(8, window.innerHeight - menuHeight - 8)),
+    });
+  };
+
+  const activate = (itemId: string, event: MouseEvent<HTMLButtonElement>) => {
+    actions.activate(itemId, { openInSplit: event.metaKey || event.ctrlKey });
+    setMenu(null);
+  };
+
+  const menuButton = isCollapsed && overflowMode !== "Scroll";
+
   return (
     <>
       <nav
@@ -244,19 +318,34 @@ const SidebarNavigation = () => {
         aria-label="Sidebar destinations"
         data-sidebar-navigation-collapsed={isCollapsed}
         style={{
-          alignItems: isCollapsed ? "center" : "stretch",
+          alignItems: "stretch",
           display: "flex",
           flexDirection: isCollapsed ? "row" : "column",
           gap: isCollapsed ? 4 : density === "compact" ? 2 : 4,
           height: "100%",
           minHeight: 0,
-          overflowX: isCollapsed ? "auto" : "hidden",
+          overflow: "hidden",
           overflowY: isCollapsed ? "hidden" : "auto",
           padding: isCollapsed ? "0 8px" : density === "compact" ? "2px 8px" : "4px 8px",
           width: "100%",
         }}
       >
-        {items.filter((item) => item.isVisible).map((item) => (
+        <div
+          style={{
+            alignItems: isCollapsed ? "center" : "stretch",
+            display: "flex",
+            flex: "1 1 auto",
+            flexDirection: isCollapsed ? "row" : "column",
+            gap: isCollapsed ? collapsedGap : density === "compact" ? 2 : 4,
+            height: "100%",
+            minHeight: 0,
+            minWidth: 0,
+            overflowX: isCollapsed && overflowMode !== "Overflow menu" ? "auto" : "hidden",
+            overflowY: isCollapsed ? "hidden" : "auto",
+            scrollbarWidth: "none",
+          }}
+        >
+          {visibleCollapsedItems.map((item) => (
           <button
             key={item.id}
             className="sidebar-resize-navigation-item"
@@ -268,7 +357,7 @@ const SidebarNavigation = () => {
             aria-keyshortcuts={item.shortcut?.ariaKeyShortcuts}
             data-active={activeItemId === item.id}
             disabled={item.isDisabled}
-            onClick={(event) => actions.activate(item.id, { openInSplit: event.metaKey || event.ctrlKey })}
+            onClick={(event) => activate(item.id, event)}
             onPointerEnter={(event) => {
               if (isCollapsed) showTooltip(item.label, event.currentTarget, true);
             }}
@@ -283,10 +372,10 @@ const SidebarNavigation = () => {
               borderRadius: 6,
               cursor: item.isDisabled ? "default" : "pointer",
               display: "flex",
-              flex: `0 0 ${isCollapsed ? 32 : rowHeight}px`,
+              flex: isCollapsed ? `0 0 ${collapsedButtonSize}px` : `0 0 ${rowHeight}px`,
               fontSize: density === "compact" ? 13 : 14,
               gap: density === "compact" ? 6 : 8,
-              height: isCollapsed ? 32 : rowHeight,
+              height: isCollapsed ? collapsedButtonSize : rowHeight,
               justifyContent: isCollapsed ? "center" : "flex-start",
               lineHeight: "20px",
               minWidth: 0,
@@ -294,35 +383,166 @@ const SidebarNavigation = () => {
               padding: isCollapsed ? 0 : density === "compact" ? "0 6px" : "0 8px",
               textAlign: "left",
               whiteSpace: "nowrap",
-              width: isCollapsed ? 32 : "100%",
+              width: isCollapsed ? collapsedButtonSize : "100%",
             }}
           >
             <SidebarNavigationIcon icon={item.icon} className="sidebar-resize-navigation-icon" />
             {!isCollapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>}
             {!isCollapsed && item.experimental_Accessory && <item.experimental_Accessory />}
           </button>
-        ))}
-        {!isCollapsed && (
+          ))}
+          {!isCollapsed && (
+            <button
+              type="button"
+              className="sidebar-resize-navigation-customize"
+              onClick={actions.openCustomize}
+              style={{
+                alignItems: "center",
+                border: 0,
+                cursor: "pointer",
+                display: "flex",
+                flex: `0 0 ${rowHeight}px`,
+                fontSize: 12,
+                gap: density === "compact" ? 6 : 8,
+                height: rowHeight,
+                padding: density === "compact" ? "0 6px" : "0 8px",
+                textAlign: "left",
+              }}
+            >
+              <NavigationGlyph kind="customize" />
+              Customize sidebar
+            </button>
+          )}
+        </div>
+        {menuButton && (
           <button
+            ref={menuButtonRef}
             type="button"
-            className="sidebar-resize-navigation-customize"
-            onClick={actions.openCustomize}
+            className="sidebar-resize-navigation-item sidebar-resize-navigation-overflow"
+            aria-label="More sidebar destinations"
+            aria-haspopup="menu"
+            aria-controls="sidebar-resize-overflow-menu"
+            aria-expanded={Boolean(menu)}
+            title="More sidebar destinations"
+            onClick={() => menu ? setMenu(null) : openMenu()}
             style={{
-              background: "transparent",
+              alignItems: "center",
               border: 0,
+              borderRadius: 6,
               cursor: "pointer",
-              flex: `0 0 ${rowHeight}px`,
-              fontSize: 12,
-              height: rowHeight,
-              textAlign: "left",
+              display: "flex",
+              flex: `0 0 ${collapsedButtonSize}px`,
+              height: collapsedButtonSize,
+              justifyContent: "center",
+              padding: 0,
+              width: collapsedButtonSize,
             }}
           >
-            Customize sidebar
+            <NavigationGlyph kind="more" />
           </button>
         )}
       </nav>
+      {menu && createPortal(
+        <div
+          ref={menuRef}
+          id="sidebar-resize-overflow-menu"
+          role="menu"
+          aria-label="Sidebar destinations"
+          onKeyDown={(event) => {
+            const menuItems = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)") ?? []);
+            const focusedIndex = menuItems.findIndex((menuItem) => menuItem === document.activeElement);
+            const nextIndex = event.key === "ArrowDown"
+              ? (focusedIndex + 1) % menuItems.length
+              : event.key === "ArrowUp"
+                ? (focusedIndex - 1 + menuItems.length) % menuItems.length
+                : event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? menuItems.length - 1
+                    : -1;
+            if (nextIndex < 0 || menuItems.length === 0) return;
+            event.preventDefault();
+            menuItems[nextIndex]?.focus();
+          }}
+          style={{
+            background: "var(--popover)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            boxShadow: "0 8px 24px rgb(0 0 0 / 20%)",
+            color: "var(--popover-foreground)",
+            left: menu.left,
+            maxHeight: "min(360px, calc(100vh - 16px))",
+            maxWidth: "calc(100vw - 16px)",
+            minWidth: "min(220px, calc(100vw - 16px))",
+            overflowY: "auto",
+            padding: 4,
+            position: "fixed",
+            top: menu.top,
+            zIndex: 10001,
+          }}
+        >
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              className="sidebar-resize-navigation-menu-item"
+              aria-current={activeItemId === item.id ? "page" : undefined}
+              disabled={item.isDisabled}
+              onClick={(event) => activate(item.id, event)}
+              style={{
+                alignItems: "center",
+                border: 0,
+                borderRadius: 5,
+                color: "inherit",
+                cursor: item.isDisabled ? "default" : "pointer",
+                display: "flex",
+                font: "inherit",
+                gap: 10,
+                height: rowHeight,
+                opacity: item.isDisabled ? 0.5 : 1,
+                padding: "0 8px",
+                textAlign: "left",
+                width: "100%",
+              }}
+            >
+              <SidebarNavigationIcon icon={item.icon} className="sidebar-resize-navigation-icon" />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+            </button>
+          ))}
+          <div aria-hidden="true" style={{ borderTop: "1px solid var(--border)", margin: "4px 0" }} />
+          <button
+            type="button"
+            role="menuitem"
+            className="sidebar-resize-navigation-menu-item"
+            onClick={() => {
+              setMenu(null);
+              actions.openCustomize();
+            }}
+            style={{
+              alignItems: "center",
+              border: 0,
+              borderRadius: 5,
+              color: "inherit",
+              cursor: "pointer",
+              display: "flex",
+              font: "inherit",
+              gap: 10,
+              height: rowHeight,
+              padding: "0 8px",
+              textAlign: "left",
+              width: "100%",
+            }}
+          >
+            <NavigationGlyph kind="customize" />
+            Customize sidebar
+          </button>
+        </div>,
+        document.body,
+      )}
       {tooltip && createPortal(
         <div
+          ref={tooltipRef}
           id="sidebar-resize-tooltip"
           role="tooltip"
           style={{
@@ -350,6 +570,27 @@ const SidebarNavigation = () => {
     </>
   );
 };
+
+const NavigationGlyph = ({ kind }: { kind: "more" | "customize" }) => (
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" style={{ flex: "0 0 16px", height: 16, width: 16 }}>
+    {kind === "more" ? (
+      <>
+        <circle cx="5" cy="12" r="1" fill="currentColor" />
+        <circle cx="12" cy="12" r="1" fill="currentColor" />
+        <circle cx="19" cy="12" r="1" fill="currentColor" />
+      </>
+    ) : (
+      <>
+        <line x1="4" y1="7" x2="7" y2="7" />
+        <line x1="11" y1="7" x2="20" y2="7" />
+        <line x1="4" y1="17" x2="13" y2="17" />
+        <line x1="17" y1="17" x2="20" y2="17" />
+        <circle cx="9" cy="7" r="2" />
+        <circle cx="15" cy="17" r="2" />
+      </>
+    )}
+  </svg>
+);
 
 export default definePluginApp((app) => {
   app.slots.experimental_sidebarNavigation({
