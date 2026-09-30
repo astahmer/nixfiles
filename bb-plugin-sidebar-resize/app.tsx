@@ -431,6 +431,7 @@ const SidebarNavigation = () => {
               borderRadius: 6,
               cursor: "pointer",
               display: "flex",
+              alignSelf: "center",
               flex: `0 0 ${collapsedButtonSize}px`,
               height: collapsedButtonSize,
               justifyContent: "center",
@@ -575,9 +576,9 @@ const NavigationGlyph = ({ kind }: { kind: "more" | "customize" }) => (
   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" style={{ flex: "0 0 16px", height: 16, width: 16 }}>
     {kind === "more" ? (
       <>
-        <circle cx="5" cy="12" r="1" fill="currentColor" />
+        <circle cx="12" cy="5" r="1" fill="currentColor" />
         <circle cx="12" cy="12" r="1" fill="currentColor" />
-        <circle cx="19" cy="12" r="1" fill="currentColor" />
+        <circle cx="12" cy="19" r="1" fill="currentColor" />
       </>
     ) : (
       <>
