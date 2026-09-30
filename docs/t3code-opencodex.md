@@ -1,19 +1,39 @@
 # T3 Code, OpenCode, and OpenCodex
 
-## T3 Code provider defaults
+## T3 Code settings and authentication
 
-Home Manager runs `assets/t3code/seed-provider-instances.mjs` on every switch.
-It merges an idempotent OpenCode Go provider instance into
-`~/.t3/userdata/settings.json`, taking a backup before the first change and
-leaving existing user-edited instances alone.
+`assets/t3code/settings-seed.json` is the Nix-owned first-run settings source.
+The activation merges only missing defaults into `~/.t3/userdata/settings.json`,
+preserves existing provider choices, and no longer edits T3's SQLite project
+defaults. It migrates the old T3 OpenCode 2 binary path to stable OpenCode 1;
+the separate `opencode2` command remains installed.
 
-| Instance | Driver | Purpose |
+OpenCode Go credentials come from the existing `secret` aliases and are written
+to T3's supported provider-environment secret files. The app settings retain
+only blank, redacted `OPENCODE_API_KEY` entries. T3 keeps these files in its
+userdata `secrets` directory with mode `0700`, and secret files with mode
+`0600`; these are local files, not encrypted Bitwarden records.
+
+| T3 instance | `secret` alias | Scope |
 | --- | --- | --- |
-| `opencode-go` | OpenCode | OpenCode CLI with an `OPENCODEX_OPENCODE_GO_API_KEY` placeholder |
+| `opencode-go` | `opencode-go-alex` | Project |
+| `opencode_manu` | `opencode-go-manu` | Global |
+| `opencode_mathias` | `opencode-go-mathias` | Global |
 
-The placeholder is deliberately non-sensitive so it stays visible in T3's
-settings for editing. T3's OpenCode driver can also read the OpenCode CLI auth
-store at `~/.local/share/opencode/auth.json`.
+The `codex` provider stays the default with the current GPT-6.1 Sol selection.
+Connect each ChatGPT subscription in T3 under **Settings → Providers → Codex**;
+T3 supports adding multiple accounts there and keeps their OAuth sessions in
+its own secret store. Those sessions are not copied from OpenCodex, whose OAuth
+store is separate. See T3's [Codex provider guide](https://github.com/pingdotgg/t3code/blob/c18e5ea6ed741443a8ec4a5d22d4b6939b0ecd21/docs/user/providers-codex.md)
+and OpenCode's [Go setup](https://opencode.ai/docs/go/).
+
+## OpenCodex activation
+
+OpenCodex remains installed and its configuration source stays in Nix. The
+`nixfiles.opencodex.activation.enable` option defaults to `false`, so Home
+Manager leaves the current config and running service alone. Set it to `true`
+in a flake module to restore configuration and service reconciliation on
+future applies.
 
 ## OpenCodex config
 

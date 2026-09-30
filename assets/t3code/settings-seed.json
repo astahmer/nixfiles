@@ -1,0 +1,135 @@
+{
+  "defaultModelSelection": {
+    "instanceId": "codex",
+    "model": "openai/gpt-6.1-sol",
+    "options": [
+      { "id": "reasoningEffort", "value": "low" },
+      { "id": "serviceTier", "value": "default" }
+    ]
+  },
+  "providers": {
+    "cursor": { "enabled": false },
+    "grok": { "enabled": false },
+    "opencode": { "enabled": false }
+  },
+  "providerInstances": {
+    "cursor": {
+      "driver": "cursor",
+      "enabled": true,
+      "config": {
+        "binaryPath": "cursor-agent",
+        "apiEndpoint": "",
+        "customModels": []
+      }
+    },
+    "opencode_alexkey": {
+      "driver": "opencode",
+      "displayName": "OpenCodeAlexKey",
+      "enabled": false,
+      "config": { "binaryPath": "$OPENCODE_BIN" }
+    },
+    "claudeAgent": {
+      "driver": "claudeAgent",
+      "enabled": true,
+      "config": {
+        "binaryPath": "claude",
+        "homePath": "",
+        "customModels": [],
+        "launchArgs": "",
+        "autoCompactWindow": ""
+      }
+    },
+    "codex": {
+      "driver": "codex",
+      "displayName": "Codex",
+      "enabled": true,
+      "config": {
+        "binaryPath": "codex",
+        "homePath": "",
+        "shadowHomePath": "",
+        "launchArgs": "",
+        "customModels": ["gpt-6.1-sol"]
+      }
+    },
+    "opencode-go": {
+      "driver": "opencode",
+      "displayName": "OpenCode Go (Alex)",
+      "enabled": true,
+      "environment": [
+        {
+          "name": "OPENCODE_API_KEY",
+          "value": "",
+          "sensitive": true,
+          "valueRedacted": true
+        }
+      ],
+      "config": {
+        "binaryPath": "$OPENCODE_BIN",
+        "serverUrl": "",
+        "serverPassword": "",
+        "customModels": [],
+        "_nixSeeded": true
+      }
+    },
+    "opencode_manu": {
+      "driver": "opencode",
+      "displayName": "OpenCode Go (Manu)",
+      "enabled": true,
+      "environment": [
+        {
+          "name": "OPENCODE_API_KEY",
+          "value": "",
+          "sensitive": true,
+          "valueRedacted": true
+        }
+      ],
+      "config": {
+        "binaryPath": "$OPENCODE_BIN",
+        "serverUrl": "",
+        "serverPassword": "",
+        "customModels": [],
+        "_nixSeeded": true
+      }
+    },
+    "opencode_mathias": {
+      "driver": "opencode",
+      "displayName": "OpenCode Go (Mathias)",
+      "enabled": true,
+      "environment": [
+        {
+          "name": "OPENCODE_API_KEY",
+          "value": "",
+          "sensitive": true,
+          "valueRedacted": true
+        }
+      ],
+      "config": {
+        "binaryPath": "$OPENCODE_BIN",
+        "serverUrl": "",
+        "serverPassword": "",
+        "customModels": [],
+        "_nixSeeded": true
+      }
+    }
+  },
+  "providerSecrets": [
+    {
+      "instanceId": "opencode-go",
+      "name": "OPENCODE_API_KEY",
+      "alias": "opencode-go-alex",
+      "scope": "project"
+    },
+    {
+      "instanceId": "opencode_manu",
+      "name": "OPENCODE_API_KEY",
+      "alias": "opencode-go-manu",
+      "scope": "global"
+    },
+    {
+      "instanceId": "opencode_mathias",
+      "name": "OPENCODE_API_KEY",
+      "alias": "opencode-go-mathias",
+      "scope": "global"
+    }
+  ]
+}

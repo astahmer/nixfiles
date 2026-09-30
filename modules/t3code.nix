@@ -1,4 +1,4 @@
-{ ... }:
+{ inputs, ... }:
 {
   config.flake.modules.homeManager.t3code =
     {
@@ -7,11 +7,23 @@
       lib,
       ...
     }:
+    let
+      secret = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret;
+      secretBin = "${secret}/bin/secret";
+      projectSecretConfig = "${config.home.homeDirectory}/.config/nixfiles/.secret.json";
+      globalSecretConfig = "${config.home.homeDirectory}/.config/nixfiles/assets/secret/global.json";
+      openCodeBin = "${config.home.homeDirectory}/.nix-profile/bin/opencode";
+      openCode2Bin = "${config.home.homeDirectory}/.nix-profile/bin/opencode2";
+    in
     {
       home.activation.t3codeSeedProviderInstances = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        export PATH="${pkgs.nodejs_24}/bin:$PATH"
-        OPENCODE_BIN="${config.home.homeDirectory}/.nix-profile/bin/opencode2" \
-          node "${../assets/t3code/seed-provider-instances.mjs}" || true
+        SECRET_BIN="${secretBin}" \
+        PROJECT_SECRET_CONFIG="${projectSecretConfig}" \
+        GLOBAL_SECRET_CONFIG="${globalSecretConfig}" \
+        OPENCODE_BIN="${openCodeBin}" \
+        OPENCODE_V2_BIN="${openCode2Bin}" \
+        T3CODE_SETTINGS_SEED_PATH="${../assets/t3code/settings-seed.json}" \
+          "${pkgs.nodejs_24}/bin/node" "${../assets/t3code/seed-provider-instances.mjs}"
       '';
     };
 

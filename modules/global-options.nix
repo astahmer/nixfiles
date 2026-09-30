@@ -45,4 +45,7 @@
     description = "NixOS state version.";
   };
 
+  options.nixfiles.opencodex.activation.enable =
+    lib.mkEnableOption "OpenCodex configuration and service activation";
+
 }

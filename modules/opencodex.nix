@@ -1,4 +1,7 @@
-{ inputs, ... }:
+{ config, inputs, ... }:
+let
+  opencodexActivationEnabled = config.nixfiles.opencodex.activation.enable;
+in
 {
   config.flake.modules.homeManager.opencodex =
     {
@@ -32,7 +35,8 @@
 
       home.file.".config/opencodex/secrets.env.example".source = ../assets/opencodex/secrets.env.example;
 
-      home.activation.opencodexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      home.activation.opencodexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] (
+        lib.optionalString opencodexActivationEnabled ''
         secrets_dir="${config.home.homeDirectory}/.config/opencodex"
         secrets_file="${secretsEnv}"
         example_file="${config.home.homeDirectory}/.config/opencodex/secrets.env.example"
@@ -375,7 +379,8 @@
         else
           ${ocx} service install
         fi
-      '';
+        ''
+      );
     };
 
   config.flake.modules.nixos.opencodex =

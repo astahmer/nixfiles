@@ -1,170 +1,251 @@
 #!/usr/bin/env node
-// Idempotent T3 Code provider-defaults seeder.
-//
-// Merges default provider instances into ~/.t3/userdata/settings.json without
-// touching unrelated settings or clobbering existing instances. Instances the
-// seeder owns are tagged with `_nixSeeded` and refreshed only while they still
-// carry the seeded binary path (so user edits win).
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from "node:fs";
+import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { createRequire } from "node:module";
 
-const require = createRequire(import.meta.url);
+const userDataDirectory = join(homedir(), ".t3", "userdata");
+const settingsPath = join(userDataDirectory, "settings.json");
+const secretsDirectory = join(userDataDirectory, "secrets");
+const settingsSeedPath = process.env.T3CODE_SETTINGS_SEED_PATH;
+const openCodeBinaryPath = process.env.OPENCODE_BIN || "opencode";
+const previousOpenCodeBinaryPath = process.env.OPENCODE_V2_BIN;
+const secretBinaryPath = process.env.SECRET_BIN;
+const projectSecretConfigPath = process.env.PROJECT_SECRET_CONFIG;
+const globalSecretConfigPath = process.env.GLOBAL_SECRET_CONFIG;
+const obsoleteOpenCodeEnvironmentName = "OPENCODEX_OPENCODE_GO_API_KEY";
+const obsoleteOpenCodePlaceholder = "REPLACE-ME";
 
-const SETTINGS_PATH = join(homedir(), ".t3", "userdata", "settings.json");
-const OPENCODE_BIN = process.env.OPENCODE_BIN || "opencode";
-const OPENCODEX_API_KEY_PLACEHOLDER = "REPLACE-ME";
+const settingsSeedDocument = JSON.parse(readFileSync(settingsSeedPath, "utf8"));
+const { providerSecrets, ...settingsSeed } = settingsSeedDocument;
 
-const DEFAULT_MODEL_SELECTION = {
-  instanceId: "opencode-go",
-  model: "deepseek-v4-flash",
-  options: [{ id: "variant", value: "max" }]
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const providerEnvironmentSecretName = (instanceId, name) =>
+  `provider-env-${Buffer.from(instanceId, "utf8").toString("base64url")}-${Buffer.from(name, "utf8").toString("base64url")}`;
+
+const readStoredBitwardenSession = () => {
+  if (process.env.BW_SESSION) return process.env.BW_SESSION;
+  if (!existsSync("/usr/bin/security")) return undefined;
+
+  const result = spawnSync(
+    "/usr/bin/security",
+    ["find-generic-password", "-a", "bitwarden-session", "-s", "secret-cli", "-w"],
+    { encoding: "utf8", timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] }
+  );
+  if (result.status !== 0 || result.error) return undefined;
+  return result.stdout.replace(/[\r\n]+$/u, "") || undefined;
 };
 
-const DEFAULT_PROJECT_MODEL_SELECTION = {
-  ...DEFAULT_MODEL_SELECTION,
-  options: [{ id: "agent", value: "build" }, { id: "variant", value: "max" }]
+const readSecretAlias = (alias, scope, environment) => {
+  const configPath = scope === "global" ? globalSecretConfigPath : projectSecretConfigPath;
+  if (!secretBinaryPath || !configPath) return undefined;
+
+  const result = spawnSync(secretBinaryPath, ["get", "--config", configPath, alias], {
+    encoding: "utf8",
+    env: environment,
+    timeout: 10_000,
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+  if (result.status !== 0 || result.error) return undefined;
+  const value = result.stdout.replace(/[\r\n]+$/u, "");
+  return value.length > 0 ? value : undefined;
 };
 
-const DEFAULT_INSTANCES = {
-  "opencode-go": {
-    driver: "opencode",
-    displayName: "OpenCode (OpenCode Go)",
-    enabled: true,
-    environment: [
-      {
-        name: "OPENCODEX_OPENCODE_GO_API_KEY",
-        value: OPENCODEX_API_KEY_PLACEHOLDER,
-        sensitive: false
-      }
-    ],
-    config: {
-      enabled: true,
-      binaryPath: OPENCODE_BIN,
-      serverUrl: "",
-      serverPassword: "",
-      customModels: [],
-      _nixSeeded: true
-    }
+const writeProviderSecret = (instanceId, name, value) => {
+  mkdirSync(secretsDirectory, { recursive: true });
+  chmodSync(secretsDirectory, 0o700);
+
+  const secretPath = join(secretsDirectory, `${providerEnvironmentSecretName(instanceId, name)}.bin`);
+  const bytes = Buffer.from(value, "utf8");
+  if (existsSync(secretPath) && readFileSync(secretPath).equals(bytes)) return false;
+
+  const temporaryPath = `${secretPath}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, bytes, { flag: "wx", mode: 0o600 });
+    chmodSync(temporaryPath, 0o600);
+    renameSync(temporaryPath, secretPath);
+    chmodSync(secretPath, 0o600);
+  } catch (error) {
+    rmSync(temporaryPath, { force: true });
+    throw error;
   }
+  return true;
 };
 
-function isSeededDefault(instance) {
-  return instance?.config?._nixSeeded === true;
-}
+const readLegacyInlineSecret = (settings, instanceId, environmentName) => {
+  const environment = settings.providerInstances?.[instanceId]?.environment ?? [];
+  const variable = environment.find((entry) => entry.name === environmentName);
+  if (!variable || variable.valueRedacted || typeof variable.value !== "string") return undefined;
+  if (variable.value.length === 0 || variable.value === obsoleteOpenCodePlaceholder) return undefined;
+  return variable.value;
+};
 
-function isStillSeedControlled(instance, seeded) {
-  if (!instance?.config || !seeded?.config) return false;
-  return instance.config.binaryPath === seeded.config.binaryPath;
-}
+const seedProviderSecrets = (settings) => {
+  const storedSession = readStoredBitwardenSession();
+  const environment = {
+    ...process.env,
+    ...(storedSession ? { BW_SESSION: storedSession } : {})
+  };
+  const unavailableAliases = [];
+  let writtenSecrets = 0;
 
-function mergeDefaults(settings) {
-  const next = { ...settings };
-  const providers = { ...(next.providerInstances ?? {}) };
-  const obsoleteSeededBridge =
-    providers.opencode &&
-    isSeededDefault(providers.opencode) &&
-    typeof providers.opencode.config?.binaryPath === "string" &&
-    providers.opencode.config.binaryPath.endsWith("/opencode-bridge");
-
-  if (obsoleteSeededBridge) {
-    delete providers.opencode;
-  }
-
-  for (const [instanceId, seeded] of Object.entries(DEFAULT_INSTANCES)) {
-    const existing = providers[instanceId];
-    if (!existing) {
-      providers[instanceId] = seeded;
+  for (const entry of providerSecrets) {
+    const aliasValue = readSecretAlias(entry.alias, entry.scope, environment);
+    const legacyValue = readLegacyInlineSecret(settings, entry.instanceId, entry.name) ??
+      (entry.instanceId === "opencode-go"
+        ? readLegacyInlineSecret(settings, entry.instanceId, obsoleteOpenCodeEnvironmentName)
+        : undefined);
+    const value = aliasValue ?? legacyValue;
+    if (!value) {
+      unavailableAliases.push(entry.alias);
       continue;
     }
-    if (isSeededDefault(existing) && isStillSeedControlled(existing, seeded)) {
-      providers[instanceId] = seeded;
+    if (writeProviderSecret(entry.instanceId, entry.name, value)) writtenSecrets += 1;
+  }
+
+  return { unavailableAliases, writtenSecrets };
+};
+
+const resolveSeedInstance = (instance) => {
+  const resolved = clone(instance);
+  if (resolved.config?.binaryPath === "$OPENCODE_BIN") {
+    resolved.config.binaryPath = openCodeBinaryPath;
+  }
+  return resolved;
+};
+
+const ensureRedactedOpenCodeEnvironment = (instanceId, instance) => {
+  const environment = instance.environment ?? [];
+  const preserved = environment.filter((entry) => {
+    if (entry.name === "OPENCODE_API_KEY") return false;
+    return instanceId !== "opencode-go" || entry.name !== obsoleteOpenCodeEnvironmentName;
+  });
+
+  return [
+    ...preserved,
+    { name: "OPENCODE_API_KEY", value: "", sensitive: true, valueRedacted: true }
+  ];
+};
+
+const mergeSettings = (settings) => {
+  let changed = false;
+  const next = { ...settings };
+
+  for (const [key, value] of Object.entries(settingsSeed)) {
+    if (key === "providerInstances" || Object.hasOwn(next, key)) continue;
+    next[key] = clone(value);
+    changed = true;
+  }
+
+  const providerInstances = { ...(next.providerInstances ?? {}) };
+  for (const [instanceId, seed] of Object.entries(settingsSeed.providerInstances)) {
+    const resolvedSeed = resolveSeedInstance(seed);
+    const existing = providerInstances[instanceId];
+    if (!existing) {
+      providerInstances[instanceId] = resolvedSeed;
+      changed = true;
+      continue;
+    }
+
+    let updated = existing;
+    if (
+      previousOpenCodeBinaryPath &&
+      existing.driver === "opencode" &&
+      existing.config?.binaryPath === previousOpenCodeBinaryPath
+    ) {
+      updated = {
+        ...updated,
+        config: { ...updated.config, binaryPath: openCodeBinaryPath }
+      };
+    }
+
+    const seededDisplayName = resolvedSeed.displayName;
+    const previousDisplayNames = {
+      "opencode-go": "OpenCode (OpenCode Go)",
+      opencode_mathias: "mathias"
+    };
+    if (existing.displayName === previousDisplayNames[instanceId] && seededDisplayName) {
+      updated = { ...updated, displayName: seededDisplayName };
+    }
+
+    if (providerSecrets.some((entry) => entry.instanceId === instanceId)) {
+      updated = {
+        ...updated,
+        environment: ensureRedactedOpenCodeEnvironment(instanceId, updated)
+      };
+    }
+
+    if (JSON.stringify(updated) !== JSON.stringify(existing)) {
+      providerInstances[instanceId] = updated;
+      changed = true;
     }
   }
 
-  next.providerInstances = providers;
-  return next;
-}
+  next.providerInstances = providerInstances;
+  return { settings: next, changed };
+};
 
-function updateProjectDefaults(db) {
-  const rows = db.prepare("SELECT project_id, default_model_selection_json FROM projection_projects").all();
-  let changed = 0;
-  for (const row of rows) {
-    let selection;
+const writeSettings = (original, next) => {
+  mkdirSync(userDataDirectory, { recursive: true });
+  if (original !== undefined) {
+    const backupPath = `${settingsPath}.nix-seed-backup`;
+    writeFileSync(backupPath, original, { mode: 0o600 });
+    chmodSync(backupPath, 0o600);
+  }
+
+  const temporaryPath = `${settingsPath}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, next, { flag: "wx", mode: 0o600 });
+    chmodSync(temporaryPath, 0o600);
+    renameSync(temporaryPath, settingsPath);
+    chmodSync(settingsPath, 0o600);
+  } catch (error) {
+    rmSync(temporaryPath, { force: true });
+    throw error;
+  }
+};
+
+const main = () => {
+  const original = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : undefined;
+  let settings = {};
+  if (original !== undefined) {
     try {
-      selection = row.default_model_selection_json
-        ? JSON.parse(row.default_model_selection_json)
-        : null;
-    } catch {
-      selection = null;
+      settings = JSON.parse(original);
+    } catch (error) {
+      process.stderr.write(`t3code seed: could not parse ${settingsPath}: ${String(error)}\n`);
+      process.exitCode = 1;
+      return;
     }
-    // Only rewrite selections that still point at the auto-bootstrap Codex
-    // default. Explicit user choices are preserved.
-    const isCodexDefault =
-      selection?.instanceId === "codex" &&
-      typeof selection?.model === "string" &&
-      !selection.model.includes("/");
-    if (!isCodexDefault) continue;
-    db.prepare(
-      "UPDATE projection_projects SET default_model_selection_json = ?, updated_at = datetime('now') WHERE project_id = ?"
-    ).run(JSON.stringify(DEFAULT_PROJECT_MODEL_SELECTION), row.project_id);
-    changed += 1;
-  }
-  return changed;
-}
-
-function main() {
-  if (!existsSync(SETTINGS_PATH)) {
-    process.stdout.write(`t3code seed: ${SETTINGS_PATH} not found; skipping (T3 not started yet).\n`);
-    return;
   }
 
-  const original = readFileSync(SETTINGS_PATH, "utf8");
-  let settings;
-  try {
-    settings = JSON.parse(original);
-  } catch (error) {
-    process.stderr.write(`t3code seed: failed to parse ${SETTINGS_PATH}: ${String(error)}\n`);
-    process.exit(1);
+  const { unavailableAliases, writtenSecrets } = seedProviderSecrets(settings);
+  const merged = mergeSettings(settings);
+  const next = `${JSON.stringify(merged.settings, null, 2)}\n`;
+  if (merged.changed || original === undefined || next !== original) {
+    writeSettings(original, next);
+    process.stdout.write("t3code seed: reconciled Nix-managed settings and provider secrets.\n");
+  } else {
+    process.stdout.write("t3code seed: settings already up to date.\n");
   }
 
-  const merged = mergeDefaults(settings);
-  const next = `${JSON.stringify(merged, null, 2)}\n`;
-  if (next === original) {
-    process.stdout.write("t3code seed: provider instances already up to date.\n");
-    return;
+  if (writtenSecrets > 0) {
+    process.stdout.write(`t3code seed: refreshed ${writtenSecrets} OpenCode Go credential file(s).\n`);
   }
-
-  const backup = `${SETTINGS_PATH}.nix-seed-backup`;
-  writeFileSync(backup, original, { mode: 0o600 });
-  mkdirSync(join(homedir(), ".t3", "userdata"), { recursive: true });
-  writeFileSync(SETTINGS_PATH, next, { mode: 0o600 });
-  chmodSync(SETTINGS_PATH, 0o600);
-  process.stdout.write(`t3code seed: merged default provider instances (backup: ${backup}).\n`);
-}
-
-function seedProjectDefaults() {
-  const stateDb = join(homedir(), ".t3", "userdata", "state.sqlite");
-  if (!existsSync(stateDb)) {
-    process.stdout.write("t3code seed: state.sqlite not found; skipping project defaults.\n");
-    return;
+  if (unavailableAliases.length > 0) {
+    process.stderr.write(
+      `t3code seed: could not resolve secret aliases: ${unavailableAliases.join(", ")}; existing T3 credential files were preserved.\n`
+    );
   }
-  try {
-    // sqlite3 ships with Node 22+; use it so Home Manager needs no extra deps.
-    const { DatabaseSync } = require("node:sqlite");
-    const db = new DatabaseSync(stateDb, { readOnly: false });
-    const projectChanges = updateProjectDefaults(db);
-    db.close();
-    if (projectChanges > 0) {
-      process.stdout.write(
-        `t3code seed: switched ${projectChanges} project default(s) to OpenCode Go.\n`
-      );
-    }
-  } catch (error) {
-    process.stderr.write(`t3code seed: project defaults skipped (${String(error)})\n`);
-  }
-}
+};
 
-seedProjectDefaults();
 main();
