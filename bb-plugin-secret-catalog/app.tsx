@@ -26,6 +26,7 @@ const styles = `
 .secret-toolbar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}.secret-brand{font-size:15px;font-weight:650;margin-right:auto}.secret-input,.secret-button{border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--foreground);padding:7px 10px}.secret-input{background:var(--background);min-width:90px}.secret-path{width:min(420px,48vw)}.secret-button{cursor:pointer}.secret-button:hover,.secret-row:hover{background:var(--accent)}.secret-button:disabled{opacity:.5;cursor:default}.secret-content{display:flex;min-height:0;flex:1}.secret-list{width:min(42%,420px);min-width:260px;overflow:auto;border-right:1px solid var(--border)}.secret-detail{min-width:0;flex:1;overflow:auto}.secret-search{width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--border);padding:12px 14px;background:var(--background);color:var(--foreground);outline:none}.secret-row{display:flex;gap:9px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer}.secret-row[data-selected=true]{background:var(--accent)}.secret-row-main{min-width:0;flex:1}.secret-alias{font-weight:600;overflow-wrap:anywhere}.secret-meta,.secret-muted{color:var(--muted-foreground);font-size:11px}.secret-detail-title{padding:15px 16px;border-bottom:1px solid var(--border);font-weight:650}.secret-value{margin:14px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);font:12px/1.5 var(--font-mono,monospace);white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}.secret-actions{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap}.secret-empty{padding:28px 18px;text-align:center;color:var(--muted-foreground)}.secret-error{padding:10px 16px;color:var(--destructive);border-bottom:1px solid var(--border)}
 .secret-editor{padding:16px;display:flex;flex-direction:column;gap:12px;max-width:600px}.secret-editor label{display:flex;flex-direction:column;gap:5px}.secret-editor input,.secret-editor select{border:1px solid var(--border);border-radius:6px;background:var(--background);color:var(--foreground);padding:8px}.secret-editor-note{color:var(--muted-foreground);font-size:11px}
 .secret-host{max-width:240px}.secret-scope{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border)}.secret-scope button{border:0;border-radius:5px;background:transparent;color:var(--muted-foreground);padding:6px 10px;cursor:pointer}.secret-scope button[data-active=true]{background:var(--accent);color:var(--foreground)}.secret-browser{position:absolute;z-index:4;inset:56px 16px auto auto;width:min(520px,90vw);max-height:70vh;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);box-shadow:0 8px 32px #0008}.secret-browser-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.secret-browser-path{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}.secret-browser-entry{display:block;width:100%;padding:8px;border:0;border-radius:4px;background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.secret-browser-entry:hover{background:var(--accent)}.secret-toolbar{position:relative}
+.secret-confirm-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgb(0 0 0/.62)}.secret-confirm{width:min(440px,100%);padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--foreground);box-shadow:0 16px 48px #000a}.secret-confirm h2{margin:0 0 8px;font-size:16px}.secret-confirm p{margin:0 0 16px;color:var(--muted-foreground)}.secret-button-danger{border-color:var(--destructive);background:var(--destructive);color:var(--destructive-foreground,#fff)}.secret-button-danger:hover{filter:brightness(1.08)}
 @media(max-width:700px){.secret-content{flex-direction:column}.secret-list{width:100%;min-width:0;max-height:48%;border-right:0;border-bottom:1px solid var(--border)}.secret-path{width:60vw}}
 `;
 
@@ -50,6 +51,7 @@ function Page() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removeConfirmation, setRemoveConfirmation] = useState(false);
   const selected = entries.find((entry) => entryId(entry) === selectedId) ?? null;
   const filtered = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
@@ -208,8 +210,7 @@ function Page() {
   };
 
   const removeAlias = async () => {
-    if (!selected || !window.confirm(`Remove the ${selected.scope} alias “${selected.alias}”?`))
-      return;
+    if (!selected) return;
     setBusy(true);
     setError(null);
     try {
@@ -221,6 +222,7 @@ function Page() {
       });
       await refresh(activeScope);
       setSelectedId("");
+      setRemoveConfirmation(false);
       setMessage(result.message);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -364,6 +366,50 @@ function Page() {
       {error && (
         <div className="secret-error" role="alert">
           {error}
+        </div>
+      )}
+      {removeConfirmation && selected && (
+        <div
+          className="secret-confirm-backdrop"
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && !busy) setRemoveConfirmation(false);
+          }}
+        >
+          <section
+            className="secret-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="secret-remove-title"
+            aria-describedby="secret-remove-description"
+          >
+            <h2 id="secret-remove-title">Remove this alias?</h2>
+            <p id="secret-remove-description">
+              Remove <strong>{selected.alias}</strong> from the {selected.scope} configuration? The
+              Bitwarden item and its value will remain untouched.
+            </p>
+            {error && (
+              <div className="secret-error" role="alert">
+                {error}
+              </div>
+            )}
+            <div className="secret-actions">
+              <button
+                className="secret-button"
+                autoFocus
+                disabled={busy}
+                onClick={() => setRemoveConfirmation(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="secret-button secret-button-danger"
+                disabled={busy}
+                onClick={() => void removeAlias()}
+              >
+                {busy ? "Removing…" : "Remove alias"}
+              </button>
+            </div>
+          </section>
         </div>
       )}
       <div className="secret-content">
@@ -547,7 +593,10 @@ function Page() {
                 <button
                   className="secret-button"
                   disabled={busy}
-                  onClick={() => void removeAlias()}
+                  onClick={() => {
+                    setError(null);
+                    setRemoveConfirmation(true);
+                  }}
                 >
                   Remove alias
                 </button>
