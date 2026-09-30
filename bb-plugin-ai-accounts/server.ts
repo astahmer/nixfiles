@@ -240,7 +240,7 @@ export default async function plugin(bb: BbPluginApi) {
       const { accounts } = await readState();
       const account = accounts.find((profile) => profile.id === id);
       if (account === undefined || !account.enabled) return { models: [] };
-      const providerId = "ai-account-" + account.id;
+      const providerId = account.provider === "codex" ? "codex" : "ai-account-" + account.id;
       try {
         const result: unknown = JSON.parse(await runBb(["provider", "models", providerId, "--host", hostId, "--json"]));
         const decoded = z.array(z.object({

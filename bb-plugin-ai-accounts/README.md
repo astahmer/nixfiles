@@ -19,10 +19,12 @@ available for an immediate check.
 OpenCode Go uses a separate `XDG_DATA_HOME` and its `opencode auth login` flow.
 Credentials stay in OpenCode's own auth file.
 
-The model section reads the selected provider's live model catalog. It supports
-favorites, visibility, order, custom entries, and per-model default reasoning
-effort. The BB picker itself is supplied by BB; provider model metadata seeds
-its model and reasoning controls. Account tags and colors are configurable.
+The model section reads the complete Codex catalog or the selected OpenCode
+Go provider catalog. It supports favorites, visibility checkboxes, order,
+custom entries, and per-model default reasoning effort. The account-wide
+**All models** composer action searches enabled account models in existing and
+new threads; BB's provider picker remains available beside it. Account tags
+and colors are configurable.
 
 Runtime paths inherit from the all-projects/all-machines default; project and
 machine-specific paths override it. Nix owns profile names, paths, tags,

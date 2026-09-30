@@ -374,7 +374,7 @@ const AccountPage = () => {
 
   const updateModelVisibility = (modelId: string, enabled: boolean) => {
     if (!selected) return;
-    const next = new Set(selected.hiddenModelIds);
+    const next = new Set(hiddenModelIds);
     if (enabled) next.delete(modelId);
     else next.add(modelId);
     setDraft((current) => ({ ...current, hiddenText: Array.from(next).join("\n") }));
@@ -467,7 +467,7 @@ const AccountPage = () => {
           <select className="aa-reasoning-default" aria-label={"Default reasoning effort for " + model.displayName} value={selected?.modelReasoningDefaults[model.id] ?? model.defaultReasoningEffort} onChange={(event) => { if (isReasoningEffort(event.currentTarget.value)) updateReasoningDefault(model.id, event.currentTarget.value); }}>
             {model.supportedReasoningEfforts.map((effort) => <option key={effort.reasoningEffort} value={effort.reasoningEffort}>{effort.description}</option>)}
           </select>
-          <button title="Move up" aria-label="Move up" disabled={groupIndex === 0} onClick={() => moveModel(model.id, -1, models)}>↑</button><button title="Move down" aria-label="Move down" disabled={groupIndex === models.length - 1} onClick={() => moveModel(model.id, 1, models)}>↓</button><label className="aa-model-switch" title={isHidden ? "Show in picker" : "Hide from picker"}><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span /></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}
+          <button title="Move up" aria-label="Move up" disabled={groupIndex === 0} onClick={() => moveModel(model.id, -1, models)}>↑</button><button title="Move down" aria-label="Move down" disabled={groupIndex === models.length - 1} onClick={() => moveModel(model.id, 1, models)}>↓</button><label className="aa-model-enable"><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span>In picker</span></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}
         </div>
       </div>
     );
@@ -543,11 +543,14 @@ const AccountPage = () => {
 
             <section className="aa-section aa-model-section">
               <div className="aa-section-heading"><div><span className="aa-index">03</span><h3>Models</h3></div><button className="aa-quiet" disabled={refreshingCatalog || !selectedHostId} onClick={() => void refreshCatalog()}>{refreshingCatalog ? "Checking…" : "↻ Check now"}</button></div>
-              <p className="aa-help">Favorites, visibility, and order are saved on this device. Custom models are added to this account’s provider entry.</p>
+              <p className="aa-help">Use the checkboxes to show models in the picker. Favorites and order are saved on this device; custom models are added to this account’s provider entry.</p>
               <div className="aa-model-toolbar"><button className="aa-quiet" onClick={() => {
                 if (!selected) return;
+                const catalogModelIds = catalogModels.map((model) => model.id);
+                const catalogIds = new Set(catalogModelIds);
                 const allHidden = catalogModels.every((model) => hiddenModelIds.has(model.id));
-                const next = allHidden ? [] : catalogModels.map((model) => model.id);
+                const unknownHiddenIds = Array.from(hiddenModelIds).filter((id) => !catalogIds.has(id));
+                const next = allHidden ? unknownHiddenIds : [...unknownHiddenIds, ...catalogModelIds];
                 setDraft((current) => ({ ...current, hiddenText: next.join("\n") }));
                 void persist({ hiddenModelIds: next });
               }}>{catalogModels.length > 0 && catalogModels.every((model) => hiddenModelIds.has(model.id)) ? "Enable all" : "Disable all"}</button><span>{catalogModels.length} models · {favoriteModels.length} favorites · {hiddenModels.length} hidden</span><button className="aa-quiet" onClick={() => setCustomModelFormOpen((open) => !open)}>{customModelFormOpen ? "Cancel" : "＋ Add custom model"}</button></div>
@@ -577,7 +580,6 @@ const AccountPage = () => {
 export default definePluginApp((app) => {
   app.composer.customize({
     id: "ai-accounts-model-search",
-    scopes: ["new-thread"],
     actions: [{ id: "global-model-picker", component: GlobalModelPicker }],
   });
   app.slots.navPanel({
