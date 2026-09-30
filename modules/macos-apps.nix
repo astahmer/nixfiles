@@ -61,7 +61,7 @@
         "Shottr.app" = "${pkgs.shottr}/Applications/Shottr.app";
         "Slack.app" = "${pkgs.slack}/Applications/Slack.app";
         "Spotify.app" = "${pkgs.spotify}/Applications/Spotify.app";
-        "T3 Code (Alpha).app" = "${t3codeBin}/Applications/T3 Code (Alpha).app";
+        "T3 Code (Nightly).app" = "${t3codeBin}/Applications/T3 Code (Nightly).app";
         "Thaw.app" = "${thaw}/Applications/Thaw.app";
         "Tidy Ports.app" = "${tidyports}/Applications/Tidy Ports.app";
         "Visual Studio Code.app" = "${visualStudioCode}/Applications/Visual Studio Code.app";

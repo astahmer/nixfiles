@@ -7,11 +7,11 @@
 
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "t3code-bin";
-  version = "0.0.42";
+  version = "0.0.45-nightly.20260930.2481";
 
   src = fetchurl {
     url = "https://github.com/pingdotgg/t3code/releases/download/v${finalAttrs.version}/T3-Code-${finalAttrs.version}-arm64.zip";
-    hash = "sha256-BmOznpeQ8Hayp0uUReEXziu26CTQYZxXjoCLS6crRjc=";
+    hash = "sha256-TPsbC6XbNvotM8//8YpSaBxcq4yK8PvH10FR9PjDIwc=";
   };
 
   strictDeps = true;
@@ -26,13 +26,13 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook preInstall
 
     mkdir -p "$out/Applications"
-    cp -R "T3 Code (Alpha).app" "$out/Applications/"
+    cp -R "T3 Code (Nightly).app" "$out/Applications/"
 
     runHook postInstall
   '';
 
   meta = {
-    description = "T3 Code (Alpha) desktop app (prebuilt macOS binary)";
+    description = "T3 Code (Nightly) desktop app (prebuilt macOS binary)";
     homepage = "https://t3.codes/";
     changelog = "https://github.com/pingdotgg/t3code/releases/tag/v${finalAttrs.version}";
     license = lib.licenses.mit;

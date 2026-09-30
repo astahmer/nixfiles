@@ -61,6 +61,11 @@ packages pin upstream release archives and app-bundle names; Claude also pins
 a build revision. Update those values together, then run the package build and
 `--validate fast`.
 
+T3 Code currently pins the upstream nightly channel. Keep the prerelease version,
+archive hash, and `T3 Code (Nightly).app` wiring together; switching back to stable
+also requires restoring the `T3 Code (Alpha).app` bundle name. Orchestrator v2
+is a separate unmerged preview branch, not part of the regular nightly channel.
+
 OpenCodex combines per-platform standalone release binaries with `gui/dist`
 from the matching published npm tarball. Update its binary hashes and dashboard
 tarball hash together.

@@ -347,7 +347,7 @@
     {
       "name": "t3code-bin",
       "type": "manual",
-      "description": "T3 Code arm64 release ZIP; keep the binary package separate from the source build",
+      "description": "T3 Code arm64 nightly ZIP; update version/hash and Nightly bundle wiring together; keep separate from the source build",
       "enabled": false,
       "systems": [
         "aarch64-darwin"
