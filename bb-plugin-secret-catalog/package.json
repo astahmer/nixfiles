@@ -1,0 +1,39 @@
+{
+  "name": "bb-plugin-secret-catalog",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint .",
+    "fmt": "oxfmt --check ."
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.5.29",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "oxfmt": "^0.71.0",
+    "oxlint": "^1.86.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "bb": ">=0.44",
+    "bbPluginSdk": ">=0.5.29"
+  },
+  "packageManager": "pnpm@12.3.4",
+  "bb": {
+    "name": "Secret Catalog",
+    "description": "Browse configured secret aliases and retrieve values through the secret CLI.",
+    "branding": {
+      "icon": "KeyRound"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx",
+    "host": "./host.ts",
+    "skills": [
+      "skills"
+    ]
+  }
+}
