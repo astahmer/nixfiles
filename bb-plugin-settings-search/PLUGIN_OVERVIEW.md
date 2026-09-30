@@ -1,18 +1,13 @@
-Search the BB plugin catalog and add compatible plugins directly from the app.
+# Settings Search
 
-## What you get
+## User problem
 
-- An **Add plugins** page in the sidebar with live catalog search.
-- Publisher, marketplace, compatibility, and installed-state details.
-- A review step that shows the resolved source before install confirmation.
+BB Settings has many categories and controls. Finding the relevant one currently means scanning the sidebar and the open settings page.
 
-## How it works
+## Behavior
 
-Catalog search, install planning, and installation use BB's host SDK. BB handles
-the install; this plugin does not download or execute plugin code itself.
-
-## For agents
-
-Use the Add plugins page to find catalog entries. Check the publisher and
-resolved source before confirming an install, especially for third-party
-marketplaces that BB does not review.
+- Adds one small search field above the Settings navigation.
+- Filters sidebar categories as the query changes.
+- Highlights matching categories and matching setting rows on the open page.
+- Keeps the active category visible and uses Escape to clear the query.
+- Removes its field and decorations when leaving Settings or reloading the plugin.

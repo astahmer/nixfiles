@@ -1,0 +1,40 @@
+.bb-settings-search {
+  display: grid;
+  gap: 4px;
+  padding: 6px 10px 8px;
+}
+
+.bb-settings-search-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.bb-settings-search-input:focus {
+  border-color: color-mix(in srgb, currentColor 42%, transparent);
+}
+
+.bb-settings-search-status {
+  min-height: 14px;
+  padding-left: 2px;
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  font-size: 11px;
+}
+
+.bb-settings-search-hidden {
+  display: none !important;
+}
+
+.bb-settings-search-match {
+  border-radius: 6px;
+  outline: 1px solid color-mix(in srgb, var(--accent, #8b7cf6) 65%, transparent);
+  background: color-mix(in srgb, var(--accent, #8b7cf6) 10%, transparent);
+}
