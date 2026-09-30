@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { definePluginApp, useBbNavigate, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 type Transport = "streamable-http" | "sse" | "stdio";
 
 const MCP_PICKER_EVENT = "mcp-manager:open-picker";
+const PLUS_MENU_LABEL = "Prompt actions";
 
 const statusLabel: Record<ServerView["status"], string> = {
   off: "Disconnected",
@@ -27,6 +28,30 @@ function McpComposerPicker() {
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
+  const [position, setPosition] = useState({ left: 12, bottom: 12 });
+  const pickerRef = useRef<HTMLElement | null>(null);
+
+  const placePicker = useCallback(() => {
+    const trigger = Array.from(
+      document.querySelectorAll<HTMLButtonElement>(`button[aria-label="${PLUS_MENU_LABEL}"]`),
+    )
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+      .sort((left, right) => right.rect.bottom - left.rect.bottom)[0];
+    const pickerWidth = Math.min(416, window.innerWidth - 24);
+    const composerMenuWidth = Math.min(256, window.innerWidth - 24);
+    const menuGap = 8;
+    const leftOfTrigger = trigger
+      ? trigger.rect.left - composerMenuWidth - menuGap - pickerWidth
+      : 12;
+    const rightOfMenu = trigger ? trigger.rect.right + composerMenuWidth + menuGap : 12;
+    const left =
+      rightOfMenu + pickerWidth <= window.innerWidth - 12
+        ? rightOfMenu
+        : Math.max(12, leftOfTrigger);
+    const bottom = trigger ? Math.max(12, window.innerHeight - trigger.rect.bottom) : 12;
+    setPosition({ left, bottom });
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -40,13 +65,14 @@ function McpComposerPicker() {
 
   useEffect(() => {
     const openPicker = () => {
+      placePicker();
       setIsOpen(true);
       setSearch("");
       void refresh();
     };
     window.addEventListener(MCP_PICKER_EVENT, openPicker);
     return () => window.removeEventListener(MCP_PICKER_EVENT, openPicker);
-  }, [refresh]);
+  }, [placePicker, refresh]);
 
   useRealtime("mcp-manager-changed", () => {
     if (isOpen) void refresh();
@@ -60,6 +86,27 @@ function McpComposerPicker() {
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || pickerRef.current?.contains(event.target)) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest(`button[aria-label="${PLUS_MENU_LABEL}"]`)
+      ) {
+        return;
+      }
+      setIsOpen(false);
+    };
+    const reposition = () => placePicker();
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("resize", reposition);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [isOpen, placePicker]);
 
   const runServerAction = async (
     server: ServerView,
@@ -98,16 +145,14 @@ function McpComposerPicker() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-3 sm:items-center"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) setIsOpen(false);
-      }}
+      className="fixed z-[100] w-[min(26rem,calc(100vw-1.5rem))]"
+      style={{ left: position.left, bottom: position.bottom }}
     >
       <section
+        ref={pickerRef}
         role="dialog"
-        aria-modal="true"
         aria-labelledby="mcp-picker-title"
-        className="max-h-[min(75vh,36rem)] w-full max-w-md overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+        className="max-h-[min(75vh,36rem)] w-full overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
       >
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div>
@@ -829,6 +874,21 @@ function McpManagerPage() {
 }
 
 export default definePluginApp((app) => {
+  app.contentScripts.register({
+    id: "wider-composer-plus-menu",
+    mount({ signal }) {
+      const style = document.createElement("style");
+      style.textContent = `
+        [role="dialog"][aria-label="${PLUS_MENU_LABEL}"] {
+          width: min(16rem, calc(100vw - 1.5rem)) !important;
+          min-width: min(16rem, calc(100vw - 1.5rem)) !important;
+        }
+      `;
+      document.head.append(style);
+      signal.addEventListener("abort", () => style.remove(), { once: true });
+      return () => style.remove();
+    },
+  });
   app.composer.customize({
     id: "mcp-server-picker",
     plusMenu: [
