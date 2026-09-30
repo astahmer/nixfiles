@@ -116,17 +116,17 @@ and cache may need downloading or rebuilding later.
 
 ```bash
 # Interactive broad cleanup first.
-rtk docker --context "$dockerContext" system prune --all
-rtk docker --context "$dockerContext" builder prune --all
+docker --context "$dockerContext" system prune --all
+docker --context "$dockerContext" builder prune --all
 
 # Noninteractive equivalent, only when this exact scope is authorized.
-rtk docker --context "$dockerContext" system prune -af
-rtk docker --context "$dockerContext" builder prune -af
+docker --context "$dockerContext" system prune -af
+docker --context "$dockerContext" builder prune -af
 
 # Separate Buildx builder: inspect the selected builder before pruning its cache.
-rtk docker --context "$dockerContext" buildx ls
-rtk docker --context "$dockerContext" buildx du
-rtk docker --context "$dockerContext" buildx prune --all
+docker --context "$dockerContext" buildx ls
+docker --context "$dockerContext" buildx du
+docker --context "$dockerContext" buildx prune --all
 ```
 
 System prune already covers the daemon's unused containers, networks, images,
@@ -146,16 +146,16 @@ Check Compose definitions and the owner's recovery needs before deletion.
 
 ```bash
 dockerContext=orbstack
-rtk docker --context "$dockerContext" system df --verbose
-rtk docker --context "$dockerContext" volume ls --filter dangling=true
-rtk docker --context "$dockerContext" volume inspect EXACT_VOLUME_NAME
-rtk docker --context "$dockerContext" ps --all --filter volume=EXACT_VOLUME_NAME
+docker --context "$dockerContext" system df --verbose
+docker --context "$dockerContext" volume ls --filter dangling=true
+docker --context "$dockerContext" volume inspect EXACT_VOLUME_NAME
+docker --context "$dockerContext" ps --all --filter volume=EXACT_VOLUME_NAME
 
 # After approving this exact volume, remove only it (without --force).
-rtk docker --context "$dockerContext" volume rm EXACT_VOLUME_NAME
+docker --context "$dockerContext" volume rm EXACT_VOLUME_NAME
 ```
 
-For a reviewed batch, `rtk docker --context "$dockerContext" volume prune`
+For a reviewed batch, `docker --context "$dockerContext" volume prune`
 removes unused anonymous volumes with confirmation. Adding `--all` includes
 unused named volumes; use it only after reviewing every candidate. These are
 real data deletions, not image/cache cleanup. Never infer permission to delete
@@ -208,13 +208,13 @@ Inspect paths before cleanup. `store prune` operates on the current store and
 does not imply that every older version directory was cleaned.
 
 ```bash
-rtk pnpm --version
-rtk pnpm store path
-rtk pnpm cache path
-rtk du -sh "$HOME/.local/share/pnpm/store/"*
-rtk du -sh "$HOME/.cache/pnpm"
-rtk pnpm store prune
-rtk pnpm cache delete '*'
+pnpm --version
+pnpm store path
+pnpm cache path
+du -sh "$HOME/.local/share/pnpm/store/"*
+du -sh "$HOME/.cache/pnpm"
+pnpm store prune
+pnpm cache delete '*'
 ```
 
 The quoted glob is a package-name pattern for the metadata command, not a shell
@@ -229,11 +229,11 @@ and active installs before deleting one exact obsolete store. Do not point a
 newer pnpm at an older version directory and assume it prunes that format.
 
 ```bash
-rtk rg -n '"packageManager"' "$HOME/dev" --glob package.json --glob '!node_modules/**'
-rtk rg -n 'storeDir:|virtualStoreDir:' /exact/project/node_modules/.modules.yaml
-rtk lsof +D "$HOME/.local/share/pnpm/store/v10"
+rg -n '"packageManager"' "$HOME/dev" --glob package.json --glob '!node_modules/**'
+rg -n 'storeDir:|virtualStoreDir:' /exact/project/node_modules/.modules.yaml
+lsof +D "$HOME/.local/share/pnpm/store/v10"
 # Only after confirming this exact versioned store is obsolete:
-rtk rm -rf "$HOME/.local/share/pnpm/store/v10"
+rm -rf "$HOME/.local/share/pnpm/store/v10"
 ```
 
 pnpm's global virtual store was added in 10.12.1. It shares dependency-graph
@@ -243,11 +243,11 @@ existing project layouts. Do not remove its central `links` directory as a cache
 project node_modules can point into it.
 
 ```bash
-rtk pnpm config get enableGlobalVirtualStore
-rtk pnpm config get virtualStoreType
+pnpm config get enableGlobalVirtualStore
+pnpm config get virtualStoreType
 # Opt-in trial in one project using the spelling supported since 10.12.1:
-rtk proxy env PNPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=true pnpm --dir /exact/project install --frozen-lockfile
-rtk rg -n 'storeDir:|virtualStoreDir:' /exact/project/node_modules/.modules.yaml
+env PNPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=true pnpm --dir /exact/project install --frozen-lockfile
+rg -n 'storeDir:|virtualStoreDir:' /exact/project/node_modules/.modules.yaml
 ```
 
 Since 11.23.0 the canonical spelling is `virtualStoreType: global`; the older
@@ -263,9 +263,9 @@ References: https://pnpm.io/settings/node-modules and https://pnpm.io/cli/store.
 ### Bun package cache
 
 ```bash
-rtk bun pm cache
+bun pm cache
 # After ensuring no Bun installs are running:
-rtk bun pm cache rm
+bun pm cache rm
 ```
 
 This clears Bun's package download cache, not project source or global packages.
@@ -278,15 +278,15 @@ Verify installed help; Nub 0.9.3 supports previews for both pruning operations.
 Store pruning preserves project node_modules, manifests, and lockfiles.
 
 ```bash
-rtk nub store path
-rtk nub cache path
-rtk nub store prune --dry-run --json
-rtk nub cache prune --dry-run
+nub store path
+nub cache path
+nub store prune --dry-run --json
+nub cache prune --dry-run
 # After reviewing the previews:
-rtk nub store prune
-rtk nub cache prune
+nub store prune
+nub cache prune
 # Optional: clear package metadata; '*' is a quoted package-name pattern.
-rtk nub cache delete '*'
+nub cache delete '*'
 ```
 
 `cache prune` removes stale extracted primer files (default age: 30 days), not

@@ -143,17 +143,17 @@ stopped containers (including their writable layers), unused networks, unused
 images, and build cache. Keep database volumes separate.
 
 ```bash
-rtk docker context show
-rtk docker system df --verbose
-rtk docker ps --all --size
-rtk docker system prune --all
-rtk pnpm store prune
+docker context show
+docker system df --verbose
+docker ps --all --size
+docker system prune --all
+pnpm store prune
 ```
 
-For an already reviewed context and scope, `rtk docker system prune -af` is the
+For an already reviewed context and scope, `docker system prune -af` is the
 noninteractive equivalent. It does not prune volumes. For build cache alone,
-use `rtk docker builder prune --all`; inspect `rtk docker buildx ls` and
-`rtk docker buildx du` before `rtk docker buildx prune --all` for separate
+use `docker builder prune --all`; inspect `docker buildx ls` and
+`docker buildx du` before `docker buildx prune --all` for separate
 Buildx caches. Pruning caches can require later downloads or rebuilds.
 Detailed audit and cleanup recipes live in
 [RECIPES.md](assets/.agents/skills/disk-space-cleanup/RECIPES.md).
@@ -165,7 +165,7 @@ keeps normal shell behavior; Enter selects a command for editing. History is
 local, automatic sync is disabled, and Atuin's secret filter is enabled.
 After `nixapply`, open a new terminal or run `exec "$SHELL" -l` to load hooks
 in an existing terminal. Import existing history once with
-`rtk atuin import auto` from your usual interactive shell.
+`atuin import auto` from your usual interactive shell.
 
 ## Workspace disk audit
 

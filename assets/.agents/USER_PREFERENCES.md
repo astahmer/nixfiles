@@ -18,6 +18,8 @@ set a different scope.
 
 ## Evidence and operations
 
+- Use commands directly. Do not prefix commands with RTK or its proxy wrapper.
+
 - Support completion claims with evidence. Keep focused checks, known failures,
   browser/runtime proof, and deployed behavior distinct.
 - For UI investigations, use real interactions. Include screenshots when I
