@@ -16,6 +16,7 @@ export const rpcContract = defineRpcContract({
       root: z.string(),
       currentRevision: z.string(),
       lastPushAt: z.number().nullable(),
+      lastPushRevision: z.string().nullable(),
       revisions: z.array(revisionSchema),
       changes: z.array(fileChangeSchema),
       workspaces: z.array(z.object({ name: z.string(), path: z.string(), revision: z.string() })),

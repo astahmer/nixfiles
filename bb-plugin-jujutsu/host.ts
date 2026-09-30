@@ -42,30 +42,74 @@ const repositoryRoot = async (inputPath: string): Promise<string> => {
   return realpath(root);
 };
 
-const listRevisions = async (root: string) => {
-  const template = String.raw`"{\"commitId\": " ++ json(commit_id.short(40)) ++ ", \"changeId\": " ++ json(change_id.short(40)) ++ ", \"changeIdPrefix\": " ++ json(change_id.shortest().prefix()) ++ ", \"empty\": " ++ self.empty() ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short(40))) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
-  const raw = await run(root, ["log", "--no-graph", "-r", "all()", "-n", "500", "-T", template]);
-  return z.array(revisionSchema).parse(
+const revisionTemplate = String.raw`"{\"commitId\": " ++ json(commit_id.short(40)) ++ ", \"changeId\": " ++ json(change_id.short(40)) ++ ", \"changeIdPrefix\": " ++ json(change_id.shortest().prefix()) ++ ", \"empty\": " ++ self.empty() ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short(40))) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
+
+const parseRevisions = (raw: string) =>
+  z.array(revisionSchema).parse(
     raw
       .split("\n")
       .filter(Boolean)
       .map((line) => JSON.parse(line)),
   );
+
+const listRevisions = async (root: string, pushedRevision: string | null) => {
+  const raw = await run(root, [
+    "log",
+    "--no-graph",
+    "-r",
+    "all()",
+    "-n",
+    "500",
+    "-T",
+    revisionTemplate,
+  ]);
+  const revisions = parseRevisions(raw);
+  if (!pushedRevision || revisions.some((revision) => revision.commitId === pushedRevision)) {
+    return revisions;
+  }
+  const pushedRaw = await run(root, [
+    "log",
+    "--no-graph",
+    "-r",
+    pushedRevision,
+    "-T",
+    revisionTemplate,
+  ]);
+  const pushed = parseRevisions(pushedRaw)[0];
+  if (pushed) revisions.push(pushed);
+  return revisions;
 };
 
-const lastPushAt = async (root: string) => {
-  const template = String.raw`json(time.start().format("%s")) ++ "\t" ++ json(description) ++ "\n"`;
-  const raw = await run(
+const lastPush = async (root: string) => {
+  const template = String.raw`json(id.short()) ++ "\t" ++ json(description) ++ "\t" ++ time.start().format("%s") ++ "\n"`;
+  const rawOperations = await run(
     root,
     ["op", "log", "--no-graph", "-n", "500", "--at-op=@", "--ignore-working-copy", "-T", template],
     256_000,
   );
-  for (const line of raw.split("\n").filter(Boolean)) {
-    const [rawTimestamp, rawDescription] = line.split("\t");
-    if (!rawTimestamp || !rawDescription) continue;
+  for (const line of rawOperations.split("\n").filter(Boolean)) {
+    const [operationId, rawDescription, rawTimestamp] = line.split("\t");
+    if (!operationId || !rawDescription || !rawTimestamp) continue;
+    const parsedOperationId = z.string().parse(JSON.parse(operationId));
     const description = z.string().parse(JSON.parse(rawDescription));
     if (!description.toLowerCase().startsWith("push ")) continue;
-    return Number(z.string().parse(JSON.parse(rawTimestamp)));
+    const pushedRevisions = await run(
+      root,
+      [
+        "log",
+        "--no-graph",
+        `--at-op=${parsedOperationId}`,
+        "-r",
+        "remote_bookmarks()",
+        "-T",
+        String.raw`commit_id.short(40) ++ "\n"`,
+      ],
+      64_000,
+    );
+    return {
+      timestamp: Number(rawTimestamp),
+      revision: pushedRevisions.split("\n").find(Boolean) ?? null,
+    };
   }
   return null;
 };
@@ -104,20 +148,20 @@ export default experimental_defineHostEntry({
   handlers: {
     inspect: async ({ path }) => {
       const root = await repositoryRoot(path);
-      const [revisionList, currentRevision, lastPush, fileChanges, workspaceList] =
-        await Promise.all([
-          listRevisions(root),
-          run(root, ["log", "--no-graph", "-r", "@", "-T", "commit_id.short(40)"]).then((value) =>
-            value.trim(),
-          ),
-          lastPushAt(root),
-          changes(root),
-          workspaces(root),
-        ]);
+      const push = await lastPush(root);
+      const [revisionList, currentRevision, fileChanges, workspaceList] = await Promise.all([
+        listRevisions(root, push?.revision ?? null),
+        run(root, ["log", "--no-graph", "-r", "@", "-T", "commit_id.short(40)"]).then((value) =>
+          value.trim(),
+        ),
+        changes(root),
+        workspaces(root),
+      ]);
       return {
         root,
         currentRevision,
-        lastPushAt: lastPush,
+        lastPushAt: push?.timestamp ?? null,
+        lastPushRevision: push?.revision ?? null,
         revisions: revisionList,
         changes: fileChanges,
         workspaces: workspaceList,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   definePluginApp,
   experimental_Diff as BbDiff,
@@ -30,6 +30,7 @@ type Snapshot = {
   root: string;
   currentRevision: string;
   lastPushAt: number | null;
+  lastPushRevision: string | null;
   revisions: Revision[];
   changes: FileChange[];
   workspaces: { name: string; path: string; revision: string }[];
@@ -92,7 +93,7 @@ const styles = `
 .jj-path-picker{display:flex;min-width:0;flex:1}.jj-path-picker .jj-path{border-radius:6px 0 0 6px}.jj-path-picker .jj-browse{border-radius:0 6px 6px 0;white-space:nowrap}.jj-picker-backdrop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:24px;background:rgb(0 0 0/.58)}.jj-picker{display:flex;flex-direction:column;width:min(720px,92vw);max-height:min(760px,84vh);padding:12px;border:1px solid var(--jj-line);border-radius:14px;background:var(--card);box-shadow:0 18px 60px #000a}.jj-picker-header{display:flex;align-items:center;gap:8px}.jj-picker-path{min-width:0;flex:1}.jj-picker-path input{width:100%;box-sizing:border-box;border:0;background:transparent;color:var(--foreground);font:14px/1.4 var(--font-mono,monospace);outline:none}.jj-picker-section{padding:12px 4px 6px;color:var(--muted-foreground);font-size:11px}.jj-picker-list{min-height:120px;overflow:auto}.jj-picker-entry{display:flex;width:100%;align-items:center;gap:10px;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-picker-entry[data-active=true],.jj-picker-entry:hover{background:var(--accent)}.jj-picker-entry:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-picker-entry-icon{width:18px;color:var(--muted-foreground)}.jj-picker-footer{display:flex;justify-content:center;gap:14px;padding:10px 4px 2px;border-top:1px solid var(--jj-line);color:var(--muted-foreground);font-size:11px}.jj-picker-footer kbd{padding:2px 5px;border:1px solid var(--jj-line);border-radius:4px;color:var(--foreground)}
 .jj-picker{width:min(1000px,86vw);max-height:min(780px,84vh);padding:16px 10px 0;overflow:hidden}.jj-picker-header{padding:0 10px 12px;border-bottom:1px solid var(--jj-line)}.jj-picker-path input{height:44px;padding:0 8px;font:16px/1.4 var(--font-sans,system-ui)}.jj-picker-section{padding:16px 16px 8px;font-size:12px}.jj-picker-list{max-height:min(620px,65vh);min-height:160px;padding:0 7px 8px;overflow:auto}.jj-project-option{display:flex;width:100%;min-height:70px;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-project-option[data-active=true],.jj-project-option:hover{background:var(--accent)}.jj-project-option:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-project-option kbd{margin-left:auto;color:var(--muted-foreground)}.jj-project-mark{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:7px;background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary);font-size:10px;font-weight:700}.jj-project-option:nth-child(6n + 2) .jj-project-mark{background:#ff910022;color:#ff9100}.jj-project-option:nth-child(6n + 3) .jj-project-mark{background:#00bcd422;color:#00bcd4}.jj-project-option:nth-child(6n + 4) .jj-project-mark{background:#8b5cf622;color:#a78bfa}.jj-project-option:nth-child(6n + 5) .jj-project-mark{background:#10b98122;color:#10b981}.jj-project-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;font-size:15px}.jj-project-copy small{overflow:hidden;color:var(--muted-foreground);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.jj-picker-footer{justify-content:flex-start;gap:18px;padding:12px 16px;background:var(--background)}.jj-picker-entry{min-height:42px;padding:8px 12px;border-radius:8px}.jj-picker-error{padding:10px 16px;color:var(--destructive)}
 .jj-context{flex-wrap:wrap}.jj-filter{width:180px;margin-left:auto;padding:4px 7px;font:11px var(--font-sans,system-ui)}.jj-push-marker{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--jj-line);background:color-mix(in srgb,var(--muted) 10%,var(--background));color:var(--muted-foreground);font-size:10px}.jj-push-marker strong{font-weight:600;letter-spacing:.04em;text-transform:uppercase}.jj-push-marker time{margin-left:auto;font:10px var(--font-mono,monospace)}.jj-revision[data-moved=true]{opacity:.28;filter:saturate(.25)}.jj-revision[data-preview=true]{background:color-mix(in srgb,#a5df6f 10%,var(--background));box-shadow:inset 3px 0 #a5df6f}.jj-revision[data-preview=true] .jj-revision-subject,.jj-revision[data-preview=true] .jj-change-id{color:#a5df6f}.jj-revision[data-preview=true] .jj-badge{border-color:#a5df6f;color:#a5df6f}.jj-revision-title{gap:0}.jj-revision-meta{justify-content:flex-end;gap:8px}.jj-revision-age{color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-change-id{font:10px var(--font-mono,monospace);font-weight:650;letter-spacing:.02em}.jj-change-id-prefix{color:#4fc1ff}.jj-badge-evolved{background:color-mix(in srgb,#b982ff 18%,var(--background));border-color:color-mix(in srgb,#b982ff 55%,var(--jj-line));color:#b982ff}
-.jj-revision-button{min-height:29px;padding-block:0}.jj-graph-cell,.jj-graph-cell svg{height:29px}.jj-revision-main{min-width:0;flex-direction:row;align-items:center;gap:7px}.jj-revision-title{flex:1;min-width:0}.jj-revision-subject{font-size:12px}.jj-labels{min-width:0;max-width:42%;min-height:0;max-height:17px;flex:none;flex-wrap:nowrap}.jj-revision-meta{gap:6px}.jj-change-id{min-width:2ch;text-align:right}.jj-revision[data-empty=true] .jj-revision-subject{color:var(--muted-foreground);font-style:italic}.jj-badge-empty{background:color-mix(in srgb,#8b8b8b 14%,var(--background));border-color:#777;color:#aaa;font-size:9px}.jj-rebase-preview-branch[hidden]{display:none}.jj-preview-toggle{padding:3px 6px;border:1px solid var(--jj-line);border-radius:5px;background:var(--background);color:var(--foreground);font:inherit;cursor:pointer}.jj-context-menu{max-height:min(80vh,520px);overflow-y:auto;overscroll-behavior:contain}
+.jj-revision-button{min-height:29px;padding-block:0}.jj-graph-cell,.jj-graph-cell svg{height:29px}.jj-revision-main{min-width:0;flex-direction:row;align-items:center;gap:7px}.jj-revision-title{flex:1;min-width:0}.jj-revision-subject{font-size:12px}.jj-labels{min-width:0;max-width:42%;min-height:0;max-height:17px;flex:none;flex-wrap:nowrap}.jj-revision-meta{gap:6px}.jj-change-id{min-width:2ch;text-align:right}.jj-revision[data-empty=true] .jj-revision-subject{color:var(--muted-foreground);font-style:italic}.jj-badge-empty{background:color-mix(in srgb,#8b8b8b 14%,var(--background));border-color:#777;color:#aaa;font-size:9px}.jj-rebase-preview-branch[hidden]{display:none}.jj-preview-toggle{padding:3px 6px;border:1px solid var(--jj-line);border-radius:5px;background:var(--background);color:var(--foreground);font:inherit;cursor:pointer}.jj-context-menu{max-height:min(80vh,520px);overflow-y:auto;overscroll-behavior:contain}.jj-push-marker{min-height:26px;padding:4px 10px;border-block:1px solid color-mix(in srgb,var(--muted-foreground) 28%,var(--jj-line));background:color-mix(in srgb,var(--muted) 13%,var(--background));box-shadow:inset 3px 0 color-mix(in srgb,var(--muted-foreground) 38%,transparent)}
 `;
 
 const RevisionGraphCell = ({
@@ -1025,15 +1026,6 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
               onChange={(event) => setGraphQuery(event.target.value)}
             />
           </div>
-          {snapshot.lastPushAt !== null && (
-            <div className="jj-push-marker">
-              <strong>Last recorded push</strong>
-              <span>to a jj Git remote</span>
-              <time title={new Date(snapshot.lastPushAt * 1000).toLocaleString()}>
-                {relativeTime(snapshot.lastPushAt)}
-              </time>
-            </div>
-          )}
           {tab === "graph" ? (
             <main className="jj-history" aria-label="Jujutsu revision graph">
               {moveSource && (
@@ -1094,224 +1086,243 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                           const changePrefix = revision.changeIdPrefix;
                           const isEvolved = !isPreview && evolvedChangeIds.has(revision.commitId);
                           return (
-                            <article
-                              className="jj-revision"
-                              key={revision.commitId}
-                              data-selected={isSelected}
-                              data-current={isCurrent}
-                              data-dragged={isDragged && !isPreview}
-                              data-moved={isDragged && !isPreview}
-                              data-preview={isPreview}
-                              data-empty={revision.empty}
-                              data-drop-target={dropTargetId === revision.commitId}
-                              onDragEnter={(event) => {
-                                if (!isPreview) {
-                                  event.preventDefault();
-                                  setDropTargetId(revision.commitId);
-                                }
-                              }}
-                              onDragOver={(event) => {
-                                if (!isPreview) {
-                                  event.preventDefault();
-                                  setDropTargetId(revision.commitId);
-                                }
-                              }}
-                              onDragLeave={(event) => {
-                                if (
-                                  !(event.relatedTarget instanceof Node) ||
-                                  !event.currentTarget.contains(event.relatedTarget)
-                                )
-                                  setDropTargetId(null);
-                              }}
-                              onDrop={(event) => {
-                                if (!isPreview) dropOnRevision(revision, event);
-                              }}
-                              onContextMenu={(event) => {
-                                if (!isPreview) {
-                                  event.preventDefault();
-                                  openRevisionContextMenu(revision, event.clientX, event.clientY);
-                                }
-                              }}
-                            >
-                              <button
-                                className="jj-revision-button"
-                                style={{
-                                  gridTemplateColumns: `${graphWidth}px minmax(0,1fr) auto`,
-                                }}
-                                aria-current={isCurrent ? "true" : undefined}
-                                aria-expanded={isSelected}
-                                onClick={() => !isPreview && handleRevisionClick(revision)}
-                                onKeyDown={(event) => {
-                                  if (
-                                    !isPreview &&
-                                    (event.key === "ContextMenu" ||
-                                      (event.shiftKey && event.key === "F10"))
-                                  ) {
-                                    event.preventDefault();
-                                    const bounds = event.currentTarget.getBoundingClientRect();
-                                    openRevisionContextMenu(
-                                      revision,
-                                      bounds.left + 28,
-                                      bounds.top + 24,
-                                    );
-                                  }
-                                }}
-                                draggable={!isPreview}
-                                onDragStart={(event) => {
-                                  event.dataTransfer.effectAllowed = "move";
-                                  event.dataTransfer.setData("text/jj-revision", revision.commitId);
-                                  setDraggedRevisionId(revision.commitId);
-                                  const ghost = document.createElement("div");
-                                  ghost.style.cssText =
-                                    "position:absolute;top:-1000px;left:-1000px;width:300px;padding:8px 12px;border:1px solid #54a5ff;border-radius:8px;background:#20242b;color:#fff;font:12px system-ui;box-shadow:0 8px 24px #0008";
-                                  branchFrom(revision.commitId)
-                                    .slice(0, 6)
-                                    .forEach((branchRevision, index) => {
-                                      const ghostRow = document.createElement("div");
-                                      ghostRow.textContent = `${index === 0 ? "●" : "│"}  ${label(branchRevision)}`;
-                                      ghostRow.style.cssText =
-                                        "padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
-                                      ghost.append(ghostRow);
-                                    });
-                                  if (branchFrom(revision.commitId).length > 6) {
-                                    const remainder = document.createElement("div");
-                                    remainder.textContent = `… and ${branchFrom(revision.commitId).length - 6} more revisions`;
-                                    remainder.style.cssText = "padding:4px 0;color:#aaa";
-                                    ghost.append(remainder);
-                                  }
-                                  document.body.append(ghost);
-                                  event.dataTransfer.setDragImage(ghost, 16, 16);
-                                  window.setTimeout(() => ghost.remove(), 0);
-                                }}
-                                onDragEnd={() => {
-                                  setDraggedRevisionId(null);
-                                  setDropTargetId(null);
-                                }}
-                              >
-                                <RevisionGraphCell
-                                  row={graphRow}
-                                  width={graphWidth}
-                                  laneGap={laneGap}
-                                  current={isCurrent}
-                                  preview={isPreview}
-                                  empty={revision.empty}
-                                />
-                                <span className="jj-revision-main">
-                                  <span className="jj-revision-title">
-                                    {isEvolved && (
-                                      <span className="jj-badge jj-badge-evolved">Evolved</span>
-                                    )}
-                                    {revision.empty && (
-                                      <span className="jj-badge jj-badge-empty">Empty</span>
-                                    )}
-                                    <span className="jj-revision-subject">{label(revision)}</span>
-                                  </span>
-                                  <span className="jj-labels">
-                                    {isCurrent && (
-                                      <span className="jj-badge jj-badge-current">@</span>
-                                    )}
-                                    {revision.bookmarks.map((bookmark) => (
-                                      <span className="jj-badge jj-badge-bookmark" key={bookmark}>
-                                        {bookmark}
-                                      </span>
-                                    ))}
-                                    {revision.tags.map((tag) => (
-                                      <span className="jj-badge jj-badge-tag" key={tag}>
-                                        {tag}
-                                      </span>
-                                    ))}
-                                    {revision.workspaces.map((workspace) => (
-                                      <span
-                                        className={`jj-badge jj-badge-workspace${workspace === "default" ? " jj-badge-workspace-default" : ""}`}
-                                        key={workspace}
-                                      >
-                                        {workspace}
-                                      </span>
-                                    ))}
-                                  </span>
-                                </span>
-                                <span className="jj-revision-meta">
-                                  <time
-                                    className="jj-revision-age"
-                                    title={new Date(revision.timestamp * 1000).toLocaleString()}
-                                  >
-                                    {relativeTime(revision.timestamp)}
-                                  </time>
-                                  <code
-                                    className="jj-change-id"
-                                    title={`Unique change ID prefix ${changePrefix}`}
-                                  >
-                                    <span className="jj-change-id-prefix">{changePrefix}</span>
-                                  </code>
-                                  <span className="jj-chevron">›</span>
-                                </span>
-                              </button>
-                              {isSelected && renderRevisionDetails(revision)}
-                              {pendingHere && (
-                                <div
-                                  className="jj-rebase-preview"
-                                  role="group"
-                                  aria-label="Preview branch rebase"
-                                >
-                                  <div className="jj-rebase-preview-heading">
-                                    <span>
-                                      Move branch onto <strong>{label(revision)}</strong>
-                                    </span>
-                                    <span>
-                                      {pendingRebase.branch.length}{" "}
-                                      {pendingRebase.branch.length === 1 ? "revision" : "revisions"}{" "}
-                                      will move
-                                    </span>
-                                    <button
-                                      className="jj-preview-toggle"
-                                      aria-expanded={rebasePreviewExpanded}
-                                      onClick={() =>
-                                        setRebasePreviewExpanded((expanded) => !expanded)
-                                      }
+                            <Fragment key={revision.commitId}>
+                              {!isPreview && revision.commitId === snapshot.lastPushRevision && (
+                                <div className="jj-push-marker" role="separator">
+                                  <strong>Last recorded push</strong>
+                                  <span>to a jj Git remote</span>
+                                  {snapshot.lastPushAt !== null && (
+                                    <time
+                                      title={new Date(snapshot.lastPushAt * 1000).toLocaleString()}
                                     >
-                                      {rebasePreviewExpanded ? "Hide" : "Show"} graph
-                                    </button>
-                                  </div>
-                                  {rebasePreviewExpanded && (
-                                    <div className="jj-rebase-preview-branch">
-                                      {pendingRebase.branch.map((branchRevision) => (
-                                        <div
-                                          className="jj-rebase-preview-row"
-                                          key={branchRevision.commitId}
-                                        >
-                                          <span
-                                            className="jj-rebase-preview-node"
-                                            aria-hidden="true"
-                                          />
-                                          {label(branchRevision)}
-                                          <code>{branchRevision.changeIdPrefix}</code>
-                                        </div>
-                                      ))}
-                                    </div>
+                                      {relativeTime(snapshot.lastPushAt)}
+                                    </time>
                                   )}
-                                  <code className="jj-confirm-code">
-                                    jj rebase -s {pendingRebase.source.commitId} -d{" "}
-                                    {pendingRebase.destination.commitId}
-                                  </code>
-                                  <div className="jj-rebase-preview-actions">
-                                    <button
-                                      className="jj-button"
-                                      disabled={busy}
-                                      onClick={() => setPendingRebase(null)}
-                                    >
-                                      Cancel
-                                    </button>
-                                    <button
-                                      className="jj-button jj-button-primary"
-                                      disabled={busy}
-                                      onClick={() => void confirmRebase()}
-                                    >
-                                      {busy ? "Moving…" : "Rebase branch"}
-                                    </button>
-                                  </div>
                                 </div>
                               )}
-                            </article>
+                              <article
+                                className="jj-revision"
+                                data-selected={isSelected}
+                                data-current={isCurrent}
+                                data-dragged={isDragged && !isPreview}
+                                data-moved={isDragged && !isPreview}
+                                data-preview={isPreview}
+                                data-empty={revision.empty}
+                                data-drop-target={dropTargetId === revision.commitId}
+                                onDragEnter={(event) => {
+                                  if (!isPreview) {
+                                    event.preventDefault();
+                                    setDropTargetId(revision.commitId);
+                                  }
+                                }}
+                                onDragOver={(event) => {
+                                  if (!isPreview) {
+                                    event.preventDefault();
+                                    setDropTargetId(revision.commitId);
+                                  }
+                                }}
+                                onDragLeave={(event) => {
+                                  if (
+                                    !(event.relatedTarget instanceof Node) ||
+                                    !event.currentTarget.contains(event.relatedTarget)
+                                  )
+                                    setDropTargetId(null);
+                                }}
+                                onDrop={(event) => {
+                                  if (!isPreview) dropOnRevision(revision, event);
+                                }}
+                                onContextMenu={(event) => {
+                                  if (!isPreview) {
+                                    event.preventDefault();
+                                    openRevisionContextMenu(revision, event.clientX, event.clientY);
+                                  }
+                                }}
+                              >
+                                <button
+                                  className="jj-revision-button"
+                                  style={{
+                                    gridTemplateColumns: `${graphWidth}px minmax(0,1fr) auto`,
+                                  }}
+                                  aria-current={isCurrent ? "true" : undefined}
+                                  aria-expanded={isSelected}
+                                  onClick={() => !isPreview && handleRevisionClick(revision)}
+                                  onKeyDown={(event) => {
+                                    if (
+                                      !isPreview &&
+                                      (event.key === "ContextMenu" ||
+                                        (event.shiftKey && event.key === "F10"))
+                                    ) {
+                                      event.preventDefault();
+                                      const bounds = event.currentTarget.getBoundingClientRect();
+                                      openRevisionContextMenu(
+                                        revision,
+                                        bounds.left + 28,
+                                        bounds.top + 24,
+                                      );
+                                    }
+                                  }}
+                                  draggable={!isPreview}
+                                  onDragStart={(event) => {
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData(
+                                      "text/jj-revision",
+                                      revision.commitId,
+                                    );
+                                    setDraggedRevisionId(revision.commitId);
+                                    const ghost = document.createElement("div");
+                                    ghost.style.cssText =
+                                      "position:absolute;top:-1000px;left:-1000px;width:300px;padding:8px 12px;border:1px solid #54a5ff;border-radius:8px;background:#20242b;color:#fff;font:12px system-ui;box-shadow:0 8px 24px #0008";
+                                    branchFrom(revision.commitId)
+                                      .slice(0, 6)
+                                      .forEach((branchRevision, index) => {
+                                        const ghostRow = document.createElement("div");
+                                        ghostRow.textContent = `${index === 0 ? "●" : "│"}  ${label(branchRevision)}`;
+                                        ghostRow.style.cssText =
+                                          "padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+                                        ghost.append(ghostRow);
+                                      });
+                                    if (branchFrom(revision.commitId).length > 6) {
+                                      const remainder = document.createElement("div");
+                                      remainder.textContent = `… and ${branchFrom(revision.commitId).length - 6} more revisions`;
+                                      remainder.style.cssText = "padding:4px 0;color:#aaa";
+                                      ghost.append(remainder);
+                                    }
+                                    document.body.append(ghost);
+                                    event.dataTransfer.setDragImage(ghost, 16, 16);
+                                    window.setTimeout(() => ghost.remove(), 0);
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggedRevisionId(null);
+                                    setDropTargetId(null);
+                                  }}
+                                >
+                                  <RevisionGraphCell
+                                    row={graphRow}
+                                    width={graphWidth}
+                                    laneGap={laneGap}
+                                    current={isCurrent}
+                                    preview={isPreview}
+                                    empty={revision.empty}
+                                  />
+                                  <span className="jj-revision-main">
+                                    <span className="jj-revision-title">
+                                      {isEvolved && (
+                                        <span className="jj-badge jj-badge-evolved">Evolved</span>
+                                      )}
+                                      {revision.empty && (
+                                        <span className="jj-badge jj-badge-empty">Empty</span>
+                                      )}
+                                      <span className="jj-revision-subject">{label(revision)}</span>
+                                    </span>
+                                    <span className="jj-labels">
+                                      {isCurrent && (
+                                        <span className="jj-badge jj-badge-current">@</span>
+                                      )}
+                                      {revision.bookmarks.map((bookmark) => (
+                                        <span className="jj-badge jj-badge-bookmark" key={bookmark}>
+                                          {bookmark}
+                                        </span>
+                                      ))}
+                                      {revision.tags.map((tag) => (
+                                        <span className="jj-badge jj-badge-tag" key={tag}>
+                                          {tag}
+                                        </span>
+                                      ))}
+                                      {revision.workspaces.map((workspace) => (
+                                        <span
+                                          className={`jj-badge jj-badge-workspace${workspace === "default" ? " jj-badge-workspace-default" : ""}`}
+                                          key={workspace}
+                                        >
+                                          {workspace}
+                                        </span>
+                                      ))}
+                                    </span>
+                                  </span>
+                                  <span className="jj-revision-meta">
+                                    <time
+                                      className="jj-revision-age"
+                                      title={new Date(revision.timestamp * 1000).toLocaleString()}
+                                    >
+                                      {relativeTime(revision.timestamp)}
+                                    </time>
+                                    <code
+                                      className="jj-change-id"
+                                      title={`Unique change ID prefix ${changePrefix}`}
+                                    >
+                                      <span className="jj-change-id-prefix">{changePrefix}</span>
+                                    </code>
+                                    <span className="jj-chevron">›</span>
+                                  </span>
+                                </button>
+                                {isSelected && renderRevisionDetails(revision)}
+                                {pendingHere && (
+                                  <div
+                                    className="jj-rebase-preview"
+                                    role="group"
+                                    aria-label="Preview branch rebase"
+                                  >
+                                    <div className="jj-rebase-preview-heading">
+                                      <span>
+                                        Move branch onto <strong>{label(revision)}</strong>
+                                      </span>
+                                      <span>
+                                        {pendingRebase.branch.length}{" "}
+                                        {pendingRebase.branch.length === 1
+                                          ? "revision"
+                                          : "revisions"}{" "}
+                                        will move
+                                      </span>
+                                      <button
+                                        className="jj-preview-toggle"
+                                        aria-expanded={rebasePreviewExpanded}
+                                        onClick={() =>
+                                          setRebasePreviewExpanded((expanded) => !expanded)
+                                        }
+                                      >
+                                        {rebasePreviewExpanded ? "Hide" : "Show"} graph
+                                      </button>
+                                    </div>
+                                    {rebasePreviewExpanded && (
+                                      <div className="jj-rebase-preview-branch">
+                                        {pendingRebase.branch.map((branchRevision) => (
+                                          <div
+                                            className="jj-rebase-preview-row"
+                                            key={branchRevision.commitId}
+                                          >
+                                            <span
+                                              className="jj-rebase-preview-node"
+                                              aria-hidden="true"
+                                            />
+                                            {label(branchRevision)}
+                                            <code>{branchRevision.changeIdPrefix}</code>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <code className="jj-confirm-code">
+                                      jj rebase -s {pendingRebase.source.commitId} -d{" "}
+                                      {pendingRebase.destination.commitId}
+                                    </code>
+                                    <div className="jj-rebase-preview-actions">
+                                      <button
+                                        className="jj-button"
+                                        disabled={busy}
+                                        onClick={() => setPendingRebase(null)}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        className="jj-button jj-button-primary"
+                                        disabled={busy}
+                                        onClick={() => void confirmRebase()}
+                                      >
+                                        {busy ? "Moving…" : "Rebase branch"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </article>
+                            </Fragment>
                           );
                         })}
                   </section>
