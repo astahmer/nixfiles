@@ -102,10 +102,16 @@ const mountResizer = () => {
       width: "28px",
     });
     handle.append(grip);
+    navigation.after(handle);
+    attachedHandle = handle;
 
     const applyHeight = (height: number) => {
       const availableHeight = parent.clientHeight;
-      const maximum = Math.max(minimumNavigationHeight, availableHeight - minimumThreadListHeight);
+      if (availableHeight === 0) return;
+      const maximum = Math.max(
+        minimumNavigationHeight,
+        availableHeight - minimumThreadListHeight - handle.offsetHeight,
+      );
       const boundedHeight = clamp(height, minimumNavigationHeight, maximum);
       navigation.style.flex = `0 0 ${boundedHeight}px`;
       navigation.style.height = `${boundedHeight}px`;
@@ -116,8 +122,8 @@ const mountResizer = () => {
 
     const currentHeight = navigation.getBoundingClientRect().height;
     const ratio = readRatio();
-    if (ratio !== null && parent.clientHeight > 0) applyHeight(parent.clientHeight * ratio);
-    else handle.setAttribute("aria-valuenow", String(Math.round((currentHeight / parent.clientHeight) * 100)));
+    if (ratio !== null) applyHeight(parent.clientHeight * ratio);
+    else applyHeight(Math.min(navigation.scrollHeight, parent.clientHeight - minimumThreadListHeight));
 
     let startY: number | null = null;
     let startHeight = currentHeight;
@@ -164,8 +170,6 @@ const mountResizer = () => {
       attach();
     });
 
-    navigation.after(handle);
-    attachedHandle = handle;
   };
 
   const observer = new MutationObserver(attach);

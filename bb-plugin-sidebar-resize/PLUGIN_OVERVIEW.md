@@ -2,7 +2,7 @@
 
 ## What you get
 
-A keyboard-accessible horizontal separator between BB's sidebar navigation and its project/thread list. Drag or use arrow keys to change the split; double-click restores the host default. The selected ratio persists locally.
+A keyboard-accessible horizontal separator between BB's sidebar navigation and its project/thread list. Drag or use arrow keys to change the split; double-click restores a full navigation list. The selected ratio persists locally, and smaller navigation panes scroll instead of clipping links.
 
 ## How it works
 
