@@ -11,17 +11,22 @@ const isReasoningEffort = (value: string): value is ReasoningEffort => reasoning
 const GlobalModelPicker = () => {
   const composer = useComposer();
   const sdk = useSdk();
+  const rpc = useRpc<typeof rpcContract>();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeProviderId, setActiveProviderId] = useState("all");
   const [accountProviders, setAccountProviders] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string }>>([]);
-  const [models, setModels] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string; model: string; displayName: string; reasoningEffort: ReasoningEffort }>>([]);
+  const [models, setModels] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string; model: string; displayName: string; reasoningEffort: ReasoningEffort; isFavorite: boolean }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [popoverPosition, setPopoverPosition] = useState({ left: 12, top: 12, maxHeight: 560 });
+  const [popoverPosition, setPopoverPosition] = useState({ left: 12, top: 12, maxHeight: 480 });
   const visibleModels = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    const providerModels = activeProviderId === "all" ? models : models.filter((entry) => entry.providerId === activeProviderId);
+    const providerModels = activeProviderId === "all"
+      ? models
+      : activeProviderId === "favorites"
+        ? models.filter((entry) => entry.isFavorite)
+        : models.filter((entry) => entry.providerId === activeProviderId);
     if (!normalizedQuery) return providerModels;
     const terms = normalizedQuery.split(/\s+/u);
     return providerModels.filter((entry) => {
@@ -31,13 +36,14 @@ const GlobalModelPicker = () => {
   }, [activeProviderId, models, query]);
 
   useEffect(() => {
-    if (!open || models.length || loading) return;
+    if (!open) return;
     let active = true;
     setLoading(true);
     setError("");
-    void sdk.providers.list().then(async (providers) => {
+    void Promise.all([sdk.providers.list(), rpc.call("list", null)]).then(async ([providers, profileResult]) => {
       const configuredProviders = providers.filter((provider) => provider.id.startsWith("ai-account-"));
       const catalogs = await Promise.all(configuredProviders.map(async (provider) => {
+        const profile = profileResult.accounts.find((account) => "ai-account-" + account.id === provider.id);
         const providerDetails = {
           providerId: provider.id,
           providerName: provider.displayName.replace(/^[^·]+·\s*/u, ""),
@@ -55,6 +61,7 @@ const GlobalModelPicker = () => {
                 ? model.displayName.slice(0, -providerDetails.badge.length - 3)
                 : model.displayName,
               reasoningEffort: model.defaultReasoningEffort,
+              isFavorite: profile?.favoriteModelIds.includes(model.id) ?? false,
             })),
           };
         } catch {
@@ -90,9 +97,9 @@ const GlobalModelPicker = () => {
       const roomBelow = window.innerHeight - bounds.bottom - 12;
       const roomAbove = bounds.top - 12;
       const placeBelow = roomBelow >= roomAbove;
-      const maxHeight = Math.max(120, Math.min(560, placeBelow ? roomBelow : roomAbove - 8));
+      const maxHeight = Math.max(120, Math.min(480, placeBelow ? roomBelow : roomAbove - 8));
       setPopoverPosition({
-        left: Math.max(12, Math.min(bounds.left, window.innerWidth - 728)),
+        left: Math.max(12, Math.min(bounds.left, window.innerWidth - 568)),
         top: placeBelow ? bounds.bottom + 8 : Math.max(12, bounds.top - maxHeight - 8),
         maxHeight,
       });
@@ -100,11 +107,12 @@ const GlobalModelPicker = () => {
     }}>All models <span aria-hidden="true">⌄</span></button>
     {open ? createPortal(<section className="aa-global-picker-popover" style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }} aria-label="Search all account models">
       <nav className="aa-global-picker-sidebar" aria-label="Filter by provider">
-        <button className={activeProviderId === "all" ? "is-active" : ""} type="button" title="All models" aria-label="All models" aria-pressed={activeProviderId === "all"} onClick={() => setActiveProviderId("all")}><span className="aa-global-picker-all-icon">▦</span></button>
+        <button className={activeProviderId === "all" ? "is-active" : ""} type="button" title="All models" aria-label="All models" aria-pressed={activeProviderId === "all"} onClick={() => setActiveProviderId("all")}><svg className="aa-global-picker-all-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="1" y="10" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="10" width="5" height="5" rx="1" fill="currentColor" /></svg></button>
+        <button className={activeProviderId === "favorites" ? "is-active" : ""} type="button" title="Favorites" aria-label="Favorites" aria-pressed={activeProviderId === "favorites"} onClick={() => setActiveProviderId("favorites")}><svg className="aa-global-picker-favorites-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.2 2.05 4.16 4.59.67-3.32 3.23.78 4.57L8 11.67l-4.1 2.16.78-4.57L1.36 6.03l4.59-.67L8 1.2Z" fill="currentColor" /></svg></button>
         {accountProviders.map((provider) => <button className={activeProviderId === provider.providerId ? "is-active" : ""} type="button" key={provider.providerId} title={provider.providerName} aria-label={provider.providerName} aria-pressed={activeProviderId === provider.providerId} onClick={() => setActiveProviderId(provider.providerId)}><span className="aa-account-badge" style={{ backgroundColor: provider.color }}>{provider.badge}</span></button>)}
       </nav>
       <div className="aa-global-picker-main">
-        <label className="aa-global-picker-search"><span aria-hidden="true">⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={activeProviderId === "all" ? "Search all models…" : `Search ${accountProviders.find((provider) => provider.providerId === activeProviderId)?.providerName ?? "provider"}…`} /></label>
+        <label className="aa-global-picker-search"><span aria-hidden="true">⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={activeProviderId === "all" ? "Search all models…" : activeProviderId === "favorites" ? "Search favorites…" : `Search ${accountProviders.find((provider) => provider.providerId === activeProviderId)?.providerName ?? "provider"}…`} /></label>
         <div className="aa-global-picker-results">
           {loading ? <p className="aa-global-picker-empty">Loading account models…</p> : null}
           {!loading && error ? <p className="aa-global-picker-empty">{error}</p> : null}
