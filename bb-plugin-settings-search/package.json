@@ -8,7 +8,7 @@
   },
   "bb": {
     "name": "Settings Search",
-    "description": "Filter and highlight settings from the Settings navigation.",
+    "description": "Search indexed settings across tabs and jump to matching controls.",
     "branding": {
       "icon": "Search"
     },
