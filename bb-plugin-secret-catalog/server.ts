@@ -33,43 +33,17 @@ export default async function plugin(bb: BbPluginApi) {
   };
 
   bb.rpc.register(rpcContract, {
-    list: async (input) =>
-      host.call("list", { cwd: input.cwd, scope: input.scope }, { hostId: input.hostId }),
+    list: async (input) => host.call("list", { cwd: input.cwd }, { hostId: input.hostId }),
     get: async (input) =>
       host.call(
         "get",
-        { cwd: input.cwd, alias: input.alias, environment: input.environment, scope: input.scope },
+        { cwd: input.cwd, alias: input.alias, environment: input.environment },
         { hostId: input.hostId },
       ),
     copy: async (input) =>
       host.call(
         "copy",
-        { cwd: input.cwd, alias: input.alias, environment: input.environment, scope: input.scope },
-        { hostId: input.hostId },
-      ),
-    set: async (input) =>
-      host.call(
-        "set",
-        {
-          cwd: input.cwd,
-          alias: input.alias,
-          value: input.value,
-          environment: input.environment,
-          scope: input.scope,
-          itemType: input.itemType,
-        },
-        { hostId: input.hostId },
-      ),
-    rename: async (input) =>
-      host.call(
-        "rename",
-        { cwd: input.cwd, alias: input.alias, newAlias: input.newAlias, scope: input.scope },
-        { hostId: input.hostId },
-      ),
-    unset: async (input) =>
-      host.call(
-        "unset",
-        { cwd: input.cwd, alias: input.alias, scope: input.scope },
+        { cwd: input.cwd, alias: input.alias, environment: input.environment },
         { hostId: input.hostId },
       ),
   });
@@ -84,7 +58,7 @@ export default async function plugin(bb: BbPluginApi) {
       const where = await threadLocation(context.threadId);
       const result = await host.call(
         "list",
-        { cwd: where.cwd, scope: "all" },
+        { cwd: where.cwd },
         { hostId: where.hostId, signal: context.signal, timeoutMs: 55_000 },
       );
       return JSON.stringify(result.entries);
@@ -139,7 +113,7 @@ export default async function plugin(bb: BbPluginApi) {
               });
             const result = await host.call(
               "list",
-              { cwd: location(input.positionals.cwd, hostId.data).cwd, scope: "all" },
+              { cwd: location(input.positionals.cwd, hostId.data).cwd },
               { hostId: hostId.data },
             );
             return { exitCode: 0, stdout: JSON.stringify(result.entries, null, 2) };

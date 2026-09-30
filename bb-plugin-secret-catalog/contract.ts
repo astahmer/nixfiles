@@ -36,10 +36,7 @@ export const secretEntrySchema = z.object({
 
 export const hostContract = defineRpcContract({
   list: {
-    input: z.object({
-      cwd: locationSchema.shape.cwd.optional(),
-      scope: z.enum(["all", "project", "global", "local"]),
-    }),
+    input: z.object({ cwd: locationSchema.shape.cwd }),
     output: z.object({ entries: z.array(secretEntrySchema).max(2000) }),
   },
   get: {
@@ -47,7 +44,6 @@ export const hostContract = defineRpcContract({
       cwd: locationSchema.shape.cwd,
       alias: aliasSchema,
       environment: z.string().min(1).max(128),
-      scope: z.enum(["project", "global", "local"]).optional(),
     }),
     output: z.object({ value: z.string().max(1_000_000) }),
   },
@@ -56,35 +52,6 @@ export const hostContract = defineRpcContract({
       cwd: locationSchema.shape.cwd,
       alias: aliasSchema,
       environment: z.string().min(1).max(128),
-      scope: z.enum(["project", "global", "local"]).optional(),
-    }),
-    output: z.object({ message: z.string().max(512) }),
-  },
-  set: {
-    input: z.object({
-      cwd: locationSchema.shape.cwd,
-      alias: aliasSchema,
-      value: z.string().min(1).max(1_000_000),
-      environment: z.string().min(1).max(128),
-      scope: z.enum(["project", "global", "local"]).optional(),
-      itemType: z.enum(["login", "secure-note"]).optional(),
-    }),
-    output: z.object({ message: z.string().max(512) }),
-  },
-  rename: {
-    input: z.object({
-      cwd: locationSchema.shape.cwd.optional(),
-      alias: aliasSchema,
-      newAlias: aliasSchema,
-      scope: z.enum(["project", "global", "local"]),
-    }),
-    output: z.object({ message: z.string().max(512) }),
-  },
-  unset: {
-    input: z.object({
-      cwd: locationSchema.shape.cwd.optional(),
-      alias: aliasSchema,
-      scope: z.enum(["project", "global", "local"]),
     }),
     output: z.object({ message: z.string().max(512) }),
   },
@@ -92,48 +59,15 @@ export const hostContract = defineRpcContract({
 
 export const rpcContract = defineRpcContract({
   list: {
-    input: locationSchema.extend({ scope: z.enum(["all", "project", "global", "local"]) }),
+    input: locationSchema,
     output: z.object({ entries: z.array(secretEntrySchema).max(2000) }),
   },
   get: {
-    input: locationSchema.extend({
-      alias: aliasSchema,
-      environment: z.string().min(1).max(128),
-      scope: z.enum(["project", "global", "local"]).optional(),
-    }),
+    input: locationSchema.extend({ alias: aliasSchema, environment: z.string().min(1).max(128) }),
     output: z.object({ value: z.string().max(1_000_000) }),
   },
   copy: {
-    input: locationSchema.extend({
-      alias: aliasSchema,
-      environment: z.string().min(1).max(128),
-      scope: z.enum(["project", "global", "local"]).optional(),
-    }),
-    output: z.object({ message: z.string().max(512) }),
-  },
-  set: {
-    input: locationSchema.extend({
-      alias: aliasSchema,
-      value: z.string().min(1).max(1_000_000),
-      environment: z.string().min(1).max(128),
-      scope: z.enum(["project", "global", "local"]).optional(),
-      itemType: z.enum(["login", "secure-note"]).optional(),
-    }),
-    output: z.object({ message: z.string().max(512) }),
-  },
-  rename: {
-    input: locationSchema.extend({
-      alias: aliasSchema,
-      newAlias: aliasSchema,
-      scope: z.enum(["project", "global", "local"]),
-    }),
-    output: z.object({ message: z.string().max(512) }),
-  },
-  unset: {
-    input: locationSchema.extend({
-      alias: aliasSchema,
-      scope: z.enum(["project", "global", "local"]),
-    }),
+    input: locationSchema.extend({ alias: aliasSchema, environment: z.string().min(1).max(128) }),
     output: z.object({ message: z.string().max(512) }),
   },
 });
