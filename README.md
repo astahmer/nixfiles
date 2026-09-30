@@ -158,6 +158,23 @@ Buildx caches. Pruning caches can require later downloads or rebuilds.
 Detailed audit and cleanup recipes live in
 [RECIPES.md](assets/.agents/skills/disk-space-cleanup/RECIPES.md).
 
+## Shared pnpm virtual store
+
+The Nix-managed global pnpm config enables `enableGlobalVirtualStore: true`.
+Apply with `nixapply`, then check `pnpm config get enableGlobalVirtualStore`
+from each project. Workspace configuration can override the machine default.
+Stop dev servers before migrating an existing install, then run
+`pnpm install --frozen-lockfile --force` with that project's pinned pnpm version.
+Check `node_modules/.modules.yaml` for a `virtualStoreDir` under the shared
+store's `links` directory. Repeat for other active JJ workspaces; do not delete
+the shared `links` directory while projects reference it.
+
+An explicit project `enableGlobalVirtualStore: false` must be removed or enabled
+for normal installs to inherit this default. For a one-time trial, use
+`env PNPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=true pnpm install --frozen-lockfile --force`.
+Different dependency graphs still need separate shared entries. Validate the
+project's usual build/dev commands after migration.
+
 ## Shell history search
 
 Atuin owns Ctrl+R in Bash and Zsh with fuzzy, global history search. Up-arrow

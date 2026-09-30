@@ -214,11 +214,14 @@ pnpm cache path
 du -sh "$HOME/.local/share/pnpm/store/"*
 du -sh "$HOME/.cache/pnpm"
 pnpm store prune
-pnpm cache delete '*'
+# Optional metadata reset after diagnosing corrupt/stale metadata:
+pnpm cache delete EXACT_PACKAGE_NAME
 ```
 
-The quoted glob is a package-name pattern for the metadata command, not a shell
-filesystem glob. Clearing metadata or pruning packages requires future downloads.
+Prefer pruning unused packages over clearing metadata. `pnpm cache delete` only
+removes package metadata, not installed dependencies; a quoted `'*'` selects all
+package metadata and is an optional full reset, not routine cleanup. Clearing
+metadata or pruning packages requires future downloads.
 The `dlx` cache is separate; inspect its exact directory under the path returned
 by `pnpm cache path`, stop active dlx commands, then remove only that verified
 cache directory if needed.
@@ -251,8 +254,9 @@ rg -n 'storeDir:|virtualStoreDir:' /exact/project/node_modules/.modules.yaml
 ```
 
 Since 11.23.0 the canonical spelling is `virtualStoreType: global`; the older
-boolean remains supported. Configure a durable machine default through the
-Nix-owned pnpm config, not `pnpm config set --global`. Dependency graphs with
+boolean remains supported. The Nix-owned machine config enables `enableGlobalVirtualStore: true`. Project
+settings can override it; inspect each project before reinstalling. Configure
+durable machine defaults through Nix, not `pnpm config set --global`. Dependency graphs with
 different peers or dependencies still need separate entries. Test project tools
 and direct Node/ESM launches: phantom dependencies can have different resolution
 behavior. APFS clones and hardlinks also mean directory totals are not guaranteed
@@ -285,8 +289,8 @@ nub cache prune --dry-run
 # After reviewing the previews:
 nub store prune
 nub cache prune
-# Optional: clear package metadata; '*' is a quoted package-name pattern.
-nub cache delete '*'
+# Optional: clear metadata for one package after diagnosing stale metadata.
+nub cache delete EXACT_PACKAGE_NAME
 ```
 
 `cache prune` removes stale extracted primer files (default age: 30 days), not
