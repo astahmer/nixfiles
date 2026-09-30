@@ -57,7 +57,17 @@ for (const entry of secrets) {
     : join(existingById.get(entry.id)?.path ?? entry.path, "auth.json");
   let document;
   if (entry.provider === "opencode-go") {
-    document = { "opencode-go": { type: "api", key: value } };
+    let existingAuth = {};
+    if (existsSync(authPath)) {
+      try {
+        const parsed = JSON.parse(readFileSync(authPath, "utf8"));
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) existingAuth = parsed;
+      } catch {
+        process.stderr.write(`bb-ai-accounts: could not parse OpenCode auth file for ${entry.id}\n`);
+        continue;
+      }
+    }
+    document = { ...existingAuth, "opencode-go": { type: "api", key: value } };
   } else {
     try {
       document = JSON.parse(value);
