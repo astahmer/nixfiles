@@ -7,7 +7,8 @@ description: Audit macOS disk usage and reclaim space safely across Docker and O
 
 Audit first, then make the narrowest cleanup that fits the user's request.
 Read [RECIPES.md](RECIPES.md) for concrete commands before inspecting or
-removing candidates.
+removing candidates. Recipes cover pnpm/Bun/Nub cache commands, shared virtual
+store checks, and separately reviewed Docker volume removal.
 
 ## Workflow
 

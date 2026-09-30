@@ -138,6 +138,29 @@ Docker documents the scope of [`system prune`](https://docs.docker.com/reference
 [`builder prune`](https://docs.docker.com/reference/cli/docker/builder/prune/),
 and [the prune commands](https://docs.docker.com/engine/manage-resources/pruning/).
 
+## Docker volumes
+
+List unattached volumes, then inspect each exact candidate's labels and mount
+point. No attached container does not prove that a database or backup is obsolete.
+Check Compose definitions and the owner's recovery needs before deletion.
+
+```bash
+dockerContext=orbstack
+rtk docker --context "$dockerContext" system df --verbose
+rtk docker --context "$dockerContext" volume ls --filter dangling=true
+rtk docker --context "$dockerContext" volume inspect EXACT_VOLUME_NAME
+rtk docker --context "$dockerContext" ps --all --filter volume=EXACT_VOLUME_NAME
+
+# After approving this exact volume, remove only it (without --force).
+rtk docker --context "$dockerContext" volume rm EXACT_VOLUME_NAME
+```
+
+For a reviewed batch, `rtk docker --context "$dockerContext" volume prune`
+removes unused anonymous volumes with confirmation. Adding `--all` includes
+unused named volumes; use it only after reviewing every candidate. These are
+real data deletions, not image/cache cleanup. Never infer permission to delete
+volumes from approval for `system prune -af`.
+
 ## OrbStack sparse disk
 
 Measure the host-side image and compare it with Docker's object-level report.
@@ -178,6 +201,98 @@ pnpm store path
 du -sh "/store/path/returned/above"
 pnpm store prune
 ```
+
+### pnpm metadata, older stores, and shared virtual store
+
+Inspect paths before cleanup. `store prune` operates on the current store and
+does not imply that every older version directory was cleaned.
+
+```bash
+rtk pnpm --version
+rtk pnpm store path
+rtk pnpm cache path
+rtk du -sh "$HOME/.local/share/pnpm/store/"*
+rtk du -sh "$HOME/.cache/pnpm"
+rtk pnpm store prune
+rtk pnpm cache delete '*'
+```
+
+The quoted glob is a package-name pattern for the metadata command, not a shell
+filesystem glob. Clearing metadata or pruning packages requires future downloads.
+The `dlx` cache is separate; inspect its exact directory under the path returned
+by `pnpm cache path`, stop active dlx commands, then remove only that verified
+cache directory if needed.
+
+Older store directories may still serve older project-pinned pnpm versions.
+Check project `packageManager` declarations, `.modules.yaml` store references,
+and active installs before deleting one exact obsolete store. Do not point a
+newer pnpm at an older version directory and assume it prunes that format.
+
+```bash
+rtk rg -n '"packageManager"' "$HOME/dev" --glob package.json --glob '!node_modules/**'
+rtk rg -n 'storeDir:|virtualStoreDir:' /exact/project/node_modules/.modules.yaml
+rtk lsof +D "$HOME/.local/share/pnpm/store/v10"
+# Only after confirming this exact versioned store is obsolete:
+rtk rm -rf "$HOME/.local/share/pnpm/store/v10"
+```
+
+pnpm's global virtual store was added in 10.12.1. It shares dependency-graph
+layouts across projects, beyond sharing package files through the content store.
+Try one project before a machine-wide setting; reinstalling is needed to change
+existing project layouts. Do not remove its central `links` directory as a cache:
+project node_modules can point into it.
+
+```bash
+rtk pnpm config get enableGlobalVirtualStore
+rtk pnpm config get virtualStoreType
+# Opt-in trial in one project using the spelling supported since 10.12.1:
+rtk proxy env PNPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=true pnpm --dir /exact/project install --frozen-lockfile
+rtk rg -n 'storeDir:|virtualStoreDir:' /exact/project/node_modules/.modules.yaml
+```
+
+Since 11.23.0 the canonical spelling is `virtualStoreType: global`; the older
+boolean remains supported. Configure a durable machine default through the
+Nix-owned pnpm config, not `pnpm config set --global`. Dependency graphs with
+different peers or dependencies still need separate entries. Test project tools
+and direct Node/ESM launches: phantom dependencies can have different resolution
+behavior. APFS clones and hardlinks also mean directory totals are not guaranteed
+unique physical bytes.
+
+References: https://pnpm.io/settings/node-modules and https://pnpm.io/cli/store.
+
+### Bun package cache
+
+```bash
+rtk bun pm cache
+# After ensuring no Bun installs are running:
+rtk bun pm cache rm
+```
+
+This clears Bun's package download cache, not project source or global packages.
+Use the returned path rather than assuming `~/.bun/install/cache`; this machine
+may use an XDG cache path. Future installs download packages again.
+
+### Nub store and metadata cache
+
+Verify installed help; Nub 0.9.3 supports previews for both pruning operations.
+Store pruning preserves project node_modules, manifests, and lockfiles.
+
+```bash
+rtk nub store path
+rtk nub cache path
+rtk nub store prune --dry-run --json
+rtk nub cache prune --dry-run
+# After reviewing the previews:
+rtk nub store prune
+rtk nub cache prune
+# Optional: clear package metadata; '*' is a quoted package-name pattern.
+rtk nub cache delete '*'
+```
+
+`cache prune` removes stale extracted primer files (default age: 30 days), not
+all metadata. `cache delete` clears matching package metadata. Avoid deleting
+the entire Nub store manually: it can contain global virtual-store entries
+referenced by projects.
 
 Check the Playwright cache against versions used by active repositories before
 removing older browser directories:
