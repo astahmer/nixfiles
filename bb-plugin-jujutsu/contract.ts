@@ -3,11 +3,13 @@ import { z } from "zod";
 
 const repositoryInput = z.object({ path: z.string().trim().min(1).max(4096) });
 const revisionInput = repositoryInput.extend({ revision: z.string().min(1).max(128) });
+const fileDiffInput = repositoryInput.extend({ file: z.string().min(1).max(4096), revision: z.string().min(1).max(128).optional() });
 
 export const revisionSchema = z.object({
   commitId: z.string(),
   changeId: z.string(),
   description: z.string(),
+  timestamp: z.number(),
   parents: z.array(z.string()),
   bookmarks: z.array(z.string()),
   tags: z.array(z.string()),
@@ -25,12 +27,15 @@ export const hostContract = defineRpcContract({
       revisions: z.array(revisionSchema),
       changes: z.array(fileChangeSchema),
       workspaces: z.array(z.object({ name: z.string(), path: z.string(), revision: z.string() })),
-      diff: z.string(),
     }),
   },
-  diff: {
+  revisionFiles: {
     input: revisionInput,
-    output: z.object({ diff: z.string(), files: z.array(z.string()) }),
+    output: z.array(fileChangeSchema),
+  },
+  fileDiff: {
+    input: fileDiffInput,
+    output: z.object({ patch: z.string() }),
   },
   describe: {
     input: revisionInput.extend({ description: z.string().max(10000) }),

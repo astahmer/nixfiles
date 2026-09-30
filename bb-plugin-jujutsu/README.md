@@ -2,11 +2,16 @@
 
 Two JJ work surfaces live in one BB sidebar page:
 
-- **Revision graph** shows recent history, parent links, bookmarks, tags, and
-  workspaces. Select a revision for its full diff, edit its description, or
-  drag it onto another revision to rebase it.
-- **Source Control** shows working-copy changes and the recent revision window.
-  Choose how many revisions to show, select files, and split or squash changes.
+- **Revision graph** lays out parent links on separate lanes, groups rows by
+  day, and shows relative time, bookmarks, tags, workspace labels, and a clear
+  working-copy marker. Expand a revision to edit its description and inspect
+  changed files. Day groups collapse. Dragging a revision onto another previews
+  the whole descendant branch inline before rebasing; right-click a revision for
+  common actions.
+- **Source Control** follows the working copy with expandable `@-1` through
+  `@-X` ancestor groups. It provides describe, split, and squash actions, and
+  opens BB's native diff viewer only after selecting a file. The ancestor
+  window is configurable.
 
 ## First run
 
@@ -16,10 +21,12 @@ Install the plugin from this directory:
 bb plugin install .
 ```
 
-Open **Jujutsu** from the BB sidebar. Enter a directory path as seen by the
-selected BB host. The primary host ID is filled in when BB exposes one; remote
-hosts can be selected by entering their host ID. The path and host ID stay in
-this browser's local storage.
+Open **Jujutsu** from BB's main sidebar or add its fixed tab to the secondary
+right sidebar. The machine selector chooses the only connected host
+automatically. The editable project-path combobox suggests paths already
+registered by BB and also accepts a pasted path. The folder browser follows the
+Secret Catalog picker, including keyboard navigation. Suggestions follow the
+chosen machine. The path and machine stay in this browser's local storage.
 
 The selected directory must be inside a JJ workspace, and `jj` must be on that
 host's `PATH`. Commands use argument arrays and run with the selected workspace
@@ -27,11 +34,12 @@ as their working directory.
 
 ## JJ operations
 
-Description edits call `jj describe`. Drag-and-drop calls `jj rebase -r`.
-Squash calls `jj squash --from REV --into DEST` and keeps the destination
-description. Split uses JJ's fileset form (`jj split -r REV FILE...`) with the
-description entered in the panel. All changes are immediately applied to the
-workspace.
+Description edits call `jj describe`. A confirmed branch rebase calls
+`jj rebase -s REV -d DEST`, moving the selected revision and its descendants
+together. Squash calls `jj squash --from REV --into DEST`
+and keeps the destination description. Split uses JJ's fileset form
+(`jj split -r REV FILE...`) with the description entered in the panel. These
+operations apply directly to the workspace.
 
 ## Development
 

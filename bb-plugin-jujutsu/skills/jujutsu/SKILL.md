@@ -7,7 +7,8 @@ description: Browse and change Jujutsu workspaces from the BB Jujutsu plugin.
 
 Use the Jujutsu sidebar page to inspect revision history and working-copy
 changes. The graph exposes bookmarks, tags, and workspaces, supports description
-edits and drag-and-drop rebases, and shows full revision diffs. Source Control
+edits and drag-and-drop branch rebases with an inline move preview, and shows
+full revision diffs. Source Control
 supports file selection for `jj split`, `jj squash`, and a configurable recent
 revision window.
 

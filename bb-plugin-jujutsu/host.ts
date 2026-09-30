@@ -42,18 +42,17 @@ const repositoryRoot = async (inputPath: string): Promise<string> => {
 };
 
 const listRevisions = async (root: string) => {
-  const template = String.raw`"{\"commitId\": " ++ json(commit_id.short()) ++ ", \"changeId\": " ++ json(change_id.short()) ++ ", \"description\": " ++ json(description) ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short())) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
+  const template = String.raw`"{\"commitId\": " ++ json(commit_id.short()) ++ ", \"changeId\": " ++ json(change_id.short()) ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short())) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
   const raw = await run(root, ["log", "--no-graph", "-r", "all()", "-n", "500", "-T", template]);
   return z.array(revisionSchema).parse(raw.split("\n").filter(Boolean).map((line) => JSON.parse(line)));
 };
 
-const changes = async (root: string) => {
-  const raw = await run(root, ["status"]);
-  return raw.split("\n").slice(1).filter(Boolean).map((line) => {
-    const match = line.match(/^(.+?)\s+(.+)$/);
-    return { status: match?.[1]?.trim() ?? "M", path: match?.[2]?.trim() ?? line.trim() };
-  });
-};
+const parseFileChanges = (summary: string) => summary.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => ({
+  status: line.slice(0, 1),
+  path: line.slice(1).trim(),
+}));
+
+const changes = async (root: string) => parseFileChanges(await run(root, ["diff", "--summary"], 64_000));
 
 const workspaces = async (root: string) => {
   const template = String.raw`json(self.name()) ++ "\t" ++ json(self.root()) ++ "\t" ++ self.target().commit_id().short() ++ "\n"`;
@@ -69,30 +68,32 @@ export default experimental_defineHostEntry({
   handlers: {
     inspect: async ({ path }) => {
       const root = await repositoryRoot(path);
-      const [revisionList, currentRevision, fileChanges, workspaceList, diff] = await Promise.all([
+      const [revisionList, currentRevision, fileChanges, workspaceList] = await Promise.all([
         listRevisions(root),
         run(root, ["log", "--no-graph", "-r", "@", "-T", "commit_id.short()"]).then((value) => value.trim()),
         changes(root),
         workspaces(root),
-        run(root, ["diff", "--git"], 1_000_000),
       ]);
-      return { root, currentRevision, revisions: revisionList, changes: fileChanges, workspaces: workspaceList, diff };
+      return { root, currentRevision, revisions: revisionList, changes: fileChanges, workspaces: workspaceList };
     },
-    diff: async ({ path, revision }) => {
+    revisionFiles: async ({ path, revision }) => {
       const root = await repositoryRoot(path);
-      const [diff, summary] = await Promise.all([
-        run(root, ["diff", "--git", "-r", revision], 1_000_000),
-        run(root, ["diff", "--summary", "-r", revision], 64_000),
-      ]);
-      const files = summary.split("\n").map((line) => line.trim().slice(2).trim()).filter(Boolean);
-      return { diff, files };
+      const summary = await run(root, ["diff", "--summary", "-r", revision], 64_000);
+      return parseFileChanges(summary);
+    },
+    fileDiff: async ({ path, file, revision }) => {
+      const root = await repositoryRoot(path);
+      const args = ["diff", "--git"];
+      if (revision) args.push("-r", revision);
+      args.push(`root-file:${JSON.stringify(file)}`);
+      return { patch: await run(root, args, 1_000_000) };
     },
     describe: async ({ path, revision, description }) => {
       await run(await repositoryRoot(path), ["describe", "-r", revision, "-m", description]);
       return { ok: true };
     },
     rebase: async ({ path, revision, destination }) => {
-      await run(await repositoryRoot(path), ["rebase", "-r", revision, "-o", destination]);
+      await run(await repositoryRoot(path), ["rebase", "-s", revision, "-d", destination]);
       return { ok: true };
     },
     squash: async ({ path, revision, destination }) => {

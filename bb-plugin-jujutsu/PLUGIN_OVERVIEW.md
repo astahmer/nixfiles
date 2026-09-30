@@ -1,6 +1,8 @@
 Bring Jujutsu's revision graph and working-copy workflow into BB. Browse
 revision history with bookmarks, tags, and workspace labels; inspect multi-file
-diffs; edit descriptions; and rebase by dragging revisions in the graph. A
+diffs; edit descriptions; and preview and confirm branch rebases by dragging
+revisions in the graph. Day groups collapse, and revision context menus provide
+common actions. A
 second view focuses on changed files, splitting selected files into a new
 revision, squashing revisions, and a configurable recent-history window.
 
