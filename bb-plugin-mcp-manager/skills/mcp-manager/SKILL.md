@@ -7,7 +7,7 @@ description: Manage global MCP servers in BB, including discovery, enablement, c
 
 The MCP Manager plugin keeps one global server registry shared across projects and providers on this BB server.
 
-Use **MCP Servers** in the composer **+** menu for quick search, connection, and enable controls. Choose **Manage servers** to open the full configuration page.
+Use **MCP Servers** in the composer **+** menu for quick search, connection, and enable controls. Choose **Add MCP** to browse provider-hosted entries or open **Custom MCP** for a remote URL or local command. The public MCP Registry link is an open directory, not a security review. Choose **Manage** to open the full configuration page.
 
 ## Discover and call tools
 

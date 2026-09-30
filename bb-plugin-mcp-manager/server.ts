@@ -148,7 +148,12 @@ export const rpcContract = defineRpcContract({
         launcher: launcherSchema.optional(),
       })
       .strict(),
-    output: serverSchema,
+    output: z
+      .object({
+        server: serverSchema,
+        authorizationUrl: z.string().nullable(),
+      })
+      .strict(),
   },
   addStdio: {
     input: z
@@ -836,9 +841,14 @@ export default async function plugin(bb: BbPluginApi) {
         error: null,
       });
       await persistServer(server);
-      if (server.transport !== "stdio" && server.launcher) return publicServer(server);
-      await connectServer(server);
-      return publicServer(await findServer(server.id));
+      if (server.transport !== "stdio" && server.launcher) {
+        return { server: publicServer(server), authorizationUrl: null };
+      }
+      const result = await connectServer(server);
+      return {
+        server: publicServer(await findServer(server.id)),
+        authorizationUrl: result.authorizationUrl,
+      };
     },
     addStdio: async (input) => {
       const server = serverConfigSchema.parse({

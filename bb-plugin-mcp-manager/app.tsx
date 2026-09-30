@@ -1,16 +1,58 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { definePluginApp, useBbNavigate, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
 import type { rpcContract, ServerView } from "./server";
+import { catalogServers } from "./catalog";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 
 type Transport = "streamable-http" | "sse" | "stdio";
+type CustomTransport = "streamable-http" | "stdio";
+
+type CustomServerDraft = {
+  name: string;
+  transport: CustomTransport;
+  url: string;
+  headers: string;
+  command: string;
+  args: string;
+  cwd: string;
+  env: string;
+};
+
+const emptyCustomServerDraft: CustomServerDraft = {
+  name: "",
+  transport: "streamable-http",
+  url: "",
+  headers: "",
+  command: "",
+  args: "[]",
+  cwd: "",
+  env: "{}",
+};
 
 const MCP_PICKER_EVENT = "mcp-manager:open-picker";
 const PLUS_MENU_LABEL = "Prompt actions";
+
+type PickerAnchor = { left: number; top: number; right: number; bottom: number };
+
+const RefreshGlyph = ({ className = "" }: { className?: string }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className={className}
+  >
+    <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5" />
+    <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
+  </svg>
+);
 
 const statusLabel: Record<ServerView["status"], string> = {
   off: "Disconnected",
@@ -26,46 +68,71 @@ function McpComposerPicker() {
   const [servers, setServers] = useState<ServerView[]>([]);
   const [search, setSearch] = useState("");
   const [pendingServerId, setPendingServerId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"toggle" | "connect" | "disconnect" | null>(
+    null,
+  );
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [authorizationUrl, setAuthorizationUrl] = useState<string | null>(null);
   const [pickerError, setPickerError] = useState<string | null>(null);
-  const [position, setPosition] = useState({ left: 12, bottom: 12 });
+  const [isBrowseOpen, setIsBrowseOpen] = useState(false);
+  const [isCustomOpen, setIsCustomOpen] = useState(false);
+  const [browseSearch, setBrowseSearch] = useState("");
+  const [customDraft, setCustomDraft] = useState(emptyCustomServerDraft);
+  const [position, setPosition] = useState({ left: 12, top: 12 });
+  const pickerAnchor = useRef<PickerAnchor | null>(null);
   const pickerRef = useRef<HTMLElement | null>(null);
+  const browseDialogRef = useRef<HTMLElement | null>(null);
+  const customDialogRef = useRef<HTMLElement | null>(null);
 
-  const placePicker = useCallback(() => {
+  const placePicker = useCallback((anchor = pickerAnchor.current) => {
     const trigger = Array.from(
       document.querySelectorAll<HTMLButtonElement>(`button[aria-label="${PLUS_MENU_LABEL}"]`),
     )
       .map((element) => ({ element, rect: element.getBoundingClientRect() }))
       .filter(({ rect }) => rect.width > 0 && rect.height > 0)
       .sort((left, right) => right.rect.bottom - left.rect.bottom)[0];
-    const pickerWidth = Math.min(416, window.innerWidth - 24);
-    const composerMenuWidth = Math.min(256, window.innerWidth - 24);
-    const menuGap = 8;
-    const leftOfTrigger = trigger
-      ? trigger.rect.left - composerMenuWidth - menuGap - pickerWidth
-      : 12;
-    const rightOfMenu = trigger ? trigger.rect.right + composerMenuWidth + menuGap : 12;
+    const pickerWidth = Math.min(360, window.innerWidth - 24);
+    const pickerHeight = Math.min(pickerRef.current?.offsetHeight ?? 280, window.innerHeight - 24);
+    const menu = anchor ?? (trigger ? trigger.rect : null);
+    if (!menu) {
+      setPosition({ left: 12, top: 12 });
+      return;
+    }
+    const rightOfMenu = menu.right + 8;
+    const leftOfMenu = menu.left - pickerWidth - 8;
     const left =
-      rightOfMenu + pickerWidth <= window.innerWidth - 12
-        ? rightOfMenu
-        : Math.max(12, leftOfTrigger);
-    const bottom = trigger ? Math.max(12, window.innerHeight - trigger.rect.bottom) : 12;
-    setPosition({ left, bottom });
+      rightOfMenu + pickerWidth <= window.innerWidth - 12 ? rightOfMenu : Math.max(12, leftOfMenu);
+    const top = Math.min(Math.max(12, menu.top), window.innerHeight - pickerHeight - 12);
+    setPosition({ left, top });
   }, []);
 
   const refresh = useCallback(async () => {
+    setIsLoading(true);
     try {
       const result = await rpc.call("list", null);
       setServers(result.servers);
       setPickerError(null);
     } catch (cause) {
       setPickerError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setIsLoading(false);
     }
   }, [rpc]);
 
   useEffect(() => {
-    const openPicker = () => {
-      placePicker();
+    const openPicker = (event: Event) => {
+      const anchor =
+        event instanceof CustomEvent && event.detail instanceof DOMRect
+          ? {
+              left: event.detail.left,
+              top: event.detail.top,
+              right: event.detail.right,
+              bottom: event.detail.bottom,
+            }
+          : null;
+      pickerAnchor.current = anchor;
+      placePicker(anchor);
       setIsOpen(true);
       setSearch("");
       void refresh();
@@ -78,19 +145,39 @@ function McpComposerPicker() {
     if (isOpen) void refresh();
   });
 
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    placePicker();
+  }, [authorizationUrl, isOpen, pendingServerId, pickerError, placePicker, servers.length]);
+
   useEffect(() => {
     if (!isOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key !== "Escape") return;
+      if (isCustomOpen) {
+        setIsCustomOpen(false);
+        return;
+      }
+      if (isBrowseOpen) {
+        setIsBrowseOpen(false);
+        return;
+      }
+      setIsOpen(false);
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [isOpen]);
+  }, [isBrowseOpen, isCustomOpen, isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (!(event.target instanceof Node) || pickerRef.current?.contains(event.target)) return;
+      if (
+        browseDialogRef.current?.contains(event.target) ||
+        customDialogRef.current?.contains(event.target)
+      ) {
+        return;
+      }
       if (
         event.target instanceof Element &&
         event.target.closest(`button[aria-label="${PLUS_MENU_LABEL}"]`)
@@ -98,6 +185,8 @@ function McpComposerPicker() {
         return;
       }
       setIsOpen(false);
+      setIsBrowseOpen(false);
+      setIsCustomOpen(false);
     };
     const reposition = () => placePicker();
     window.addEventListener("pointerdown", closeOnOutsidePointer);
@@ -114,6 +203,7 @@ function McpComposerPicker() {
   ) => {
     if (pendingServerId) return;
     setPendingServerId(server.id);
+    setPendingAction(action);
     try {
       if (action === "toggle") {
         await rpc.call("setEnabled", { id: server.id, enabled: !server.enabled });
@@ -134,144 +224,613 @@ function McpComposerPicker() {
       await refresh();
     } finally {
       setPendingServerId(null);
+      setPendingAction(null);
     }
   };
 
   const filteredServers = servers.filter((server) =>
     server.name.toLowerCase().includes(search.trim().toLowerCase()),
   );
+  const filteredCatalog = catalogServers.filter((server) =>
+    `${server.name} ${server.description} ${server.category}`
+      .toLowerCase()
+      .includes(browseSearch.trim().toLowerCase()),
+  );
 
-  if (!isOpen) return null;
+  const addCatalogServer = async (catalogServer: (typeof catalogServers)[number]) => {
+    if (pendingServerId) return;
+    const existingServer = servers.find(
+      (server) => server.transport !== "stdio" && server.url === catalogServer.url,
+    );
+    if (existingServer) {
+      setPickerError(`${catalogServer.name} is already registered.`);
+      return;
+    }
+    setPendingServerId(catalogServer.url);
+    try {
+      const result = await rpc.call("addRemote", {
+        name: catalogServer.name,
+        url: catalogServer.url,
+        transport: "streamable-http",
+      });
+      setAuthorizationUrl(result.authorizationUrl);
+      setPickerError(null);
+      setIsBrowseOpen(false);
+      await refresh();
+    } catch (cause) {
+      setPickerError(cause instanceof Error ? cause.message : String(cause));
+      await refresh();
+    } finally {
+      setPendingServerId(null);
+    }
+  };
+
+  const addCustomServer = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (pendingServerId || !customDraft.name.trim()) return;
+    setPendingServerId("custom");
+    try {
+      if (customDraft.transport === "stdio") {
+        await rpc.call("addStdio", {
+          name: customDraft.name.trim(),
+          command: customDraft.command.trim(),
+          args: JSON.parse(customDraft.args),
+          cwd: customDraft.cwd.trim() || undefined,
+          env: JSON.parse(customDraft.env),
+        });
+      } else {
+        const result = await rpc.call("addRemote", {
+          name: customDraft.name.trim(),
+          url: customDraft.url.trim(),
+          transport: "streamable-http",
+          headers: customDraft.headers.trim() ? JSON.parse(customDraft.headers) : {},
+        });
+        setAuthorizationUrl(result.authorizationUrl);
+      }
+      setCustomDraft(emptyCustomServerDraft);
+      setIsCustomOpen(false);
+      setPickerError(null);
+      await refresh();
+    } catch (cause) {
+      setPickerError(cause instanceof Error ? cause.message : String(cause));
+      await refresh();
+    } finally {
+      setPendingServerId(null);
+    }
+  };
+
+  if (!isOpen && !isBrowseOpen && !isCustomOpen) return null;
 
   return createPortal(
-    <div
-      className="fixed z-[100] w-[min(26rem,calc(100vw-1.5rem))]"
-      style={{ left: position.left, bottom: position.bottom }}
-    >
-      <section
-        ref={pickerRef}
-        role="dialog"
-        aria-labelledby="mcp-picker-title"
-        className="max-h-[min(75vh,36rem)] w-full overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
-      >
-        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <div>
-            <h2 id="mcp-picker-title" className="text-sm font-semibold">
-              MCP servers
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {servers.filter((server) => server.enabled).length} enabled globally
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Close MCP server picker"
-            onClick={() => setIsOpen(false)}
+    <>
+      {isOpen ? (
+        <div
+          className="fixed z-[100] w-[min(22.5rem,calc(100vw-1.5rem))]"
+          style={{ left: position.left, top: position.top }}
+        >
+          <section
+            ref={pickerRef}
+            role="dialog"
+            aria-labelledby="mcp-picker-title"
+            className="flex max-h-[min(75vh,36rem)] w-full flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
           >
-            <Icon name="X" className="size-4" />
-          </Button>
-        </header>
-        <div className="p-3">
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search MCP servers…"
-            aria-label="Search MCP servers"
-          />
-        </div>
-        {pickerError ? (
-          <p
-            role="alert"
-            className="mx-3 mb-3 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
-          >
-            {pickerError}
-          </p>
-        ) : null}
-        {authorizationUrl ? (
-          <a
-            href={authorizationUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mx-3 mb-3 block rounded-md border border-border px-3 py-2 text-sm underline underline-offset-4"
-          >
-            Continue MCP sign-in
-          </a>
-        ) : null}
-        <ul className="max-h-72 divide-y divide-border overflow-y-auto px-3">
-          {filteredServers.map((server) => (
-            <li key={server.id} className="flex items-center gap-3 py-3">
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <Icon
-                  name={server.transport === "stdio" ? "Terminal" : "Globe"}
-                  className="size-4"
-                />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{server.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {server.error ? server.error : statusLabel[server.status]}
+            <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div>
+                <h2 id="mcp-picker-title" className="text-sm font-semibold">
+                  MCP servers
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {servers.filter((server) => server.enabled).length} enabled globally
                 </p>
               </div>
-              {server.enabled && server.status !== "ready" ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={pendingServerId !== null}
-                  onClick={() => void runServerAction(server, "connect")}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Close MCP server picker"
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsBrowseOpen(false);
+                  setIsCustomOpen(false);
+                }}
+              >
+                <Icon name="X" className="size-4" />
+              </Button>
+            </header>
+            <div className="shrink-0 border-b border-border bg-popover p-2">
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search MCP servers…"
+                aria-label="Search MCP servers"
+              />
+            </div>
+            {pickerError ? (
+              <p
+                role="alert"
+                className="mx-3 mb-3 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
+              >
+                {pickerError}
+              </p>
+            ) : null}
+            {authorizationUrl ? (
+              <a
+                href={authorizationUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mx-3 mb-3 block rounded-md border border-border px-3 py-2 text-sm underline underline-offset-4"
+              >
+                Continue MCP sign-in
+              </a>
+            ) : null}
+            <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto px-3">
+              {isLoading && servers.length === 0 ? (
+                <li
+                  className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground"
+                  aria-live="polite"
                 >
-                  {server.status === "needs-auth" ? "Login" : "Connect"}
-                </Button>
+                  <RefreshGlyph className="size-4 animate-spin" /> Loading MCP servers…
+                </li>
               ) : null}
-              {server.enabled && server.status === "ready" ? (
+              {filteredServers.map((server) => (
+                <li
+                  key={server.id}
+                  className="flex items-center gap-3 py-3"
+                  aria-busy={pendingServerId === server.id}
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <Icon
+                      name={server.transport === "stdio" ? "Terminal" : "Globe"}
+                      className="size-4"
+                    />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{server.name}</p>
+                    <p
+                      className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground"
+                      aria-live="polite"
+                    >
+                      {pendingServerId === server.id ? (
+                        <RefreshGlyph className="size-3 shrink-0 animate-spin" />
+                      ) : null}
+                      <span className="truncate">
+                        {pendingServerId === server.id
+                          ? pendingAction === "connect"
+                            ? "Connecting…"
+                            : pendingAction === "disconnect"
+                              ? "Disconnecting…"
+                              : "Updating…"
+                          : server.error || statusLabel[server.status]}
+                      </span>
+                    </p>
+                  </div>
+                  {server.enabled && server.status !== "ready" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={pendingServerId !== null}
+                      onClick={() => void runServerAction(server, "connect")}
+                    >
+                      {server.status === "needs-auth" ? "Login" : "Connect"}
+                    </Button>
+                  ) : null}
+                  {server.enabled && server.status === "ready" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={pendingServerId !== null}
+                      onClick={() => void runServerAction(server, "disconnect")}
+                    >
+                      Disconnect
+                    </Button>
+                  ) : null}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={server.enabled}
+                    disabled={pendingServerId !== null}
+                    aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 ${server.enabled ? "bg-emerald-600" : "bg-muted-foreground/40"}`}
+                    onClick={() => void runServerAction(server, "toggle")}
+                  >
+                    <span
+                      className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${server.enabled ? "translate-x-4" : "translate-x-0"}`}
+                    />
+                  </button>
+                </li>
+              ))}
+              {!isLoading && filteredServers.length === 0 ? (
+                <li className="py-6 text-center text-sm text-muted-foreground">
+                  {servers.length === 0 ? "No MCP servers registered yet." : "No matching servers."}
+                </li>
+              ) : null}
+            </ul>
+            <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-border p-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={isRefreshing}
+                aria-busy={isRefreshing}
+                onClick={async () => {
+                  setIsRefreshing(true);
+                  await refresh();
+                  setIsRefreshing(false);
+                }}
+              >
+                <RefreshGlyph className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              <div className="flex items-center gap-1">
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  disabled={pendingServerId !== null}
-                  onClick={() => void runServerAction(server, "disconnect")}
+                  onClick={() => {
+                    setIsOpen(false);
+                    navigate.toPluginPanel("servers");
+                  }}
                 >
-                  Disconnect
+                  Manage
                 </Button>
-              ) : null}
-              <Button
-                type="button"
-                size="sm"
-                variant={server.enabled ? "default" : "outline"}
-                disabled={pendingServerId !== null}
-                aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
-                aria-pressed={server.enabled}
-                onClick={() => void runServerAction(server, "toggle")}
-              >
-                {server.enabled ? "On" : "Off"}
-              </Button>
-            </li>
-          ))}
-          {filteredServers.length === 0 ? (
-            <li className="py-6 text-center text-sm text-muted-foreground">
-              {servers.length === 0 ? "No MCP servers registered yet." : "No matching servers."}
-            </li>
-          ) : null}
-        </ul>
-        <footer className="flex justify-between border-t border-border p-3">
-          <Button type="button" variant="ghost" size="sm" onClick={() => void refresh()}>
-            <Icon name="RefreshCw" className="size-4" /> Refresh
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => {
-              setIsOpen(false);
-              navigate.toPluginPanel("servers");
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setBrowseSearch("");
+                    setIsOpen(false);
+                    setIsBrowseOpen(true);
+                  }}
+                >
+                  <Icon name="Plus" className="size-4" /> Add MCP
+                </Button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+      {isBrowseOpen ? (
+        <div className="fixed inset-0 z-[10000] bg-black/60">
+          <section
+            ref={browseDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mcp-browse-title"
+            className="absolute left-1/2 top-1/2 flex max-h-[76vh] w-[calc(100vw_-_2rem)] flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl sm:left-[calc(50%_+_10rem)] sm:w-[min(46rem,_calc(100vw_-_20rem))]"
+            style={{
+              left: "calc(50% + 10rem)",
+              maxHeight: "min(58vh, 34rem)",
+              top: "calc(50% - 5rem)",
+              transform: "translate(-50%, -50%)",
+              width: "min(46rem, calc(100vw - 20rem))",
             }}
           >
-            Manage servers
-          </Button>
-        </footer>
-      </section>
-    </div>,
+            <header className="flex shrink-0 items-center justify-between gap-3 px-5 pb-3 pt-4">
+              <div>
+                <h2 id="mcp-browse-title" className="text-lg font-semibold">
+                  Browse MCPs
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Official hosted servers from their providers.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Close MCP browser"
+                onClick={() => setIsBrowseOpen(false)}
+              >
+                <Icon name="X" className="size-5" />
+              </Button>
+            </header>
+            <div className="shrink-0 border-b border-border bg-popover px-5 pb-3">
+              <Input
+                value={browseSearch}
+                onChange={(event) => setBrowseSearch(event.target.value)}
+                placeholder="Search MCPs"
+                aria-label="Search available MCP servers"
+                autoFocus
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {!browseSearch.trim() ||
+                "custom mcp add your own".includes(browseSearch.toLowerCase()) ? (
+                  <button
+                    type="button"
+                    className="flex min-h-24 items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-state-hover"
+                    onClick={() => {
+                      setCustomDraft(emptyCustomServerDraft);
+                      setIsBrowseOpen(false);
+                      setIsCustomOpen(true);
+                    }}
+                  >
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Icon name="Plus" className="size-6" />
+                    </span>
+                    <span>
+                      <span className="block font-medium">Custom MCP</span>
+                      <span className="mt-1 block text-sm text-muted-foreground">
+                        Add your own MCP server
+                      </span>
+                    </span>
+                  </button>
+                ) : null}
+                {filteredCatalog.map((catalogServer) => {
+                  const alreadyAdded = servers.some(
+                    (server) => server.transport !== "stdio" && server.url === catalogServer.url,
+                  );
+                  return (
+                    <article
+                      key={catalogServer.url}
+                      className="flex min-h-24 items-center gap-3 rounded-lg border border-border bg-card p-3"
+                    >
+                      <span
+                        className="flex size-11 shrink-0 items-center justify-center rounded-lg p-1.5"
+                        style={{
+                          backgroundColor:
+                            catalogServer.iconBackground === "light" ? "#ffffff" : "#232323",
+                        }}
+                      >
+                        <img
+                          src={`data:image/svg+xml,${encodeURIComponent(catalogServer.icon)}`}
+                          alt=""
+                          className="size-7 object-contain"
+                        />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="truncate font-medium">{catalogServer.name}</h3>
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                            {catalogServer.category}
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                          {catalogServer.description}
+                        </p>
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          <a
+                            href={catalogServer.docsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                          >
+                            Provider docs
+                          </a>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={alreadyAdded || pendingServerId !== null}
+                            onClick={() => void addCatalogServer(catalogServer)}
+                          >
+                            {alreadyAdded
+                              ? "Added"
+                              : pendingServerId === catalogServer.url
+                                ? "Adding…"
+                                : "Add"}
+                          </Button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+                {filteredCatalog.length === 0 && browseSearch.trim() ? (
+                  <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                    No matching MCPs in the curated list.
+                  </p>
+                ) : null}
+              </div>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-foreground">
+                <p>These listings link to provider-hosted endpoints and their documentation.</p>
+                <a
+                  href="https://registry.modelcontextprotocol.io/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-4 hover:text-foreground"
+                >
+                  Explore the public MCP Registry
+                </a>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
+      {isCustomOpen ? (
+        <div className="fixed inset-0 z-[10000] bg-black/60">
+          <section
+            ref={customDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mcp-custom-title"
+            className="absolute left-1/2 top-1/2 flex max-h-[78vh] w-[calc(100vw_-_2rem)] flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl sm:left-[calc(50%_+_10rem)] sm:w-[min(32rem,_calc(100vw_-_20rem))]"
+            style={{
+              left: "calc(50% + 10rem)",
+              maxHeight: "min(64vh, 38rem)",
+              top: "calc(50% - 5rem)",
+              transform: "translate(-50%, -50%)",
+              width: "min(32rem, calc(100vw - 20rem))",
+            }}
+          >
+            <header className="flex items-center justify-between border-b border-border px-6 py-4">
+              <div>
+                <h2 id="mcp-custom-title" className="text-xl font-semibold">
+                  Add a Custom MCP
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Add a remote URL or a local command.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Close custom MCP form"
+                onClick={() => setIsCustomOpen(false)}
+              >
+                <Icon name="X" className="size-5" />
+              </Button>
+            </header>
+            <form
+              onSubmit={(event) => void addCustomServer(event)}
+              className="min-h-0 space-y-4 overflow-y-auto p-5"
+            >
+              <label className="block space-y-2 text-sm">
+                <span>Name</span>
+                <Input
+                  value={customDraft.name}
+                  onChange={(event) => setCustomDraft({ ...customDraft, name: event.target.value })}
+                  placeholder="my-mcp-server"
+                  aria-label="Custom MCP server name"
+                  required
+                />
+              </label>
+              <div className="grid grid-cols-2 rounded-lg bg-muted p-1">
+                <button
+                  type="button"
+                  aria-pressed={customDraft.transport === "streamable-http"}
+                  className={`rounded-md px-3 py-2 text-sm ${customDraft.transport === "streamable-http" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+                  onClick={() => setCustomDraft({ ...customDraft, transport: "streamable-http" })}
+                >
+                  URL
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={customDraft.transport === "stdio"}
+                  className={`rounded-md px-3 py-2 text-sm ${customDraft.transport === "stdio" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}
+                  onClick={() => setCustomDraft({ ...customDraft, transport: "stdio" })}
+                >
+                  Command
+                </button>
+              </div>
+              {customDraft.transport === "streamable-http" ? (
+                <>
+                  <label className="block space-y-2 text-sm">
+                    <span>Server URL</span>
+                    <Input
+                      value={customDraft.url}
+                      onChange={(event) =>
+                        setCustomDraft({ ...customDraft, url: event.target.value })
+                      }
+                      type="url"
+                      placeholder="https://example.com/mcp"
+                      aria-label="Custom MCP server URL"
+                      required
+                    />
+                  </label>
+                  <details className="rounded-lg border border-border px-3 py-2">
+                    <summary className="cursor-pointer text-sm">Advanced: request headers</summary>
+                    <textarea
+                      value={customDraft.headers}
+                      onChange={(event) =>
+                        setCustomDraft({ ...customDraft, headers: event.target.value })
+                      }
+                      placeholder={'{"Authorization":"Bearer …"}'}
+                      aria-label="Custom MCP request headers as JSON"
+                      className="mt-3 min-h-20 w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Headers are stored as secrets. Leave empty for OAuth or public servers.
+                    </p>
+                  </details>
+                </>
+              ) : (
+                <>
+                  <label className="block space-y-2 text-sm">
+                    <span>Command</span>
+                    <Input
+                      value={customDraft.command}
+                      onChange={(event) =>
+                        setCustomDraft({ ...customDraft, command: event.target.value })
+                      }
+                      placeholder="npx"
+                      aria-label="Custom MCP command"
+                      required
+                    />
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Adding starts this command on the BB host. Only add commands you trust.
+                  </p>
+                  <label className="block space-y-2 text-sm">
+                    <span>Arguments (JSON array)</span>
+                    <Input
+                      value={customDraft.args}
+                      onChange={(event) =>
+                        setCustomDraft({ ...customDraft, args: event.target.value })
+                      }
+                      placeholder='["-y", "@vendor/mcp"]'
+                      aria-label="Custom MCP command arguments as JSON array"
+                    />
+                  </label>
+                  <label className="block space-y-2 text-sm">
+                    <span>Working directory (optional)</span>
+                    <Input
+                      value={customDraft.cwd}
+                      onChange={(event) =>
+                        setCustomDraft({ ...customDraft, cwd: event.target.value })
+                      }
+                      placeholder="/path/to/project"
+                      aria-label="Custom MCP working directory"
+                    />
+                  </label>
+                  <details className="rounded-lg border border-border px-3 py-2">
+                    <summary className="cursor-pointer text-sm">Advanced: environment</summary>
+                    <Input
+                      value={customDraft.env}
+                      onChange={(event) =>
+                        setCustomDraft({ ...customDraft, env: event.target.value })
+                      }
+                      placeholder={'{"API_KEY":"…"}'}
+                      aria-label="Custom MCP environment as JSON object"
+                      className="mt-3"
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      The command starts on the BB host when you add this server. Environment values
+                      are stored as secrets.
+                    </p>
+                  </details>
+                </>
+              )}
+              {pickerError ? (
+                <p
+                  role="alert"
+                  className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  {pickerError}
+                </p>
+              ) : null}
+              <footer className="sticky bottom-0 flex items-center justify-between border-t border-border bg-popover pt-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setIsCustomOpen(false);
+                    setIsBrowseOpen(true);
+                  }}
+                >
+                  Browse MCPs
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={
+                    pendingServerId !== null ||
+                    !customDraft.name.trim() ||
+                    (customDraft.transport === "streamable-http"
+                      ? !customDraft.url.trim()
+                      : !customDraft.command.trim())
+                  }
+                >
+                  <Icon name="Plus" className="size-4" />
+                  {pendingServerId === "custom" ? "Adding…" : "Add MCP"}
+                </Button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      ) : null}
+    </>,
     document.body,
   );
 }
@@ -351,7 +910,7 @@ function McpManagerPage() {
               },
         );
       } else if (transport !== "stdio") {
-        await rpc.call("addRemote", {
+        const result = await rpc.call("addRemote", {
           name: name.trim(),
           url: url.trim(),
           transport,
@@ -367,6 +926,7 @@ function McpManagerPage() {
               }
             : {}),
         });
+        if (result.authorizationUrl) setAuthorizationUrl(result.authorizationUrl);
       } else {
         await rpc.call("addStdio", {
           name: name.trim(),
@@ -525,7 +1085,7 @@ function McpManagerPage() {
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => void refresh()}>
-            <Icon name="RefreshCw" className="size-4" /> Refresh
+            <RefreshGlyph className="size-4" /> Refresh
           </Button>
         </div>
 
@@ -898,7 +1458,20 @@ export default definePluginApp((app) => {
         icon: "Plug",
         description: "Connect, disconnect, or disable global MCP servers.",
         run: () => {
-          window.dispatchEvent(new Event(MCP_PICKER_EVENT));
+          const composerMenu =
+            document.querySelector<HTMLElement>(`[role="menu"][aria-label="${PLUS_MENU_LABEL}"]`) ??
+            document.querySelector<HTMLElement>(`[role="dialog"][aria-label="${PLUS_MENU_LABEL}"]`);
+          const mcpMenuItem = Array.from(
+            composerMenu?.querySelectorAll<HTMLElement>("[role='menuitem'], button") ?? [],
+          ).find((item) => item.textContent?.trim().startsWith("MCP Servers"));
+          window.dispatchEvent(
+            new CustomEvent(MCP_PICKER_EVENT, {
+              detail:
+                mcpMenuItem?.getBoundingClientRect() ??
+                composerMenu?.getBoundingClientRect() ??
+                null,
+            }),
+          );
         },
       },
     ],

@@ -5,8 +5,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --ignore-pattern 'dist/**'",
-    "fmt": "oxfmt --write server.ts app.tsx components lib package.json tsconfig.json",
-    "fmt:check": "oxfmt --check server.ts app.tsx components lib package.json tsconfig.json",
+    "fmt": "oxfmt --write server.ts app.tsx catalog.ts catalog-icons.ts components lib package.json tsconfig.json",
+    "fmt:check": "oxfmt --check server.ts app.tsx catalog.ts catalog-icons.ts components lib package.json tsconfig.json",
     "build": "bb plugin build ."
   },
   "dependencies": {

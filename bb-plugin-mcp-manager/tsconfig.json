@@ -13,5 +13,13 @@
     "noEmit": true,
     "skipLibCheck": false
   },
-  "include": ["server.ts", "app.tsx", "components", "lib", "hooks"]
+  "include": [
+    "server.ts",
+    "app.tsx",
+    "catalog.ts",
+    "catalog-icons.ts",
+    "components",
+    "lib",
+    "hooks"
+  ]
 }
