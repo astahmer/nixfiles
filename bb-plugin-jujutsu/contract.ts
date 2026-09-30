@@ -3,12 +3,16 @@ import { z } from "zod";
 
 const repositoryInput = z.object({ path: z.string().trim().min(1).max(4096) });
 const revisionInput = repositoryInput.extend({ revision: z.string().min(1).max(128) });
-const fileDiffInput = repositoryInput.extend({ file: z.string().min(1).max(4096), revision: z.string().min(1).max(128).optional() });
+const fileDiffInput = repositoryInput.extend({
+  file: z.string().min(1).max(4096),
+  revision: z.string().min(1).max(128).optional(),
+});
 
 export const revisionSchema = z.object({
   commitId: z.string(),
   changeId: z.string(),
   changeIdPrefix: z.string(),
+  empty: z.boolean(),
   description: z.string(),
   timestamp: z.number(),
   parents: z.array(z.string()),
@@ -43,6 +47,18 @@ export const hostContract = defineRpcContract({
     input: revisionInput.extend({ description: z.string().max(10000) }),
     output: z.object({ ok: z.boolean() }),
   },
+  edit: { input: revisionInput, output: z.object({ ok: z.boolean() }) },
+  newChange: { input: revisionInput, output: z.object({ ok: z.boolean() }) },
+  duplicate: { input: revisionInput, output: z.object({ ok: z.boolean() }) },
+  abandon: { input: revisionInput, output: z.object({ ok: z.boolean() }) },
+  revert: {
+    input: revisionInput.extend({ destination: z.string().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  setBookmark: {
+    input: revisionInput.extend({ name: z.string().trim().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
   rebase: {
     input: revisionInput.extend({ destination: z.string().min(1).max(128) }),
     output: z.object({ ok: z.boolean() }),
@@ -52,7 +68,10 @@ export const hostContract = defineRpcContract({
     output: z.object({ ok: z.boolean() }),
   },
   split: {
-    input: revisionInput.extend({ files: z.array(z.string().min(1).max(4096)).min(1).max(100), message: z.string().max(10000) }),
+    input: revisionInput.extend({
+      files: z.array(z.string().min(1).max(4096)).min(1).max(100),
+      message: z.string().max(10000),
+    }),
     output: z.object({ ok: z.boolean() }),
   },
 });

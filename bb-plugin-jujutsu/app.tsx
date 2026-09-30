@@ -14,6 +14,7 @@ type Revision = {
   commitId: string;
   changeId: string;
   changeIdPrefix: string;
+  empty: boolean;
   description: string;
   timestamp: number;
   parents: string[];
@@ -49,22 +50,14 @@ const laneColor = (lane: number) => graphPalette[lane % graphPalette.length];
 const previewColor = "#a5df6f";
 const label = (revision: Revision) =>
   revision.description.trim().split("\n")[0] || "(no description)";
-const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const relativeTime = (timestamp: number) => {
-  const elapsedSeconds = timestamp - Date.now() / 1000;
-  const elapsedMinutes = elapsedSeconds / 60;
-  const elapsedHours = elapsedMinutes / 60;
-  const elapsedDays = elapsedHours / 24;
-  if (Math.abs(elapsedSeconds) < 60)
-    return relativeTimeFormat.format(Math.round(elapsedSeconds), "second");
-  if (Math.abs(elapsedMinutes) < 60)
-    return relativeTimeFormat.format(Math.round(elapsedMinutes), "minute");
-  if (Math.abs(elapsedHours) < 24)
-    return relativeTimeFormat.format(Math.round(elapsedHours), "hour");
-  if (Math.abs(elapsedDays) < 30) return relativeTimeFormat.format(Math.round(elapsedDays), "day");
-  if (Math.abs(elapsedDays) < 365)
-    return relativeTimeFormat.format(Math.round(elapsedDays / 30), "month");
-  return relativeTimeFormat.format(Math.round(elapsedDays / 365), "year");
+  const seconds = Math.max(0, Date.now() / 1000 - timestamp);
+  if (seconds < 60) return "now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}min`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h`;
+  if (seconds < 2_592_000) return `${Math.floor(seconds / 86_400)}d`;
+  if (seconds < 31_536_000) return `${Math.floor(seconds / 2_592_000)}mo`;
+  return `${Math.floor(seconds / 31_536_000)}y`;
 };
 const revisionDay = (timestamp: number) => {
   const date = new Date(timestamp * 1000);
@@ -99,6 +92,7 @@ const styles = `
 .jj-path-picker{display:flex;min-width:0;flex:1}.jj-path-picker .jj-path{border-radius:6px 0 0 6px}.jj-path-picker .jj-browse{border-radius:0 6px 6px 0;white-space:nowrap}.jj-picker-backdrop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:24px;background:rgb(0 0 0/.58)}.jj-picker{display:flex;flex-direction:column;width:min(720px,92vw);max-height:min(760px,84vh);padding:12px;border:1px solid var(--jj-line);border-radius:14px;background:var(--card);box-shadow:0 18px 60px #000a}.jj-picker-header{display:flex;align-items:center;gap:8px}.jj-picker-path{min-width:0;flex:1}.jj-picker-path input{width:100%;box-sizing:border-box;border:0;background:transparent;color:var(--foreground);font:14px/1.4 var(--font-mono,monospace);outline:none}.jj-picker-section{padding:12px 4px 6px;color:var(--muted-foreground);font-size:11px}.jj-picker-list{min-height:120px;overflow:auto}.jj-picker-entry{display:flex;width:100%;align-items:center;gap:10px;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-picker-entry[data-active=true],.jj-picker-entry:hover{background:var(--accent)}.jj-picker-entry:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-picker-entry-icon{width:18px;color:var(--muted-foreground)}.jj-picker-footer{display:flex;justify-content:center;gap:14px;padding:10px 4px 2px;border-top:1px solid var(--jj-line);color:var(--muted-foreground);font-size:11px}.jj-picker-footer kbd{padding:2px 5px;border:1px solid var(--jj-line);border-radius:4px;color:var(--foreground)}
 .jj-picker{width:min(1000px,86vw);max-height:min(780px,84vh);padding:16px 10px 0;overflow:hidden}.jj-picker-header{padding:0 10px 12px;border-bottom:1px solid var(--jj-line)}.jj-picker-path input{height:44px;padding:0 8px;font:16px/1.4 var(--font-sans,system-ui)}.jj-picker-section{padding:16px 16px 8px;font-size:12px}.jj-picker-list{max-height:min(620px,65vh);min-height:160px;padding:0 7px 8px;overflow:auto}.jj-project-option{display:flex;width:100%;min-height:70px;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-project-option[data-active=true],.jj-project-option:hover{background:var(--accent)}.jj-project-option:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-project-option kbd{margin-left:auto;color:var(--muted-foreground)}.jj-project-mark{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:7px;background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary);font-size:10px;font-weight:700}.jj-project-option:nth-child(6n + 2) .jj-project-mark{background:#ff910022;color:#ff9100}.jj-project-option:nth-child(6n + 3) .jj-project-mark{background:#00bcd422;color:#00bcd4}.jj-project-option:nth-child(6n + 4) .jj-project-mark{background:#8b5cf622;color:#a78bfa}.jj-project-option:nth-child(6n + 5) .jj-project-mark{background:#10b98122;color:#10b981}.jj-project-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;font-size:15px}.jj-project-copy small{overflow:hidden;color:var(--muted-foreground);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.jj-picker-footer{justify-content:flex-start;gap:18px;padding:12px 16px;background:var(--background)}.jj-picker-entry{min-height:42px;padding:8px 12px;border-radius:8px}.jj-picker-error{padding:10px 16px;color:var(--destructive)}
 .jj-context{flex-wrap:wrap}.jj-filter{width:180px;margin-left:auto;padding:4px 7px;font:11px var(--font-sans,system-ui)}.jj-push-marker{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--jj-line);background:color-mix(in srgb,var(--muted) 10%,var(--background));color:var(--muted-foreground);font-size:10px}.jj-push-marker strong{font-weight:600;letter-spacing:.04em;text-transform:uppercase}.jj-push-marker time{margin-left:auto;font:10px var(--font-mono,monospace)}.jj-revision[data-moved=true]{opacity:.28;filter:saturate(.25)}.jj-revision[data-preview=true]{background:color-mix(in srgb,#a5df6f 10%,var(--background));box-shadow:inset 3px 0 #a5df6f}.jj-revision[data-preview=true] .jj-revision-subject,.jj-revision[data-preview=true] .jj-change-id{color:#a5df6f}.jj-revision[data-preview=true] .jj-badge{border-color:#a5df6f;color:#a5df6f}.jj-revision-title{gap:0}.jj-revision-meta{justify-content:flex-end;gap:8px}.jj-revision-age{color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-change-id{font:10px var(--font-mono,monospace);font-weight:650;letter-spacing:.02em}.jj-change-id-prefix{color:#4fc1ff}.jj-badge-evolved{background:color-mix(in srgb,#b982ff 18%,var(--background));border-color:color-mix(in srgb,#b982ff 55%,var(--jj-line));color:#b982ff}
+.jj-revision-button{min-height:29px;padding-block:0}.jj-graph-cell,.jj-graph-cell svg{height:29px}.jj-revision-main{min-width:0;flex-direction:row;align-items:center;gap:7px}.jj-revision-title{flex:1;min-width:0}.jj-revision-subject{font-size:12px}.jj-labels{min-width:0;max-width:42%;min-height:0;max-height:17px;flex:none;flex-wrap:nowrap}.jj-revision-meta{gap:6px}.jj-change-id{min-width:2ch;text-align:right}.jj-revision[data-empty=true] .jj-revision-subject{color:var(--muted-foreground);font-style:italic}.jj-badge-empty{background:color-mix(in srgb,#8b8b8b 14%,var(--background));border-color:#777;color:#aaa;font-size:9px}.jj-rebase-preview-branch[hidden]{display:none}.jj-preview-toggle{padding:3px 6px;border:1px solid var(--jj-line);border-radius:5px;background:var(--background);color:var(--foreground);font:inherit;cursor:pointer}.jj-context-menu{max-height:min(80vh,520px);overflow-y:auto;overscroll-behavior:contain}
 `;
 
 const RevisionGraphCell = ({
@@ -107,12 +101,14 @@ const RevisionGraphCell = ({
   laneGap,
   current,
   preview,
+  empty,
 }: {
   row: RevisionGraphRow;
   width: number;
   laneGap: number;
   current: boolean;
   preview: boolean;
+  empty: boolean;
 }) => {
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = 21;
@@ -174,14 +170,28 @@ const RevisionGraphCell = ({
             strokeWidth="2"
           />
         ))}
-        <circle
-          cx={center(row.commitLane)}
-          cy={middle}
-          r="5"
-          fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"}
-          stroke={color(row.commitLane)}
-          strokeWidth="2"
-        />
+        {empty ? (
+          <rect
+            x={center(row.commitLane) - 4.5}
+            y={middle - 4.5}
+            width="9"
+            height="9"
+            transform={`rotate(45 ${center(row.commitLane)} ${middle})`}
+            fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"}
+            stroke={color(row.commitLane)}
+            strokeWidth="2"
+            strokeDasharray="2 1"
+          />
+        ) : (
+          <circle
+            cx={center(row.commitLane)}
+            cy={middle}
+            r="5"
+            fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"}
+            stroke={color(row.commitLane)}
+            strokeWidth="2"
+          />
+        )}
       </svg>
     </span>
   );
@@ -264,6 +274,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [revisionFiles, setRevisionFiles] = useState<FileChange[]>([]);
   const [revisionFilesLoading, setRevisionFilesLoading] = useState(false);
   const [revisionFilesError, setRevisionFilesError] = useState<string | null>(null);
+  const revisionDiffRequest = useRef(0);
   const [diffTarget, setDiffTarget] = useState<DiffTarget | null>(null);
   const [diffPatch, setDiffPatch] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
@@ -286,6 +297,8 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const sourceListRef = useRef<HTMLDivElement>(null);
   const [expandedSourceRevisionId, setExpandedSourceRevisionId] = useState<string | null>(null);
   const [pendingRebase, setPendingRebase] = useState<PendingRebase | null>(null);
+  const [rebasePreviewExpanded, setRebasePreviewExpanded] = useState(false);
+  const [pendingAbandon, setPendingAbandon] = useState<Revision | null>(null);
   const [draggedRevisionId, setDraggedRevisionId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [revisionContextMenu, setRevisionContextMenu] = useState<RevisionContextMenu | null>(null);
@@ -312,6 +325,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           hostId: normalizedHostId,
         });
         setSnapshot(result);
+        revisionDiffRequest.current += 1;
         setPendingRebase(null);
         setMoveSource(null);
         setRevisionContextMenu(null);
@@ -708,7 +722,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     [revisions],
   );
   const maximumLaneCount = graphRows.reduce((maximum, row) => Math.max(maximum, row.laneCount), 1);
-  const graphWidth = Math.min(116, 20 + (maximumLaneCount - 1) * 16);
+  const graphWidth = Math.min(92, 20 + (maximumLaneCount - 1) * 12);
   const laneGap = maximumLaneCount <= 1 ? 0 : (graphWidth - 20) / (maximumLaneCount - 1);
   const recentRevisions = useMemo(() => {
     if (!snapshot) return [];
@@ -739,11 +753,29 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     }
   };
   const selectRevision = (revision: Revision) => {
+    revisionDiffRequest.current += 1;
     setSelectedRevision((current) => (current?.commitId === revision.commitId ? null : revision));
     setDescription(revision.description);
     setDiffTarget(null);
   };
+  const showRevisionDiff = async (revision: Revision) => {
+    setSelectedRevision(revision);
+    setDescription(revision.description);
+    setDiffTarget(null);
+    const requestId = ++revisionDiffRequest.current;
+    try {
+      const files = await rpc.call("revisionFiles", { path, hostId, revision: revision.commitId });
+      if (requestId === revisionDiffRequest.current && files[0]) {
+        setDiffTarget({ path: files[0].path, revision: revision.commitId });
+      }
+    } catch (cause) {
+      if (requestId === revisionDiffRequest.current) {
+        setRevisionFilesError(cause instanceof Error ? cause.message : String(cause));
+      }
+    }
+  };
   const toggleSourceRevision = (revision: Revision) => {
+    revisionDiffRequest.current += 1;
     const isExpanded = expandedSourceRevisionId === revision.commitId;
     setExpandedSourceRevisionId(isExpanded ? null : revision.commitId);
     setSelectedRevision(isExpanded ? null : revision);
@@ -805,6 +837,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       return;
     }
     setPendingRebase({ source, destination, branch });
+    setRebasePreviewExpanded(false);
     setMoveSource(null);
     setRevisionContextMenu(null);
     setSelectedRevision(null);
@@ -1069,6 +1102,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                               data-dragged={isDragged && !isPreview}
                               data-moved={isDragged && !isPreview}
                               data-preview={isPreview}
+                              data-empty={revision.empty}
                               data-drop-target={dropTargetId === revision.commitId}
                               onDragEnter={(event) => {
                                 if (!isPreview) {
@@ -1160,11 +1194,15 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                   laneGap={laneGap}
                                   current={isCurrent}
                                   preview={isPreview}
+                                  empty={revision.empty}
                                 />
                                 <span className="jj-revision-main">
                                   <span className="jj-revision-title">
                                     {isEvolved && (
                                       <span className="jj-badge jj-badge-evolved">Evolved</span>
+                                    )}
+                                    {revision.empty && (
+                                      <span className="jj-badge jj-badge-empty">Empty</span>
                                     )}
                                     <span className="jj-revision-subject">{label(revision)}</span>
                                   </span>
@@ -1201,10 +1239,9 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                   </time>
                                   <code
                                     className="jj-change-id"
-                                    title={`Change ID ${revision.changeId}`}
+                                    title={`Unique change ID prefix ${changePrefix}`}
                                   >
                                     <span className="jj-change-id-prefix">{changePrefix}</span>
-                                    {revision.changeId.slice(changePrefix.length)}
                                   </code>
                                   <span className="jj-chevron">›</span>
                                 </span>
@@ -1225,22 +1262,33 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                       {pendingRebase.branch.length === 1 ? "revision" : "revisions"}{" "}
                                       will move
                                     </span>
+                                    <button
+                                      className="jj-preview-toggle"
+                                      aria-expanded={rebasePreviewExpanded}
+                                      onClick={() =>
+                                        setRebasePreviewExpanded((expanded) => !expanded)
+                                      }
+                                    >
+                                      {rebasePreviewExpanded ? "Hide" : "Show"} graph
+                                    </button>
                                   </div>
-                                  <div className="jj-rebase-preview-branch">
-                                    {pendingRebase.branch.map((branchRevision) => (
-                                      <div
-                                        className="jj-rebase-preview-row"
-                                        key={branchRevision.commitId}
-                                      >
-                                        <span
-                                          className="jj-rebase-preview-node"
-                                          aria-hidden="true"
-                                        />
-                                        {label(branchRevision)}
-                                        <code>{branchRevision.changeId.slice(0, 8)}</code>
-                                      </div>
-                                    ))}
-                                  </div>
+                                  {rebasePreviewExpanded && (
+                                    <div className="jj-rebase-preview-branch">
+                                      {pendingRebase.branch.map((branchRevision) => (
+                                        <div
+                                          className="jj-rebase-preview-row"
+                                          key={branchRevision.commitId}
+                                        >
+                                          <span
+                                            className="jj-rebase-preview-node"
+                                            aria-hidden="true"
+                                          />
+                                          {label(branchRevision)}
+                                          <code>{branchRevision.changeIdPrefix}</code>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                   <code className="jj-confirm-code">
                                     jj rebase -s {pendingRebase.source.commitId} -d{" "}
                                     {pendingRebase.destination.commitId}
@@ -1806,8 +1854,8 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             role="menu"
             aria-label={`Actions for ${label(revisionContextMenu.revision)}`}
             style={{
-              left: Math.min(revisionContextMenu.x, window.innerWidth - 215),
-              top: Math.min(revisionContextMenu.y, window.innerHeight - 210),
+              left: Math.max(8, Math.min(revisionContextMenu.x, window.innerWidth - 245)),
+              top: Math.max(8, Math.min(revisionContextMenu.y, window.innerHeight - 520)),
             }}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
@@ -1818,13 +1866,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
               role="menuitem"
               onClick={() => {
                 const revision = revisionContextMenu.revision;
-                setSelectedRevision(revision);
-                setDescription(revision.description);
-                setDiffTarget(null);
+                void showRevisionDiff(revision);
                 setRevisionContextMenu(null);
               }}
             >
-              View diff
+              Show Diff
             </button>
             <button
               role="menuitem"
@@ -1838,7 +1884,46 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             >
               Describe…
             </button>
+            <button
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setRevisionContextMenu(null);
+                void runAction(() =>
+                  rpc.call("edit", { path, hostId, revision: revision.commitId }),
+                );
+              }}
+            >
+              Edit This Change
+            </button>
+            <button
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setRevisionContextMenu(null);
+                void runAction(() =>
+                  rpc.call("newChange", { path, hostId, revision: revision.commitId }),
+                );
+              }}
+            >
+              New Change Here
+            </button>
             <div className="jj-context-menu-separator" />
+            <button
+              role="menuitem"
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setSelectedRevision(revision);
+                setDescription(revision.description);
+                setSelectedRevisionFiles([]);
+                setDiffTarget(null);
+                setRevisionContextMenu(null);
+              }}
+            >
+              Split…
+            </button>
             <button
               role="menuitem"
               disabled={revisionContextMenu.revision.parents.length === 0 || busy}
@@ -1857,7 +1942,95 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                   );
               }}
             >
-              Squash into parent
+              Squash
+            </button>
+            <button
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                setPendingAbandon(revisionContextMenu.revision);
+                setRevisionContextMenu(null);
+              }}
+            >
+              Abandon…
+            </button>
+            <div className="jj-context-menu-separator" />
+            <button
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setRevisionContextMenu(null);
+                void runAction(() =>
+                  rpc.call("duplicate", { path, hostId, revision: revision.commitId }),
+                );
+              }}
+            >
+              Duplicate
+            </button>
+            <button
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setRevisionContextMenu(null);
+                void runAction(() =>
+                  rpc.call("revert", {
+                    path,
+                    hostId,
+                    revision: revision.commitId,
+                    destination: "@",
+                  }),
+                );
+              }}
+            >
+              Revert
+            </button>
+            <div className="jj-context-menu-separator" />
+            <button
+              role="menuitem"
+              disabled={busy || !revisions.some((revision) => revision.bookmarks.includes("main"))}
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                const mainRevision = revisions.find((candidate) =>
+                  candidate.bookmarks.includes("main"),
+                );
+                setRevisionContextMenu(null);
+                if (mainRevision) beginRebasePreview(revision, mainRevision);
+              }}
+            >
+              Rebase on Main
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setRevisionContextMenu(null);
+                const name = window.prompt("Bookmark name", revision.bookmarks[0] ?? "");
+                if (name?.trim())
+                  void runAction(() =>
+                    rpc.call("setBookmark", {
+                      path,
+                      hostId,
+                      revision: revision.commitId,
+                      name: name.trim(),
+                    }),
+                  );
+              }}
+            >
+              Set Bookmark Here…
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setRevisionContextMenu(null);
+                void navigator.clipboard.writeText(revision.changeId).catch((cause) => {
+                  setError(cause instanceof Error ? cause.message : String(cause));
+                });
+              }}
+            >
+              Copy Change ID
             </button>
             <button
               role="menuitem"
@@ -1871,6 +2044,41 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             </button>
           </div>
         </>
+      )}
+      {pendingAbandon && (
+        <div className="jj-confirm-backdrop" role="presentation">
+          <section
+            className="jj-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="jj-abandon-title"
+          >
+            <h2 id="jj-abandon-title">Abandon this change?</h2>
+            <p>
+              JJ will abandon “{label(pendingAbandon)}” and rebase its descendants onto its parent.
+            </p>
+            <code className="jj-confirm-code">jj abandon {pendingAbandon.changeIdPrefix}</code>
+            <div className="jj-confirm-actions">
+              <button className="jj-button" disabled={busy} onClick={() => setPendingAbandon(null)}>
+                Cancel
+              </button>
+              <button
+                className="jj-button jj-button-primary"
+                disabled={busy}
+                onClick={() => {
+                  const revision = pendingAbandon;
+                  void runAction(() =>
+                    rpc.call("abandon", { path, hostId, revision: revision.commitId }),
+                  ).then((success) => {
+                    if (success) setPendingAbandon(null);
+                  });
+                }}
+              >
+                {busy ? "Abandoning…" : "Abandon change"}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
     </div>
   );

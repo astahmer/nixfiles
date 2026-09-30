@@ -18,12 +18,16 @@ export type RevisionGraphRow = {
   startsHere: boolean;
 };
 
-const firstOpenLane = (lanes: Array<string | null>) => {
-  const openLane = lanes.indexOf(null);
-  return openLane < 0 ? lanes.length : openLane;
+const firstOpenLane = (lanes: Array<string | null>, fromLane = 0) => {
+  for (let lane = fromLane; lane < lanes.length; lane += 1) {
+    if (lanes[lane] === null) return lane;
+  }
+  return lanes.length;
 };
 
-export const layoutRevisionGraph = (revisions: readonly RevisionGraphInput[]): RevisionGraphRow[] => {
+export const layoutRevisionGraph = (
+  revisions: readonly RevisionGraphInput[],
+): RevisionGraphRow[] => {
   const lanes: Array<string | null> = [];
   const rows: RevisionGraphRow[] = [];
 
@@ -36,28 +40,29 @@ export const layoutRevisionGraph = (revisions: readonly RevisionGraphInput[]): R
     }
 
     const topLanes = lanes
-      .map((commitId, lane) => commitId === null || lane === commitLane ? -1 : lane)
+      .map((commitId, lane) => (commitId === null || lane === commitLane ? -1 : lane))
       .filter((lane) => lane >= 0);
     const nextLanes = [...lanes];
     nextLanes[commitLane] = null;
     const edges = revision.parents.map((parentId, parentIndex) => {
       let targetLane = nextLanes.indexOf(parentId);
       if (targetLane < 0) {
-        targetLane = parentIndex === 0 && nextLanes[commitLane] === null
-          ? commitLane
-          : firstOpenLane(nextLanes);
+        targetLane =
+          parentIndex === 0 && nextLanes[commitLane] === null
+            ? commitLane
+            : firstOpenLane(nextLanes, commitLane + 1);
         nextLanes[targetLane] = parentId;
       }
       return {
         fromLane: commitLane,
         toLane: targetLane,
-        kind: targetLane === commitLane ? "straight" as const : "merge" as const,
+        kind: targetLane === commitLane ? ("straight" as const) : ("merge" as const),
       };
     });
 
     while (nextLanes.length > 0 && nextLanes.at(-1) === null) nextLanes.pop();
     const bottomLanes = nextLanes
-      .map((commitId, lane) => commitId === null ? -1 : lane)
+      .map((commitId, lane) => (commitId === null ? -1 : lane))
       .filter((lane) => lane >= 0 && !edges.some((edge) => edge.toLane === lane));
     rows.push({
       commitLane,

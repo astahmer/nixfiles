@@ -28,7 +28,8 @@ const run = async (cwd: string, args: string[], maxBytes = 2_000_000): Promise<s
     });
     process.once("close", (code) => {
       clearTimeout(timeout);
-      if (code !== 0) reject(new Error(error.trim() || `jj ${args[0]} failed (${code ?? "signal"})`));
+      if (code !== 0)
+        reject(new Error(error.trim() || `jj ${args[0]} failed (${code ?? "signal"})`));
       else resolveOutput(output);
     });
   });
@@ -42,14 +43,23 @@ const repositoryRoot = async (inputPath: string): Promise<string> => {
 };
 
 const listRevisions = async (root: string) => {
-  const template = String.raw`"{\"commitId\": " ++ json(commit_id.short(40)) ++ ", \"changeId\": " ++ json(change_id.short(40)) ++ ", \"changeIdPrefix\": " ++ json(change_id.shortest().prefix()) ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short(40))) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
+  const template = String.raw`"{\"commitId\": " ++ json(commit_id.short(40)) ++ ", \"changeId\": " ++ json(change_id.short(40)) ++ ", \"changeIdPrefix\": " ++ json(change_id.shortest().prefix()) ++ ", \"empty\": " ++ self.empty() ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short(40))) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
   const raw = await run(root, ["log", "--no-graph", "-r", "all()", "-n", "500", "-T", template]);
-  return z.array(revisionSchema).parse(raw.split("\n").filter(Boolean).map((line) => JSON.parse(line)));
+  return z.array(revisionSchema).parse(
+    raw
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line)),
+  );
 };
 
 const lastPushAt = async (root: string) => {
   const template = String.raw`json(time.start().format("%s")) ++ "\t" ++ json(description) ++ "\n"`;
-  const raw = await run(root, ["op", "log", "--no-graph", "-n", "500", "--at-op=@", "--ignore-working-copy", "-T", template], 256_000);
+  const raw = await run(
+    root,
+    ["op", "log", "--no-graph", "-n", "500", "--at-op=@", "--ignore-working-copy", "-T", template],
+    256_000,
+  );
   for (const line of raw.split("\n").filter(Boolean)) {
     const [rawTimestamp, rawDescription] = line.split("\t");
     if (!rawTimestamp || !rawDescription) continue;
@@ -60,20 +70,33 @@ const lastPushAt = async (root: string) => {
   return null;
 };
 
-const parseFileChanges = (summary: string) => summary.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => ({
-  status: line.slice(0, 1),
-  path: line.slice(1).trim(),
-}));
+const parseFileChanges = (summary: string) =>
+  summary
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => ({
+      status: line.slice(0, 1),
+      path: line.slice(1).trim(),
+    }));
 
-const changes = async (root: string) => parseFileChanges(await run(root, ["diff", "--summary"], 64_000));
+const changes = async (root: string) =>
+  parseFileChanges(await run(root, ["diff", "--summary"], 64_000));
 
 const workspaces = async (root: string) => {
   const template = String.raw`json(self.name()) ++ "\t" ++ json(self.root()) ++ "\t" ++ self.target().commit_id().short() ++ "\n"`;
   const raw = await run(root, ["workspace", "list", "-T", template]);
-  return raw.split("\n").filter(Boolean).map((line) => {
-    const [rawName = "\"\"", rawPath = "null", revision = ""] = line.split("\t");
-    return { name: z.string().parse(JSON.parse(rawName)), path: z.string().nullable().parse(JSON.parse(rawPath)) ?? "", revision };
-  });
+  return raw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [rawName = '""', rawPath = "null", revision = ""] = line.split("\t");
+      return {
+        name: z.string().parse(JSON.parse(rawName)),
+        path: z.string().nullable().parse(JSON.parse(rawPath)) ?? "",
+        revision,
+      };
+    });
 };
 
 export default experimental_defineHostEntry({
@@ -81,14 +104,24 @@ export default experimental_defineHostEntry({
   handlers: {
     inspect: async ({ path }) => {
       const root = await repositoryRoot(path);
-      const [revisionList, currentRevision, lastPush, fileChanges, workspaceList] = await Promise.all([
-        listRevisions(root),
-        run(root, ["log", "--no-graph", "-r", "@", "-T", "commit_id.short(40)"]).then((value) => value.trim()),
-        lastPushAt(root),
-        changes(root),
-        workspaces(root),
-      ]);
-      return { root, currentRevision, lastPushAt: lastPush, revisions: revisionList, changes: fileChanges, workspaces: workspaceList };
+      const [revisionList, currentRevision, lastPush, fileChanges, workspaceList] =
+        await Promise.all([
+          listRevisions(root),
+          run(root, ["log", "--no-graph", "-r", "@", "-T", "commit_id.short(40)"]).then((value) =>
+            value.trim(),
+          ),
+          lastPushAt(root),
+          changes(root),
+          workspaces(root),
+        ]);
+      return {
+        root,
+        currentRevision,
+        lastPushAt: lastPush,
+        revisions: revisionList,
+        changes: fileChanges,
+        workspaces: workspaceList,
+      };
     },
     revisionFiles: async ({ path, revision }) => {
       const root = await repositoryRoot(path);
@@ -106,17 +139,61 @@ export default experimental_defineHostEntry({
       await run(await repositoryRoot(path), ["describe", "-r", revision, "-m", description]);
       return { ok: true };
     },
+    edit: async ({ path, revision }) => {
+      await run(await repositoryRoot(path), ["edit", revision]);
+      return { ok: true };
+    },
+    newChange: async ({ path, revision }) => {
+      await run(await repositoryRoot(path), ["new", revision]);
+      return { ok: true };
+    },
+    duplicate: async ({ path, revision }) => {
+      await run(await repositoryRoot(path), ["duplicate", revision]);
+      return { ok: true };
+    },
+    abandon: async ({ path, revision }) => {
+      await run(await repositoryRoot(path), ["abandon", revision]);
+      return { ok: true };
+    },
+    revert: async ({ path, revision, destination }) => {
+      await run(await repositoryRoot(path), [
+        "revert",
+        "--revision",
+        revision,
+        "--onto",
+        destination,
+      ]);
+      return { ok: true };
+    },
+    setBookmark: async ({ path, revision, name }) => {
+      await run(await repositoryRoot(path), ["bookmark", "set", name, "--revision", revision]);
+      return { ok: true };
+    },
     rebase: async ({ path, revision, destination }) => {
       await run(await repositoryRoot(path), ["rebase", "-s", revision, "-d", destination]);
       return { ok: true };
     },
     squash: async ({ path, revision, destination }) => {
-      await run(await repositoryRoot(path), ["squash", "--from", revision, "--into", destination, "--use-destination-message"]);
+      await run(await repositoryRoot(path), [
+        "squash",
+        "--from",
+        revision,
+        "--into",
+        destination,
+        "--use-destination-message",
+      ]);
       return { ok: true };
     },
     split: async ({ path, revision, files, message }) => {
       const filesets = files.map((file) => `root-file:${JSON.stringify(file)}`);
-      await run(await repositoryRoot(path), ["split", "-r", revision, "--message", message, ...filesets]);
+      await run(await repositoryRoot(path), [
+        "split",
+        "-r",
+        revision,
+        "--message",
+        message,
+        ...filesets,
+      ]);
       return { ok: true };
     },
   },
