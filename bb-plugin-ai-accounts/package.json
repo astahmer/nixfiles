@@ -10,7 +10,7 @@
     "name": "AI Accounts",
     "description": "Manage Codex and OpenCode Go accounts and their model picker entries from BB.",
     "branding": {
-      "icon": "UsersRound"
+      "icon": "Bot"
     },
     "server": "./server.ts",
     "host": "./host.ts",

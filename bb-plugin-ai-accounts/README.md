@@ -22,9 +22,9 @@ Credentials stay in OpenCode's own auth file.
 The model section reads the complete Codex catalog or the selected OpenCode
 Go provider catalog. It supports favorites, visibility checkboxes, order,
 custom entries, and per-model default reasoning effort. The account-wide
-**All models** composer action searches enabled account models in existing and
-new threads; BB's provider picker remains available beside it. Account tags
-and colors are configurable.
+**All models** composer action opens on a searchable view of every enabled
+account, with provider tabs for narrower searches; BB's provider picker stays
+available beside it. Account tags and colors are configurable.
 
 Runtime paths inherit from the all-projects/all-machines default; project and
 machine-specific paths override it. Nix owns profile names, paths, tags,

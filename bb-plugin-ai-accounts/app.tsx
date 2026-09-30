@@ -13,19 +13,22 @@ const GlobalModelPicker = () => {
   const sdk = useSdk();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [activeProviderId, setActiveProviderId] = useState("all");
+  const [accountProviders, setAccountProviders] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string }>>([]);
   const [models, setModels] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string; model: string; displayName: string; reasoningEffort: ReasoningEffort }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [popoverPosition, setPopoverPosition] = useState({ left: 12, top: 12, maxHeight: 560 });
   const visibleModels = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    if (!normalizedQuery) return models;
+    const providerModels = activeProviderId === "all" ? models : models.filter((entry) => entry.providerId === activeProviderId);
+    if (!normalizedQuery) return providerModels;
     const terms = normalizedQuery.split(/\s+/u);
-    return models.filter((entry) => {
+    return providerModels.filter((entry) => {
       const searchable = `${entry.displayName} ${entry.model} ${entry.providerName} ${entry.badge}`.toLocaleLowerCase();
       return terms.every((term) => searchable.includes(term));
     });
-  }, [models, query]);
+  }, [activeProviderId, models, query]);
 
   useEffect(() => {
     if (!open || models.length || loading) return;
@@ -33,24 +36,33 @@ const GlobalModelPicker = () => {
     setLoading(true);
     setError("");
     void sdk.providers.list().then(async (providers) => {
-      const accountProviders = providers.filter((provider) => provider.id.startsWith("ai-account-"));
-      const catalogs = await Promise.all(accountProviders.map(async (provider) => {
+      const configuredProviders = providers.filter((provider) => provider.id.startsWith("ai-account-"));
+      const catalogs = await Promise.all(configuredProviders.map(async (provider) => {
+        const providerDetails = {
+          providerId: provider.id,
+          providerName: provider.displayName.replace(/^[^·]+·\s*/u, ""),
+          badge: provider.displayName.match(/^([^·]+)·/u)?.[1]?.trim() ?? provider.displayName.slice(0, 2).toUpperCase(),
+          color: provider.strings?.iconTint?.dark ?? "#64748B",
+        };
         try {
           const result = await sdk.providers.models({ providerId: provider.id });
-          return result.models.map((model) => ({
-            providerId: provider.id,
-            providerName: provider.displayName.replace(/^[^·]+·\s*/u, ""),
-            badge: provider.displayName.match(/^([^·]+)·/u)?.[1]?.trim() ?? provider.displayName.slice(0, 2).toUpperCase(),
-            color: provider.strings?.iconTint?.dark ?? "#64748B",
-            model: model.model,
-            displayName: model.displayName,
-            reasoningEffort: model.defaultReasoningEffort,
-          }));
+          return {
+            provider: providerDetails,
+            models: result.models.map((model) => ({
+              ...providerDetails,
+              model: model.model,
+              displayName: model.displayName,
+              reasoningEffort: model.defaultReasoningEffort,
+            })),
+          };
         } catch {
-          return [];
+          return { provider: providerDetails, models: [] };
         }
       }));
-      if (active) setModels(catalogs.flat().sort((left, right) => left.displayName.localeCompare(right.displayName) || left.providerName.localeCompare(right.providerName)));
+      if (active) {
+        setAccountProviders(catalogs.map((catalog) => catalog.provider));
+        setModels(catalogs.flatMap((catalog) => catalog.models).sort((left, right) => left.displayName.localeCompare(right.displayName) || left.providerName.localeCompare(right.providerName)));
+      }
     }).catch(() => {
       if (active) setError("Could not load account models. Check the selected machine and provider sign-in.");
     }).finally(() => {
@@ -78,25 +90,31 @@ const GlobalModelPicker = () => {
       const placeBelow = roomBelow >= roomAbove;
       const maxHeight = Math.max(120, Math.min(560, placeBelow ? roomBelow : roomAbove - 8));
       setPopoverPosition({
-        left: Math.max(12, Math.min(bounds.left, window.innerWidth - 452)),
+        left: Math.max(12, Math.min(bounds.left, window.innerWidth - 728)),
         top: placeBelow ? bounds.bottom + 8 : Math.max(12, bounds.top - maxHeight - 8),
         maxHeight,
       });
       setOpen((current) => !current);
     }}>All models <span aria-hidden="true">⌄</span></button>
     {open ? createPortal(<section className="aa-global-picker-popover" style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }} aria-label="Search all account models">
-      <label className="aa-global-picker-search"><span aria-hidden="true">⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Search all accounts and models" /></label>
-      <div className="aa-global-picker-results">
-        {loading ? <p className="aa-global-picker-empty">Loading account models…</p> : null}
-        {!loading && error ? <p className="aa-global-picker-empty">{error}</p> : null}
-        {!loading && !error && visibleModels.length === 0 ? <p className="aa-global-picker-empty">No matching account models.</p> : null}
-        {visibleModels.map((entry) => <button className="aa-global-picker-row" type="button" key={`${entry.providerId}:${entry.model}`} onClick={() => void selectModel(entry)}>
-          <span className="aa-account-badge" style={{ backgroundColor: entry.color }}>{entry.badge}</span>
-          <span className="aa-global-picker-row-copy"><strong>{entry.displayName}</strong><small>{entry.providerName} · {entry.model}</small></span>
-          <span className="aa-global-picker-effort">{entry.reasoningEffort}</span>
-        </button>)}
+      <nav className="aa-global-picker-sidebar" aria-label="Filter by provider">
+        <button className={activeProviderId === "all" ? "is-active" : ""} type="button" title="All models" aria-label="All models" aria-pressed={activeProviderId === "all"} onClick={() => setActiveProviderId("all")}><span className="aa-global-picker-all-icon">▦</span></button>
+        {accountProviders.map((provider) => <button className={activeProviderId === provider.providerId ? "is-active" : ""} type="button" key={provider.providerId} title={provider.providerName} aria-label={provider.providerName} aria-pressed={activeProviderId === provider.providerId} onClick={() => setActiveProviderId(provider.providerId)}><span className="aa-account-badge" style={{ backgroundColor: provider.color }}>{provider.badge}</span></button>)}
+      </nav>
+      <div className="aa-global-picker-main">
+        <label className="aa-global-picker-search"><span aria-hidden="true">⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={activeProviderId === "all" ? "Search all models…" : `Search ${accountProviders.find((provider) => provider.providerId === activeProviderId)?.providerName ?? "provider"}…`} /></label>
+        <div className="aa-global-picker-results">
+          {loading ? <p className="aa-global-picker-empty">Loading account models…</p> : null}
+          {!loading && error ? <p className="aa-global-picker-empty">{error}</p> : null}
+          {!loading && !error && visibleModels.length === 0 ? <p className="aa-global-picker-empty">No matching account models.</p> : null}
+          {visibleModels.map((entry) => <button className={"aa-global-picker-row " + (activeProviderId !== "all" ? "is-compact" : "")} type="button" key={`${entry.providerId}:${entry.model}`} onClick={() => void selectModel(entry)}>
+            {activeProviderId === "all" ? <span className="aa-account-badge" style={{ backgroundColor: entry.color }}>{entry.badge}</span> : null}
+            <span className="aa-global-picker-row-copy"><strong>{entry.displayName}</strong>{activeProviderId === "all" ? <small>{entry.providerName}</small> : null}</span>
+            <span className="aa-global-picker-effort">{entry.reasoningEffort}</span>
+          </button>)}
+        </div>
+        <footer className="aa-global-picker-footer">Reasoning effort follows each model’s default. Change it separately in the composer.</footer>
       </div>
-      <footer className="aa-global-picker-footer">Reasoning effort follows the model default. Change it separately in the composer.</footer>
     </section>, document.body) : null}
   </div>;
 };
@@ -115,6 +133,7 @@ const AccountPage = () => {
   const [catalog, setCatalog] = useState<Array<{ id: string; displayName: string; isDefault: boolean; supportedReasoningEfforts: Array<{ reasoningEffort: ReasoningEffort; description: string }>; defaultReasoningEffort: ReasoningEffort }>>([]);
   const [customDraft, setCustomDraft] = useState({ id: "", displayName: "" });
   const [customModelFormOpen, setCustomModelFormOpen] = useState(false);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [refreshingCatalog, setRefreshingCatalog] = useState(false);
   const [scopeMode, setScopeMode] = useState<"default" | "project" | "machine" | "project-machine">("default");
   const [scopeHostId, setScopeHostId] = useState("");
@@ -476,7 +495,6 @@ const AccountPage = () => {
   return (
     <main className="aa-page">
       <header className="aa-page-toolbar">
-        <h1>AI Accounts</h1>
         <div className="aa-scope-bar">
           <span>Applying settings for</span>
           <select aria-label="Project scope" value={projectScope} onChange={(event) => updateProjectScope(event.currentTarget.value)}>
@@ -493,7 +511,16 @@ const AccountPage = () => {
 
       <div className="aa-layout">
         <aside className="aa-rail" aria-label="Provider accounts">
-          <div className="aa-rail-heading"><span>YOUR ACCOUNTS <i>{accounts.length}</i></span><div className="aa-add-actions"><button disabled={saving} onClick={() => void addAccount("codex")}>＋ Codex</button><button disabled={saving} onClick={() => void addAccount("opencode-go")}>＋ OpenCode Go</button></div></div>
+          <div className="aa-rail-heading">
+            <span>YOUR ACCOUNTS <i>{accounts.length}</i></span>
+            <div className="aa-add-menu-anchor">
+              <button className="aa-add-trigger" type="button" aria-label="Add account" aria-expanded={addMenuOpen} onClick={() => setAddMenuOpen((current) => !current)}>＋</button>
+              {addMenuOpen ? <div className="aa-add-menu" role="menu">
+                <button type="button" role="menuitem" disabled={saving} onClick={() => { setAddMenuOpen(false); void addAccount("codex"); }}>Codex account</button>
+                <button type="button" role="menuitem" disabled={saving} onClick={() => { setAddMenuOpen(false); void addAccount("opencode-go"); }}>OpenCode Go account</button>
+              </div> : null}
+            </div>
+          </div>
           {accounts.length === 0 && <p className="aa-empty">Add an account to give it a private provider entry in the model picker.</p>}
           {(["codex", "opencode-go"] as const).map((provider) => {
             const providerAccounts = accounts.filter((account) => account.provider === provider);
@@ -537,14 +564,14 @@ const AccountPage = () => {
 
             <section className="aa-section">
               <div className="aa-section-heading"><div><span className="aa-index">02</span><h3>Runtime paths</h3></div><span className="aa-muted">Absolute path on the provider machine</span></div>
-              <label className="aa-path-field">{selected.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"}<input value={draft.path} onChange={(event) => setDraft((current) => ({ ...current, path: event.currentTarget.value }))} spellCheck={false} /></label>
-              <p className="aa-help">{selected.provider === "codex" ? "Codex keeps auth.json, config, and its local state in this account home." : "OpenCode keeps auth and data below this XDG data root. Go sign-in uses its API key flow."} Specific project and machine paths override this inherited default.</p>
+              <label className="aa-path-field"><span>{selected.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"}<small>{selected.provider === "codex" ? "Private Codex home and local state." : "OpenCode auth and local data root."}</small></span><input value={draft.path} onChange={(event) => setDraft((current) => ({ ...current, path: event.currentTarget.value }))} spellCheck={false} /></label>
+              <p className="aa-help">Specific project and machine paths override the inherited account path.</p>
             </section>
 
             <section className="aa-section aa-model-section">
               <div className="aa-section-heading"><div><span className="aa-index">03</span><h3>Models</h3></div><button className="aa-quiet" disabled={refreshingCatalog || !selectedHostId} onClick={() => void refreshCatalog()}>{refreshingCatalog ? "Checking…" : "↻ Check now"}</button></div>
               <p className="aa-help">Use the checkboxes to show models in the picker. Favorites and order are saved on this device; custom models are added to this account’s provider entry.</p>
-              <div className="aa-model-toolbar"><button className="aa-quiet" onClick={() => {
+              <div className="aa-model-card"><div className="aa-model-toolbar"><button className="aa-quiet" onClick={() => {
                 if (!selected) return;
                 const catalogModelIds = catalogModels.map((model) => model.id);
                 const catalogIds = new Set(catalogModelIds);
@@ -560,6 +587,7 @@ const AccountPage = () => {
                 {hiddenModels.length > 0 ? <section className="aa-model-group"><h4>Hidden from picker</h4>{renderModelRows(hiddenModels)}</section> : null}
               </> : <p className="aa-empty">{selectedHostId ? "No models returned yet. Sign in on this machine, then refresh the provider catalog." : "Choose a machine to read the provider’s model catalog."}</p>}
               {customModelFormOpen ? <div className="aa-custom-model-form"><label>Model ID<input id="aa-custom-model-id" value={customDraft.id} onChange={(event) => setCustomDraft((current) => ({ ...current, id: event.currentTarget.value }))} placeholder="provider/model-id" /></label><label>Display name<input value={customDraft.displayName} onChange={(event) => setCustomDraft((current) => ({ ...current, displayName: event.currentTarget.value }))} placeholder="Custom model" /></label><button className="aa-quiet" onClick={addCustomModel}>Add model</button></div> : null}
+              </div>
             </section>
 
             <footer className="aa-footer">
@@ -585,7 +613,7 @@ export default definePluginApp((app) => {
   app.slots.navPanel({
     id: "accounts",
     title: "AI Accounts",
-    icon: "UsersRound",
+    icon: "Bot",
     path: "accounts",
     component: AccountPage,
   });
