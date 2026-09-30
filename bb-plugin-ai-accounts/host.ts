@@ -1,22 +1,35 @@
 import { experimental_acpProviderBridge } from "@get-bb/plugin-sdk/provider-bridge/acp";
 import { z } from "zod";
-import { readOpenCodexAccountUsage } from "./open-codex-usage";
+import { readCodexUsage } from "./codex-usage";
+import { readOpenCodeGoUsage } from "./opencode-go-usage";
 
 const preferencesByRequest = new Map<string, {
   hiddenModelIds: Set<string>;
   modelOrder: string[];
   customModels: Array<{ id: string; displayName: string }>;
+  modelReasoningDefaults: Record<string, "none" | "low" | "medium" | "high" | "xhigh" | "ultracode" | "max" | "ultra">;
 }>();
 const requestSchema = z.object({
   id: z.union([z.string(), z.number()]),
   method: z.string().optional(),
   params: z.object({ providerOptions: z.record(z.string(), z.unknown()).optional() }).passthrough(),
 }).passthrough();
+const usageProviderSchema = z.object({ accountProvider: z.enum(["codex", "opencode-go"]) });
 const providerOptionsSchema = z.object({
   hiddenModelIds: z.array(z.string()).optional(),
   modelOrder: z.array(z.string()).optional(),
   customModels: z.array(z.object({ id: z.string(), displayName: z.string() })).optional(),
+  modelReasoningDefaults: z.record(z.string(), z.enum(["none", "low", "medium", "high", "xhigh", "ultracode", "max", "ultra"])).optional(),
 });
+const reasoningEffortSchema = z.enum(["none", "low", "medium", "high", "xhigh", "ultracode", "max", "ultra"]);
+const availableModelSchema = z.object({
+  id: z.string(),
+  model: z.string(),
+  displayName: z.string(),
+  supportedReasoningEfforts: z.array(z.object({ reasoningEffort: reasoningEffortSchema, description: z.string() })),
+  defaultReasoningEffort: reasoningEffortSchema,
+  isDefault: z.boolean(),
+}).passthrough();
 const responseSchema = z.object({
   id: z.union([z.string(), z.number()]),
   result: z.object({ models: z.array(z.unknown()).optional(), selectedOnlyModels: z.array(z.unknown()).optional() }).passthrough().optional(),
@@ -35,9 +48,22 @@ const forwardLine = (line: string) => {
         if (preferences && decoded.data.result) {
           const filterAndSort = (models: unknown[]) => {
             const byId = new Map<string, unknown>();
-            for (const model of models) {
-              const modelId = modelIdOf(model);
-              if (modelId && !preferences.hiddenModelIds.has(modelId)) byId.set(modelId, model);
+            const routedDefaults = new Set(models.flatMap((rawModel) => {
+              const decodedModel = availableModelSchema.safeParse(rawModel);
+              if (!decodedModel.success || !decodedModel.data.isDefault || !decodedModel.data.id.startsWith("codex-perso/")) return [];
+              return [decodedModel.data.id.slice("codex-perso/".length)];
+            }));
+            for (const rawModel of models) {
+              const decodedModel = availableModelSchema.safeParse(rawModel);
+              if (!decodedModel.success) continue;
+              const model = decodedModel.data;
+              const modelId = model.id;
+              if (modelId.startsWith("codex-perso/") || preferences.hiddenModelIds.has(modelId)) continue;
+              const configuredDefault = preferences.modelReasoningDefaults[modelId];
+              const defaultReasoningEffort = configuredDefault && model.supportedReasoningEfforts.some((effort) => effort.reasoningEffort === configuredDefault)
+                ? configuredDefault
+                : model.defaultReasoningEffort;
+              byId.set(modelId, { ...model, defaultReasoningEffort, isDefault: model.isDefault || routedDefaults.has(modelId) });
             }
             for (const custom of preferences.customModels) {
               if (!preferences.hiddenModelIds.has(custom.id) && !byId.has(custom.id)) {
@@ -98,23 +124,26 @@ export const experimental_providerBridge = {
       const decoded = requestSchema.safeParse(JSON.parse(line));
       if (decoded.success) {
         if (decoded.data.method === "provider/usage") {
-          void readOpenCodexAccountUsage(decoded.data.params.providerOptions ?? {}).then((result) => {
+          const usageProvider = usageProviderSchema.safeParse(decoded.data.params.providerOptions ?? {});
+          const readUsage = usageProvider.success && usageProvider.data.accountProvider === "opencode-go" ? readOpenCodeGoUsage : readCodexUsage;
+          void readUsage().then((result) => {
             originalWrite(JSON.stringify({ jsonrpc: "2.0", id: decoded.data.id, result }) + "\n");
           }).catch(() => {
             originalWrite(JSON.stringify({
               jsonrpc: "2.0",
               id: decoded.data.id,
-              result: { supported: true, usage: { status: "error", message: "OpenCodex usage could not be read." } },
+              result: { supported: true, usage: { status: "error", accountEmail: null, planLabel: null, message: "Codex subscription limits could not be read." } },
             }) + "\n");
           });
           return;
         }
         const options = providerOptionsSchema.safeParse(decoded.data.params.providerOptions ?? {});
-        if (options.success && (options.data.hiddenModelIds || options.data.modelOrder || options.data.customModels)) {
+        if (options.success && (options.data.hiddenModelIds || options.data.modelOrder || options.data.customModels || options.data.modelReasoningDefaults)) {
           preferencesByRequest.set(String(decoded.data.id), {
             hiddenModelIds: new Set(options.data.hiddenModelIds ?? []),
             modelOrder: options.data.modelOrder ?? [],
             customModels: options.data.customModels ?? [],
+            modelReasoningDefaults: options.data.modelReasoningDefaults ?? {},
           });
           if (preferencesByRequest.size > 256) {
             const oldestRequestId = preferencesByRequest.keys().next().value;
@@ -127,9 +156,4 @@ export const experimental_providerBridge = {
     }
     experimental_acpProviderBridge.handleLine(line);
   },
-};
-
-const modelIdOf = (model: unknown) => {
-  const decoded = z.object({ id: z.string().optional(), modelId: z.string().optional() }).passthrough().safeParse(model);
-  return decoded.success ? decoded.data.id ?? decoded.data.modelId : undefined;
 };

@@ -3,6 +3,10 @@ import { definePluginApp, useBbContext, useRpc } from "@get-bb/plugin-sdk/app";
 import type { AccountProfile, rpcContract } from "./server";
 import "./app.css";
 
+const reasoningEffortValues = ["none", "low", "medium", "high", "xhigh", "ultracode", "max", "ultra"] as const;
+type ReasoningEffort = typeof reasoningEffortValues[number];
+const isReasoningEffort = (value: string): value is ReasoningEffort => reasoningEffortValues.some((effort) => effort === value);
+
 const AccountPage = () => {
   const rpc = useRpc<typeof rpcContract>();
   const context = useBbContext();
@@ -11,10 +15,10 @@ const AccountPage = () => {
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ displayName: "", path: "", hiddenText: "", proxyAccountName: "" });
+  const [draft, setDraft] = useState({ displayName: "", path: "", hiddenText: "", badge: "", accentColor: "#2563EB" });
   const [machines, setMachines] = useState<Array<{ id: string; name: string; status: string }>>([]);
   const [selectedHostId, setSelectedHostId] = useState("");
-  const [catalog, setCatalog] = useState<Array<{ id: string; displayName: string; isDefault: boolean }>>([]);
+  const [catalog, setCatalog] = useState<Array<{ id: string; displayName: string; isDefault: boolean; supportedReasoningEfforts: Array<{ reasoningEffort: ReasoningEffort; description: string }>; defaultReasoningEffort: ReasoningEffort }>>([]);
   const [customDraft, setCustomDraft] = useState({ id: "", displayName: "" });
   const [refreshingCatalog, setRefreshingCatalog] = useState(false);
   const [scopeMode, setScopeMode] = useState<"default" | "project" | "machine" | "project-machine">("default");
@@ -57,7 +61,8 @@ const AccountPage = () => {
       displayName: selected.displayName,
       path: selected.path,
       hiddenText: selected.hiddenModelIds.join("\n"),
-      proxyAccountName: selected.proxyAccountName ?? "",
+      badge: selected.badge ?? selected.displayName.split(/\s+/u).filter(Boolean).map((part) => part[0]).join("").slice(0, 3).toUpperCase(),
+      accentColor: selected.accentColor ?? (selected.provider === "codex" ? "#2563EB" : "#7C3AED"),
     });
   }, [selected?.id]);
 
@@ -101,18 +106,20 @@ const AccountPage = () => {
       const result = await rpc.call("save", {
         provider,
         displayName: provider === "codex" ? "Codex " + count : "OpenCode Go " + count,
-        proxyAccountName: "",
+        badge: provider === "codex" ? "C" + count : "O" + count,
+        accentColor: provider === "codex" ? "#2563EB" : "#7C3AED",
         path: root + "/" + count,
         enabled: true,
         hiddenModelIds: [],
         favoriteModelIds: [],
         modelOrder: [],
+        modelReasoningDefaults: {},
         customModels: [],
         pathOverrides: [],
       });
       setAccounts((current) => [...current, result.account]);
       setSelectedId(result.account.id);
-      setNotice("Account added. Set the absolute path that exists on the machine running its provider.");
+      setNotice("Account added. Sign in once to create its isolated home and connect this profile.");
     } catch {
       setNotice("Could not add the account.");
     } finally {
@@ -124,8 +131,8 @@ const AccountPage = () => {
     if (!selected) return;
     const quotedPath = "'" + draft.path.replaceAll("'", "'\\''") + "'";
     const command = selected.provider === "codex"
-      ? "CODEX_HOME=" + quotedPath + " codex login"
-      : "XDG_DATA_HOME=" + quotedPath + " opencode auth login";
+      ? "mkdir -p " + quotedPath + " && chmod 700 " + quotedPath + " && CODEX_HOME=" + quotedPath + " codex login"
+      : "mkdir -p " + quotedPath + " && XDG_DATA_HOME=" + quotedPath + " opencode auth login";
     try {
       await navigator.clipboard.writeText(command);
       setNotice("Sign-in command copied. Run it in a terminal on the machine using this account.");
@@ -181,7 +188,7 @@ const AccountPage = () => {
     if (!selected) return;
     const hiddenModelIds = Array.from(new Set(draft.hiddenText.split(/\s+/u).map((model) => model.trim()).filter(Boolean)));
     if (scopeMode === "default") {
-      await persist({ displayName: draft.displayName, path: draft.path, hiddenModelIds, proxyAccountName: draft.proxyAccountName.trim() || undefined });
+      await persist({ displayName: draft.displayName, path: draft.path, hiddenModelIds, badge: draft.badge, accentColor: draft.accentColor });
       return;
     }
     if ((scopeMode === "project" || scopeMode === "project-machine") && !context.projectId) {
@@ -196,14 +203,14 @@ const AccountPage = () => {
     const hostId = scopeMode === "machine" || scopeMode === "project-machine" ? scopeHostId.trim() : null;
     const pathOverrides = selected.pathOverrides.filter((entry) => entry.projectId !== projectId || entry.hostId !== hostId);
     if (draft.path !== selected.path) pathOverrides.push({ projectId, hostId, path: draft.path });
-    await persist({ displayName: draft.displayName, hiddenModelIds, pathOverrides, proxyAccountName: draft.proxyAccountName.trim() || undefined });
+    await persist({ displayName: draft.displayName, hiddenModelIds, pathOverrides, badge: draft.badge, accentColor: draft.accentColor });
   };
 
   const hiddenModelIds = new Set(draft.hiddenText.split(/\s+/u).filter(Boolean));
   const catalogModels = selected
     ? [
       ...catalog,
-      ...selected.customModels.filter((custom) => !catalog.some((model) => model.id === custom.id)).map((custom) => ({ ...custom, isDefault: false })),
+      ...selected.customModels.filter((custom) => !catalog.some((model) => model.id === custom.id)).map((custom) => ({ ...custom, isDefault: false, supportedReasoningEfforts: [{ reasoningEffort: "medium", description: "Medium" }], defaultReasoningEffort: "medium" })),
     ]
     : catalog;
   const modelIndex = new Map(catalogModels.map((model, index) => [model.id, index]));
@@ -250,6 +257,11 @@ const AccountPage = () => {
     if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
     [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
     void persist({ modelOrder: order });
+  };
+
+  const updateReasoningDefault = (modelId: string, effort: ReasoningEffort) => {
+    if (!selected) return;
+    void persist({ modelReasoningDefaults: { ...selected.modelReasoningDefaults, [modelId]: effort } });
   };
 
   const addCustomModel = () => {
@@ -301,7 +313,12 @@ const AccountPage = () => {
       <div className={"aa-model-row " + (isHidden ? "is-hidden" : "")} key={model.id}>
         <button className="aa-favorite" aria-label={isFavorite ? "Remove favorite" : "Add favorite"} onClick={() => updateFavorites(model.id)}>{isFavorite ? "★" : "☆"}</button>
         <span className="aa-model-copy"><strong>{model.displayName}</strong><small>{model.id}{model.isDefault ? " · default" : ""}</small></span>
-        <div className="aa-model-actions"><button title="Move up" aria-label="Move up" disabled={globalIndex === 0} onClick={() => moveModel(model.id, -1)}>↑</button><button title="Move down" aria-label="Move down" disabled={globalIndex === orderedModels.length - 1} onClick={() => moveModel(model.id, 1)}>↓</button><label className="aa-model-switch" title={isHidden ? "Show in picker" : "Hide from picker"}><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span /></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}</div>
+        <div className="aa-model-actions">
+          <select className="aa-reasoning-default" aria-label={"Default reasoning effort for " + model.displayName} value={selected?.modelReasoningDefaults[model.id] ?? model.defaultReasoningEffort} onChange={(event) => { if (isReasoningEffort(event.currentTarget.value)) updateReasoningDefault(model.id, event.currentTarget.value); }}>
+            {model.supportedReasoningEfforts.map((effort) => <option key={effort.reasoningEffort} value={effort.reasoningEffort}>{effort.description}</option>)}
+          </select>
+          <button title="Move up" aria-label="Move up" disabled={globalIndex === 0} onClick={() => moveModel(model.id, -1)}>↑</button><button title="Move down" aria-label="Move down" disabled={globalIndex === orderedModels.length - 1} onClick={() => moveModel(model.id, 1)}>↓</button><label className="aa-model-switch" title={isHidden ? "Show in picker" : "Hide from picker"}><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span /></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}
+        </div>
       </div>
     );
   });
@@ -332,7 +349,7 @@ const AccountPage = () => {
                 <h2>{provider === "codex" ? "CODEX" : "OPENCODE GO"}</h2>
                 {providerAccounts.map((account) => (
                   <button className={"aa-account-row " + (selectedId === account.id ? "is-selected" : "")} key={account.id} onClick={() => setSelectedId(account.id)}>
-                    <span className={"aa-mark " + (provider === "codex" ? "codex" : "opencode")}>{provider === "codex" ? "C" : "O"}</span>
+                    <span className={"aa-mark " + (provider === "codex" ? "codex" : "opencode")} style={{ backgroundColor: account.accentColor ?? "#2563EB" }}>{account.badge ?? account.displayName.slice(0, 2).toUpperCase()}</span>
                     <span className="aa-row-copy"><strong>{account.displayName}</strong><small>{account.email ?? "Email not detected"}</small></span>
                     <i className={account.enabled ? "aa-dot" : "aa-dot is-off"} />
                   </button>
@@ -347,7 +364,7 @@ const AccountPage = () => {
           <section className="aa-detail">
             <div className="aa-detail-top">
               <div className="aa-provider-title">
-                <span className={"aa-mark large " + (selected.provider === "codex" ? "codex" : "opencode")}>{selected.provider === "codex" ? "C" : "O"}</span>
+                <span className={"aa-mark large " + (selected.provider === "codex" ? "codex" : "opencode")} style={{ backgroundColor: draft.accentColor }}>{draft.badge || "AI"}</span>
                 <div><p className="aa-kicker">{selected.provider === "codex" ? "CHATGPT SUBSCRIPTION" : "OPENCODE SUBSCRIPTION"}</p><h2>{selected.displayName}</h2></div>
               </div>
               <label className="aa-switch-label"><span>{selected.enabled ? "Enabled in model picker" : "Hidden from model picker"}</span><input type="checkbox" checked={selected.enabled} onChange={(event) => void persist({ enabled: event.currentTarget.checked })} /><span className="aa-switch" /></label>
@@ -369,9 +386,10 @@ const AccountPage = () => {
               <div className="aa-field-grid identity">
                 <label>Display name<input value={draft.displayName} onChange={(event) => setDraft((current) => ({ ...current, displayName: event.currentTarget.value }))} /></label>
                 <label>Signed-in email<input readOnly value={identityEmail ?? (selected.provider === "codex" ? "Sign in, then refresh" : "OpenCode Go key login")} /></label>
-                <label>OpenCodex account mapping<input value={draft.proxyAccountName} onChange={(event) => setDraft((current) => ({ ...current, proxyAccountName: event.currentTarget.value }))} placeholder={selected.provider === "codex" ? "Alias or account ID · leave blank to match" : "Provider name · leave blank to match"} /></label>
+                <label>Picker tag<input value={draft.badge} maxLength={4} onChange={(event) => setDraft((current) => ({ ...current, badge: event.currentTarget.value.toUpperCase() }))} placeholder="EM" /></label>
+                <label>Tag color<input className="aa-color-input" type="color" value={draft.accentColor} onChange={(event) => setDraft((current) => ({ ...current, accentColor: event.currentTarget.value }))} /></label>
               </div>
-              <p className="aa-help">Usage meters match the local OpenCodex account alias for Codex or provider name for OpenCode Go. Leave blank to match this profile’s ID or display name.</p>
+              <p className="aa-help">The short tag and color distinguish this account in BB’s provider picker. Change them any time.</p>
             </section>
 
             <section className="aa-section">
