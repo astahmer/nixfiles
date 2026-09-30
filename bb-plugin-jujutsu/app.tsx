@@ -129,7 +129,7 @@ const styles = `
 .jj-full-diff-body{min-height:0;flex:1;overflow:auto}.jj-full-diff-body>div{min-height:100%}
 .jj-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:8px}.jj-tabs{width:max-content;max-width:100%;margin:0}.jj-repository-controls{display:flex;min-width:0;align-items:center;gap:7px;flex-wrap:wrap}.jj-repository-controls .jj-host{flex:0 1 180px;width:auto}.jj-repository-controls .jj-path-picker{flex:1 1 180px}.jj-repository-controls .jj-path{width:100%;border-radius:6px}.jj-refresh{display:grid;width:34px;height:34px;flex:none;place-items:center;padding:0}.jj-revision-diff-file{border-bottom:1px solid var(--jj-line)}.jj-revision-diff-file h3{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;margin:0;padding:8px 12px;border-bottom:1px solid var(--jj-line);background:var(--card);font:600 12px var(--font-mono,monospace)}.jj-revision-diff-file h3 .jj-status{width:auto}.jj-revision-diff-renderer{padding:8px 10px}.jj-revision-diff-renderer>div{min-height:0}
 .jj-toolbar{gap:5px;padding:6px 9px}.jj-tab{padding:6px 9px}.jj-repository-controls{gap:5px}.jj-repository-controls .jj-input{padding:5px 8px}.jj-refresh{width:30px;height:30px}.jj-picker{width:min(580px,calc(100vw - 32px));max-height:min(480px,72vh);padding:6px 6px 0;border-radius:10px}.jj-picker-header{padding:0 6px 4px;gap:4px}.jj-picker-path input{height:32px;font-size:13px}.jj-picker-section{padding:5px 8px 3px;font-size:10px}.jj-picker-list{max-height:min(360px,58vh);min-height:0;padding:0 3px 4px}.jj-project-option{min-height:36px;gap:7px;padding:4px 6px;border-radius:5px}.jj-project-mark{width:18px;height:18px;border-radius:4px;font-size:8px}.jj-project-copy{gap:0;font-size:12px}.jj-project-copy small{font-size:9px}.jj-picker-entry{min-height:29px;padding:3px 7px;border-radius:5px}.jj-picker-footer{gap:8px;padding:5px 8px;font-size:9px}.jj-picker-footer kbd{padding:1px 3px}
-.jj-ancestor-files-heading{display:flex;align-items:center;gap:6px}.jj-ancestor-files-heading .jj-section-heading-toggle{flex:1;min-width:0}.jj-ancestor-full-diff{flex:none;padding:4px 7px;font-size:10px}
+.jj-files-heading{display:flex;align-items:center;gap:6px}.jj-files-heading .jj-section-heading-toggle{flex:1;min-width:0}.jj-full-diff-action{flex:none;padding:4px 7px;font-size:10px}
 `;
 
 const RevisionGraphCell = ({
@@ -646,11 +646,8 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [snapshot]);
 
   useEffect(() => {
-    const shouldLoadSourceFiles =
-      tab === "source" && expandedSourceRevisionId === selectedRevision?.commitId;
     if (
       !selectedRevision ||
-      (filesExpandedRevisionId !== selectedRevision.commitId && !shouldLoadSourceFiles) ||
       !snapshot ||
       !path ||
       !hostId
@@ -707,15 +704,12 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       active = false;
     };
   }, [
-    expandedSourceRevisionId,
-    filesExpandedRevisionId,
     hostId,
     loadedRevisionFilesFor,
     path,
     rpc,
     selectedRevision?.commitId,
     snapshot,
-    tab,
   ]);
 
   useEffect(() => {
@@ -1075,21 +1069,34 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           </button>
         </div>
       </div>
-      <button
-        className="jj-section-heading jj-section-heading-toggle"
-        aria-expanded={filesExpandedRevisionId === revision.commitId}
-        onClick={() =>
-          setFilesExpandedRevisionId((current) =>
-            current === revision.commitId ? null : revision.commitId,
-          )
-        }
-      >
-        <span className="jj-chevron">›</span>
-        Changed files{" "}
-        {filesExpandedRevisionId === revision.commitId && (
-          <span className="jj-count">{revisionFilesLoading ? "…" : revisionFiles.length}</span>
-        )}
-      </button>
+      <div className="jj-files-heading">
+        <button
+          className="jj-section-heading jj-section-heading-toggle"
+          aria-expanded={filesExpandedRevisionId === revision.commitId}
+          onClick={() =>
+            setFilesExpandedRevisionId((current) =>
+              current === revision.commitId ? null : revision.commitId,
+            )
+          }
+        >
+          <span className="jj-chevron">›</span>
+          Changed files
+          <span className="jj-count">
+            {revisionFilesLoading
+              ? "…"
+              : revisionFilesError
+                ? "!"
+                : revisionFiles.length}
+          </span>
+        </button>
+        <button
+          className="jj-button jj-full-diff-action"
+          title={`View the full diff for ${label(revision)}`}
+          onClick={() => void showRevisionDiff(revision)}
+        >
+          Full diff
+        </button>
+      </div>
       {filesExpandedRevisionId === revision.commitId && revisionFilesError && (
         <div className="jj-error-inline" role="alert">
           {revisionFilesError}
@@ -1798,7 +1805,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                 </div>
                                 {isExpanded && selectedRevision?.commitId === revision.commitId && (
                                   <div className="jj-ancestor-files">
-                                    <div className="jj-ancestor-files-heading">
+                                    <div className="jj-files-heading">
                                       <button
                                         className="jj-section-heading jj-section-heading-toggle"
                                         aria-expanded={filesExpandedRevisionId === revision.commitId}
@@ -1821,7 +1828,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                         </span>
                                       </button>
                                       <button
-                                        className="jj-button jj-ancestor-full-diff"
+                                          className="jj-button jj-full-diff-action"
                                         title={`View the full diff for ${label(revision)}`}
                                         onClick={() => void showRevisionDiff(revision)}
                                       >

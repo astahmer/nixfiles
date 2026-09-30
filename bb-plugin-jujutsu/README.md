@@ -14,8 +14,9 @@ Two JJ work surfaces live in one BB sidebar page:
 - **Source Control** follows the working copy with expandable `@-1` through
   `@-X` ancestor groups, visible even before a file is selected. Expanding an
   ancestor shows its changed-file count before the file list; **Full diff** opens
-  every file diff for that revision together. It also provides describe, split,
-  and squash actions. The ancestor window is configurable.
+  every file diff for that revision together. The graph uses the same count and
+  full-diff controls. Source Control also provides describe, split, and squash
+  actions. The ancestor window is configurable.
 
 ## First run
 
