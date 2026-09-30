@@ -197,7 +197,9 @@ export default async function plugin(bb: BbPluginApi) {
           supportsThreadArchive: false,
           supportsThreadRename: false,
           permissionModes: ["full", "accept-edits"],
-          reasoningLevels: ["low", "medium", "high"],
+          reasoningLevels: account.provider === "codex"
+            ? ["low", "medium", "high", "xhigh", "max", "ultra"]
+            : ["low", "medium", "high"],
         },
         composerActions: [],
         models: { scope: "host" },
