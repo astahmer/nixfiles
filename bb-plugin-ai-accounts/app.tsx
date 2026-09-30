@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { definePluginApp, useBbContext, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { AccountProfile, rpcContract } from "./server";
@@ -12,6 +12,8 @@ const GlobalModelPicker = () => {
   const composer = useComposer();
   const sdk = useSdk();
   const rpc = useRpc<typeof rpcContract>();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeProviderId, setActiveProviderId] = useState("all");
@@ -34,6 +36,18 @@ const GlobalModelPicker = () => {
       return terms.every((term) => searchable.includes(term));
     });
   }, [activeProviderId, models, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (triggerRef.current?.contains(event.target) || popoverRef.current?.contains(event.target)) return;
+      setOpen(false);
+      setQuery("");
+    };
+    document.addEventListener("pointerdown", handleOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +106,7 @@ const GlobalModelPicker = () => {
   };
 
   return <div className="aa-global-picker">
-    <button className="aa-global-picker-trigger" type="button" aria-expanded={open} onClick={(event) => {
+    <button ref={triggerRef} className="aa-global-picker-trigger" type="button" aria-expanded={open} onClick={(event) => {
       const bounds = event.currentTarget.getBoundingClientRect();
       const roomBelow = window.innerHeight - bounds.bottom - 12;
       const roomAbove = bounds.top - 12;
@@ -105,7 +119,7 @@ const GlobalModelPicker = () => {
       });
       setOpen((current) => !current);
     }}>All models <span aria-hidden="true">⌄</span></button>
-    {open ? createPortal(<section className="aa-global-picker-popover" style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }} aria-label="Search all account models">
+    {open ? createPortal(<section ref={popoverRef} className="aa-global-picker-popover" style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }} aria-label="Search all account models">
       <nav className="aa-global-picker-sidebar" aria-label="Filter by provider">
         <button className={activeProviderId === "all" ? "is-active" : ""} type="button" title="All models" aria-label="All models" aria-pressed={activeProviderId === "all"} onClick={() => setActiveProviderId("all")}><svg className="aa-global-picker-all-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="1" y="10" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="10" width="5" height="5" rx="1" fill="currentColor" /></svg></button>
         <button className={activeProviderId === "favorites" ? "is-active" : ""} type="button" title="Favorites" aria-label="Favorites" aria-pressed={activeProviderId === "favorites"} onClick={() => setActiveProviderId("favorites")}><svg className="aa-global-picker-favorites-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.2 2.05 4.16 4.59.67-3.32 3.23.78 4.57L8 11.67l-4.1 2.16.78-4.57L1.36 6.03l4.59-.67L8 1.2Z" fill="currentColor" /></svg></button>
