@@ -12,9 +12,10 @@ Two JJ work surfaces live in one BB sidebar page:
   graph, dims its old position, and previews the command before rebasing;
   right-click a revision for common actions.
 - **Source Control** follows the working copy with expandable `@-1` through
-  `@-X` ancestor groups. It provides describe, split, and squash actions, and
-  opens BB's native diff viewer only after selecting a file. The ancestor
-  window is configurable.
+  `@-X` ancestor groups, visible even before a file is selected. Expanding an
+  ancestor shows its changed-file count before the file list; **Full diff** opens
+  every file diff for that revision together. It also provides describe, split,
+  and squash actions. The ancestor window is configurable.
 
 ## First run
 
@@ -26,7 +27,7 @@ bb plugin install .
 
 Open **Jujutsu** from BB's main sidebar or add its fixed tab to the secondary
 right sidebar. The machine selector chooses the only connected host
-automatically. The editable project-path combobox suggests paths already
+automatically. The compact project picker suggests paths already
 registered by BB and also accepts a pasted path. The folder browser follows the
 Secret Catalog picker, including keyboard navigation. Suggestions follow the
 chosen machine. The path and machine stay in this browser's local storage.

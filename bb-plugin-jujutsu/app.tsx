@@ -128,7 +128,8 @@ const styles = `
 .jj-full-diff-header span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jj-full-diff-body{min-height:0;flex:1;overflow:auto}.jj-full-diff-body>div{min-height:100%}
 .jj-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:8px}.jj-tabs{width:max-content;max-width:100%;margin:0}.jj-repository-controls{display:flex;min-width:0;align-items:center;gap:7px;flex-wrap:wrap}.jj-repository-controls .jj-host{flex:0 1 180px;width:auto}.jj-repository-controls .jj-path-picker{flex:1 1 180px}.jj-repository-controls .jj-path{width:100%;border-radius:6px}.jj-refresh{display:grid;width:34px;height:34px;flex:none;place-items:center;padding:0}.jj-revision-diff-file{border-bottom:1px solid var(--jj-line)}.jj-revision-diff-file h3{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;margin:0;padding:8px 12px;border-bottom:1px solid var(--jj-line);background:var(--card);font:600 12px var(--font-mono,monospace)}.jj-revision-diff-file h3 .jj-status{width:auto}.jj-revision-diff-renderer{padding:8px 10px}.jj-revision-diff-renderer>div{min-height:0}
-.jj-picker{width:min(620px,calc(100vw - 32px));max-height:min(520px,78vh);padding:8px 7px 0;border-radius:12px}.jj-picker-header{padding:0 7px 6px;gap:5px}.jj-picker-path input{height:36px;font-size:14px}.jj-picker-section{padding:8px 10px 4px;font-size:11px}.jj-picker-list{max-height:min(390px,60vh);min-height:0;padding:0 4px 5px}.jj-project-option{min-height:42px;gap:8px;padding:5px 7px;border-radius:6px}.jj-project-mark{width:20px;height:20px;border-radius:5px;font-size:9px}.jj-project-copy{gap:0;font-size:13px}.jj-project-copy small{font-size:10px}.jj-picker-entry{min-height:32px;padding:4px 8px;border-radius:6px}.jj-picker-footer{gap:10px;padding:7px 9px;font-size:10px}.jj-picker-footer kbd{padding:1px 4px}
+.jj-toolbar{gap:5px;padding:6px 9px}.jj-tab{padding:6px 9px}.jj-repository-controls{gap:5px}.jj-repository-controls .jj-input{padding:5px 8px}.jj-refresh{width:30px;height:30px}.jj-picker{width:min(580px,calc(100vw - 32px));max-height:min(480px,72vh);padding:6px 6px 0;border-radius:10px}.jj-picker-header{padding:0 6px 4px;gap:4px}.jj-picker-path input{height:32px;font-size:13px}.jj-picker-section{padding:5px 8px 3px;font-size:10px}.jj-picker-list{max-height:min(360px,58vh);min-height:0;padding:0 3px 4px}.jj-project-option{min-height:36px;gap:7px;padding:4px 6px;border-radius:5px}.jj-project-mark{width:18px;height:18px;border-radius:4px;font-size:8px}.jj-project-copy{gap:0;font-size:12px}.jj-project-copy small{font-size:9px}.jj-picker-entry{min-height:29px;padding:3px 7px;border-radius:5px}.jj-picker-footer{gap:8px;padding:5px 8px;font-size:9px}.jj-picker-footer kbd{padding:1px 3px}
+.jj-ancestor-files-heading{display:flex;align-items:center;gap:6px}.jj-ancestor-files-heading .jj-section-heading-toggle{flex:1;min-width:0}.jj-ancestor-full-diff{flex:none;padding:4px 7px;font-size:10px}
 `;
 
 const RevisionGraphCell = ({
@@ -321,6 +322,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [revisionFilesLoading, setRevisionFilesLoading] = useState(false);
   const [revisionFileStatsLoading, setRevisionFileStatsLoading] = useState(false);
   const [revisionFilesError, setRevisionFilesError] = useState<string | null>(null);
+  const [loadedRevisionFilesFor, setLoadedRevisionFilesFor] = useState<string | null>(null);
   const [filesExpandedRevisionId, setFilesExpandedRevisionId] = useState<string | null>(null);
   const revisionDiffRequest = useRef(0);
   const [diffTarget, setDiffTarget] = useState<DiffTarget | null>(null);
@@ -644,19 +646,25 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [snapshot]);
 
   useEffect(() => {
+    const shouldLoadSourceFiles =
+      tab === "source" && expandedSourceRevisionId === selectedRevision?.commitId;
     if (
       !selectedRevision ||
-      filesExpandedRevisionId !== selectedRevision.commitId ||
+      (filesExpandedRevisionId !== selectedRevision.commitId && !shouldLoadSourceFiles) ||
       !snapshot ||
       !path ||
       !hostId
     ) {
-      setRevisionFiles([]);
-      setRevisionFileStats([]);
+      if (!selectedRevision || loadedRevisionFilesFor !== selectedRevision.commitId) {
+        setRevisionFiles([]);
+        setRevisionFileStats([]);
+        setRevisionFilesError(null);
+      }
       setRevisionFilesLoading(false);
       setRevisionFileStatsLoading(false);
       return;
     }
+    if (loadedRevisionFilesFor === selectedRevision.commitId) return;
     let active = true;
     setRevisionFiles([]);
     setRevisionFileStats([]);
@@ -665,19 +673,24 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setRevisionFileStatsLoading(true);
     setRevisionFilesError(null);
     const input = { path, hostId, revision: selectedRevision.commitId };
+    let filesLoaded = false;
     void Promise.allSettled([
       rpc.call("revisionFiles", input),
       rpc.call("revisionFileStats", input),
     ])
       .then(([filesResult, statsResult]) => {
         if (!active) return;
-        if (filesResult.status === "fulfilled") setRevisionFiles(filesResult.value);
-        else
+        if (filesResult.status === "fulfilled") {
+          setRevisionFiles(filesResult.value);
+          filesLoaded = true;
+        }
+        if (filesResult.status === "rejected") {
           setRevisionFilesError(
             filesResult.reason instanceof Error
               ? filesResult.reason.message
               : String(filesResult.reason),
           );
+        }
         if (statsResult.status === "fulfilled") setRevisionFileStats(statsResult.value);
       })
       .catch((cause) => {
@@ -685,6 +698,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       })
       .finally(() => {
         if (active) {
+          if (filesLoaded) setLoadedRevisionFilesFor(selectedRevision.commitId);
           setRevisionFilesLoading(false);
           setRevisionFileStatsLoading(false);
         }
@@ -692,7 +706,17 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     return () => {
       active = false;
     };
-  }, [filesExpandedRevisionId, hostId, path, rpc, selectedRevision?.commitId, snapshot]);
+  }, [
+    expandedSourceRevisionId,
+    filesExpandedRevisionId,
+    hostId,
+    loadedRevisionFilesFor,
+    path,
+    rpc,
+    selectedRevision?.commitId,
+    snapshot,
+    tab,
+  ]);
 
   useEffect(() => {
     if (!diffTarget || !path || !hostId) {
@@ -854,6 +878,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setSelectedRevision((current) => (current?.commitId === revision.commitId ? null : revision));
     setDescription(revision.description);
     setFilesExpandedRevisionId(null);
+    setLoadedRevisionFilesFor(null);
     setDiffTarget(null);
     setFullDiffOpen(false);
   };
@@ -899,6 +924,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setFilesExpandedRevisionId(null);
     setSelectedRevisionFiles([]);
     setDiffTarget(null);
+    setLoadedRevisionFilesFor(null);
   };
   const selectFileDiff = (filePath: string, revisionId: string | null) => {
     setDiffTarget({ path: filePath, revision: revisionId });
@@ -1702,8 +1728,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                       }}
                     />
                   )}
-                  {diffTarget && (
-                    <section className="jj-group jj-history-group">
+                  <section className="jj-group jj-history-group">
                       <button
                         className="jj-group-header"
                         aria-expanded={historyExpanded}
@@ -1773,23 +1798,36 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                 </div>
                                 {isExpanded && selectedRevision?.commitId === revision.commitId && (
                                   <div className="jj-ancestor-files">
-                                    <button
-                                      className="jj-section-heading jj-section-heading-toggle"
-                                      aria-expanded={filesExpandedRevisionId === revision.commitId}
-                                      onClick={() =>
-                                        setFilesExpandedRevisionId((current) =>
-                                          current === revision.commitId ? null : revision.commitId,
-                                        )
-                                      }
-                                    >
-                                      <span className="jj-chevron">›</span>
-                                      Changed files{" "}
-                                      {filesExpandedRevisionId === revision.commitId && (
+                                    <div className="jj-ancestor-files-heading">
+                                      <button
+                                        className="jj-section-heading jj-section-heading-toggle"
+                                        aria-expanded={filesExpandedRevisionId === revision.commitId}
+                                        onClick={() =>
+                                          setFilesExpandedRevisionId((current) =>
+                                            current === revision.commitId
+                                              ? null
+                                              : revision.commitId,
+                                          )
+                                        }
+                                      >
+                                        <span className="jj-chevron">›</span>
+                                        Changed files
                                         <span className="jj-count">
-                                          {revisionFilesLoading ? "…" : revisionFiles.length}
+                                          {revisionFilesLoading
+                                            ? "…"
+                                            : revisionFilesError
+                                              ? "!"
+                                              : revisionFiles.length}
                                         </span>
-                                      )}
-                                    </button>
+                                      </button>
+                                      <button
+                                        className="jj-button jj-ancestor-full-diff"
+                                        title={`View the full diff for ${label(revision)}`}
+                                        onClick={() => void showRevisionDiff(revision)}
+                                      >
+                                        Full diff
+                                      </button>
+                                    </div>
                                     {filesExpandedRevisionId === revision.commitId &&
                                       revisionFilesError && (
                                         <div className="jj-error-inline" role="alert">
@@ -1913,8 +1951,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                           })}
                         </div>
                       )}
-                    </section>
-                  )}
+                  </section>
                 </div>
                 {diffTarget && (
                   <aside className="jj-preview">

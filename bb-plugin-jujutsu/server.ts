@@ -1,6 +1,6 @@
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { hostContract, revisionSchema, fileChangeSchema } from "./contract";
+import { hostContract, revisionSchema, fileChangeSchema, fileStatSchema } from "./contract";
 
 const target = z.object({ hostId: z.string().min(1), path: z.string().trim().min(1).max(4096) });
 const revisionTarget = target.extend({ revision: z.string().min(1).max(128) });
@@ -23,6 +23,7 @@ export const rpcContract = defineRpcContract({
     }),
   },
   revisionFiles: { input: revisionTarget, output: z.array(fileChangeSchema) },
+  revisionFileStats: { input: revisionTarget, output: z.array(fileStatSchema) },
   fileDiff: { input: fileDiffTarget, output: z.object({ patch: z.string() }) },
   describe: {
     input: revisionTarget.extend({ description: z.string().max(10000) }),
@@ -66,6 +67,12 @@ export default async function plugin(bb: BbPluginApi) {
     revisionFiles: async (input) =>
       host.call(
         "revisionFiles",
+        { path: input.path, revision: input.revision },
+        { hostId: input.hostId },
+      ),
+    revisionFileStats: async (input) =>
+      host.call(
+        "revisionFileStats",
         { path: input.path, revision: input.revision },
         { hostId: input.hostId },
       ),
