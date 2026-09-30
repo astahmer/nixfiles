@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
-import { definePluginApp, experimental_ProviderModelPicker as ProviderModelPicker, useRpc } from "@get-bb/plugin-sdk/app";
+import { definePluginApp, experimental_ProviderModelPicker as ProviderModelPicker, useBbContext, useRpc } from "@get-bb/plugin-sdk/app";
 import type { AccountProfile, rpcContract } from "./server";
 import "./app.css";
 
 const AccountPage = () => {
   const rpc = useRpc<typeof rpcContract>();
+  const context = useBbContext();
   const [accounts, setAccounts] = useState<AccountProfile[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
   const [draft, setDraft] = useState({ displayName: "", path: "", hiddenText: "" });
+  const [machines, setMachines] = useState<Array<{ id: string; name: string; status: string }>>([]);
+  const [selectedHostId, setSelectedHostId] = useState("");
+  const [catalog, setCatalog] = useState<Array<{ id: string; displayName: string; isDefault: boolean }>>([]);
+  const [scopeMode, setScopeMode] = useState<"default" | "project" | "machine" | "project-machine">("default");
+  const [scopeHostId, setScopeHostId] = useState("");
   const selected = accounts.find((account) => account.id === selectedId) ?? null;
 
   async function loadAccounts() {
@@ -26,18 +32,43 @@ const AccountPage = () => {
   }, []);
 
   useEffect(() => {
+    void rpc.call("machines", null).then((result) => {
+      setMachines(result.machines);
+      const connected = result.machines.find((machine) => machine.status === "connected");
+      if (connected) setSelectedHostId(connected.id);
+    }).catch(() => setMachines([]));
+  }, []);
+
+  useEffect(() => {
     if (selected?.email) setIdentityEmail(selected.email);
     else setIdentityEmail(null);
   }, [selected?.id, selected?.email]);
 
   useEffect(() => {
     if (!selected) return;
+    setScopeMode("default");
+    setScopeHostId("");
     setDraft({
       displayName: selected.displayName,
       path: selected.path,
       hiddenText: selected.hiddenModelIds.join("\n"),
     });
   }, [selected?.id]);
+
+  useEffect(() => {
+    if (!selected || !selectedHostId) {
+      setCatalog([]);
+      return;
+    }
+    let current = true;
+    setCatalog([]);
+    void rpc.call("catalog", { id: selected.id, hostId: selectedHostId }).then((result) => {
+      if (current) setCatalog(result.models);
+    }).catch(() => {
+      if (current) setCatalog([]);
+    });
+    return () => { current = false; };
+  }, [selected?.id, selectedHostId]);
 
   const persist = async (patch: Partial<NonNullable<typeof selected>>) => {
     if (!selected) return;
@@ -57,15 +88,17 @@ const AccountPage = () => {
 
   const addAccount = async (provider: "codex" | "opencode-go") => {
     const count = accounts.filter((account) => account.provider === provider).length + 1;
-    const root = provider === "codex" ? "/Users/your-user/.local/share/bb-ai-accounts/codex" : "/Users/your-user/.local/share/bb-ai-accounts/opencode";
     setSaving(true);
     try {
+      const defaults = await rpc.call("defaults", null);
+      const root = provider === "codex" ? defaults.codex : defaults.opencodeGo;
       const result = await rpc.call("save", {
         provider,
         displayName: provider === "codex" ? "Codex " + count : "OpenCode Go " + count,
         path: root + "/" + count,
         enabled: true,
         hiddenModelIds: [],
+        pathOverrides: [],
       });
       setAccounts((current) => [...current, result.account]);
       setSelectedId(result.account.id);
@@ -79,7 +112,7 @@ const AccountPage = () => {
 
   const signIn = async () => {
     if (!selected) return;
-    const quotedPath = "'" + selected.path.replaceAll("'", "'\\''") + "'";
+    const quotedPath = "'" + draft.path.replaceAll("'", "'\\''") + "'";
     const command = selected.provider === "codex"
       ? "CODEX_HOME=" + quotedPath + " codex login"
       : "XDG_DATA_HOME=" + quotedPath + " opencode auth login";
@@ -94,7 +127,7 @@ const AccountPage = () => {
   const refreshIdentity = async () => {
     if (!selected) return;
     try {
-      const result = await rpc.call("identity", { id: selected.id });
+      const result = await rpc.call("identity", { id: selected.id, path: draft.path });
       setIdentityEmail(result.email);
       if (result.email) {
         const updated = { ...selected, email: result.email };
@@ -116,7 +149,47 @@ const AccountPage = () => {
     setNotice("Profile removed. Provider credentials were left on disk.");
   };
 
-  const liveProviderId = selected ? "ai-account-" + selected.id.replaceAll("-", "").slice(0, 24) : "";
+  const selectScope = (mode: typeof scopeMode, hostId = scopeHostId) => {
+    setScopeMode(mode);
+    if (!selected) return;
+    const projectId = mode === "project" || mode === "project-machine" ? context.projectId : null;
+    const machineId = mode === "machine" || mode === "project-machine" ? hostId.trim() : null;
+    const candidates = selected.pathOverrides.filter((entry) =>
+      (entry.projectId === null || entry.projectId === projectId) &&
+      (entry.hostId === null || entry.hostId === machineId),
+    );
+    candidates.sort((left, right) =>
+      Number(right.projectId !== null) + Number(right.hostId !== null) -
+      Number(left.projectId !== null) - Number(left.hostId !== null),
+    );
+    const override = candidates[0];
+    setDraft((current) => ({ ...current, path: override?.path ?? selected.path }));
+  };
+
+  const saveAccount = async () => {
+    if (!selected) return;
+    const hiddenModelIds = Array.from(new Set(draft.hiddenText.split(/\s+/u).map((model) => model.trim()).filter(Boolean)));
+    if (scopeMode === "default") {
+      await persist({ displayName: draft.displayName, path: draft.path, hiddenModelIds });
+      return;
+    }
+    if ((scopeMode === "project" || scopeMode === "project-machine") && !context.projectId) {
+      setNotice("Open a project to configure a project-specific path.");
+      return;
+    }
+    if ((scopeMode === "machine" || scopeMode === "project-machine") && !scopeHostId.trim()) {
+      setNotice("Choose a machine before saving this path override.");
+      return;
+    }
+    const projectId = scopeMode === "project" || scopeMode === "project-machine" ? context.projectId : null;
+    const hostId = scopeMode === "machine" || scopeMode === "project-machine" ? scopeHostId.trim() : null;
+    const pathOverrides = selected.pathOverrides.filter((entry) => entry.projectId !== projectId || entry.hostId !== hostId);
+    if (draft.path !== selected.path) pathOverrides.push({ projectId, hostId, path: draft.path });
+    await persist({ displayName: draft.displayName, hiddenModelIds, pathOverrides });
+  };
+
+  const liveProviderId = selected ? "ai-account-" + selected.id : "";
+  const hiddenModelIds = new Set(draft.hiddenText.split(/\s+/u).filter(Boolean));
 
   return (
     <main className="aa-page">
@@ -175,27 +248,41 @@ const AccountPage = () => {
 
             <section className="aa-section">
               <div className="aa-section-heading"><div><span className="aa-index">02</span><h3>Runtime paths</h3></div><span className="aa-muted">Absolute path on the provider machine</span></div>
+              <div className="aa-scope-controls">
+                <label>Apply to<select value={scopeMode} onChange={(event) => selectScope(event.currentTarget.value as typeof scopeMode)}>
+                  <option value="default">All projects · all machines</option>
+                  <option value="project" disabled={!context.projectId}>This project · all machines</option>
+                  <option value="machine">All projects · selected machine</option>
+                  <option value="project-machine" disabled={!context.projectId}>This project · selected machine</option>
+                </select></label>
+                {scopeMode === "machine" || scopeMode === "project-machine" ? <label>Machine<select value={scopeHostId} onChange={(event) => { setScopeHostId(event.currentTarget.value); selectScope(scopeMode, event.currentTarget.value); }}>
+                  <option value="">Choose a machine</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}{machine.status === "connected" ? " · connected" : ""}</option>)}
+                </select></label> : null}
+              </div>
               <label className="aa-path-field">{selected.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"}<input value={draft.path} onChange={(event) => setDraft((current) => ({ ...current, path: event.currentTarget.value }))} spellCheck={false} /></label>
-              <p className="aa-help">{selected.provider === "codex" ? "Codex keeps auth.json, config, and its local state in this account home." : "OpenCode keeps auth and data below this XDG data root. Go sign-in uses its API key flow."}</p>
+              <p className="aa-help">{selected.provider === "codex" ? "Codex keeps auth.json, config, and its local state in this account home." : "OpenCode keeps auth and data below this XDG data root. Go sign-in uses its API key flow."} Specific project and machine paths override this inherited default.</p>
             </section>
 
             <section className="aa-section aa-model-section">
               <div className="aa-section-heading"><div><span className="aa-index">03</span><h3>Model picker</h3></div><span className="aa-live"><i /> LIVE CATALOG</span></div>
-              <p className="aa-help">BB reads model availability from this account’s provider. Open the selector to inspect its current catalog.</p>
+              <p className="aa-help">BB reads the available models from this account on the selected machine. Turn models off here to hide them from its picker entry.</p>
+              <label className="aa-catalog-machine">Catalog machine<select value={selectedHostId} onChange={(event) => setSelectedHostId(event.currentTarget.value)}><option value="">Choose a machine</option>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}</option>)}</select></label>
+              <div className="aa-model-list" aria-label="Available models">
+                {catalog.length ? catalog.map((model) => <label className="aa-model-option" key={model.id}><input type="checkbox" checked={!hiddenModelIds.has(model.id)} onChange={(event) => {
+                  const next = new Set(hiddenModelIds);
+                  if (event.currentTarget.checked) next.delete(model.id); else next.add(model.id);
+                  setDraft((current) => ({ ...current, hiddenText: Array.from(next).join("\n") }));
+                }} /><span><strong>{model.displayName}</strong><small>{model.id}{model.isDefault ? " · default" : ""}</small></span></label>) : <p className="aa-empty">{selectedHostId ? "No models returned yet. Sign in on this machine, then refresh the provider catalog." : "Choose a machine to read the provider’s model catalog."}</p>}
+              </div>
               <div className="aa-picker-wrap">
                 <ProviderModelPicker value={{ providerId: liveProviderId, model: "", reasoningLevel: "medium" }} onChange={() => undefined} allowProviderChange={false} />
               </div>
-              <label className="aa-model-filter">Hide these model IDs<textarea value={draft.hiddenText} onChange={(event) => setDraft((current) => ({ ...current, hiddenText: event.currentTarget.value }))} placeholder="One exact provider model ID per line" spellCheck={false} /></label>
-              <p className="aa-help">Model IDs come from the live provider catalog. Hidden IDs are removed from this account’s BB model list; blank keeps every discovered model available.</p>
+              <p className="aa-help">Model visibility is saved with the account profile and applies to the selected provider entry on every machine.</p>
             </section>
 
             <footer className="aa-footer">
               <button className="aa-primary" onClick={() => void signIn()}>↗ Copy sign-in command</button>
-              <button onClick={() => void persist({
-                displayName: draft.displayName,
-                path: draft.path,
-                hiddenModelIds: Array.from(new Set(draft.hiddenText.split(/\s+/u).map((model) => model.trim()).filter(Boolean))),
-              })}>Save changes</button>
+              <button onClick={() => void saveAccount()}>Save changes</button>
               <span>{notice || (saving ? "Saving…" : "Provider and account are separate entries in the model picker.")}</span>
               <button className="aa-danger" onClick={() => void remove()}>Remove profile</button>
             </footer>

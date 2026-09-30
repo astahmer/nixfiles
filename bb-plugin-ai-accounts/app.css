@@ -61,11 +61,20 @@
 .aa-field-grid input:focus, .aa-path-field input:focus, .aa-model-filter textarea:focus { border-color: #5998ee; box-shadow: 0 0 0 2px rgba(89,152,238,.16); }
 .aa-field-grid input[readonly] { color: var(--aa-muted); }
 .aa-path-field input, .aa-model-filter textarea { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; }
+.aa-scope-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.aa-scope-controls label, .aa-catalog-machine { display: grid; gap: 7px; color: var(--aa-muted); font-size: 10px; }
+.aa-scope-controls select, .aa-catalog-machine select { width: 100%; min-width: 0; border: 1px solid var(--aa-border); border-radius: 8px; background: rgba(0,0,0,.12); color: var(--aa-ink); padding: 9px 10px; font: inherit; font-size: 11px; }
 .aa-help { line-height: 1.5; margin: 8px 0 0; }
 .aa-live { color: var(--aa-muted); display: flex; align-items: center; gap: 6px; font-size: 9px; letter-spacing: .09em; }
 .aa-live i { width: 6px; height: 6px; }
 .aa-picker-wrap { border: 1px solid var(--aa-border); border-radius: 9px; padding: 10px; background: rgba(0,0,0,.1); }
-.aa-model-filter { margin-top: 12px; }
+.aa-catalog-machine { max-width: 360px; margin-bottom: 12px; }
+.aa-model-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; max-height: 240px; overflow: auto; margin-bottom: 12px; }
+.aa-model-option { display: flex; align-items: start; gap: 9px; min-width: 0; padding: 10px; border: 1px solid var(--aa-border); border-radius: 8px; background: rgba(0,0,0,.08); cursor: pointer; }
+.aa-model-option input { accent-color: #3788f5; margin: 2px 0 0; }
+.aa-model-option span { display: grid; gap: 4px; min-width: 0; }
+.aa-model-option strong { font-size: 11px; font-weight: 600; }
+.aa-model-option small { color: var(--aa-muted); font: 9px var(--font-mono, monospace); overflow-wrap: anywhere; }
 .aa-model-filter textarea { min-height: 64px; resize: vertical; }
 .aa-footer { display: flex; align-items: center; gap: 13px; padding-top: 18px; }
 .aa-footer > span { flex: 1; color: var(--aa-muted); font-size: 10px; line-height: 1.5; }
@@ -88,6 +97,6 @@
   .aa-page { padding: 14px; }
   .aa-add-actions { width: 100%; }
   .aa-add-actions button { flex: 1; }
-  .aa-field-grid { grid-template-columns: 1fr; }
+  .aa-field-grid, .aa-scope-controls, .aa-model-list { grid-template-columns: 1fr; }
   .aa-detail-top { align-items: start; flex-direction: column; }
 }
