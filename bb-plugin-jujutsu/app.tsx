@@ -1,4 +1,12 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   definePluginApp,
   experimental_Diff as BbDiff,
@@ -109,7 +117,7 @@ const styles = `
 .jj-revision-subject{min-width:0;flex:1}
 .jj-day-heading-content{width:100%}
 .jj-revision-details{position:relative;padding:10px 12px 14px;border:1px solid color-mix(in srgb,var(--primary) 38%,var(--jj-line));border-top:0;border-radius:0 0 7px 7px;background:color-mix(in srgb,var(--card) 94%,var(--background));box-shadow:inset 3px 0 color-mix(in srgb,var(--primary) 65%,transparent)}
-.jj-description-edit{min-height:96px;line-height:1.4}
+.jj-description-edit{min-height:0;max-height:96px;line-height:1.4;overflow-y:hidden;resize:none}
 .jj-section-heading-toggle{width:100%;border:0;border-radius:5px;background:transparent;text-align:left;cursor:pointer}
 .jj-section-heading-toggle:hover,.jj-section-heading-toggle[aria-expanded=true]{background:var(--accent)}
 .jj-file-stats{display:flex;gap:5px;margin-left:auto;color:var(--muted-foreground);font:10px var(--font-mono,monospace);white-space:nowrap}
@@ -121,7 +129,7 @@ const styles = `
 .jj-rebase-preview-title{grid-column:1/-1}
 .jj-rebase-preview-meta{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .jj-rebase-preview-meta>span{color:var(--muted-foreground);font-size:11px;white-space:nowrap}
-.jj-ancestor-ops .jj-description-edit{min-height:96px}
+.jj-ancestor-ops .jj-description-edit{min-height:0;max-height:96px}
 .jj-full-diff-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:24px;background:rgb(0 0 0 / 60%)}
 .jj-full-diff{width:min(1200px,100%);height:min(900px,100%);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--jj-line);border-radius:9px;background:var(--background);box-shadow:0 18px 60px #0009}
 .jj-full-diff-header{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--jj-line);font-weight:600}
@@ -283,6 +291,36 @@ const FilePath = ({ path }: { path: string }) => {
   );
 };
 
+const DescriptionTextarea = ({
+  value,
+  onChange,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label: string;
+}) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "0px";
+    const height = Math.min(textarea.scrollHeight, 96);
+    textarea.style.height = `${height}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 96 ? "auto" : "hidden";
+  }, [value]);
+  return (
+    <textarea
+      ref={textareaRef}
+      rows={1}
+      className="jj-input jj-description-edit"
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+};
+
 const statusClass = (status: string) => {
   if (status === "A" || status === "?" || status.toLowerCase().includes("added"))
     return "jj-status-added";
@@ -321,6 +359,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [revisionFileStats, setRevisionFileStats] = useState<FileStat[]>([]);
   const [revisionFilesLoading, setRevisionFilesLoading] = useState(false);
   const [revisionFileStatsLoading, setRevisionFileStatsLoading] = useState(false);
+  const [revisionFileStatsError, setRevisionFileStatsError] = useState<string | null>(null);
   const [revisionFilesError, setRevisionFilesError] = useState<string | null>(null);
   const [loadedRevisionFilesFor, setLoadedRevisionFilesFor] = useState<string | null>(null);
   const [filesExpandedRevisionId, setFilesExpandedRevisionId] = useState<string | null>(null);
@@ -656,6 +695,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         setRevisionFiles([]);
         setRevisionFileStats([]);
         setRevisionFilesError(null);
+        setRevisionFileStatsError(null);
       }
       setRevisionFilesLoading(false);
       setRevisionFileStatsLoading(false);
@@ -669,6 +709,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setRevisionFilesLoading(true);
     setRevisionFileStatsLoading(true);
     setRevisionFilesError(null);
+    setRevisionFileStatsError(null);
     const input = { path, hostId, revision: selectedRevision.commitId };
     let filesLoaded = false;
     void Promise.allSettled([
@@ -689,6 +730,13 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           );
         }
         if (statsResult.status === "fulfilled") setRevisionFileStats(statsResult.value);
+        if (statsResult.status === "rejected") {
+          setRevisionFileStatsError(
+            statsResult.reason instanceof Error
+              ? statsResult.reason.message
+              : String(statsResult.reason),
+          );
+        }
       })
       .catch((cause) => {
         if (active) setRevisionFilesError(cause instanceof Error ? cause.message : String(cause));
@@ -1024,11 +1072,10 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       style={{ marginLeft: graphWidth }}
     >
       <div className="jj-detail-toolbar">
-        <textarea
-          className="jj-input jj-description-edit"
-          aria-label="Revision description"
+        <DescriptionTextarea
           value={description}
-          onChange={(event) => setDescription(event.target.value)}
+          label="Revision description"
+          onChange={setDescription}
         />
         <div className="jj-detail-actions-row">
           <button
@@ -1107,6 +1154,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           Loading changed files…
         </div>
       )}
+      {filesExpandedRevisionId === revision.commitId && revisionFileStatsError && (
+        <div className="jj-error-inline" role="alert">
+          Line counts unavailable: {revisionFileStatsError}
+        </div>
+      )}
       {filesExpandedRevisionId === revision.commitId &&
         !revisionFilesLoading &&
         revisionFiles.length === 0 && (
@@ -1126,6 +1178,9 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                   <FilePath path={file.path} />
                   <span className="jj-file-stats">
                     {revisionFileStatsLoading && <span>…</span>}
+                    {!revisionFileStatsLoading && revisionFileStatsError && (
+                      <span title={revisionFileStatsError}>unavailable</span>
+                    )}
                     {!revisionFileStatsLoading && stats && (
                       <>
                         <span className="jj-file-additions">+{stats.additions}</span>
@@ -1892,11 +1947,10 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                       </>
                                     )}
                                     <div className="jj-ancestor-ops">
-                                      <textarea
-                                        className="jj-input jj-description-edit"
-                                        aria-label="Revision description"
+                                      <DescriptionTextarea
                                         value={description}
-                                        onChange={(event) => setDescription(event.target.value)}
+                                        label="Revision description"
+                                        onChange={setDescription}
                                       />
                                       <div className="jj-ancestor-actions">
                                         <button
