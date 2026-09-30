@@ -1,41 +1,24 @@
-#!/usr/bin/env node
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { dirname } from "node:path";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
-const configPath = process.env.AI_ACCOUNTS_CONFIG;
-const secretBinary = process.env.SECRET_BIN;
-const globalSecretConfig = process.env.GLOBAL_SECRET_CONFIG;
-const projectSecretConfig = process.env.PROJECT_SECRET_CONFIG;
-const bbBinary = process.env.BB_BIN || "bb";
-if (!configPath) throw new Error("AI_ACCOUNTS_CONFIG is required.");
-
-const document = JSON.parse(readFileSync(configPath, "utf8"));
-const accountDocument = { accounts: document.accounts };
-const unavailableAliases = [];
-let writtenCredentialFiles = 0;
-
-const readSecret = (alias, scope) => {
-  const config = scope === "global" ? globalSecretConfig : projectSecretConfig;
-  if (!secretBinary || !config) return undefined;
-  const result = spawnSync(secretBinary, ["get", "--config", config, alias], {
-    encoding: "utf8",
-    timeout: 10000,
-    stdio: ["ignore", "pipe", "ignore"],
-  });
-  if (result.status !== 0 || result.error) return undefined;
-  const value = result.stdout.replace(/[\r\n]+$/u, "");
-  return value.length > 0 ? value : undefined;
+const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+const accounts = readJson(process.env.AI_ACCOUNTS_CONFIG);
+const secrets = readJson(process.env.AI_ACCOUNTS_SECRETS);
+const existing = JSON.parse(execFileSync("bb", ["ai-accounts", "list", "--json"], { encoding: "utf8" }));
+const existingById = new Map(existing.map((account) => [account.id, account]));
+const profileDirectory = join(homedir(), ".local", "share", "bb-ai-accounts");
+const ensurePrivateDirectory = (path) => {
+  mkdirSync(path, { recursive: true, mode: 0o700 });
+  chmodSync(path, 0o700);
 };
-
-const writePrivateFile = (path, contents) => {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  chmodSync(dirname(path), 0o700);
-  if (existsSync(path) && readFileSync(path).equals(Buffer.from(contents))) return false;
-  const temporaryPath = path + "." + randomUUID() + ".tmp";
+const writePrivateFile = (path, content) => {
+  ensurePrivateDirectory(dirname(path));
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
   try {
-    writeFileSync(temporaryPath, contents, { flag: "wx", mode: 0o600 });
+    writeFileSync(temporaryPath, content, { flag: "wx", mode: 0o600 });
     chmodSync(temporaryPath, 0o600);
     renameSync(temporaryPath, path);
     chmodSync(path, 0o600);
@@ -43,52 +26,60 @@ const writePrivateFile = (path, contents) => {
     rmSync(temporaryPath, { force: true });
     throw error;
   }
-  return true;
+};
+const readSecret = ({ alias, scope }) => {
+  const config = scope === "global" ? process.env.GLOBAL_SECRET_CONFIG : process.env.PROJECT_SECRET_CONFIG;
+  const session = process.env.BW_SESSION || readStoredSession();
+  const result = spawnSync(process.env.SECRET_BIN, ["get", "--config", config, alias], {
+    encoding: "utf8",
+    timeout: 10_000,
+    stdio: ["ignore", "pipe", "ignore"],
+    env: session ? { ...process.env, BW_SESSION: session } : process.env,
+  });
+  return result.status === 0 && !result.error ? result.stdout.replace(/[\r\n]+$/u, "") : "";
+};
+const readStoredSession = () => {
+  if (!existsSync("/usr/bin/security")) return "";
+  const result = spawnSync("/usr/bin/security", ["find-generic-password", "-a", "bitwarden-session", "-s", "secret-cli", "-w"], {
+    encoding: "utf8", timeout: 5_000, stdio: ["ignore", "pipe", "ignore"],
+  });
+  return result.status === 0 && !result.error ? result.stdout.replace(/[\r\n]+$/u, "") : "";
 };
 
-for (const entry of document.secrets ?? []) {
-  const account = document.accounts.find((profile) => profile.id === entry.accountId);
-  if (!account) continue;
-  const value = readSecret(entry.alias, entry.scope);
+for (const entry of secrets) {
+  const value = readSecret(entry);
   if (!value) {
-    unavailableAliases.push(entry.alias);
+    process.stderr.write(`bb-ai-accounts: secret alias unavailable: ${entry.alias}\n`);
     continue;
   }
-  const authPath = account.provider === "codex"
-    ? account.path + "/auth.json"
-    : account.path + "/opencode/auth.json";
-  mkdirSync(account.path, { recursive: true, mode: 0o700 });
-  chmodSync(account.path, 0o700);
-  let contents = value;
-  if (entry.format === "opencode-go-key") {
-    let existing = {};
-    try {
-      existing = JSON.parse(readFileSync(authPath, "utf8"));
-    } catch {
-      existing = {};
-    }
-    contents = JSON.stringify({
-      ...existing,
-      "opencode-go": { type: "api", key: value },
-    }, null, 2) + "\n";
+  const authPath = entry.provider === "opencode-go"
+    ? join(existingById.get(entry.id)?.path ?? entry.path, "opencode", "auth.json")
+    : join(existingById.get(entry.id)?.path ?? entry.path, "auth.json");
+  let document;
+  if (entry.provider === "opencode-go") {
+    document = { "opencode-go": { type: "api", key: value } };
   } else {
-    JSON.parse(value);
-    contents = value.endsWith("\n") ? value : value + "\n";
+    try {
+      document = JSON.parse(value);
+    } catch {
+      process.stderr.write(`bb-ai-accounts: Codex auth alias must contain auth.json JSON: ${entry.alias}\n`);
+      continue;
+    }
   }
-  if (writePrivateFile(authPath, contents)) writtenCredentialFiles += 1;
+  writePrivateFile(authPath, `${JSON.stringify(document, null, 2)}\n`);
 }
 
-const pluginSync = spawnSync(bbBinary, ["ai-accounts", "sync", configPath], {
-  encoding: "utf8",
-  timeout: 30000,
-  stdio: ["ignore", "pipe", "pipe"],
-});
-if (pluginSync.status !== 0 || pluginSync.error) {
-  throw new Error("Could not synchronize BB AI Accounts. Install the plugin first, then re-apply.");
+ensurePrivateDirectory(profileDirectory);
+const configuredIds = new Set(accounts.accounts.map((account) => account.id));
+const mergedAccounts = [
+  ...accounts.accounts.map((account) => ({ ...account, ...existingById.get(account.id) })),
+  ...existing.filter((account) => !configuredIds.has(account.id)),
+];
+const mergedPath = join(profileDirectory, `accounts-${randomUUID()}.json`);
+writePrivateFile(mergedPath, `${JSON.stringify({ accounts: mergedAccounts })}\n`);
+try {
+  execFileSync("bb", ["ai-accounts", "sync", mergedPath], { stdio: "ignore" });
+} finally {
+  rmSync(mergedPath, { force: true });
 }
-
-process.stdout.write(JSON.stringify({
-  accounts: document.accounts.length,
-  writtenCredentialFiles,
-  unavailableAliases,
-}) + "\n");
+process.stdout.write(`bb-ai-accounts: synchronized ${accounts.accounts.length} account profiles.\n`);

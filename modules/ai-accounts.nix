@@ -1,175 +1,141 @@
 { inputs, ... }:
 {
   config.flake.modules.homeManager.aiAccounts =
-    { config, pkgs, lib, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     let
-      inherit (lib) mkIf mkOption types;
-      cfg = config.programs.bbAiAccounts;
-      homeDirectory = config.home.homeDirectory;
-      accounts = map
-        (account: {
-          inherit (account) id provider displayName;
-          path = if account.path == null then "${homeDirectory}/.local/share/bb-ai-accounts/${account.id}" else account.path;
-          pathOverrides = account.pathOverrides;
-          enabled = account.enabled;
-          hiddenModelIds = account.hiddenModelIds;
-        })
-        cfg.accounts;
-      secrets = builtins.filter (entry: entry.alias != null) (map
-        (account: {
-          accountId = account.id;
-          inherit (account) alias scope;
-          format = if account.format == null then (if account.provider == "codex" then "codex-auth-json" else "opencode-go-key") else account.format;
-        })
-        cfg.accounts);
-      seedConfig = pkgs.writeText "bb-ai-accounts.json" (builtins.toJSON {
-        inherit accounts secrets;
-      });
+      inherit (lib) mkEnableOption mkOption types;
+      settings = config.programs.bbAiAccounts;
+      pluginSource = ../bb-plugin-ai-accounts;
       secretPackage = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret;
-      pluginPath = "${homeDirectory}/.config/nixfiles/bb-plugin-ai-accounts";
-      seedScript = "${../assets/ai-accounts/seed.mjs}";
+      accountsDocument = {
+        accounts = map (account: {
+          inherit (account)
+            id
+            provider
+            displayName
+            path
+            ;
+          enabled = account.enabled;
+          pathOverrides = [ ];
+          hiddenModelIds = [ ];
+        }) settings.accounts;
+      };
+      secretsDocument = map (account: {
+        inherit (account) id provider path;
+        alias = account.secretAlias;
+        scope = account.secretScope;
+      }) (builtins.filter (account: account.secretAlias != null) settings.accounts);
     in
     {
       options.programs.bbAiAccounts = {
-        enable = mkOption {
-          type = types.bool;
+        enable = mkEnableOption "Nix-managed BB Codex and OpenCode Go accounts" // {
           default = true;
-          description = "Whether to install and seed BB Codex and OpenCode Go account profiles.";
         };
         accounts = mkOption {
-          type = types.listOf (types.submodule {
-            options = {
-              id = mkOption {
-                type = types.str;
-                description = "Stable lowercase profile id used by BB threads.";
-              };
-              provider = mkOption {
-                type = types.enum [ "codex" "opencode-go" ];
-                description = "Subscription provider.";
-              };
-              displayName = mkOption {
-                type = types.str;
-                description = "Name shown in the BB account page and model picker.";
-              };
-              path = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Provider home path; Codex uses CODEX_HOME, OpenCode uses XDG_DATA_HOME.";
-              };
-              pathOverrides = mkOption {
-                type = types.listOf (types.submodule {
-                  options = {
-                    projectId = mkOption { type = types.nullOr types.str; default = null; };
-                    hostId = mkOption { type = types.nullOr types.str; default = null; };
-                    path = mkOption { type = types.str; };
+          description = "Declarative AI account profiles and optional secret-cli aliases.";
+          type = types.listOf (
+            types.submodule (
+              { ... }: {
+                options = {
+                  id = mkOption { type = types.strMatching "^[a-z0-9][a-z0-9-]{0,47}$"; };
+                  provider = mkOption {
+                    type = types.enum [
+                      "codex"
+                      "opencode-go"
+                    ];
                   };
-                });
-                default = [ ];
-              };
-              enabled = mkOption { type = types.bool; default = true; };
-              hiddenModelIds = mkOption { type = types.listOf types.str; default = [ ]; };
-              alias = mkOption {
-                type = types.nullOr types.str;
-                default = null;
-                description = "Optional secret-cli alias for provider credentials.";
-              };
-              scope = mkOption {
-                type = types.enum [ "project" "global" ];
-                default = "project";
-                description = "Secret alias scope.";
-              };
-              format = mkOption {
-                type = types.nullOr (types.enum [ "opencode-go-key" "codex-auth-json" ]);
-                default = null;
-                description = "Credential value format returned by secret-cli.";
-              };
-            };
-          });
-          default = [ ];
-          description = "Declarative provider accounts. Credentials are resolved from secret-cli at activation.";
+                  displayName = mkOption { type = types.str; };
+                  path = mkOption { type = types.str; };
+                  enabled = mkOption {
+                    type = types.bool;
+                    default = true;
+                  };
+                  secretAlias = mkOption {
+                    type = types.nullOr types.str;
+                    default = null;
+                  };
+                  secretScope = mkOption {
+                    type = types.enum [
+                      "project"
+                      "global"
+                    ];
+                    default = "project";
+                  };
+                };
+              }
+            )
+          );
+          default = [
+            {
+              id = "codex";
+              provider = "codex";
+              displayName = "Codex";
+              path = "${config.home.homeDirectory}/.codex";
+            }
+            {
+              id = "codex-work";
+              provider = "codex";
+              displayName = "Codex Work";
+              path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/codex/work";
+            }
+            {
+              id = "codex-alex2";
+              provider = "codex";
+              displayName = "Codex Alex2";
+              path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/codex/alex2";
+            }
+            {
+              id = "opencode-go-alex";
+              provider = "opencode-go";
+              displayName = "OpenCode Go Alex";
+              path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/alex";
+              secretAlias = "opencode-go-alex";
+            }
+            {
+              id = "opencode-go-manu";
+              provider = "opencode-go";
+              displayName = "OpenCode Go Manu";
+              path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/manu";
+              secretAlias = "opencode-go-manu";
+              secretScope = "global";
+            }
+            {
+              id = "opencode-go-mathias";
+              provider = "opencode-go";
+              displayName = "OpenCode Go Mathias";
+              path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/mathias";
+              secretAlias = "opencode-go-mathias";
+              secretScope = "global";
+            }
+          ];
         };
       };
 
-      config = mkIf cfg.enable {
-        programs.bbAiAccounts.accounts = lib.mkDefault [
-          {
-            id = "codex";
-            provider = "codex";
-            displayName = "Codex";
-          }
-          {
-            id = "codex-work";
-            provider = "codex";
-            displayName = "Codex Work";
-          }
-          {
-            id = "codex-alex2";
-            provider = "codex";
-            displayName = "Codex Alex2";
-          }
-          {
-            id = "opencode-go-alex";
-            provider = "opencode-go";
-            displayName = "OpenCode Go (Alex)";
-            alias = "opencode-go-alex";
-            scope = "project";
-          }
-          {
-            id = "opencode-go-manu";
-            provider = "opencode-go";
-            displayName = "OpenCode Go (Manu)";
-            alias = "opencode-go-manu";
-            scope = "global";
-          }
-          {
-            id = "opencode-go-mathias";
-            provider = "opencode-go";
-            displayName = "OpenCode Go (Mathias)";
-            alias = "opencode-go-mathias";
-            scope = "global";
-          }
-        ];
-        assertions = [
-          {
-            assertion = builtins.all
-              (account: account.alias == null || account.format != "opencode-go-key" || account.provider == "opencode-go")
-              cfg.accounts;
-            message = "opencode-go-key credentials require an opencode-go account.";
-          }
-          {
-            assertion = builtins.all
-              (account: account.alias == null || account.format != "codex-auth-json" || account.provider == "codex")
-              cfg.accounts;
-            message = "codex-auth-json credentials require a Codex account.";
-          }
-        ];
+      config = lib.mkIf settings.enable {
+        home.file.".config/bb-plugin-ai-accounts/accounts.json".text = builtins.toJSON accountsDocument;
+        home.file.".config/bb-plugin-ai-accounts/secrets.json".text = builtins.toJSON secretsDocument;
 
-        home.activation.bbAiAccounts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          if command -v bb >/dev/null 2>&1 && [ -d "${pluginPath}" ]; then
-            (
-              cd "${pluginPath}"
-              lockHash="$(${pkgs.coreutils}/bin/sha256sum package-lock.json | cut -d ' ' -f 1)"
-              lockStamp="${homeDirectory}/.local/state/bb-ai-accounts/package-lock-hash"
-              mkdir -p "$(dirname "$lockStamp")"
-              if [ ! -f "$lockStamp" ] || [ "$(cat "$lockStamp")" != "$lockHash" ]; then
-                ${pkgs.nodejs_24}/bin/npm ci --silent
-                printf '%s' "$lockHash" > "$lockStamp"
-              fi
-              bb plugin build
-              bb plugin install "${pluginPath}" --yes
-            )
-
-            export SECRET_BIN="${secretPackage}/bin/secret"
-            export GLOBAL_SECRET_CONFIG="${homeDirectory}/.config/nixfiles/assets/secret/global.json"
-            export PROJECT_SECRET_CONFIG="${homeDirectory}/.config/nixfiles/.secret.json"
-            export AI_ACCOUNTS_CONFIG="${seedConfig}"
-            export BB_BIN="$(command -v bb)"
-            ${pkgs.nodejs_24}/bin/node "${seedScript}"
-          elif ! command -v bb >/dev/null 2>&1; then
-            echo "bb-ai-accounts: bb CLI not found; profile seed skipped." >&2
-          else
-            echo "bb-ai-accounts: source missing at ${pluginPath}; clone nixfiles there and re-apply." >&2
-          fi
+        home.activation.installBbAiAccounts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          export PATH="${pkgs.nodejs_24}/bin:${pkgs.rsync}/bin:${pkgs.coreutils}/bin:$PATH"
+          plugin_dir="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin"
+          mkdir -p "$plugin_dir"
+          rsync -a --delete --exclude node_modules --exclude dist "${pluginSource}/" "$plugin_dir/"
+          cd "$plugin_dir"
+          npm ci --no-audit --no-fund --silent
+          bb plugin build
+          bb plugin install . --yes
+          AI_ACCOUNTS_CONFIG="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/accounts.json" \
+          AI_ACCOUNTS_SECRETS="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/secrets.json" \
+          SECRET_BIN="${secretPackage}/bin/secret" \
+          PROJECT_SECRET_CONFIG="${config.home.homeDirectory}/.config/nixfiles/.secret.json" \
+          GLOBAL_SECRET_CONFIG="${config.home.homeDirectory}/.config/nixfiles/assets/secret/global.json" \
+          BB_AI_ACCOUNTS_PLUGIN="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin" \
+            "${pkgs.nodejs_24}/bin/node" "${../assets/ai-accounts/seed.mjs}"
         '';
       };
     };
