@@ -1,27 +1,16 @@
 import { defineCli, cliCommand, PluginCliError, defineRpcContract, type BbPluginApi, type JsonValue } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { createHash } from "node:crypto";
 
 const providerSchema = z.enum(["codex", "opencode-go"]);
 const accountSchema = z.object({
-  id: z.string().min(1).max(48).regex(/^[a-z0-9][a-z0-9-]*$/u),
+  id: z.string().uuid(),
   provider: providerSchema,
   displayName: z.string().trim().min(1).max(48).regex(/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u),
   path: z.string().min(1).max(1024).refine(
     (path) => path.startsWith("/") && !/[\u0000-\u001f\u007f]/u.test(path),
     "must be an absolute path without control characters",
   ),
-  pathOverrides: z.array(z.object({
-    projectId: z.string().min(1).nullable(),
-    hostId: z.string().min(1).nullable(),
-    path: z.string().min(1).max(1024).refine(
-      (path) => path.startsWith("/") && !/[\u0000-\u001f\u007f]/u.test(path),
-      "must be an absolute path without control characters",
-    ),
-  })).max(100).default([]),
   email: z.string().email().optional(),
   enabled: z.boolean().default(true),
   hiddenModelIds: z.array(z.string().min(1).max(160)).max(500).default([]),
@@ -32,13 +21,8 @@ type Account = AccountProfile;
 type Provider = z.infer<typeof providerSchema>;
 
 const stateKey = "accounts-v2";
-const accountInputSchema = accountSchema.omit({ id: true }).extend({ id: accountSchema.shape.id.optional() });
-const accountIdSchema = accountSchema.shape.id;
+const accountInputSchema = accountSchema.omit({ id: true }).extend({ id: z.string().uuid().optional() });
 export const rpcContract = defineRpcContract({
-  defaults: {
-    input: z.null(),
-    output: z.object({ codex: z.string(), opencodeGo: z.string() }),
-  },
   list: {
     input: z.null(),
     output: z.object({ accounts: z.array(accountSchema) }),
@@ -48,11 +32,11 @@ export const rpcContract = defineRpcContract({
     output: z.object({ account: accountSchema }),
   },
   remove: {
-    input: z.object({ id: accountIdSchema }),
+    input: z.object({ id: z.string().uuid() }),
     output: z.object({ accounts: z.array(accountSchema) }),
   },
   identity: {
-    input: z.object({ id: accountIdSchema, path: accountSchema.shape.path.optional() }),
+    input: z.object({ id: z.string().uuid() }),
     output: z.object({ email: z.string().email().nullable() }),
   },
 });
@@ -63,18 +47,6 @@ const providerDisplayNames: Record<Provider, string> = {
 };
 
 const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
-
-const accountPathFor = (account: Account, projectId: string | null, hostId: string) => {
-  const matches = account.pathOverrides.filter((override) =>
-    (override.projectId === null || override.projectId === projectId) &&
-    (override.hostId === null || override.hostId === hostId),
-  );
-  matches.sort((left, right) =>
-    Number(right.projectId !== null) + Number(right.hostId !== null) -
-    Number(left.projectId !== null) - Number(left.hostId !== null),
-  );
-  return matches[0]?.path ?? account.path;
-};
 
 const tokenEmail = (auth: unknown) => {
   const result = z.object({ tokens: z.object({ id_token: z.string().optional() }).optional() }).safeParse(auth);
@@ -106,12 +78,14 @@ export default async function plugin(bb: BbPluginApi) {
     const { accounts } = await readState();
     for (const account of accounts.filter((profile) => profile.enabled)) {
       const displayName = providerDisplayNames[account.provider] + " · " + account.displayName;
+      const launchEnv: Record<string, string> = account.provider === "codex"
+        ? { CODEX_HOME: account.path }
+        : { XDG_DATA_HOME: account.path };
       const launchCommand = account.provider === "codex" ? "npx" : "opencode";
       const launchArgs = account.provider === "codex" ? ["--yes", "@agentclientprotocol/codex-acp@2.0.1"] : ["acp"];
-      const launch: JsonValue = { displayName, command: launchCommand, args: launchArgs, env: {} };
-      const providerId = "ai-account-" + createHash("sha256").update(account.id).digest("hex").slice(0, 24);
+      const launch: JsonValue = { displayName, command: launchCommand, args: launchArgs, env: launchEnv };
       registrations.set(account.id, bb.providers.register({
-        id: providerId,
+        id: "ai-account-" + account.id.replaceAll("-", "").slice(0, 24),
         displayName,
         family: account.provider === "codex" ? "codex" : "opencode-go",
         icon: account.provider === "codex" ? "Bot" : "Sparkles",
@@ -144,28 +118,13 @@ export default async function plugin(bb: BbPluginApi) {
         },
         composerActions: [],
         models: { scope: "host" },
-        env: { passthrough: [account.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"] },
+        env: { passthrough: [] },
       }));
-      const variable = account.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME";
-      bb.providers.experimental_contributeEnv(providerId, async (context) => {
-        const current = await readState();
-        const configured = current.accounts.find((profile) => profile.id === account.id);
-        if (configured === undefined || !configured.enabled) return [];
-        return [{
-          name: variable,
-          value: accountPathFor(configured, context.projectId, context.hostId),
-          reason: "Use the account path configured for this project and machine in AI Accounts.",
-        }];
-      });
     }
   };
 
   await syncProviders();
   bb.rpc.register(rpcContract, {
-    defaults() {
-      const root = join(homedir(), ".local", "share", "bb-ai-accounts");
-      return { codex: join(root, "codex"), opencodeGo: join(root, "opencode") };
-    },
     async list() {
       const { accounts } = await readState();
       return { accounts };
@@ -189,12 +148,12 @@ export default async function plugin(bb: BbPluginApi) {
       await syncProviders();
       return { accounts: next };
     },
-    async identity({ id, path }) {
+    async identity({ id }) {
       const { accounts } = await readState();
       const account = accounts.find((profile) => profile.id === id);
       if (account === undefined || account.provider !== "codex") return { email: account?.email ?? null };
       try {
-        const authFile = await readFile((path ?? account.path) + "/auth.json", "utf8");
+        const authFile = await readFile(account.path + "/auth.json", "utf8");
         const email = tokenEmail(JSON.parse(authFile));
         if (email === null) return { email: account.email ?? null };
         const next = accounts.map((profile) => profile.id === id ? { ...profile, email } : profile);
@@ -236,37 +195,6 @@ export default async function plugin(bb: BbPluginApi) {
             ? "CODEX_HOME=" + quote(account.path) + " codex login"
             : "XDG_DATA_HOME=" + quote(account.path) + " opencode auth login";
           return { exitCode: 0, stdout: "Run this in a terminal to sign in to " + account.displayName + ":\n\n" + command };
-        },
-      }),
-      remove: cliCommand({
-        summary: "Remove a BB account profile without deleting its credentials",
-        positionals: [{ name: "id", description: "Account id", required: true }],
-        async run(input) {
-          const { accounts } = await readState();
-          const next = accounts.filter((account) => account.id !== input.positionals.id);
-          if (next.length === accounts.length) throw new PluginCliError("Account not found.", { code: "account_not_found" });
-          await bb.storage.kv.set(stateKey, { accounts: next });
-          await syncProviders();
-          return { exitCode: 0, stdout: "Profile removed. Provider credential files were left in place." };
-        },
-      }),
-      sync: cliCommand({
-        summary: "Replace account profiles from a declarative JSON file",
-        positionals: [{ name: "path", description: "Path to an accounts JSON file", required: true }],
-        async run(input) {
-          let document: unknown;
-          try {
-            document = JSON.parse(await readFile(input.positionals.path, "utf8"));
-          } catch {
-            throw new PluginCliError("Could not read or parse the accounts file.", { code: "invalid_accounts_file" });
-          }
-          const parsed = stateSchema.safeParse(document);
-          if (!parsed.success) {
-            throw new PluginCliError("Accounts file must be an object with a valid accounts array.", { code: "invalid_accounts_file" });
-          }
-          await bb.storage.kv.set(stateKey, parsed.data);
-          await syncProviders();
-          return { exitCode: 0, stdout: "Synchronized " + parsed.data.accounts.length + " account profiles from " + input.positionals.path + "." };
         },
       }),
     },

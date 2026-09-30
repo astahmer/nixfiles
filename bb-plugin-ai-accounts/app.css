@@ -57,10 +57,6 @@
 .aa-muted, .aa-help { color: var(--aa-muted); font-size: 10px; }
 .aa-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .aa-field-grid label, .aa-path-field, .aa-model-filter { display: grid; gap: 7px; color: var(--aa-muted); font-size: 10px; }
-.aa-scope-field { display: grid; gap: 7px; max-width: 390px; margin-bottom: 12px; color: var(--aa-muted); font-size: 10px; }
-.aa-scope-field select { width: 100%; border: 1px solid var(--aa-border); border-radius: 8px; background: rgba(0,0,0,.12); color: var(--aa-ink); padding: 10px 11px; font: inherit; font-size: 12px; }
-.aa-scope-field option { color: #222; }
-.aa-scope-context { margin: 0 0 10px; color: var(--aa-muted); font-size: 10px; }
 .aa-field-grid input, .aa-path-field input, .aa-model-filter textarea { min-width: 0; width: 100%; border: 1px solid var(--aa-border); border-radius: 8px; background: rgba(0,0,0,.12); color: var(--aa-ink); padding: 10px 11px; font: inherit; font-size: 12px; outline: none; }
 .aa-field-grid input:focus, .aa-path-field input:focus, .aa-model-filter textarea:focus { border-color: #5998ee; box-shadow: 0 0 0 2px rgba(89,152,238,.16); }
 .aa-field-grid input[readonly] { color: var(--aa-muted); }
