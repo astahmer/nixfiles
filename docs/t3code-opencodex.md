@@ -24,14 +24,30 @@ Codex models come from official model discovery; Nix seeds no custom model or
 default model selection. Nightly is the only T3 app installed by Nix; old Alpha
 bundles in either Applications directory are leftover installations.
 
-Nix seeds Codex Work and Codex Alex2 instances with the shared `~/.codex` home
-and separate shadow homes under `~/.local/share/t3code/codex`. Authenticate
-these once using `CODEX_HOME=<shadow-home> codex login`, or connect the accounts
-through T3. OpenCodex refresh tokens are not copied into another client.
-Connect each ChatGPT subscription in T3 under **Settings → Providers → Codex**;
-T3 supports adding multiple accounts there and keeps their OAuth sessions in
-its own secret store. Those sessions are not copied from OpenCodex, whose OAuth
-store is separate. See T3's [Codex provider guide](https://github.com/pingdotgg/t3code/blob/c18e5ea6ed741443a8ec4a5d22d4b6939b0ecd21/docs/user/providers-codex.md)
+Nix seeds `codex-work` and `codex-alex2` as separate Codex instances. Their
+shadow homes live under `~/.local/share/t3code/codex`; the regular `~/.codex`
+login remains separate. On each machine, sign into each account once by running
+the matching command separately in a terminal:
+
+```sh
+CODEX_HOME="$HOME/.local/share/t3code/codex/codex-work" codex -c 'cli_auth_credentials_store="file"' login
+```
+
+```sh
+CODEX_HOME="$HOME/.local/share/t3code/codex/codex-alex2" codex -c 'cli_auth_credentials_store="file"' login
+```
+
+Choose the matching ChatGPT account in the browser for each login. If the
+browser silently selects the wrong account, sign out there or open the login
+URL in a private window. After both logins finish, refresh the status beside
+**Checked…** in T3. Codex CLI stores each login under that command's
+`CODEX_HOME` ([credential-store configuration](https://developers.openai.com/codex/config-reference));
+these machine-local auth files are not Nix settings and should not be copied
+from OpenCodex. This leaves the normal `~/.codex` login intact.
+
+T3 supports multiple Codex accounts. OpenCodex refresh tokens are not copied
+into another client; its OAuth store is separate. See T3's
+[Codex provider guide](https://github.com/pingdotgg/t3code/blob/c18e5ea6ed741443a8ec4a5d22d4b6939b0ecd21/docs/user/providers-codex.md)
 and OpenCode's [Go setup](https://opencode.ai/docs/go/).
 
 ## OpenCodex activation
