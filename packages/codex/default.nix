@@ -13,7 +13,7 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-aarch64-apple-darwin.tar.gz";
-        hash = "sha256-DxUiNiv4yLu1i/L6ijxgCgtyPx1ONAWrgxr+2jJDiQk=";
+        hash = "sha256-Al3v/YTLyZ2I75UuWF3GfHyU5Cc/ibo9RffleZdDwTw=";
       };
       x86_64-linux = {
         url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-unknown-linux-musl.tar.gz";
@@ -37,7 +37,7 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "codex";
-  version = "0.157.0";
+  version = "0.159.2";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   codeModeHostSrc = fetchurl (

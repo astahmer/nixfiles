@@ -17,7 +17,11 @@ in
       lightjj = packages.lightjj;
       plannotator = packages.plannotator;
       codex = packages.codex;
-      opencode = packages.opencode2;
+      opencode = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
+      opencode2 = packages.opencode2;
+      agent = pkgs.writeShellScriptBin "agent" ''
+        exec ${lib.getExe cursorAgent} "$@"
+      '';
       pi-watchdog = packages.pi-watchdog;
       qmd = inputs.qmd.packages.${pkgs.stdenv.hostPlatform.system}.default;
       zed = packages.zed;
@@ -28,6 +32,7 @@ in
         pkgs.gh
         pkgs."github-copilot-cli"
         cursorAgent
+        agent
         codex
         plannotator
         pkgs.comma
@@ -63,6 +68,7 @@ in
         pkgs."yt-dlp"
         pkgs.uv
         opencode
+        opencode2
         pkgs.htop
         pkgs.btop
         devenv

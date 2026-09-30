@@ -9,7 +9,7 @@ let
     {
       aarch64-darwin = {
         url = "https://github.com/versenilvis/iris/releases/download/v${version}/iris_darwin_arm64.tar.gz";
-        hash = "sha256-KIqVN683Fkd2AMBJQHQHfh0JP/vOlYq5l1rJDtbcwwQ=";
+        hash = "sha256-KSDMUb2sux2rhvVzRjTtqSaPA3dleb0+5yS4TPSXtcA=";
       };
       x86_64-linux = {
         url = "https://github.com/versenilvis/iris/releases/download/v${version}/iris_linux_amd64.tar.gz";
@@ -20,7 +20,7 @@ let
 in
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "iris";
-  version = "0.7.0";
+  version = "0.7.1";
 
   src = fetchurl (sourceFor stdenvNoCC.hostPlatform.system finalAttrs.version);
   sourceRoot = ".";
