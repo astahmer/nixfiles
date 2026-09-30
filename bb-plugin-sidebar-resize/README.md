@@ -1,10 +1,10 @@
 # Sidebar Resize
 
-Adds a horizontal drag handle between BB's sidebar navigation and its project/thread list. Drag to give either section more room. The handle supports keyboard resizing with the arrow keys, `Home`/`End`, and double-click to restore the default layout.
+Adds a horizontal drag handle between BB's sidebar navigation and its project/thread list. Drag to give either section more room. At 76px and below, navigation collapses into a horizontal icon row, leaving nearly all sidebar height for projects and threads. The handle supports keyboard resizing with the arrow keys, `Home`/`End`, and double-click to restore the default layout.
 
-The selected split is saved in browser local storage and scales with the sidebar height. By default, navigation keeps its full content height; when resized smaller, it scrolls instead of hiding links.
+The selected split is saved in browser local storage and scales with the sidebar height. When expanded, navigation keeps its full content height and scrolls instead of hiding links. When collapsed, each destination remains available by its icon and tooltip.
 
-This is a companion plugin. BB's supported frontend content-script API decorates the app shell, so the existing BB Sidebar plugin does not need to be forked or changed. The script uses the host's `Sidebar navigation` accessibility label to find its insertion point.
+This is a companion plugin. It uses BB's public navigation slot and frontend content-script API, so the existing BB Sidebar plugin does not need to be forked or changed. The script uses the host's `Sidebar navigation` accessibility label to find its insertion point.
 
 ## Development
 

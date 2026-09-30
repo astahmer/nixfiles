@@ -1,9 +1,15 @@
-import { definePluginApp } from "@get-bb/plugin-sdk/app";
+import { useLayoutEffect, useRef, useState } from "react";
+import {
+  definePluginApp,
+  experimental_SidebarNavigationIcon,
+  experimental_useSidebarNavigation,
+} from "@get-bb/plugin-sdk/app";
 
 const storageKey = "bb.sidebar-resize.navigation-ratio.v1";
 const handleAttribute = "data-bb-sidebar-resize-handle";
-const minimumNavigationHeight = 112;
+const minimumNavigationHeight = 48;
 const minimumThreadListHeight = 180;
+const compactNavigationThreshold = 76;
 
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(Math.max(value, minimum), maximum);
@@ -11,7 +17,7 @@ const clamp = (value: number, minimum: number, maximum: number) =>
 const readRatio = () => {
   try {
     const value = Number(localStorage.getItem(storageKey));
-    return Number.isFinite(value) && value > 0 ? clamp(value, 0.12, 0.82) : null;
+    return Number.isFinite(value) && value > 0 ? clamp(value, 0.04, 0.82) : null;
   } catch {
     return null;
   }
@@ -19,7 +25,7 @@ const readRatio = () => {
 
 const writeRatio = (value: number) => {
   try {
-    localStorage.setItem(storageKey, String(clamp(value, 0.12, 0.82)));
+    localStorage.setItem(storageKey, String(clamp(value, 0.04, 0.82)));
   } catch {
     // Resizing still works for this session when storage is unavailable.
   }
@@ -75,7 +81,7 @@ const mountResizer = () => {
     handle.setAttribute("role", "separator");
     handle.setAttribute("aria-label", "Resize sidebar navigation and project list");
     handle.setAttribute("aria-orientation", "horizontal");
-    handle.setAttribute("aria-valuemin", "12");
+    handle.setAttribute("aria-valuemin", "4");
     handle.setAttribute("aria-valuemax", "82");
     handle.setAttribute("tabindex", "0");
     Object.assign(handle.style, {
@@ -182,6 +188,101 @@ const mountResizer = () => {
   };
 };
 
+const SidebarNavigationIcon = experimental_SidebarNavigationIcon;
+
+const SidebarNavigation = () => {
+  const { items, activeItemId, actions } = experimental_useSidebarNavigation();
+  const navigationRef = useRef<HTMLElement>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  useLayoutEffect(() => {
+    const navigation = navigationRef.current;
+    if (!navigation) return;
+
+    const observer = new ResizeObserver(([entry]) => {
+      setIsCollapsed(entry.contentRect.height <= compactNavigationThreshold);
+    });
+    observer.observe(navigation);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <nav
+      ref={navigationRef}
+      aria-label="Sidebar destinations"
+      data-sidebar-navigation-collapsed={isCollapsed}
+      style={{
+        alignItems: isCollapsed ? "center" : "stretch",
+        display: "flex",
+        flexDirection: isCollapsed ? "row" : "column",
+        gap: 4,
+        height: "100%",
+        minHeight: 0,
+        overflowX: isCollapsed ? "auto" : "hidden",
+        overflowY: isCollapsed ? "hidden" : "auto",
+        padding: isCollapsed ? "0 8px" : "4px 8px",
+        width: "100%",
+      }}
+    >
+      {items.filter((item) => item.isVisible).map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          title={item.label}
+          aria-label={item.label}
+          aria-current={activeItemId === item.id ? "page" : undefined}
+          aria-keyshortcuts={item.shortcut?.ariaKeyShortcuts}
+          disabled={item.isDisabled}
+          onClick={(event) => actions.activate(item.id, { openInSplit: event.metaKey || event.ctrlKey })}
+          style={{
+            alignItems: "center",
+            background: activeItemId === item.id ? "var(--accent)" : "transparent",
+            border: 0,
+            borderRadius: 8,
+            color: "var(--foreground)",
+            cursor: item.isDisabled ? "default" : "pointer",
+            display: "flex",
+            flex: isCollapsed ? "0 0 36px" : "0 0 40px",
+            gap: 12,
+            justifyContent: isCollapsed ? "center" : "flex-start",
+            minWidth: 0,
+            opacity: item.isDisabled ? 0.5 : 1,
+            padding: isCollapsed ? 0 : "0 12px",
+            textAlign: "left",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <SidebarNavigationIcon icon={item.icon} />
+          {!isCollapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>}
+          {!isCollapsed && item.experimental_Accessory && <item.experimental_Accessory />}
+        </button>
+      ))}
+      {!isCollapsed && (
+        <button
+          type="button"
+          onClick={actions.openCustomize}
+          style={{
+            background: "transparent",
+            border: 0,
+            color: "var(--muted-foreground)",
+            cursor: "pointer",
+            flex: "0 0 36px",
+            textAlign: "left",
+          }}
+        >
+          Customize sidebar
+        </button>
+      )}
+    </nav>
+  );
+};
+
 export default definePluginApp((app) => {
+  app.slots.experimental_sidebarNavigation({
+    id: "compact-navigation",
+    title: "Compact sidebar navigation",
+    description: "Use a horizontal icon row when the navigation pane is collapsed.",
+    component: SidebarNavigation,
+  });
   app.contentScripts.register({ id: "sidebar-resizer", mount: mountResizer });
 });
