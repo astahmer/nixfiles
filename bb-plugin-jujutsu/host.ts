@@ -46,16 +46,17 @@ const revisionTemplate = String.raw`"{\"commitId\": " ++ json(commit_id.short(40
 
 const parseRevisions = (raw: string) =>
   z.array(revisionSchema).parse(
-    raw
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line)),
+    raw.split("\n").flatMap((line) => {
+      const jsonStart = line.indexOf("{");
+      if (jsonStart < 0) return [];
+      return [JSON.parse(line.slice(jsonStart))];
+    }),
   );
 
 const listRevisions = async (root: string, pushedRevision: string | null) => {
   const raw = await run(root, [
     "log",
-    "--no-graph",
+    "--color=never",
     "-r",
     "all()",
     "-n",
