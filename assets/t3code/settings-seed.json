@@ -1,16 +1,14 @@
 {
-  "defaultModelSelection": {
-    "instanceId": "codex",
-    "model": "openai/gpt-6.1-sol",
-    "options": [
-      { "id": "reasoningEffort", "value": "low" },
-      { "id": "serviceTier", "value": "default" }
-    ]
-  },
   "providers": {
-    "cursor": { "enabled": false },
-    "grok": { "enabled": false },
-    "opencode": { "enabled": false }
+    "cursor": {
+      "enabled": false
+    },
+    "grok": {
+      "enabled": false
+    },
+    "opencode": {
+      "enabled": false
+    }
   },
   "providerInstances": {
     "cursor": {
@@ -26,7 +24,9 @@
       "driver": "opencode",
       "displayName": "OpenCodeAlexKey",
       "enabled": false,
-      "config": { "binaryPath": "$OPENCODE_BIN" }
+      "config": {
+        "binaryPath": "$OPENCODE_BIN"
+      }
     },
     "claudeAgent": {
       "driver": "claudeAgent",
@@ -48,7 +48,7 @@
         "homePath": "",
         "shadowHomePath": "",
         "launchArgs": "",
-        "customModels": ["gpt-6.1-sol"]
+        "customModels": []
       }
     },
     "opencode-go": {
@@ -109,6 +109,30 @@
         "serverPassword": "",
         "customModels": [],
         "_nixSeeded": true
+      }
+    },
+    "codex-work": {
+      "driver": "codex",
+      "displayName": "Codex Work",
+      "enabled": true,
+      "config": {
+        "binaryPath": "codex",
+        "homePath": "$CODEX_HOME",
+        "shadowHomePath": "$CODEX_SHADOW_ROOT/codex-work",
+        "launchArgs": "",
+        "customModels": []
+      }
+    },
+    "codex-alex2": {
+      "driver": "codex",
+      "displayName": "Codex Alex2",
+      "enabled": true,
+      "config": {
+        "binaryPath": "codex",
+        "homePath": "$CODEX_HOME",
+        "shadowHomePath": "$CODEX_SHADOW_ROOT/codex-alex2",
+        "launchArgs": "",
+        "customModels": []
       }
     }
   },

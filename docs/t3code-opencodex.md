@@ -20,7 +20,14 @@ userdata `secrets` directory with mode `0700`, and secret files with mode
 | `opencode_manu` | `opencode-go-manu` | Global |
 | `opencode_mathias` | `opencode-go-mathias` | Global |
 
-The `codex` provider stays the default with the current GPT-6.1 Sol selection.
+Codex models come from official model discovery; Nix seeds no custom model or
+default model selection. Nightly is the only T3 app installed by Nix; old Alpha
+bundles in either Applications directory are leftover installations.
+
+Nix seeds Codex Work and Codex Alex2 instances with the shared `~/.codex` home
+and separate shadow homes under `~/.local/share/t3code/codex`. Authenticate
+these once using `CODEX_HOME=<shadow-home> codex login`, or connect the accounts
+through T3. OpenCodex refresh tokens are not copied into another client.
 Connect each ChatGPT subscription in T3 under **Settings → Providers → Codex**;
 T3 supports adding multiple accounts there and keeps their OAuth sessions in
 its own secret store. Those sessions are not copied from OpenCodex, whose OAuth

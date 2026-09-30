@@ -6,7 +6,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  writeFileSync
+  writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -40,7 +40,7 @@ const readStoredBitwardenSession = () => {
   const result = spawnSync(
     "/usr/bin/security",
     ["find-generic-password", "-a", "bitwarden-session", "-s", "secret-cli", "-w"],
-    { encoding: "utf8", timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] }
+    { encoding: "utf8", timeout: 5_000, stdio: ["ignore", "pipe", "ignore"] },
   );
   if (result.status !== 0 || result.error) return undefined;
   return result.stdout.replace(/[\r\n]+$/u, "") || undefined;
@@ -54,7 +54,7 @@ const readSecretAlias = (alias, scope, environment) => {
     encoding: "utf8",
     env: environment,
     timeout: 10_000,
-    stdio: ["ignore", "pipe", "ignore"]
+    stdio: ["ignore", "pipe", "ignore"],
   });
   if (result.status !== 0 || result.error) return undefined;
   const value = result.stdout.replace(/[\r\n]+$/u, "");
@@ -65,7 +65,10 @@ const writeProviderSecret = (instanceId, name, value) => {
   mkdirSync(secretsDirectory, { recursive: true });
   chmodSync(secretsDirectory, 0o700);
 
-  const secretPath = join(secretsDirectory, `${providerEnvironmentSecretName(instanceId, name)}.bin`);
+  const secretPath = join(
+    secretsDirectory,
+    `${providerEnvironmentSecretName(instanceId, name)}.bin`,
+  );
   const bytes = Buffer.from(value, "utf8");
   if (existsSync(secretPath) && readFileSync(secretPath).equals(bytes)) return false;
 
@@ -86,7 +89,8 @@ const readLegacyInlineSecret = (settings, instanceId, environmentName) => {
   const environment = settings.providerInstances?.[instanceId]?.environment ?? [];
   const variable = environment.find((entry) => entry.name === environmentName);
   if (!variable || variable.valueRedacted || typeof variable.value !== "string") return undefined;
-  if (variable.value.length === 0 || variable.value === obsoleteOpenCodePlaceholder) return undefined;
+  if (variable.value.length === 0 || variable.value === obsoleteOpenCodePlaceholder)
+    return undefined;
   return variable.value;
 };
 
@@ -94,14 +98,15 @@ const seedProviderSecrets = (settings) => {
   const storedSession = readStoredBitwardenSession();
   const environment = {
     ...process.env,
-    ...(storedSession ? { BW_SESSION: storedSession } : {})
+    ...(storedSession ? { BW_SESSION: storedSession } : {}),
   };
   const unavailableAliases = [];
   let writtenSecrets = 0;
 
   for (const entry of providerSecrets) {
     const aliasValue = readSecretAlias(entry.alias, entry.scope, environment);
-    const legacyValue = readLegacyInlineSecret(settings, entry.instanceId, entry.name) ??
+    const legacyValue =
+      readLegacyInlineSecret(settings, entry.instanceId, entry.name) ??
       (entry.instanceId === "opencode-go"
         ? readLegacyInlineSecret(settings, entry.instanceId, obsoleteOpenCodeEnvironmentName)
         : undefined);
@@ -121,6 +126,14 @@ const resolveSeedInstance = (instance) => {
   if (resolved.config?.binaryPath === "$OPENCODE_BIN") {
     resolved.config.binaryPath = openCodeBinaryPath;
   }
+  if (resolved.driver === "codex" && resolved.config?.homePath === "$CODEX_HOME") {
+    resolved.config.homePath = join(homedir(), ".codex");
+    resolved.config.shadowHomePath = resolved.config.shadowHomePath.replace(
+      "$CODEX_SHADOW_ROOT",
+      join(homedir(), ".local", "share", "t3code", "codex"),
+    );
+    mkdirSync(resolved.config.shadowHomePath, { recursive: true, mode: 0o700 });
+  }
   return resolved;
 };
 
@@ -133,7 +146,7 @@ const ensureRedactedOpenCodeEnvironment = (instanceId, instance) => {
 
   return [
     ...preserved,
-    { name: "OPENCODE_API_KEY", value: "", sensitive: true, valueRedacted: true }
+    { name: "OPENCODE_API_KEY", value: "", sensitive: true, valueRedacted: true },
   ];
 };
 
@@ -165,14 +178,14 @@ const mergeSettings = (settings) => {
     ) {
       updated = {
         ...updated,
-        config: { ...updated.config, binaryPath: openCodeBinaryPath }
+        config: { ...updated.config, binaryPath: openCodeBinaryPath },
       };
     }
 
     const seededDisplayName = resolvedSeed.displayName;
     const previousDisplayNames = {
       "opencode-go": "OpenCode (OpenCode Go)",
-      opencode_mathias: "mathias"
+      opencode_mathias: "mathias",
     };
     if (existing.displayName === previousDisplayNames[instanceId] && seededDisplayName) {
       updated = { ...updated, displayName: seededDisplayName };
@@ -181,7 +194,7 @@ const mergeSettings = (settings) => {
     if (providerSecrets.some((entry) => entry.instanceId === instanceId)) {
       updated = {
         ...updated,
-        environment: ensureRedactedOpenCodeEnvironment(instanceId, updated)
+        environment: ensureRedactedOpenCodeEnvironment(instanceId, updated),
       };
     }
 
@@ -239,11 +252,13 @@ const main = () => {
   }
 
   if (writtenSecrets > 0) {
-    process.stdout.write(`t3code seed: refreshed ${writtenSecrets} OpenCode Go credential file(s).\n`);
+    process.stdout.write(
+      `t3code seed: refreshed ${writtenSecrets} OpenCode Go credential file(s).\n`,
+    );
   }
   if (unavailableAliases.length > 0) {
     process.stderr.write(
-      `t3code seed: could not resolve secret aliases: ${unavailableAliases.join(", ")}; existing T3 credential files were preserved.\n`
+      `t3code seed: could not resolve secret aliases: ${unavailableAliases.join(", ")}; existing T3 credential files were preserved.\n`,
     );
   }
 };
