@@ -157,7 +157,8 @@ export default async function plugin(bb: BbPluginApi) {
     registrations.clear();
     const { accounts } = await readState();
     for (const account of accounts.filter((profile) => profile.enabled)) {
-      const displayName = (account.badge ?? badgeFor(account.displayName, account.provider)) + " · " + account.displayName;
+      const accountBadge = account.badge ?? badgeFor(account.displayName, account.provider);
+      const displayName = accountBadge + " · " + account.displayName;
       const launchCommand = account.provider === "codex" ? "npx" : "opencode";
       const launchArgs = account.provider === "codex" ? ["--yes", "@agentclientprotocol/codex-acp@2.0.1"] : ["acp"];
       const launch: JsonValue = { displayName, command: launchCommand, args: launchArgs, env: {} };
@@ -182,6 +183,7 @@ export default async function plugin(bb: BbPluginApi) {
           accountId: account.id,
           accountProvider: account.provider,
           accountDisplayName: account.displayName,
+          accountBadge,
           hiddenModelIds: account.hiddenModelIds,
           favoriteModelIds: account.favoriteModelIds,
           modelOrder: account.modelOrder,
@@ -253,7 +255,14 @@ export default async function plugin(bb: BbPluginApi) {
           defaultReasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh", "ultracode", "max", "ultra"]),
         }).passthrough()).safeParse(result);
         if (!decoded.success) return { models: [] };
-        return { models: decoded.data.filter((model) => !model.id.startsWith("codex-perso/")).map(({ id: modelId, displayName, isDefault, supportedReasoningEfforts, defaultReasoningEffort }) => ({ id: modelId, displayName, isDefault, supportedReasoningEfforts, defaultReasoningEffort })) };
+        const accountBadge = account.badge ?? badgeFor(account.displayName, account.provider);
+        return { models: decoded.data.filter((model) => !model.id.startsWith("codex-perso/")).map(({ id: modelId, displayName, isDefault, supportedReasoningEfforts, defaultReasoningEffort }) => ({
+          id: modelId,
+          displayName: displayName.endsWith(" · " + accountBadge) ? displayName.slice(0, -accountBadge.length - 3) : displayName,
+          isDefault,
+          supportedReasoningEfforts,
+          defaultReasoningEffort,
+        })) };
       } catch {
         return { models: [] };
       }

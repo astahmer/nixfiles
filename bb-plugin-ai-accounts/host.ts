@@ -5,6 +5,7 @@ import { readOpenCodeGoUsage } from "./opencode-go-usage";
 
 const preferencesByRequest = new Map<string, {
   hiddenModelIds: Set<string>;
+  accountBadge: string;
   modelOrder: string[];
   customModels: Array<{ id: string; displayName: string }>;
   modelReasoningDefaults: Record<string, "none" | "low" | "medium" | "high" | "xhigh" | "ultracode" | "max" | "ultra">;
@@ -16,6 +17,7 @@ const requestSchema = z.object({
 }).passthrough();
 const usageProviderSchema = z.object({ accountProvider: z.enum(["codex", "opencode-go"]) });
 const providerOptionsSchema = z.object({
+  accountBadge: z.string().trim().min(1).max(4).optional(),
   hiddenModelIds: z.array(z.string()).optional(),
   modelOrder: z.array(z.string()).optional(),
   customModels: z.array(z.object({ id: z.string(), displayName: z.string() })).optional(),
@@ -63,14 +65,19 @@ const forwardLine = (line: string) => {
               const defaultReasoningEffort = configuredDefault && model.supportedReasoningEfforts.some((effort) => effort.reasoningEffort === configuredDefault)
                 ? configuredDefault
                 : model.defaultReasoningEffort;
-              byId.set(modelId, { ...model, defaultReasoningEffort, isDefault: model.isDefault || routedDefaults.has(modelId) });
+              byId.set(modelId, {
+                ...model,
+                displayName: model.displayName + " · " + preferences.accountBadge,
+                defaultReasoningEffort,
+                isDefault: model.isDefault || routedDefaults.has(modelId),
+              });
             }
             for (const custom of preferences.customModels) {
               if (!preferences.hiddenModelIds.has(custom.id) && !byId.has(custom.id)) {
                 byId.set(custom.id, {
                   id: custom.id,
                   model: custom.id,
-                  displayName: custom.displayName,
+                  displayName: custom.displayName + " · " + preferences.accountBadge,
                   description: "Custom provider model",
                   isDefault: false,
                   defaultReasoningEffort: "medium",
@@ -138,8 +145,9 @@ export const experimental_providerBridge = {
           return;
         }
         const options = providerOptionsSchema.safeParse(decoded.data.params.providerOptions ?? {});
-        if (options.success && (options.data.hiddenModelIds || options.data.modelOrder || options.data.customModels || options.data.modelReasoningDefaults)) {
+        if (options.success && options.data.accountBadge) {
           preferencesByRequest.set(String(decoded.data.id), {
+            accountBadge: options.data.accountBadge,
             hiddenModelIds: new Set(options.data.hiddenModelIds ?? []),
             modelOrder: options.data.modelOrder ?? [],
             customModels: options.data.customModels ?? [],

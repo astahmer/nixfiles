@@ -51,7 +51,9 @@ const GlobalModelPicker = () => {
             models: result.models.map((model) => ({
               ...providerDetails,
               model: model.model,
-              displayName: model.displayName,
+              displayName: model.displayName.endsWith(" · " + providerDetails.badge)
+                ? model.displayName.slice(0, -providerDetails.badge.length - 3)
+                : model.displayName,
               reasoningEffort: model.defaultReasoningEffort,
             })),
           };
