@@ -21,9 +21,13 @@ favorites, visibility, ordering, and custom model entries. Runtime paths inherit
 from the all-projects/all-machines default, with more specific project and
 machine paths taking precedence.
 
-Subscription quota meters are not included yet. Codex ACP does not expose a
-stable usage method, and OpenCode Go usage needs the proxy’s usage endpoint and
-account mapping.
+BB’s provider usage meters read per-account quotas from the local OpenCodex
+management API. Codex accounts map by their OpenCodex alias; OpenCode Go maps by
+provider name. AI Accounts first matches the profile ID or display name, and the
+**OpenCodex account mapping** field overrides that lookup when names differ. Reads
+stay on `127.0.0.1`; the plugin uses the local OpenCodex admin token only for
+these read-only quota requests. OpenCodex must be running on the machine that
+checks usage.
 
 ## Runtime requirements
 

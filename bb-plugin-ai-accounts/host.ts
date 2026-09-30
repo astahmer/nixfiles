@@ -1,5 +1,6 @@
 import { experimental_acpProviderBridge } from "@get-bb/plugin-sdk/provider-bridge/acp";
 import { z } from "zod";
+import { readOpenCodexAccountUsage } from "./open-codex-usage";
 
 const preferencesByRequest = new Map<string, {
   hiddenModelIds: Set<string>;
@@ -8,6 +9,7 @@ const preferencesByRequest = new Map<string, {
 }>();
 const requestSchema = z.object({
   id: z.union([z.string(), z.number()]),
+  method: z.string().optional(),
   params: z.object({ providerOptions: z.record(z.string(), z.unknown()).optional() }).passthrough(),
 }).passthrough();
 const providerOptionsSchema = z.object({
@@ -95,6 +97,18 @@ export const experimental_providerBridge = {
     try {
       const decoded = requestSchema.safeParse(JSON.parse(line));
       if (decoded.success) {
+        if (decoded.data.method === "provider/usage") {
+          void readOpenCodexAccountUsage(decoded.data.params.providerOptions ?? {}).then((result) => {
+            originalWrite(JSON.stringify({ jsonrpc: "2.0", id: decoded.data.id, result }) + "\n");
+          }).catch(() => {
+            originalWrite(JSON.stringify({
+              jsonrpc: "2.0",
+              id: decoded.data.id,
+              result: { supported: true, usage: { status: "error", message: "OpenCodex usage could not be read." } },
+            }) + "\n");
+          });
+          return;
+        }
         const options = providerOptionsSchema.safeParse(decoded.data.params.providerOptions ?? {});
         if (options.success && (options.data.hiddenModelIds || options.data.modelOrder || options.data.customModels)) {
           preferencesByRequest.set(String(decoded.data.id), {

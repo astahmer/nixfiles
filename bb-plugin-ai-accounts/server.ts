@@ -10,6 +10,7 @@ const accountSchema = z.object({
   id: z.string().min(1).max(48).regex(/^[a-z0-9][a-z0-9-]*$/u),
   provider: providerSchema,
   displayName: z.string().trim().min(1).max(48).regex(/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u),
+  proxyAccountName: z.string().trim().max(100).optional(),
   path: z.string().min(1).max(1024).refine(
     (path) => path.startsWith("/") && !/[\u0000-\u001f\u007f]/u.test(path),
     "must be an absolute path without control characters",
@@ -161,11 +162,15 @@ export default async function plugin(bb: BbPluginApi) {
           acpLaunchSpec: launch,
           acpDialect: "generic",
           accountId: account.id,
+          accountProvider: account.provider,
+          accountDisplayName: account.displayName,
+          proxyAccountName: account.proxyAccountName ?? "",
           hiddenModelIds: account.hiddenModelIds,
           favoriteModelIds: account.favoriteModelIds,
           modelOrder: account.modelOrder,
           customModels: account.customModels,
         },
+        maintenance: { usage: true },
         capabilities: {
           supportsServiceTier: false,
           supportsNativeUserQuestion: true,

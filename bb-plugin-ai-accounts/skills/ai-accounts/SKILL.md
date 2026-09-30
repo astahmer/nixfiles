@@ -10,6 +10,10 @@ runtime paths by project and machine, refresh Codex email identity, and enable
 or hide a profile from BB's provider picker. Each enabled profile gets an
 independent provider and live model catalog. Favorite, hide, reorder, or add
 models from the catalog; BB reads available IDs from the provider machine.
+Subscription meters read quota from the local OpenCodex management API: Codex
+profiles match its account alias, and OpenCode Go profiles match its provider
+name. Set **OpenCodex account mapping** when the profile ID or display name does
+not match. OpenCodex must be running on the provider machine.
 
 Use \`bb ai-accounts list\` to inspect profile names and paths. Use
 \`bb ai-accounts login <account-id>\` to print its shell sign-in command.

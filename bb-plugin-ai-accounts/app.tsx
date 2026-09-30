@@ -11,7 +11,7 @@ const AccountPage = () => {
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ displayName: "", path: "", hiddenText: "" });
+  const [draft, setDraft] = useState({ displayName: "", path: "", hiddenText: "", proxyAccountName: "" });
   const [machines, setMachines] = useState<Array<{ id: string; name: string; status: string }>>([]);
   const [selectedHostId, setSelectedHostId] = useState("");
   const [catalog, setCatalog] = useState<Array<{ id: string; displayName: string; isDefault: boolean }>>([]);
@@ -57,6 +57,7 @@ const AccountPage = () => {
       displayName: selected.displayName,
       path: selected.path,
       hiddenText: selected.hiddenModelIds.join("\n"),
+      proxyAccountName: selected.proxyAccountName ?? "",
     });
   }, [selected?.id]);
 
@@ -100,6 +101,7 @@ const AccountPage = () => {
       const result = await rpc.call("save", {
         provider,
         displayName: provider === "codex" ? "Codex " + count : "OpenCode Go " + count,
+        proxyAccountName: "",
         path: root + "/" + count,
         enabled: true,
         hiddenModelIds: [],
@@ -179,7 +181,7 @@ const AccountPage = () => {
     if (!selected) return;
     const hiddenModelIds = Array.from(new Set(draft.hiddenText.split(/\s+/u).map((model) => model.trim()).filter(Boolean)));
     if (scopeMode === "default") {
-      await persist({ displayName: draft.displayName, path: draft.path, hiddenModelIds });
+      await persist({ displayName: draft.displayName, path: draft.path, hiddenModelIds, proxyAccountName: draft.proxyAccountName.trim() || undefined });
       return;
     }
     if ((scopeMode === "project" || scopeMode === "project-machine") && !context.projectId) {
@@ -194,7 +196,7 @@ const AccountPage = () => {
     const hostId = scopeMode === "machine" || scopeMode === "project-machine" ? scopeHostId.trim() : null;
     const pathOverrides = selected.pathOverrides.filter((entry) => entry.projectId !== projectId || entry.hostId !== hostId);
     if (draft.path !== selected.path) pathOverrides.push({ projectId, hostId, path: draft.path });
-    await persist({ displayName: draft.displayName, hiddenModelIds, pathOverrides });
+    await persist({ displayName: draft.displayName, hiddenModelIds, pathOverrides, proxyAccountName: draft.proxyAccountName.trim() || undefined });
   };
 
   const hiddenModelIds = new Set(draft.hiddenText.split(/\s+/u).filter(Boolean));
@@ -367,7 +369,9 @@ const AccountPage = () => {
               <div className="aa-field-grid identity">
                 <label>Display name<input value={draft.displayName} onChange={(event) => setDraft((current) => ({ ...current, displayName: event.currentTarget.value }))} /></label>
                 <label>Signed-in email<input readOnly value={identityEmail ?? (selected.provider === "codex" ? "Sign in, then refresh" : "OpenCode Go key login")} /></label>
+                <label>OpenCodex account mapping<input value={draft.proxyAccountName} onChange={(event) => setDraft((current) => ({ ...current, proxyAccountName: event.currentTarget.value }))} placeholder={selected.provider === "codex" ? "Alias or account ID · leave blank to match" : "Provider name · leave blank to match"} /></label>
               </div>
+              <p className="aa-help">Usage meters match the local OpenCodex account alias for Codex or provider name for OpenCode Go. Leave blank to match this profile’s ID or display name.</p>
             </section>
 
             <section className="aa-section">
