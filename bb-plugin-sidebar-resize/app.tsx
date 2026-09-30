@@ -1,9 +1,11 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "./app.css";
 import {
   definePluginApp,
   experimental_SidebarNavigationIcon,
   experimental_useSidebarNavigation,
+  useSettings,
 } from "@get-bb/plugin-sdk/app";
 
 const storageKey = "bb.sidebar-resize.navigation-ratio.v1";
@@ -192,8 +194,34 @@ const SidebarNavigationIcon = experimental_SidebarNavigationIcon;
 
 const SidebarNavigation = () => {
   const { items, activeItemId, actions } = experimental_useSidebarNavigation();
+  const { values } = useSettings();
   const navigationRef = useRef<HTMLElement>(null);
+  const tooltipTimer = useRef<number | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [tooltip, setTooltip] = useState<{ label: string; left: number; bottom: number } | null>(null);
+  const density = values?.density === "Comfortable" ? "comfortable" : "compact";
+  const rowHeight = density === "compact" ? 30 : 34;
+
+  const clearTooltip = () => {
+    if (tooltipTimer.current !== null) window.clearTimeout(tooltipTimer.current);
+    tooltipTimer.current = null;
+    setTooltip(null);
+  };
+
+  const showTooltip = (label: string, button: HTMLButtonElement, delayed: boolean) => {
+    if (tooltipTimer.current !== null) window.clearTimeout(tooltipTimer.current);
+    const bounds = button.getBoundingClientRect();
+    const nextTooltip = {
+      label,
+      left: bounds.left + bounds.width / 2,
+      bottom: window.innerHeight - bounds.top + 6,
+    };
+    if (delayed) {
+      tooltipTimer.current = window.setTimeout(() => setTooltip(nextTooltip), 350);
+      return;
+    }
+    setTooltip(nextTooltip);
+  };
 
   useLayoutEffect(() => {
     const navigation = navigationRef.current;
@@ -203,80 +231,123 @@ const SidebarNavigation = () => {
       setIsCollapsed(entry.contentRect.height <= compactNavigationThreshold);
     });
     observer.observe(navigation);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (tooltipTimer.current !== null) window.clearTimeout(tooltipTimer.current);
+    };
   }, []);
 
   return (
-    <nav
-      ref={navigationRef}
-      aria-label="Sidebar destinations"
-      data-sidebar-navigation-collapsed={isCollapsed}
-      style={{
-        alignItems: isCollapsed ? "center" : "stretch",
-        display: "flex",
-        flexDirection: isCollapsed ? "row" : "column",
-        gap: 4,
-        height: "100%",
-        minHeight: 0,
-        overflowX: isCollapsed ? "auto" : "hidden",
-        overflowY: isCollapsed ? "hidden" : "auto",
-        padding: isCollapsed ? "0 8px" : "4px 8px",
-        width: "100%",
-      }}
-    >
-      {items.filter((item) => item.isVisible).map((item) => (
-        <button
-          key={item.id}
-          className="sidebar-resize-navigation-item"
-          type="button"
-          title={item.label}
-          aria-label={item.label}
-          aria-current={activeItemId === item.id ? "page" : undefined}
-          aria-keyshortcuts={item.shortcut?.ariaKeyShortcuts}
-          data-active={activeItemId === item.id}
-          disabled={item.isDisabled}
-          onClick={(event) => actions.activate(item.id, { openInSplit: event.metaKey || event.ctrlKey })}
+    <>
+      <nav
+        ref={navigationRef}
+        aria-label="Sidebar destinations"
+        data-sidebar-navigation-collapsed={isCollapsed}
+        style={{
+          alignItems: isCollapsed ? "center" : "stretch",
+          display: "flex",
+          flexDirection: isCollapsed ? "row" : "column",
+          gap: isCollapsed ? 4 : density === "compact" ? 2 : 4,
+          height: "100%",
+          minHeight: 0,
+          overflowX: isCollapsed ? "auto" : "hidden",
+          overflowY: isCollapsed ? "hidden" : "auto",
+          padding: isCollapsed ? "0 8px" : density === "compact" ? "2px 8px" : "4px 8px",
+          width: "100%",
+        }}
+      >
+        {items.filter((item) => item.isVisible).map((item) => (
+          <button
+            key={item.id}
+            className="sidebar-resize-navigation-item"
+            type="button"
+            title={isCollapsed ? undefined : item.label}
+            aria-label={item.label}
+            aria-describedby={tooltip?.label === item.label ? "sidebar-resize-tooltip" : undefined}
+            aria-current={activeItemId === item.id ? "page" : undefined}
+            aria-keyshortcuts={item.shortcut?.ariaKeyShortcuts}
+            data-active={activeItemId === item.id}
+            disabled={item.isDisabled}
+            onClick={(event) => actions.activate(item.id, { openInSplit: event.metaKey || event.ctrlKey })}
+            onPointerEnter={(event) => {
+              if (isCollapsed) showTooltip(item.label, event.currentTarget, true);
+            }}
+            onPointerLeave={clearTooltip}
+            onFocus={(event) => {
+              if (isCollapsed) showTooltip(item.label, event.currentTarget, false);
+            }}
+            onBlur={clearTooltip}
+            style={{
+              alignItems: "center",
+              border: 0,
+              borderRadius: 6,
+              cursor: item.isDisabled ? "default" : "pointer",
+              display: "flex",
+              flex: `0 0 ${isCollapsed ? 32 : rowHeight}px`,
+              fontSize: density === "compact" ? 13 : 14,
+              gap: density === "compact" ? 6 : 8,
+              height: isCollapsed ? 32 : rowHeight,
+              justifyContent: isCollapsed ? "center" : "flex-start",
+              lineHeight: "20px",
+              minWidth: 0,
+              opacity: item.isDisabled ? 0.5 : 1,
+              padding: isCollapsed ? 0 : density === "compact" ? "0 6px" : "0 8px",
+              textAlign: "left",
+              whiteSpace: "nowrap",
+              width: isCollapsed ? 32 : "100%",
+            }}
+          >
+            <SidebarNavigationIcon icon={item.icon} className="sidebar-resize-navigation-icon" />
+            {!isCollapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>}
+            {!isCollapsed && item.experimental_Accessory && <item.experimental_Accessory />}
+          </button>
+        ))}
+        {!isCollapsed && (
+          <button
+            type="button"
+            className="sidebar-resize-navigation-customize"
+            onClick={actions.openCustomize}
+            style={{
+              background: "transparent",
+              border: 0,
+              cursor: "pointer",
+              flex: `0 0 ${rowHeight}px`,
+              fontSize: 12,
+              height: rowHeight,
+              textAlign: "left",
+            }}
+          >
+            Customize sidebar
+          </button>
+        )}
+      </nav>
+      {tooltip && createPortal(
+        <div
+          id="sidebar-resize-tooltip"
+          role="tooltip"
           style={{
-            alignItems: "center",
-            border: 0,
-            borderRadius: 8,
-            cursor: item.isDisabled ? "default" : "pointer",
-            display: "flex",
-            flex: "0 0 32px",
-            fontSize: 14,
-            gap: 8,
-            justifyContent: isCollapsed ? "center" : "flex-start",
-            lineHeight: "20px",
-            minWidth: 0,
-            opacity: item.isDisabled ? 0.5 : 1,
-            padding: isCollapsed ? 0 : "0 8px",
-            textAlign: "left",
+            background: "var(--popover)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            bottom: tooltip.bottom,
+            boxShadow: "0 4px 12px rgb(0 0 0 / 18%)",
+            color: "var(--popover-foreground)",
+            fontSize: 12,
+            left: tooltip.left,
+            lineHeight: "16px",
+            padding: "4px 8px",
+            pointerEvents: "none",
+            position: "fixed",
+            transform: "translateX(-50%)",
             whiteSpace: "nowrap",
+            zIndex: 10000,
           }}
         >
-          <SidebarNavigationIcon icon={item.icon} className="sidebar-resize-navigation-icon" />
-          {!isCollapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>}
-          {!isCollapsed && item.experimental_Accessory && <item.experimental_Accessory />}
-        </button>
-      ))}
-      {!isCollapsed && (
-        <button
-          type="button"
-          className="sidebar-resize-navigation-customize"
-          onClick={actions.openCustomize}
-          style={{
-            background: "transparent",
-            border: 0,
-            cursor: "pointer",
-            flex: "0 0 32px",
-            fontSize: 13,
-            textAlign: "left",
-          }}
-        >
-          Customize sidebar
-        </button>
+          {tooltip.label}
+        </div>,
+        document.body,
       )}
-    </nav>
+    </>
   );
 };
 

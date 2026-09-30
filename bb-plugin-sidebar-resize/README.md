@@ -4,6 +4,8 @@ Adds a horizontal drag handle between BB's sidebar navigation and its project/th
 
 The selected split is saved in browser local storage and scales with the sidebar height. When expanded, navigation keeps its full content height and scrolls instead of hiding links. When collapsed, each destination remains available by its icon and tooltip.
 
+Set **Navigation density** to **Compact** or **Comfortable** under Settings → Installed plugins → Sidebar Resize.
+
 This is a companion plugin. It uses BB's public navigation slot and frontend content-script API, so the existing BB Sidebar plugin does not need to be forked or changed. The script uses the host's `Sidebar navigation` accessibility label to find its insertion point.
 
 ## Development
