@@ -32,11 +32,13 @@ colors, and reasoning defaults. Model visibility, favorites, order, and custom
 models can be edited in the page.
 
 Codex usage limits are read directly from Codex app-server's
-`account/rateLimits/read` using the selected `CODEX_HOME`. OpenCode Go limits
+`account/rateLimits/read` using that profile's `CODEX_HOME`. OpenCode Go limits
 come from OpenCode's authenticated `/zen/go/v1/usage` endpoint using the API key
-in that profile's own `auth.json`. This plugin does not use OpenCodex, its
-management API, or its account mapping. BB's token and cost history comes from sessions
-started in BB; the plugin API has no historical usage import surface.
+in that profile's own `auth.json`. Each profile reports its own live quota to
+BB's provider usage API, so BB can display separate account windows. This
+plugin does not use OpenCodex, its management API, or its account mapping. BB's
+token and cost history comes from sessions started in BB; the plugin API has no
+historical usage import surface.
 
 ## Nix setup
 

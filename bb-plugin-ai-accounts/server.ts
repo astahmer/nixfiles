@@ -197,6 +197,7 @@ export default async function plugin(bb: BbPluginApi) {
           acpDialect: "generic",
           accountId: account.id,
           accountProvider: account.provider,
+          accountHome: account.path,
           accountDisplayName: account.displayName,
           accountBadge,
           hiddenModelIds: account.hiddenModelIds,

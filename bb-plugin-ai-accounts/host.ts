@@ -15,7 +15,10 @@ const requestSchema = z.object({
   method: z.string().optional(),
   params: z.object({ providerOptions: z.record(z.string(), z.unknown()).optional() }).passthrough(),
 }).passthrough();
-const usageProviderSchema = z.object({ accountProvider: z.enum(["codex", "opencode-go"]) });
+const usageProviderSchema = z.object({
+  accountProvider: z.enum(["codex", "opencode-go"]),
+  accountHome: z.string().min(1).max(1024).optional(),
+});
 const providerOptionsSchema = z.object({
   accountBadge: z.string().trim().min(1).max(4).optional(),
   hiddenModelIds: z.array(z.string()).optional(),
@@ -133,7 +136,7 @@ export const experimental_providerBridge = {
         if (decoded.data.method === "provider/usage") {
           const usageProvider = usageProviderSchema.safeParse(decoded.data.params.providerOptions ?? {});
           const readUsage = usageProvider.success && usageProvider.data.accountProvider === "opencode-go" ? readOpenCodeGoUsage : readCodexUsage;
-          void readUsage().then((result) => {
+          void readUsage(usageProvider.success ? usageProvider.data.accountHome : undefined).then((result) => {
             originalWrite(JSON.stringify({ jsonrpc: "2.0", id: decoded.data.id, result }) + "\n");
           }).catch(() => {
             originalWrite(JSON.stringify({

@@ -23,8 +23,8 @@ const failure = (message: string) => ({
   usage: { status: "error" as const, accountEmail: null, planLabel: null, message },
 });
 
-export const readOpenCodeGoUsage = async () => {
-  const dataHome = process.env.XDG_DATA_HOME;
+export const readOpenCodeGoUsage = async (accountHome?: string) => {
+  const dataHome = accountHome ?? process.env.XDG_DATA_HOME;
   if (!dataHome) return failure("The OpenCode account data directory was not provided to the usage reader.");
   try {
     const authContent = await readFile(join(dataHome, "opencode", "auth.json"), "utf8");

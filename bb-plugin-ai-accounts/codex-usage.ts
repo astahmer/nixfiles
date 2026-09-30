@@ -26,8 +26,8 @@ const resetDate = (value: number | string | null | undefined) => {
   return null;
 };
 
-export const readCodexUsage = async () => {
-  const codexHome = process.env.CODEX_HOME;
+export const readCodexUsage = async (accountHome?: string) => {
+  const codexHome = accountHome ?? process.env.CODEX_HOME;
   if (!codexHome) return failure("The Codex account home was not provided to the usage reader.");
   const child = spawn("codex", ["app-server"], {
     cwd: process.cwd(),
