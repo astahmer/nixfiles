@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import "./app.css";
 import {
   definePluginApp,
   experimental_SidebarNavigationIcon,
@@ -86,8 +87,7 @@ const mountResizer = () => {
     handle.setAttribute("tabindex", "0");
     Object.assign(handle.style, {
       alignItems: "center",
-      background: "var(--background)",
-      borderBlock: "1px solid var(--border)",
+      background: "var(--border-seam)",
       cursor: "row-resize",
       display: "flex",
       flex: "0 0 8px",
@@ -227,32 +227,34 @@ const SidebarNavigation = () => {
       {items.filter((item) => item.isVisible).map((item) => (
         <button
           key={item.id}
+          className="sidebar-resize-navigation-item"
           type="button"
           title={item.label}
           aria-label={item.label}
           aria-current={activeItemId === item.id ? "page" : undefined}
           aria-keyshortcuts={item.shortcut?.ariaKeyShortcuts}
+          data-active={activeItemId === item.id}
           disabled={item.isDisabled}
           onClick={(event) => actions.activate(item.id, { openInSplit: event.metaKey || event.ctrlKey })}
           style={{
             alignItems: "center",
-            background: activeItemId === item.id ? "var(--accent)" : "transparent",
             border: 0,
             borderRadius: 8,
-            color: "var(--foreground)",
             cursor: item.isDisabled ? "default" : "pointer",
             display: "flex",
-            flex: isCollapsed ? "0 0 36px" : "0 0 40px",
-            gap: 12,
+            flex: "0 0 32px",
+            fontSize: 14,
+            gap: 8,
             justifyContent: isCollapsed ? "center" : "flex-start",
+            lineHeight: "20px",
             minWidth: 0,
             opacity: item.isDisabled ? 0.5 : 1,
-            padding: isCollapsed ? 0 : "0 12px",
+            padding: isCollapsed ? 0 : "0 8px",
             textAlign: "left",
             whiteSpace: "nowrap",
           }}
         >
-          <SidebarNavigationIcon icon={item.icon} />
+          <SidebarNavigationIcon icon={item.icon} className="sidebar-resize-navigation-icon" />
           {!isCollapsed && <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.label}</span>}
           {!isCollapsed && item.experimental_Accessory && <item.experimental_Accessory />}
         </button>
@@ -260,13 +262,14 @@ const SidebarNavigation = () => {
       {!isCollapsed && (
         <button
           type="button"
+          className="sidebar-resize-navigation-customize"
           onClick={actions.openCustomize}
           style={{
             background: "transparent",
             border: 0,
-            color: "var(--muted-foreground)",
             cursor: "pointer",
-            flex: "0 0 36px",
+            flex: "0 0 32px",
+            fontSize: 13,
             textAlign: "left",
           }}
         >

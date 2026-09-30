@@ -10,5 +10,5 @@
     "noEmit": true,
     "skipLibCheck": false
   },
-  "include": ["app.tsx", "server.ts"]
+  "include": ["app.tsx", "server.ts", "styles.d.ts"]
 }
