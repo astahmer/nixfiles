@@ -198,12 +198,14 @@ const SidebarNavigation = () => {
   const navigationRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const tooltipTimer = useRef<number | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [navigationWidth, setNavigationWidth] = useState(0);
   const [tooltip, setTooltip] = useState<{ label: string; left: number; bottom: number } | null>(null);
   const [menu, setMenu] = useState<{ left: number; top: number } | null>(null);
+  const [menuSearch, setMenuSearch] = useState("");
   const density = values?.density === "Comfortable" ? "comfortable" : "compact";
   const rowHeight = density === "compact" ? 30 : 34;
   const overflowMode = values?.overflow === "Scroll" || values?.overflow === "Overflow menu"
@@ -219,6 +221,10 @@ const SidebarNavigation = () => {
   const menuItems = overflowMode === "Overflow menu"
     ? visibleItems.slice(visibleCollapsedItems.length)
     : visibleItems;
+  const normalizedQuery = menuSearch.trim().toLocaleLowerCase();
+  const filteredMenuItems = normalizedQuery
+    ? menuItems.filter((item) => item.label.toLocaleLowerCase().includes(normalizedQuery))
+    : menuItems;
 
   const clearTooltip = () => {
     if (tooltipTimer.current !== null) window.clearTimeout(tooltipTimer.current);
@@ -274,6 +280,11 @@ const SidebarNavigation = () => {
     };
     const dismissOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      if (document.activeElement === searchInputRef.current && searchInputRef.current.value) {
+        event.preventDefault();
+        setMenuSearch("");
+        return;
+      }
       setMenu(null);
       menuButtonRef.current?.focus();
     };
@@ -287,14 +298,15 @@ const SidebarNavigation = () => {
 
   useLayoutEffect(() => {
     if (!menu) return;
-    menuRef.current?.querySelector<HTMLButtonElement>("[role='menuitem']:not(:disabled)")?.focus();
+    searchInputRef.current?.focus();
   }, [Boolean(menu)]);
 
   const openMenu = () => {
     const button = menuButtonRef.current;
     if (!button) return;
+    setMenuSearch("");
     const bounds = button.getBoundingClientRect();
-    const menuHeight = Math.min(360, (menuItems.length + 1) * rowHeight + 24);
+    const menuHeight = Math.min(360, (menuItems.length + 2) * rowHeight + 32);
     const opensAbove = window.innerHeight - bounds.bottom < menuHeight && bounds.top > menuHeight;
     setMenu({
       left: clamp(bounds.left, 8, Math.max(8, window.innerWidth - 280)),
@@ -307,6 +319,7 @@ const SidebarNavigation = () => {
   const activate = (itemId: string, event: MouseEvent<HTMLButtonElement>) => {
     actions.activate(itemId, { openInSplit: event.metaKey || event.ctrlKey });
     setMenu(null);
+    setMenuSearch("");
   };
 
   const menuButton = isCollapsed && overflowMode !== "Scroll";
@@ -447,23 +460,30 @@ const SidebarNavigation = () => {
         <div
           ref={menuRef}
           id="sidebar-resize-overflow-menu"
-          role="menu"
+          role="dialog"
           aria-label="Sidebar destinations"
           onKeyDown={(event) => {
-            const menuItems = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']:not(:disabled)") ?? []);
-            const focusedIndex = menuItems.findIndex((menuItem) => menuItem === document.activeElement);
-            const nextIndex = event.key === "ArrowDown"
-              ? (focusedIndex + 1) % menuItems.length
-              : event.key === "ArrowUp"
-                ? (focusedIndex - 1 + menuItems.length) % menuItems.length
-                : event.key === "Home"
-                  ? 0
-                  : event.key === "End"
-                    ? menuItems.length - 1
-                    : -1;
-            if (nextIndex < 0 || menuItems.length === 0) return;
+            const menuButtons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("[data-overflow-item]:not(:disabled)") ?? []);
+            const focusedIndex = menuButtons.findIndex((menuItem) => menuItem === document.activeElement);
+            const isSearchFocused = searchInputRef.current === document.activeElement;
+            const nextIndex = isSearchFocused
+              ? event.key === "ArrowDown"
+                ? 0
+                : event.key === "ArrowUp"
+                  ? menuButtons.length - 1
+                  : -1
+              : event.key === "ArrowDown"
+                ? (focusedIndex + 1) % menuButtons.length
+                : event.key === "ArrowUp"
+                  ? (focusedIndex - 1 + menuButtons.length) % menuButtons.length
+                  : event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? menuButtons.length - 1
+                      : -1;
+            if (nextIndex < 0 || menuButtons.length === 0) return;
             event.preventDefault();
-            menuItems[nextIndex]?.focus();
+            menuButtons[nextIndex]?.focus();
           }}
           style={{
             background: "var(--popover)",
@@ -485,11 +505,30 @@ const SidebarNavigation = () => {
             zIndex: 10001,
           }}
         >
-          {menuItems.map((item) => (
+          <input
+            ref={searchInputRef}
+            className="sidebar-resize-navigation-search"
+            type="search"
+            aria-label="Filter sidebar destinations"
+            placeholder="Filter destinations…"
+            value={menuSearch}
+            onChange={(event) => setMenuSearch(event.currentTarget.value)}
+            style={{
+              borderRadius: 5,
+              boxSizing: "border-box",
+              color: "inherit",
+              font: "inherit",
+              height: rowHeight,
+              marginBottom: 4,
+              padding: "0 8px",
+              width: "100%",
+            }}
+          />
+          {filteredMenuItems.map((item) => (
             <button
               key={item.id}
               type="button"
-              role="menuitem"
+              data-overflow-item
               className="sidebar-resize-navigation-menu-item"
               aria-current={activeItemId === item.id ? "page" : undefined}
               disabled={item.isDisabled}
@@ -514,10 +553,15 @@ const SidebarNavigation = () => {
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
             </button>
           ))}
+          {filteredMenuItems.length === 0 && (
+            <div role="status" style={{ color: "var(--muted-foreground)", padding: "8px" }}>
+              No matching destinations
+            </div>
+          )}
           <div aria-hidden="true" style={{ borderTop: "1px solid var(--border)", margin: "4px 0" }} />
           <button
             type="button"
-            role="menuitem"
+            data-overflow-item
             className="sidebar-resize-navigation-menu-item"
             onClick={() => {
               setMenu(null);

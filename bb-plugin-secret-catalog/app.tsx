@@ -22,6 +22,53 @@ type KnownProjectPath = { name: string; path: string; hostId: string };
 const entryId = (entry: SecretEntry) => `${entry.scope}:${entry.alias}:${entry.env}`;
 const entryScope = (scope: string): MutableScope =>
   scope === "global" || scope === "local" ? scope : "project";
+type SecretIconName = "eye" | "eye-off" | "copy" | "edit" | "remove";
+const SecretIcon = ({ name }: { name: SecretIconName }) => (
+  <svg
+    aria-hidden="true"
+    width="15"
+    height="15"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {name === "eye" && (
+      <>
+        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    )}
+    {name === "eye-off" && (
+      <>
+        <path d="m3 3 18 18" />
+        <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+        <path d="M9.9 5.2A10.9 10.9 0 0 1 12 5c6.4 0 10 7 10 7a15.8 15.8 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7c1 0 2-.2 2.8-.5" />
+      </>
+    )}
+    {name === "copy" && (
+      <>
+        <rect x="8" y="8" width="13" height="13" rx="2" />
+        <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" />
+      </>
+    )}
+    {name === "edit" && (
+      <>
+        <path d="M12 20h9" />
+        <path d="m16.5 3.5 4 4L8 20l-5 1 1-5Z" />
+      </>
+    )}
+    {name === "remove" && (
+      <>
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2m3 0-1 14H6L5 6" />
+        <path d="M10 11v5m4-5v5" />
+      </>
+    )}
+  </svg>
+);
 
 const styles = `
 .secret-page{height:100%;min-height:0;display:flex;flex-direction:column;color:var(--foreground);background:var(--background);font:13px/1.45 var(--font-sans,system-ui)}
@@ -32,6 +79,7 @@ const styles = `
 .secret-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.secret-scope button:disabled{opacity:.45;cursor:default}.secret-picker-header .secret-button{display:flex;align-items:center;gap:4px}.secret-picker-header .secret-button kbd{margin-left:5px;color:var(--muted-foreground);font-size:10px}.secret-picker-entry-icon{position:relative;display:flex;align-items:center}.secret-picker-entry-icon:before{content:"";display:block;width:13px;height:9px;border:1.5px solid currentColor;border-radius:2px}.secret-picker-entry-icon:after{content:"";position:absolute;top:1px;left:2px;width:5px;height:2px;border:1.5px solid currentColor;border-bottom:0;border-radius:2px 2px 0 0}.secret-toolbar .secret-project-picker .secret-path{border-radius:6px;cursor:pointer}.secret-project-picker .secret-path:hover{border-color:var(--ring,var(--primary))}.secret-picker{width:min(1000px,86vw);max-height:min(780px,84vh);padding:16px 10px 0;overflow:hidden}.secret-picker-header{padding:0 10px 12px;border-bottom:1px solid var(--border)}.secret-picker-header .secret-button{flex:none}.secret-picker-path input{height:44px;padding:0 8px;font:16px/1.4 var(--font-sans,system-ui)}.secret-picker-section{padding:16px 16px 8px;font-size:12px}.secret-picker-list{max-height:min(620px,65vh);min-height:160px;padding:0 7px 8px;overflow:auto}.secret-project-option{display:flex;width:100%;min-height:70px;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.secret-project-option[data-active=true],.secret-project-option:hover{background:var(--accent)}.secret-project-option:focus-visible{outline:2px solid var(--ring,var(--primary))}.secret-project-option kbd{margin-left:auto;color:var(--muted-foreground)}.secret-project-mark{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:7px;background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary);font-size:10px;font-weight:700}.secret-project-option:nth-child(6n + 2) .secret-project-mark{background:#ff910022;color:#ff9100}.secret-project-option:nth-child(6n + 3) .secret-project-mark{background:#00bcd422;color:#00bcd4}.secret-project-option:nth-child(6n + 4) .secret-project-mark{background:#8b5cf622;color:#a78bfa}.secret-project-option:nth-child(6n + 5) .secret-project-mark{background:#10b98122;color:#10b981}.secret-project-option-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;font-size:15px}.secret-project-option-copy small{overflow:hidden;color:var(--muted-foreground);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.secret-picker-footer{justify-content:flex-start;gap:18px;padding:12px 16px;background:var(--background)}.secret-picker-error{padding:10px 16px;color:var(--destructive)}
 @media(max-width:700px){.secret-toolbar{flex-wrap:wrap}.secret-brand{width:100%}.secret-host{width:40%}.secret-project-picker{flex:1}.secret-content{flex-direction:column}.secret-list{width:100%;min-width:0;max-height:48%;border-right:0;border-bottom:1px solid var(--border)}.secret-path{width:60vw}.secret-list-head{flex-wrap:wrap}}
 .secret-picker{width:min(620px,calc(100vw - 32px));max-height:min(520px,78vh);padding:8px 7px 0;border-radius:12px}.secret-picker-header{padding:0 7px 6px;gap:5px}.secret-picker-path input{height:36px;font-size:14px}.secret-picker-section{padding:8px 10px 4px;font-size:11px}.secret-picker-list{max-height:min(390px,60vh);min-height:0;padding:0 4px 5px}.secret-project-option{min-height:42px;gap:8px;padding:5px 7px;border-radius:6px}.secret-project-mark{width:20px;height:20px;border-radius:5px;font-size:9px}.secret-project-option-copy{gap:0;font-size:13px}.secret-project-option-copy small{font-size:10px}.secret-picker-entry{min-height:32px;padding:4px 8px}.secret-picker-footer{gap:10px;padding:7px 9px;font-size:10px}.secret-picker-footer kbd{padding:1px 4px}
+.secret-header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:18px 20px 14px;border-bottom:1px solid var(--border)}.secret-heading h1{display:flex;align-items:center;gap:10px;margin:0;font-size:20px;line-height:1.2}.secret-count{padding:3px 8px;border-radius:999px;background:var(--accent);color:var(--muted-foreground);font-size:11px;font-weight:500}.secret-heading p{margin:6px 0 0;color:var(--muted-foreground);font-size:12px}.secret-header-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.secret-button-primary{background:var(--foreground);color:var(--background);font-weight:600}.secret-button-primary:hover{filter:brightness(.9)}.secret-contextbar{display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border)}.secret-contextbar .secret-host{width:min(260px,32%);flex:none}.secret-contextbar .secret-project-picker{flex:1}.secret-contextbar .secret-path{height:34px}.secret-scope{flex:none}.secret-search-wrap{padding:12px 20px 10px}.secret-search{height:38px;border:1px solid var(--border);border-radius:7px;padding:0 12px}.secret-table-scroll{min-height:0;flex:1;overflow:auto;padding:0 20px 20px}.secret-table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--border);border-radius:8px;overflow:hidden}.secret-table th{padding:10px 12px;background:var(--accent);color:var(--muted-foreground);font-size:10px;font-weight:650;letter-spacing:.045em;text-align:left;text-transform:uppercase}.secret-table td{padding:9px 12px;border-top:1px solid var(--border);vertical-align:middle}.secret-table tbody tr:hover{background:color-mix(in srgb,var(--accent) 36%,transparent)}.secret-table tbody tr[data-selected=true]{background:var(--accent)}.secret-variable{display:flex;min-width:140px;flex-direction:column;gap:3px}.secret-variable-button{padding:0;border:0;background:transparent;color:var(--foreground);text-align:left;font:600 12px/1.3 var(--font-mono,monospace);overflow-wrap:anywhere;cursor:pointer}.secret-variable-button:focus-visible{outline:2px solid var(--ring,var(--primary));outline-offset:2px}.secret-variable small,.secret-description small{color:var(--muted-foreground);font-size:10px}.secret-description{display:flex;flex-direction:column;gap:3px;overflow-wrap:anywhere}.secret-value-cell{display:flex;min-width:155px;align-items:center;gap:4px}.secret-masked-value{min-width:0;flex:1;overflow:hidden;color:var(--muted-foreground);font:12px/1.4 var(--font-mono,monospace);text-overflow:ellipsis;white-space:nowrap}.secret-inline-value{overflow:hidden;color:var(--foreground);font:12px/1.4 var(--font-mono,monospace);text-overflow:ellipsis;white-space:nowrap;user-select:text}.secret-icon-button{display:grid;width:28px;height:28px;flex:none;place-items:center;border:0;border-radius:5px;background:transparent;color:var(--muted-foreground);font:16px/1 var(--font-sans,system-ui);cursor:pointer}.secret-icon-button:hover{background:var(--accent);color:var(--foreground)}.secret-icon-button:focus-visible{outline:2px solid var(--ring,var(--primary));outline-offset:-2px}.secret-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:2px;white-space:nowrap}.secret-table th:last-child{text-align:right}.secret-table-empty{padding:38px 14px!important;color:var(--muted-foreground);text-align:center}.secret-notice{margin:0 20px 12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;color:var(--muted-foreground);font-size:11px}.secret-editor-backdrop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:20px;background:rgb(0 0 0/.58)}.secret-editor{width:min(480px,calc(100vw - 32px));max-height:90vh;overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 18px 60px #000a}.secret-editor h2{margin:0;padding:16px 18px;border-bottom:1px solid var(--border);font-size:16px}.secret-editor-fields{display:flex;flex-direction:column;gap:12px;padding:16px 18px}.secret-editor .secret-actions{padding:0 18px 16px}.secret-empty-page{padding:38px 16px;color:var(--muted-foreground);text-align:center}.secret-scope-label{margin:0 4px 0 8px;color:var(--muted-foreground);font-size:11px}@media(max-width:760px){.secret-header{flex-wrap:wrap;padding:14px}.secret-header-actions{width:100%;justify-content:flex-start}.secret-contextbar{flex-wrap:wrap;padding:8px 14px}.secret-contextbar .secret-host{width:100%;max-width:none}.secret-contextbar .secret-project-picker{flex:1 1 65%}.secret-scope{width:100%;overflow:auto}.secret-search-wrap{padding:10px 14px}.secret-table-scroll{padding:0 14px 14px}.secret-table{min-width:680px}}
 `;
 
 function Page() {
@@ -67,7 +115,7 @@ function Page() {
     const query = search.trim().toLocaleLowerCase();
     if (!query) return entries;
     return entries.filter((entry) =>
-      [entry.alias, entry.item, entry.envKey, entry.scope].some((field) =>
+      [entry.alias, entry.item, entry.envKey, entry.field, entry.env, entry.scope].some((field) =>
         field.toLocaleLowerCase().includes(query),
       ),
     );
@@ -163,22 +211,24 @@ function Page() {
     })();
   }, [sdk]);
 
-  const reveal = async () => {
-    if (!selected) return;
+  const reveal = async (entry = selected) => {
+    if (!entry) return;
     setBusy(true);
     setError(null);
-    setMessage(
-      "Secret value is visible in this BB window until you hide it or select another alias.",
-    );
+    setSelectedId(entryId(entry));
+    setEnvironment(entry.env);
+    setValue(null);
+    setMessage(null);
     try {
       const result = await rpc.call("get", {
         hostId,
         cwd: cwd.trim() || "/",
-        alias: selected.alias,
-        environment,
-        scope: entryScope(selected.scope),
+        alias: entry.alias,
+        environment: entry.env,
+        scope: entryScope(entry.scope),
       });
       setValue(result.value);
+      setMessage("Value visible until hidden or another alias is selected.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setMessage(null);
@@ -187,17 +237,20 @@ function Page() {
     }
   };
 
-  const copy = async () => {
-    if (!selected) return;
+  const copy = async (entry = selected) => {
+    if (!entry) return;
     setBusy(true);
     setError(null);
+    setSelectedId(entryId(entry));
+    setEnvironment(entry.env);
+    setValue(null);
     try {
       const result = await rpc.call("copy", {
         hostId,
         cwd: cwd.trim() || "/",
-        alias: selected.alias,
-        environment,
-        scope: entryScope(selected.scope),
+        alias: entry.alias,
+        environment: entry.env,
+        scope: entryScope(entry.scope),
       });
       setMessage(result.message);
     } catch (cause) {
@@ -403,11 +456,13 @@ function Page() {
       ?.scrollIntoView({ block: "nearest" });
   }, [browserIndex, browser, isDirectoryQuery, projectIndex]);
 
-  const openUpdate = () => {
-    if (!selected) return;
-    setDraftAlias(selected.alias);
+  const openUpdate = (entry = selected) => {
+    if (!entry) return;
+    setSelectedId(entryId(entry));
+    setEnvironment(entry.env);
+    setDraftAlias(entry.alias);
     setDraftValue("");
-    setDraftScope(entryScope(selected.scope));
+    setDraftScope(entryScope(entry.scope));
     setEditorMode("update");
     setValue(null);
     setMessage(null);
@@ -421,8 +476,27 @@ function Page() {
   return (
     <div className="secret-page">
       <style>{styles}</style>
-      <header className="secret-toolbar">
-        <strong className="secret-brand">Secret Catalog</strong>
+      <header className="secret-header">
+        <div className="secret-heading">
+          <h1>
+            Secret Catalog <span className="secret-count">{entries.length} secrets</span>
+          </h1>
+          <p>Aliases from the secret CLI. Values stay hidden until you reveal them.</p>
+        </div>
+        <div className="secret-header-actions">
+          <button className="secret-button" disabled={busy || !hostId} onClick={() => void refresh()}>
+            Refresh
+          </button>
+          <button
+            className="secret-button secret-button-primary"
+            disabled={busy || !hostId || (activeScope !== "global" && !cwd.trim())}
+            onClick={openCreate}
+          >
+            + Add Secret
+          </button>
+        </div>
+      </header>
+      <div className="secret-contextbar">
         <select
           className="secret-input secret-host"
           aria-label="Machine"
@@ -442,7 +516,7 @@ function Page() {
               value={host.id}
               disabled={host.status !== "connected" || host.lifecycle.phase !== "active"}
             >
-              {host.name} · {host.status}
+              {host.name}
             </option>
           ))}
         </select>
@@ -460,7 +534,23 @@ function Page() {
             }}
           />
         </div>
-      </header>
+        <nav className="secret-scope" aria-label="Secret scope">
+          {(["all", "project", "global", "local"] as const).map((scope) => (
+            <button
+              key={scope}
+              data-active={activeScope === scope}
+              disabled={(scope === "project" || scope === "local") && !cwd.trim()}
+              onClick={() => {
+                setActiveScope(scope);
+                void refresh(scope);
+              }}
+            >
+              {scope[0]?.toLocaleUpperCase()}
+              {scope.slice(1)}
+            </button>
+          ))}
+        </nav>
+      </div>
       {projectPickerOpen && (
         <div
           className="secret-picker-backdrop"
@@ -656,99 +746,22 @@ function Page() {
           </section>
         </div>
       )}
-      <div className="secret-content">
-        <aside className="secret-list" aria-label="Configured aliases">
-          <div className="secret-list-head">
-            <nav className="secret-scope" aria-label="Secret scope">
-              {(["all", "project", "global", "local"] as const).map((scope) => (
-                <button
-                  key={scope}
-                  data-active={activeScope === scope}
-                  disabled={
-                    (scope === "project" && !cwd.trim()) || (scope === "local" && !cwd.trim())
-                  }
-                  onClick={() => {
-                    setActiveScope(scope);
-                    void refresh(scope);
-                  }}
-                >
-                  {scope[0]?.toLocaleUpperCase()}
-                  {scope.slice(1)}
-                </button>
-              ))}
-            </nav>
-            <button
-              className="secret-button"
-              disabled={busy || !hostId || (activeScope !== "global" && !cwd.trim())}
-              onClick={openCreate}
-            >
-              + New
-            </button>
-          </div>
-          <input
-            className="secret-search"
-            aria-label="Search aliases"
-            placeholder="Search aliases, items, or scope…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-          <div role="listbox" aria-label="Configured aliases">
-            {filtered.map((entry, index) => (
-              <button
-                className="secret-row"
-                id={`secret-option-${index}`}
-                key={entryId(entry)}
-                type="button"
-                role="option"
-                aria-selected={selectedId === entryId(entry)}
-                tabIndex={
-                  index === selectedFilteredIndex || (selectedFilteredIndex < 0 && index === 0)
-                    ? 0
-                    : -1
-                }
-                data-selected={selectedId === entryId(entry)}
-                onClick={() => selectEntry(entry)}
-                onKeyDown={(event) => {
-                  let nextIndex = index;
-                  if (event.key === "ArrowDown")
-                    nextIndex = Math.min(index + 1, filtered.length - 1);
-                  else if (event.key === "ArrowUp") nextIndex = Math.max(index - 1, 0);
-                  else if (event.key === "Home") nextIndex = 0;
-                  else if (event.key === "End") nextIndex = filtered.length - 1;
-                  else return;
-                  event.preventDefault();
-                  const nextEntry = filtered[nextIndex];
-                  if (!nextEntry) return;
-                  selectEntry(nextEntry);
-                  document.getElementById(`secret-option-${nextIndex}`)?.focus();
-                }}
-              >
-                <span className="secret-row-main">
-                  <div className="secret-alias">{entry.alias}</div>
-                  <div className="secret-meta">
-                    {entry.scope} · {entry.env} · {entry.item}
-                  </div>
-                </span>
-              </button>
-            ))}
-          </div>
-          {entries.length > 0 && filtered.length === 0 && (
-            <div className="secret-empty">No aliases match.</div>
-          )}
-          {entries.length === 0 && (
-            <div className="secret-empty">No {activeScope} aliases found.</div>
-          )}
-        </aside>
-        <main className="secret-detail">
-          {editorMode ? (
-            <form
-              className="secret-editor"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveValue();
-              }}
-            >
-              <h2>{editorMode === "create" ? "Add secret alias" : `Update ${draftAlias}`}</h2>
+      {editorMode && (
+        <div
+          className="secret-editor-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) closeEditor();
+          }}
+        >
+          <form
+            className="secret-editor"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveValue();
+            }}
+          >
+            <h2>{editorMode === "create" ? "Add secret" : `Edit ${draftAlias}`}</h2>
+            <div className="secret-editor-fields">
               {editorMode === "create" && (
                 <label>
                   Scope
@@ -807,90 +820,164 @@ function Page() {
               <div className="secret-editor-note">
                 BB sends this value to `secret` over stdin. The plugin does not store it.
               </div>
-              <div className="secret-actions">
-                <button
-                  className="secret-button"
-                  type="button"
-                  disabled={busy}
-                  onClick={closeEditor}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="secret-button"
-                  type="submit"
-                  disabled={busy || (!draftValue && editorMode === "create")}
-                >
-                  {busy ? "Saving…" : "Save through secret CLI"}
-                </button>
-              </div>
-            </form>
-          ) : selected ? (
-            <>
-              <div className="secret-detail-title">
-                {selected.alias}
-                <div className="secret-meta">
-                  {selected.scope} · {selected.envKey} · {selected.field}
-                </div>
-              </div>
-              <div className="secret-detail-toolbar">
-                <label className="secret-environment">
-                  Environment{" "}
-                  <input
-                    className="secret-input"
-                    value={environment}
-                    onChange={(event) => {
-                      setEnvironment(event.target.value);
-                      setValue(null);
-                    }}
-                  />
-                </label>
-                <div className="secret-primary-actions">
-                  <button
-                    className="secret-button"
-                    disabled={busy || !environment.trim()}
-                    onClick={() => void copy()}
-                  >
-                    Copy
-                  </button>
-                  <button
-                    className="secret-button"
-                    disabled={busy || !environment.trim()}
-                    onClick={() => (value === null ? void reveal() : setValue(null))}
-                  >
-                    {value === null ? "Reveal value" : "Hide value"}
-                  </button>
-                </div>
-                <details className="secret-manage">
-                  <summary>Manage</summary>
-                  <div className="secret-manage-actions">
-                    <button className="secret-button" disabled={busy} onClick={openUpdate}>
-                      Edit alias / value
-                    </button>
-                    <button
-                      className="secret-button secret-button-danger"
-                      disabled={busy}
-                      onClick={() => {
-                        setError(null);
-                        setRemoveConfirmation(true);
-                      }}
-                    >
-                      Remove alias
-                    </button>
-                  </div>
-                </details>
-              </div>
-              {message && (
-                <div className="secret-actions secret-muted" role="status">
-                  {message}
-                </div>
-              )}
-              {value !== null && <pre className="secret-value">{value || "(empty value)"}</pre>}
-            </>
-          ) : (
-            <div className="secret-empty">Select an alias to inspect or copy its value.</div>
-          )}
-        </main>
+            </div>
+            <div className="secret-actions">
+              <button
+                className="secret-button"
+                type="button"
+                disabled={busy}
+                onClick={closeEditor}
+              >
+                Cancel
+              </button>
+              <button
+                className="secret-button secret-button-primary"
+                type="submit"
+                disabled={busy || (!draftValue && editorMode === "create")}
+              >
+                {busy ? "Saving…" : "Save through secret CLI"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+      <div className="secret-search-wrap">
+        <input
+          className="secret-search"
+          aria-label="Search secrets"
+          placeholder="Filter by variable name, service, or alias…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+      </div>
+      {message && <div className="secret-notice" role="status">{message}</div>}
+      <div className="secret-table-scroll">
+        <table className="secret-table">
+          <thead>
+            <tr>
+              <th scope="col">Variable</th>
+              <th scope="col">Description / service</th>
+              <th scope="col">Value</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((entry, index) => {
+              const id = entryId(entry);
+              const isSelected = selectedId === id;
+              const isRevealed = isSelected && value !== null;
+              return (
+                <tr key={id} data-selected={isSelected}>
+                  <td>
+                    <div className="secret-variable">
+                      <button
+                        className="secret-variable-button"
+                        id={`secret-option-${index}`}
+                        type="button"
+                        aria-pressed={isSelected}
+                        tabIndex={
+                          index === selectedFilteredIndex || (selectedFilteredIndex < 0 && index === 0)
+                            ? 0
+                            : -1
+                        }
+                        onClick={() => selectEntry(entry)}
+                        onKeyDown={(event) => {
+                          let nextIndex = index;
+                          if (event.key === "ArrowDown") nextIndex = Math.min(index + 1, filtered.length - 1);
+                          else if (event.key === "ArrowUp") nextIndex = Math.max(index - 1, 0);
+                          else if (event.key === "Home") nextIndex = 0;
+                          else if (event.key === "End") nextIndex = filtered.length - 1;
+                          else return;
+                          event.preventDefault();
+                          const nextEntry = filtered[nextIndex];
+                          if (!nextEntry) return;
+                          selectEntry(nextEntry);
+                          document.getElementById(`secret-option-${nextIndex}`)?.focus();
+                        }}
+                      >
+                        {entry.envKey}
+                      </button>
+                      <small>{entry.alias} · {entry.scope} · {entry.env}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="secret-description">
+                      <span>{entry.item}</span>
+                      <small>{entry.field}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="secret-value-cell">
+                      <span className={isRevealed ? "secret-inline-value" : "secret-masked-value"}>
+                        {isRevealed ? value || "(empty value)" : "••••••••••••"}
+                      </span>
+                      <button
+                        className="secret-icon-button"
+                        type="button"
+                        aria-label={isRevealed ? `Hide ${entry.alias}` : `Reveal ${entry.alias}`}
+                        title={isRevealed ? "Hide value" : "Reveal value"}
+                        disabled={busy}
+                        onClick={() => {
+                          if (isRevealed) setValue(null);
+                          else void reveal(entry);
+                        }}
+                      >
+                        <SecretIcon name={isRevealed ? "eye-off" : "eye"} />
+                      </button>
+                      <button
+                        className="secret-icon-button"
+                        type="button"
+                        aria-label={`Copy ${entry.alias}`}
+                        title="Copy with secret CLI"
+                        disabled={busy}
+                        onClick={() => void copy(entry)}
+                      >
+                        <SecretIcon name="copy" />
+                      </button>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="secret-row-actions">
+                      <button
+                        className="secret-icon-button"
+                        type="button"
+                        aria-label={`Edit ${entry.alias}`}
+                        title="Edit alias or value"
+                        disabled={busy}
+                        onClick={() => openUpdate(entry)}
+                      >
+                        <SecretIcon name="edit" />
+                      </button>
+                      <button
+                        className="secret-icon-button"
+                        type="button"
+                        aria-label={`Remove ${entry.alias}`}
+                        title="Remove alias"
+                        disabled={busy}
+                        onClick={() => {
+                          selectEntry(entry);
+                          setError(null);
+                          setRemoveConfirmation(true);
+                        }}
+                      >
+                        <SecretIcon name="remove" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {filtered.length === 0 && (
+              <tr>
+                <td className="secret-table-empty" colSpan={4}>
+                  {entries.length === 0
+                    ? `No ${activeScope} secrets found for this location.`
+                    : "No secrets match your filter."}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
