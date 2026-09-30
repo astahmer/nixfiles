@@ -4,14 +4,17 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
+import { providerIconOptions } from "./provider-icons";
 
 const providerSchema = z.enum(["codex", "opencode-go"]);
+const providerIconSchema = z.enum(providerIconOptions);
 const accountSchema = z.object({
   id: z.string().min(1).max(48).regex(/^[a-z0-9][a-z0-9-]*$/u),
   provider: providerSchema,
-  displayName: z.string().trim().min(1).max(48).regex(/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u),
+  displayName: z.string().trim().min(1).max(48).refine((name) => !/[\u0000-\u001f\u007f]/u.test(name)),
   badge: z.string().trim().min(1).max(4).transform((value) => value.toUpperCase()).optional(),
   accentColor: z.string().regex(/^#[\da-fA-F]{6}$/u).optional(),
+  providerIcon: providerIconSchema.optional(),
   path: z.string().min(1).max(1024).refine(
     (path) => path.startsWith("/") && !/[\u0000-\u001f\u007f]/u.test(path),
     "must be an absolute path without control characters",
@@ -48,6 +51,7 @@ const stateSchema = z.object({ accounts: z.array(accountSchema).max(100) }).refi
 export type AccountProfile = z.infer<typeof accountSchema>;
 type Account = AccountProfile;
 type Provider = z.infer<typeof providerSchema>;
+type ProviderIcon = z.infer<typeof providerIconSchema>;
 
 const stateKey = "accounts-v2";
 const accountInputSchema = accountSchema.omit({ id: true }).extend({ id: accountSchema.shape.id.optional() });
@@ -104,6 +108,17 @@ const colorFor = (id: string, provider: Provider) => {
   const index = [...id].reduce((total, character) => total + character.charCodeAt(0), 0) % palette.length;
   return palette[index];
 };
+const assignProviderIcons = (accounts: Account[]) => {
+  const usedIcons = new Set(accounts.flatMap((account) => account.providerIcon ? [account.providerIcon] : []));
+  const availableIcons = providerIconOptions.filter((icon) => !usedIcons.has(icon));
+  let nextIconIndex = 0;
+  return accounts.map((account) => {
+    if (account.providerIcon) return account;
+    const providerIcon: ProviderIcon = availableIcons[nextIconIndex] ?? providerIconOptions[nextIconIndex % providerIconOptions.length];
+    nextIconIndex += 1;
+    return { ...account, providerIcon };
+  });
+};
 
 const runBb = (args: string[]) => new Promise<string>((resolve, reject) => {
   execFile(process.env.BB_CLI ?? "bb", args, { encoding: "utf8", timeout: 30_000, maxBuffer: 1_000_000 }, (error, stdout) => {
@@ -147,7 +162,7 @@ export default async function plugin(bb: BbPluginApi) {
     if (stored === undefined) return { accounts: [] };
     const parsed = stateSchema.safeParse(stored);
     if (!parsed.success) throw new Error("Stored account profiles are invalid; edit or remove the affected profiles.");
-    return parsed.data;
+    return { accounts: assignProviderIcons(parsed.data.accounts) };
   };
 
   const registrations = new Map<string, { dispose(): void }>();
@@ -167,7 +182,7 @@ export default async function plugin(bb: BbPluginApi) {
         id: providerId,
         displayName,
         family: account.provider === "codex" ? "codex" : "opencode-go",
-        icon: "./icons/account.svg",
+        icon: account.providerIcon ?? "Bot",
         strings: {
           signInHint: account.provider === "codex"
             ? "Select " + displayName + ", then choose ChatGPT sign-in. This profile stores its login under " + account.path + "."
@@ -284,9 +299,10 @@ export default async function plugin(bb: BbPluginApi) {
       const next = accounts.some((saved) => saved.id === id)
         ? accounts.map((saved) => saved.id === id ? account : saved)
         : [...accounts, account];
-      await bb.storage.kv.set(stateKey, { accounts: next });
+      const accountsWithIcons = assignProviderIcons(next);
+      await bb.storage.kv.set(stateKey, { accounts: accountsWithIcons });
       await syncProviders();
-      return { account };
+      return { account: accountsWithIcons.find((saved) => saved.id === id) ?? account };
     },
     async remove({ id }) {
       const { accounts } = await readState();

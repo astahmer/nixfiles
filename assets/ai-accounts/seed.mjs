@@ -97,6 +97,7 @@ const mergedAccounts = [
     path: account.path,
     badge: account.badge,
     accentColor: account.accentColor,
+    providerIcon: account.providerIcon,
     modelReasoningDefaults: account.modelReasoningDefaults,
     enabled: account.enabled,
   })),

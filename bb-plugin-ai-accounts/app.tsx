@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { definePluginApp, useBbContext, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
+import { providerIconOptions, type ProviderIcon } from "./provider-icons";
 import type { AccountProfile, rpcContract } from "./server";
 import "./app.css";
 
@@ -105,6 +106,24 @@ const GlobalModelPicker = () => {
     }
   };
 
+  const toggleFavorite = async (entry: typeof models[number]) => {
+    setError("");
+    try {
+      const result = await rpc.call("list", null);
+      const account = result.accounts.find((profile) => "ai-account-" + profile.id === entry.providerId);
+      if (!account) throw new Error("Account profile unavailable.");
+      const favoriteModelIds = account.favoriteModelIds.includes(entry.model)
+        ? account.favoriteModelIds.filter((modelId) => modelId !== entry.model)
+        : [...account.favoriteModelIds, entry.model];
+      await rpc.call("save", { ...account, favoriteModelIds });
+      setModels((current) => current.map((model) => model.providerId === entry.providerId && model.model === entry.model
+        ? { ...model, isFavorite: favoriteModelIds.includes(model.model) }
+        : model));
+    } catch {
+      setError("Could not update this model’s favorite status.");
+    }
+  };
+
   return <div className="aa-global-picker">
     <button ref={triggerRef} className="aa-global-picker-trigger" type="button" aria-expanded={open} onClick={(event) => {
       const bounds = event.currentTarget.getBoundingClientRect();
@@ -118,7 +137,7 @@ const GlobalModelPicker = () => {
         maxHeight,
       });
       setOpen((current) => !current);
-    }}>All models <span aria-hidden="true">⌄</span></button>
+    }}>All models <svg className="aa-global-picker-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg></button>
     {open ? createPortal(<section ref={popoverRef} className="aa-global-picker-popover" style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }} aria-label="Search all account models">
       <nav className="aa-global-picker-sidebar" aria-label="Filter by provider">
         <button className={activeProviderId === "all" ? "is-active" : ""} type="button" title="All models" aria-label="All models" aria-pressed={activeProviderId === "all"} onClick={() => setActiveProviderId("all")}><svg className="aa-global-picker-all-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="1" y="10" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="10" width="5" height="5" rx="1" fill="currentColor" /></svg></button>
@@ -130,12 +149,17 @@ const GlobalModelPicker = () => {
         <div className="aa-global-picker-results">
           {loading ? <p className="aa-global-picker-empty">Loading account models…</p> : null}
           {!loading && error ? <p className="aa-global-picker-empty">{error}</p> : null}
-          {!loading && !error && visibleModels.length === 0 ? <p className="aa-global-picker-empty">No matching account models.</p> : null}
-          {visibleModels.map((entry) => <button className={"aa-global-picker-row " + (activeProviderId !== "all" ? "is-compact" : "")} type="button" key={`${entry.providerId}:${entry.model}`} onClick={() => void selectModel(entry)}>
-            {activeProviderId === "all" ? <span className="aa-account-badge" style={{ backgroundColor: entry.color }}>{entry.badge}</span> : null}
-            <span className="aa-global-picker-row-copy"><strong>{entry.displayName}</strong>{activeProviderId === "all" ? <small>{entry.providerName}</small> : null}</span>
-            <span className="aa-global-picker-effort">{entry.reasoningEffort}</span>
-          </button>)}
+          {!loading && !error && visibleModels.length === 0 ? <p className="aa-global-picker-empty">{activeProviderId === "favorites" ? "No favorites yet. Star a model to add it here." : "No matching account models."}</p> : null}
+          {visibleModels.map((entry) => <div className={"aa-global-picker-row " + (activeProviderId !== "all" ? "is-compact" : "")} key={`${entry.providerId}:${entry.model}`}>
+            <button className="aa-global-picker-select" type="button" onClick={() => void selectModel(entry)}>
+              {activeProviderId === "all" ? <span className="aa-account-badge" style={{ backgroundColor: entry.color }}>{entry.badge}</span> : null}
+              <span className="aa-global-picker-row-copy"><strong>{entry.displayName}</strong>{activeProviderId === "all" ? <small>{entry.providerName}</small> : null}</span>
+              <span className="aa-global-picker-effort">{entry.reasoningEffort}</span>
+            </button>
+            <button className={"aa-global-picker-star " + (entry.isFavorite ? "is-favorite" : "")} type="button" aria-label={entry.isFavorite ? `Remove ${entry.displayName} from favorites` : `Add ${entry.displayName} to favorites`} title={entry.isFavorite ? "Remove favorite" : "Add to favorites"} onClick={() => void toggleFavorite(entry)}>
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.2 2.05 4.16 4.59.67-3.32 3.23.78 4.57L8 11.67l-4.1 2.16.78-4.57L1.36 6.03l4.59-.67L8 1.2Z" /></svg>
+            </button>
+          </div>)}
         </div>
         <footer className="aa-global-picker-footer">Reasoning effort follows each model’s default. Change it separately in the composer.</footer>
       </div>
@@ -151,7 +175,7 @@ const AccountPage = () => {
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
   const [identityEmail, setIdentityEmail] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ displayName: "", path: "", hiddenText: "", badge: "", accentColor: "#2563EB" });
+  const [draft, setDraft] = useState<{ displayName: string; path: string; hiddenText: string; badge: string; accentColor: string; providerIcon: ProviderIcon }>({ displayName: "", path: "", hiddenText: "", badge: "", accentColor: "#2563EB", providerIcon: providerIconOptions[0] });
   const [machines, setMachines] = useState<Array<{ id: string; name: string; status: string }>>([]);
   const [selectedHostId, setSelectedHostId] = useState("");
   const [catalog, setCatalog] = useState<Array<{ id: string; displayName: string; isDefault: boolean; supportedReasoningEfforts: Array<{ reasoningEffort: ReasoningEffort; description: string }>; defaultReasoningEffort: ReasoningEffort }>>([]);
@@ -230,6 +254,7 @@ const AccountPage = () => {
       hiddenText: selected.hiddenModelIds.join("\n"),
       badge: selected.badge ?? selected.displayName.split(/\s+/u).filter(Boolean).map((part) => part[0]).join("").slice(0, 3).toUpperCase(),
       accentColor: selected.accentColor ?? (selected.provider === "codex" ? "#2563EB" : "#7C3AED"),
+      providerIcon: selected.providerIcon ?? providerIconOptions[0],
     });
   }, [selected?.id]);
 
@@ -275,6 +300,7 @@ const AccountPage = () => {
         displayName: provider === "codex" ? "Codex " + count : "OpenCode Go " + count,
         badge: provider === "codex" ? "C" + count : "O" + count,
         accentColor: provider === "codex" ? "#2563EB" : "#7C3AED",
+        providerIcon: providerIconOptions.find((icon) => !accounts.some((account) => account.providerIcon === icon)) ?? providerIconOptions[0],
         path: root + "/" + count,
         enabled: true,
         hiddenModelIds: [],
@@ -375,7 +401,7 @@ const AccountPage = () => {
     if (!selected) return;
     const hiddenModelIds = Array.from(new Set(draft.hiddenText.split(/\s+/u).map((model) => model.trim()).filter(Boolean)));
     if (scopeMode === "default") {
-      await persist({ displayName: draft.displayName, path: draft.path, hiddenModelIds, badge: draft.badge, accentColor: draft.accentColor });
+      await persist({ displayName: draft.displayName, path: draft.path, hiddenModelIds, badge: draft.badge, accentColor: draft.accentColor, providerIcon: draft.providerIcon });
       return;
     }
     if ((scopeMode === "project" || scopeMode === "project-machine") && !context.projectId) {
@@ -390,7 +416,7 @@ const AccountPage = () => {
     const hostId = scopeMode === "machine" || scopeMode === "project-machine" ? scopeHostId.trim() : null;
     const pathOverrides = selected.pathOverrides.filter((entry) => entry.projectId !== projectId || entry.hostId !== hostId);
     if (draft.path !== selected.path) pathOverrides.push({ projectId, hostId, path: draft.path });
-    await persist({ displayName: draft.displayName, hiddenModelIds, pathOverrides, badge: draft.badge, accentColor: draft.accentColor });
+    await persist({ displayName: draft.displayName, hiddenModelIds, pathOverrides, badge: draft.badge, accentColor: draft.accentColor, providerIcon: draft.providerIcon });
   };
 
   const hiddenModelIds = new Set(draft.hiddenText.split(/\s+/u).filter(Boolean));
@@ -582,6 +608,7 @@ const AccountPage = () => {
                 <label>Signed-in email<input readOnly value={identityEmail ?? (selected.provider === "codex" ? "Sign in, then refresh" : "OpenCode Go key login")} /></label>
                 <label>Picker tag<input value={draft.badge} maxLength={4} onChange={(event) => setDraft((current) => ({ ...current, badge: event.currentTarget.value.toUpperCase() }))} placeholder="EM" /></label>
                 <label>Tag color<input className="aa-color-input" type="color" value={draft.accentColor} onChange={(event) => setDraft((current) => ({ ...current, accentColor: event.currentTarget.value }))} /></label>
+                <label>Picker icon<select value={draft.providerIcon} onChange={(event) => setDraft((current) => ({ ...current, providerIcon: providerIconOptions.find((icon) => icon === event.currentTarget.value) ?? current.providerIcon }))}>{providerIconOptions.map((icon) => <option key={icon} value={icon}>{icon}</option>)}</select></label>
               </div>
               <p className="aa-help">The short tag and color distinguish this account in BB’s provider picker. Change them any time.</p>
             </section>

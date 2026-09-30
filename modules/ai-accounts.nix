@@ -12,8 +12,22 @@
       settings = config.programs.bbAiAccounts;
       pluginSource = ../bb-plugin-ai-accounts;
       secretPackage = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret;
+      providerIconOptions = [
+        "Bot"
+        "BriefcaseBusiness"
+        "Code"
+        "FlaskConical"
+        "Rocket"
+        "Sparkles"
+        "Terminal"
+        "Layers"
+        "Brain"
+        "Globe"
+        "Command"
+        "Gem"
+      ];
       accountsDocument = {
-        accounts = map (account: {
+        accounts = lib.imap0 (index: account: {
           inherit (account)
             id
             provider
@@ -23,6 +37,11 @@
             accentColor
             modelReasoningDefaults
             ;
+          providerIcon =
+            if account.providerIcon == null then
+              builtins.elemAt providerIconOptions (builtins.mod index (builtins.length providerIconOptions))
+            else
+              account.providerIcon;
           enabled = account.enabled;
           pathOverrides = [ ];
           hiddenModelIds = [ ];
@@ -60,6 +79,10 @@
                   accentColor = mkOption {
                     type = types.strMatching "^#[0-9A-Fa-f]{6}$";
                     default = "#2563EB";
+                  };
+                  providerIcon = mkOption {
+                    type = types.nullOr (types.enum providerIconOptions);
+                    default = null;
                   };
                   modelReasoningDefaults = mkOption {
                     type = types.attrsOf (
@@ -103,6 +126,7 @@
               displayName = "Codex";
               badge = "EM";
               accentColor = "#2563EB";
+              providerIcon = "Bot";
               modelReasoningDefaults = {
                 "gpt-6-luna" = "max";
                 "gpt-6.1-sol" = "low";
@@ -115,6 +139,7 @@
               displayName = "Codex Work";
               badge = "CW";
               accentColor = "#DC2626";
+              providerIcon = "BriefcaseBusiness";
               modelReasoningDefaults = {
                 "gpt-6-luna" = "max";
                 "gpt-6.1-sol" = "low";
@@ -127,6 +152,7 @@
               displayName = "Codex Alex2";
               badge = "CA";
               accentColor = "#16A34A";
+              providerIcon = "Code";
               modelReasoningDefaults = {
                 "gpt-6-luna" = "max";
                 "gpt-6.1-sol" = "low";
@@ -139,6 +165,7 @@
               displayName = "OpenCode Go Alex";
               badge = "OA";
               accentColor = "#7C3AED";
+              providerIcon = "FlaskConical";
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/alex";
               secretAlias = "opencode-go-alex";
             }
@@ -148,6 +175,7 @@
               displayName = "OpenCode Go Manu";
               badge = "OM";
               accentColor = "#C026D3";
+              providerIcon = "Rocket";
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/manu";
               secretAlias = "opencode-go-manu";
               secretScope = "global";
@@ -158,6 +186,7 @@
               displayName = "OpenCode Go Mathias";
               badge = "OX";
               accentColor = "#EA580C";
+              providerIcon = "Sparkles";
               path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/opencode/mathias";
               secretAlias = "opencode-go-mathias";
               secretScope = "global";
