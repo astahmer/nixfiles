@@ -22,6 +22,11 @@ export const revisionSchema = z.object({
 });
 
 export const fileChangeSchema = z.object({ path: z.string(), status: z.string() });
+export const fileStatSchema = z.object({
+  path: z.string(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+});
 
 export const hostContract = defineRpcContract({
   inspect: {
@@ -39,6 +44,10 @@ export const hostContract = defineRpcContract({
   revisionFiles: {
     input: revisionInput,
     output: z.array(fileChangeSchema),
+  },
+  revisionFileStats: {
+    input: revisionInput,
+    output: z.array(fileStatSchema),
   },
   fileDiff: {
     input: fileDiffInput,

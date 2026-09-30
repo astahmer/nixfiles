@@ -125,6 +125,31 @@ const parseFileChanges = (summary: string) =>
       path: line.slice(1).trim(),
     }));
 
+const parseFileStats = (patch: string) => {
+  const stats = new Map<string, { path: string; additions: number; deletions: number }>();
+  let currentPath = "";
+  let inHunk = false;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("diff --git ")) {
+      const header = line.match(/^diff --git a\/(.*) b\/(.*)$/);
+      currentPath = header?.[2] ?? "";
+      inHunk = false;
+      if (currentPath) stats.set(currentPath, { path: currentPath, additions: 0, deletions: 0 });
+      continue;
+    }
+    if (line.startsWith("@@")) {
+      inHunk = true;
+      continue;
+    }
+    if (!currentPath || !inHunk) continue;
+    const entry = stats.get(currentPath);
+    if (!entry) continue;
+    if (line.startsWith("+") && !line.startsWith("+++")) entry.additions += 1;
+    if (line.startsWith("-") && !line.startsWith("---")) entry.deletions += 1;
+  }
+  return [...stats.values()];
+};
+
 const changes = async (root: string) =>
   parseFileChanges(await run(root, ["diff", "--summary"], 64_000));
 
@@ -172,6 +197,11 @@ export default experimental_defineHostEntry({
       const root = await repositoryRoot(path);
       const summary = await run(root, ["diff", "--summary", "-r", revision], 64_000);
       return parseFileChanges(summary);
+    },
+    revisionFileStats: async ({ path, revision }) => {
+      const root = await repositoryRoot(path);
+      const patch = await run(root, ["diff", "--git", "--color=never", "-r", revision], 1_000_000);
+      return parseFileStats(patch);
     },
     fileDiff: async ({ path, file, revision }) => {
       const root = await repositoryRoot(path);

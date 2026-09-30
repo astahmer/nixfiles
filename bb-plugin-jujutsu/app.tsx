@@ -24,6 +24,7 @@ type Revision = {
 };
 
 type FileChange = { path: string; status: string };
+type FileStat = { path: string; additions: number; deletions: number };
 type ProjectPath = { name: string; path: string; hostId: string };
 
 type Snapshot = {
@@ -47,6 +48,8 @@ type DirectoryResult = {
 type GraphItem = { revision: Revision; isPreview: boolean; originalId?: string };
 
 const previewColor = "#a5df6f";
+const graphColors = ["#4fc1ff", "#c586c0", "#4ec9b0", "#dcdcaa", "#ce9178", "#b5cea8"];
+const laneColor = (lane: number) => graphColors[lane % graphColors.length] ?? "#4fc1ff";
 const label = (revision: Revision) =>
   revision.description.trim().split("\n")[0] || "(no description)";
 const relativeTime = (timestamp: number) => {
@@ -103,6 +106,26 @@ const styles = `
 .jj-revision-title{display:flex;flex:1;min-width:0;align-items:center;gap:4px;overflow:hidden;white-space:nowrap}
 .jj-revision-title .jj-badge{flex:none;max-width:160px}
 .jj-revision-subject{min-width:0;flex:1}
+.jj-day-heading-content{width:100%}
+.jj-revision-details{position:relative;padding:10px 12px 14px;border:1px solid color-mix(in srgb,var(--primary) 38%,var(--jj-line));border-top:0;border-radius:0 0 7px 7px;background:color-mix(in srgb,var(--card) 94%,var(--background));box-shadow:inset 3px 0 color-mix(in srgb,var(--primary) 65%,transparent)}
+.jj-description-edit{min-height:96px;line-height:1.4}
+.jj-section-heading-toggle{width:100%;border:0;border-radius:5px;background:transparent;text-align:left;cursor:pointer}
+.jj-section-heading-toggle:hover,.jj-section-heading-toggle[aria-expanded=true]{background:var(--accent)}
+.jj-file-stats{display:flex;gap:5px;margin-left:auto;color:var(--muted-foreground);font:10px var(--font-mono,monospace);white-space:nowrap}
+.jj-file-additions{color:#4ec9b0}.jj-file-deletions{color:#f48771}
+.jj-revision-details .jj-file-list{padding:3px 6px;border-left:2px solid color-mix(in srgb,var(--primary) 40%,var(--jj-line));margin-left:9px}
+.jj-revision-details .jj-file-button{width:100%}
+.jj-ancestor-files{margin:0 8px 8px 18px;padding:8px 10px;border:1px solid color-mix(in srgb,var(--primary) 32%,var(--jj-line));border-left:3px solid color-mix(in srgb,var(--primary) 58%,var(--jj-line));border-radius:0 0 7px 7px;background:color-mix(in srgb,var(--card) 94%,var(--background));box-shadow:inset 0 1px color-mix(in srgb,var(--primary) 18%,transparent)}
+.jj-rebase-preview-heading{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px 12px}
+.jj-rebase-preview-title{grid-column:1/-1}
+.jj-rebase-preview-meta{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.jj-rebase-preview-meta>span{color:var(--muted-foreground);font-size:11px;white-space:nowrap}
+.jj-ancestor-ops .jj-description-edit{min-height:96px}
+.jj-full-diff-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:24px;background:rgb(0 0 0 / 60%)}
+.jj-full-diff{width:min(1200px,100%);height:min(900px,100%);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--jj-line);border-radius:9px;background:var(--background);box-shadow:0 18px 60px #0009}
+.jj-full-diff-header{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--jj-line);font-weight:600}
+.jj-full-diff-header span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jj-full-diff-body{min-height:0;flex:1;overflow:auto}.jj-full-diff-body>div{min-height:100%}
 .jj-picker{width:min(620px,calc(100vw - 32px));max-height:min(520px,78vh);padding:8px 7px 0;border-radius:12px}.jj-picker-header{padding:0 7px 6px;gap:5px}.jj-picker-path input{height:36px;font-size:14px}.jj-picker-section{padding:8px 10px 4px;font-size:11px}.jj-picker-list{max-height:min(390px,60vh);min-height:0;padding:0 4px 5px}.jj-project-option{min-height:42px;gap:8px;padding:5px 7px;border-radius:6px}.jj-project-mark{width:20px;height:20px;border-radius:5px;font-size:9px}.jj-project-copy{gap:0;font-size:13px}.jj-project-copy small{font-size:10px}.jj-picker-entry{min-height:32px;padding:4px 8px;border-radius:6px}.jj-picker-footer{gap:10px;padding:7px 9px;font-size:10px}.jj-picker-footer kbd{padding:1px 4px}
 `;
 
@@ -114,7 +137,6 @@ const RevisionGraphCell = ({
   preview,
   empty,
   evolved,
-  workspace,
 }: {
   row: RevisionGraphRow;
   width: number;
@@ -123,7 +145,6 @@ const RevisionGraphCell = ({
   preview: boolean;
   empty: boolean;
   evolved: boolean;
-  workspace: boolean;
 }) => {
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = 21;
@@ -133,16 +154,8 @@ const RevisionGraphCell = ({
       ? "var(--primary)"
       : evolved
         ? "var(--jj-evolved)"
-        : workspace
-          ? "var(--jj-workspace)"
-          : "var(--primary)";
-  const fill = preview
-    ? previewColor
-    : current
-      ? "var(--primary)"
-      : workspace
-        ? "var(--jj-workspace)"
-        : "var(--background)";
+        : laneColor(row.commitLane);
+  const fill = preview ? previewColor : current ? "var(--primary)" : "var(--background)";
 
   return (
     <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
@@ -155,7 +168,7 @@ const RevisionGraphCell = ({
               y1={middle}
               x2={center(edge.toLane)}
               y2="42"
-              stroke={preview ? previewColor : "var(--jj-rail)"}
+              stroke={preview ? previewColor : laneColor(edge.fromLane)}
               strokeWidth="1.5"
             />
           ) : (
@@ -163,7 +176,7 @@ const RevisionGraphCell = ({
               key={`edge-${index}`}
               d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 8}, ${center(edge.toLane)} ${middle + 8}, ${center(edge.toLane)} 42`}
               fill="none"
-              stroke={preview ? previewColor : "var(--jj-rail)"}
+              stroke={preview ? previewColor : laneColor(edge.fromLane)}
               strokeWidth="1.5"
             />
           ),
@@ -175,7 +188,7 @@ const RevisionGraphCell = ({
             y1="0"
             x2={center(lane)}
             y2={middle}
-            stroke={preview ? previewColor : "var(--jj-rail)"}
+            stroke={preview ? previewColor : laneColor(lane)}
             strokeWidth="1.5"
           />
         ))}
@@ -185,7 +198,7 @@ const RevisionGraphCell = ({
             y1="0"
             x2={center(row.commitLane)}
             y2={middle}
-            stroke={preview ? previewColor : "var(--jj-rail)"}
+            stroke={preview ? previewColor : laneColor(row.commitLane)}
             strokeWidth="1.5"
           />
         )}
@@ -196,7 +209,7 @@ const RevisionGraphCell = ({
             y1={middle}
             x2={center(lane)}
             y2="42"
-            stroke={preview ? previewColor : "var(--jj-rail)"}
+            stroke={preview ? previewColor : laneColor(lane)}
             strokeWidth="1.5"
           />
         ))}
@@ -302,13 +315,17 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [selectedRevision, setSelectedRevision] = useState<Revision | null>(null);
   const [revisionFiles, setRevisionFiles] = useState<FileChange[]>([]);
+  const [revisionFileStats, setRevisionFileStats] = useState<FileStat[]>([]);
   const [revisionFilesLoading, setRevisionFilesLoading] = useState(false);
+  const [revisionFileStatsLoading, setRevisionFileStatsLoading] = useState(false);
   const [revisionFilesError, setRevisionFilesError] = useState<string | null>(null);
+  const [filesExpandedRevisionId, setFilesExpandedRevisionId] = useState<string | null>(null);
   const revisionDiffRequest = useRef(0);
   const [diffTarget, setDiffTarget] = useState<DiffTarget | null>(null);
   const [diffPatch, setDiffPatch] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const [fullDiffOpen, setFullDiffOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [workingDescription, setWorkingDescription] = useState("");
   const [editingWorkingDescription, setEditingWorkingDescription] = useState(false);
@@ -619,31 +636,55 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [snapshot]);
 
   useEffect(() => {
-    if (!selectedRevision || !snapshot || !path || !hostId) {
+    if (
+      !selectedRevision ||
+      filesExpandedRevisionId !== selectedRevision.commitId ||
+      !snapshot ||
+      !path ||
+      !hostId
+    ) {
       setRevisionFiles([]);
+      setRevisionFileStats([]);
       setRevisionFilesLoading(false);
+      setRevisionFileStatsLoading(false);
       return;
     }
     let active = true;
     setRevisionFiles([]);
+    setRevisionFileStats([]);
     setSelectedRevisionFiles([]);
     setRevisionFilesLoading(true);
+    setRevisionFileStatsLoading(true);
     setRevisionFilesError(null);
-    void rpc
-      .call("revisionFiles", { path, hostId, revision: selectedRevision.commitId })
-      .then((files) => {
-        if (active) setRevisionFiles(files);
+    const input = { path, hostId, revision: selectedRevision.commitId };
+    void Promise.allSettled([
+      rpc.call("revisionFiles", input),
+      rpc.call("revisionFileStats", input),
+    ])
+      .then(([filesResult, statsResult]) => {
+        if (!active) return;
+        if (filesResult.status === "fulfilled") setRevisionFiles(filesResult.value);
+        else
+          setRevisionFilesError(
+            filesResult.reason instanceof Error
+              ? filesResult.reason.message
+              : String(filesResult.reason),
+          );
+        if (statsResult.status === "fulfilled") setRevisionFileStats(statsResult.value);
       })
       .catch((cause) => {
         if (active) setRevisionFilesError(cause instanceof Error ? cause.message : String(cause));
       })
       .finally(() => {
-        if (active) setRevisionFilesLoading(false);
+        if (active) {
+          setRevisionFilesLoading(false);
+          setRevisionFileStatsLoading(false);
+        }
       });
     return () => {
       active = false;
     };
-  }, [hostId, path, rpc, selectedRevision?.commitId, snapshot]);
+  }, [filesExpandedRevisionId, hostId, path, rpc, selectedRevision?.commitId, snapshot]);
 
   useEffect(() => {
     if (!diffTarget || !path || !hostId) {
@@ -804,7 +845,9 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     revisionDiffRequest.current += 1;
     setSelectedRevision((current) => (current?.commitId === revision.commitId ? null : revision));
     setDescription(revision.description);
+    setFilesExpandedRevisionId(null);
     setDiffTarget(null);
+    setFullDiffOpen(false);
   };
   const showRevisionDiff = async (revision: Revision) => {
     setSelectedRevision(revision);
@@ -828,11 +871,16 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setExpandedSourceRevisionId(isExpanded ? null : revision.commitId);
     setSelectedRevision(isExpanded ? null : revision);
     setDescription(revision.description);
+    setFilesExpandedRevisionId(null);
     setSelectedRevisionFiles([]);
     setDiffTarget(null);
   };
   const selectFileDiff = (filePath: string, revisionId: string | null) => {
     setDiffTarget({ path: filePath, revision: revisionId });
+  };
+  const openFullDiff = (filePath: string, revisionId: string | null) => {
+    setDiffTarget({ path: filePath, revision: revisionId });
+    setFullDiffOpen(true);
   };
   const changeSourcePanePercent = (nextPercent: number) => {
     const percent = Math.round(Math.min(80, Math.max(20, nextPercent)));
@@ -844,16 +892,17 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     if (!bounds || bounds.height === 0) return;
     changeSourcePanePercent(((clientY - bounds.top) / bounds.height) * 100);
   };
-  const saveDescription = () =>
-    selectedRevision &&
-    void runAction(() =>
+  const saveRevisionDescription = async (revision: Revision) => {
+    const didSave = await runAction(() =>
       rpc.call("describe", {
         path,
         hostId,
-        revision: selectedRevision.commitId,
+        revision: revision.commitId,
         description,
       }),
     );
+    if (didSave) setSelectedRevision({ ...revision, description });
+  };
   const dropOnRevision = (destination: Revision, event: React.DragEvent) => {
     event.preventDefault();
     const sourceId = event.dataTransfer.getData("text/jj-revision");
@@ -886,9 +935,17 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     }
     setPendingRebase({ source, destination, branch });
     setRebasePreviewExpanded(false);
+    setDraggedRevisionId(null);
+    setDropTargetId(null);
     setMoveSource(null);
     setRevisionContextMenu(null);
     setSelectedRevision(null);
+  };
+  const cancelRebasePreview = () => {
+    setPendingRebase(null);
+    setRebasePreviewExpanded(false);
+    setDraggedRevisionId(null);
+    setDropTargetId(null);
   };
   const handleRevisionClick = (revision: Revision) => {
     if (moveSource) {
@@ -914,7 +971,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   };
 
   const renderRevisionDetails = (revision: Revision) => (
-    <section className="jj-revision-details" aria-label={`Details for ${label(revision)}`}>
+    <section
+      className="jj-revision-details"
+      aria-label={`Details for ${label(revision)}`}
+      style={{ marginLeft: graphWidth }}
+    >
       <div className="jj-detail-toolbar">
         <textarea
           className="jj-input jj-description-edit"
@@ -923,7 +984,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           onChange={(event) => setDescription(event.target.value)}
         />
         <div className="jj-detail-actions-row">
-          <button className="jj-button" disabled={busy} onClick={() => void saveDescription()}>
+          <button
+            className="jj-button"
+            disabled={busy || description === revision.description}
+            onClick={() => void saveRevisionDescription(revision)}
+          >
             Describe
           </button>
           <button
@@ -944,49 +1009,63 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           </button>
         </div>
       </div>
-      <div className="jj-section-heading">
+      <button
+        className="jj-section-heading jj-section-heading-toggle"
+        aria-expanded={filesExpandedRevisionId === revision.commitId}
+        onClick={() =>
+          setFilesExpandedRevisionId((current) =>
+            current === revision.commitId ? null : revision.commitId,
+          )
+        }
+      >
+        <span className="jj-chevron">›</span>
         Changed files{" "}
-        <span className="jj-count">{revisionFilesLoading ? "…" : revisionFiles.length}</span>
-      </div>
-      {revisionFilesError && (
+        {filesExpandedRevisionId === revision.commitId && (
+          <span className="jj-count">{revisionFilesLoading ? "…" : revisionFiles.length}</span>
+        )}
+      </button>
+      {filesExpandedRevisionId === revision.commitId && revisionFilesError && (
         <div className="jj-error-inline" role="alert">
           {revisionFilesError}
         </div>
       )}
-      {revisionFilesLoading && (
+      {filesExpandedRevisionId === revision.commitId && revisionFilesLoading && (
         <div className="jj-selection-hint" role="status">
           Loading changed files…
         </div>
       )}
-      {!revisionFilesLoading && revisionFiles.length === 0 && (
-        <div className="jj-selection-hint">No file changes in this revision.</div>
-      )}
-      <div className="jj-file-list">
-        {revisionFiles.map((file) => (
-          <div key={file.path}>
-            <button
-              className="jj-file-button"
-              data-selected={
-                diffTarget?.revision === revision.commitId && diffTarget.path === file.path
-              }
-              onClick={() => selectFileDiff(file.path, revision.commitId)}
-            >
-              <span className={`jj-status ${statusClass(file.status)}`}>{file.status}</span>
-              <FilePath path={file.path} />
-            </button>
-            {diffTarget?.revision === revision.commitId && diffTarget.path === file.path && (
-              <div className="jj-file-preview">
-                <DiffPreview
-                  path={file.path}
-                  patch={diffPatch}
-                  loading={diffLoading}
-                  error={diffError}
-                />
+      {filesExpandedRevisionId === revision.commitId &&
+        !revisionFilesLoading &&
+        revisionFiles.length === 0 && (
+          <div className="jj-selection-hint">No file changes in this revision.</div>
+        )}
+      {filesExpandedRevisionId === revision.commitId && (
+        <div className="jj-file-list">
+          {revisionFiles.map((file) => {
+            const stats = revisionFileStats.find((entry) => entry.path === file.path);
+            return (
+              <div key={file.path}>
+                <button
+                  className="jj-file-button"
+                  onClick={() => openFullDiff(file.path, revision.commitId)}
+                >
+                  <span className={`jj-status ${statusClass(file.status)}`}>{file.status}</span>
+                  <FilePath path={file.path} />
+                  <span className="jj-file-stats">
+                    {revisionFileStatsLoading && <span>…</span>}
+                    {!revisionFileStatsLoading && stats && (
+                      <>
+                        <span className="jj-file-additions">+{stats.additions}</span>
+                        <span className="jj-file-deletions">−{stats.deletions}</span>
+                      </>
+                    )}
+                  </span>
+                </button>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 
@@ -1121,15 +1200,18 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                 y1="0"
                                 x2={10 + lane * laneGap}
                                 y2="22"
-                                stroke="var(--jj-rail)"
+                                stroke={laneColor(lane)}
                                 strokeWidth="1.5"
                               />
                             ))}
                           </svg>
                         </span>
-                        <span className="jj-day-heading-content">
-                          <span className="jj-chevron">›</span>
+                        <span
+                          className="jj-day-heading-content"
+                          style={{ paddingLeft: (group.rows[0]?.row.commitLane ?? 0) * laneGap }}
+                        >
                           <span>{group.day}</span>
+                          <span className="jj-chevron">›</span>
                           <span className="jj-count">{group.dayCount}</span>
                         </span>
                       </button>
@@ -1274,7 +1356,6 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                     preview={isPreview}
                                     empty={revision.empty}
                                     evolved={isEvolved}
-                                    workspace={revision.workspaces.length > 0}
                                   />
                                   <span
                                     className="jj-revision-main"
@@ -1335,25 +1416,27 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                     aria-label="Preview branch rebase"
                                   >
                                     <div className="jj-rebase-preview-heading">
-                                      <span>
-                                        Move branch onto <strong>{label(revision)}</strong>
-                                      </span>
-                                      <span>
-                                        {pendingRebase.branch.length}{" "}
-                                        {pendingRebase.branch.length === 1
-                                          ? "revision"
-                                          : "revisions"}{" "}
-                                        will move
-                                      </span>
-                                      <button
-                                        className="jj-preview-toggle"
-                                        aria-expanded={rebasePreviewExpanded}
-                                        onClick={() =>
-                                          setRebasePreviewExpanded((expanded) => !expanded)
-                                        }
-                                      >
-                                        {rebasePreviewExpanded ? "Hide" : "Show"} graph
-                                      </button>
+                                      <strong className="jj-rebase-preview-title">
+                                        Move branch onto {label(revision)}
+                                      </strong>
+                                      <div className="jj-rebase-preview-meta">
+                                        <span>
+                                          {pendingRebase.branch.length}{" "}
+                                          {pendingRebase.branch.length === 1
+                                            ? "revision"
+                                            : "revisions"}{" "}
+                                          will move
+                                        </span>
+                                        <button
+                                          className="jj-preview-toggle"
+                                          aria-expanded={rebasePreviewExpanded}
+                                          onClick={() =>
+                                            setRebasePreviewExpanded((expanded) => !expanded)
+                                          }
+                                        >
+                                          {rebasePreviewExpanded ? "Hide" : "Show"} graph
+                                        </button>
+                                      </div>
                                     </div>
                                     {rebasePreviewExpanded && (
                                       <div className="jj-rebase-preview-branch">
@@ -1380,7 +1463,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                       <button
                                         className="jj-button"
                                         disabled={busy}
-                                        onClick={() => setPendingRebase(null)}
+                                        onClick={cancelRebasePreview}
                                       >
                                         Cancel
                                       </button>
@@ -1623,65 +1706,82 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                 </div>
                                 {isExpanded && selectedRevision?.commitId === revision.commitId && (
                                   <div className="jj-ancestor-files">
-                                    <div className="jj-section-heading">
+                                    <button
+                                      className="jj-section-heading jj-section-heading-toggle"
+                                      aria-expanded={filesExpandedRevisionId === revision.commitId}
+                                      onClick={() =>
+                                        setFilesExpandedRevisionId((current) =>
+                                          current === revision.commitId ? null : revision.commitId,
+                                        )
+                                      }
+                                    >
+                                      <span className="jj-chevron">›</span>
                                       Changed files{" "}
-                                      <span className="jj-count">
-                                        {revisionFilesLoading ? "…" : revisionFiles.length}
-                                      </span>
-                                    </div>
-                                    {revisionFilesError && (
-                                      <div className="jj-error-inline" role="alert">
-                                        {revisionFilesError}
-                                      </div>
-                                    )}
-                                    {revisionFilesLoading ? (
-                                      <div className="jj-selection-hint">Loading files…</div>
-                                    ) : (
-                                      revisionFiles.map((file) => (
-                                        <div className="jj-file-entry" key={file.path}>
-                                          <input
-                                            className="jj-checkbox"
-                                            type="checkbox"
-                                            aria-label={`Select ${file.path} for split`}
-                                            checked={selectedRevisionFiles.includes(file.path)}
-                                            onChange={(event) =>
-                                              setSelectedRevisionFiles((current) =>
-                                                event.target.checked
-                                                  ? [...current, file.path]
-                                                  : current.filter(
-                                                      (selectedPath) => selectedPath !== file.path,
-                                                    ),
-                                              )
-                                            }
-                                          />
-                                          <button
-                                            className="jj-file-button"
-                                            data-selected={
-                                              diffTarget?.revision === revision.commitId &&
-                                              diffTarget.path === file.path
-                                            }
-                                            onClick={() =>
-                                              selectFileDiff(file.path, revision.commitId)
-                                            }
-                                          >
-                                            <span
-                                              className={`jj-status ${statusClass(file.status)}`}
-                                            >
-                                              {file.status}
-                                            </span>
-                                            <FilePath path={file.path} />
-                                          </button>
+                                      {filesExpandedRevisionId === revision.commitId && (
+                                        <span className="jj-count">
+                                          {revisionFilesLoading ? "…" : revisionFiles.length}
+                                        </span>
+                                      )}
+                                    </button>
+                                    {filesExpandedRevisionId === revision.commitId &&
+                                      revisionFilesError && (
+                                        <div className="jj-error-inline" role="alert">
+                                          {revisionFilesError}
                                         </div>
-                                      ))
-                                    )}
-                                    {!revisionFilesLoading && revisionFiles.length === 0 && (
-                                      <div className="jj-selection-hint">
-                                        No file changes in this revision.
-                                      </div>
+                                      )}
+                                    {filesExpandedRevisionId === revision.commitId && (
+                                      <>
+                                        {revisionFilesLoading ? (
+                                          <div className="jj-selection-hint">Loading files…</div>
+                                        ) : (
+                                          <>
+                                            {revisionFiles.map((file) => (
+                                              <div className="jj-file-entry" key={file.path}>
+                                                <input
+                                                  className="jj-checkbox"
+                                                  type="checkbox"
+                                                  aria-label={`Select ${file.path} for split`}
+                                                  checked={selectedRevisionFiles.includes(
+                                                    file.path,
+                                                  )}
+                                                  onChange={(event) =>
+                                                    setSelectedRevisionFiles((current) =>
+                                                      event.target.checked
+                                                        ? [...current, file.path]
+                                                        : current.filter(
+                                                            (selectedPath) =>
+                                                              selectedPath !== file.path,
+                                                          ),
+                                                    )
+                                                  }
+                                                />
+                                                <button
+                                                  className="jj-file-button"
+                                                  onClick={() =>
+                                                    openFullDiff(file.path, revision.commitId)
+                                                  }
+                                                >
+                                                  <span
+                                                    className={`jj-status ${statusClass(file.status)}`}
+                                                  >
+                                                    {file.status}
+                                                  </span>
+                                                  <FilePath path={file.path} />
+                                                </button>
+                                              </div>
+                                            ))}
+                                            {revisionFiles.length === 0 && (
+                                              <div className="jj-selection-hint">
+                                                No file changes in this revision.
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+                                      </>
                                     )}
                                     <div className="jj-ancestor-ops">
                                       <textarea
-                                        className="jj-input"
+                                        className="jj-input jj-description-edit"
                                         aria-label="Revision description"
                                         value={description}
                                         onChange={(event) => setDescription(event.target.value)}
@@ -1689,17 +1789,8 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                       <div className="jj-ancestor-actions">
                                         <button
                                           className="jj-button"
-                                          disabled={busy}
-                                          onClick={() =>
-                                            void runAction(() =>
-                                              rpc.call("describe", {
-                                                path,
-                                                hostId,
-                                                revision: revision.commitId,
-                                                description,
-                                              }),
-                                            )
-                                          }
+                                          disabled={busy || description === revision.description}
+                                          onClick={() => void saveRevisionDescription(revision)}
                                         >
                                           Describe
                                         </button>
@@ -1784,6 +1875,47 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             </main>
           )}
         </>
+      )}
+      {fullDiffOpen && diffTarget && (
+        <div
+          className="jj-full-diff-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setFullDiffOpen(false);
+              setDiffTarget(null);
+            }
+          }}
+        >
+          <section
+            className="jj-full-diff"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Diff for ${diffTarget.path}`}
+          >
+            <header className="jj-full-diff-header">
+              <span>{diffTarget.path}</span>
+              <button
+                className="jj-button"
+                aria-label="Close diff"
+                onClick={() => {
+                  setFullDiffOpen(false);
+                  setDiffTarget(null);
+                }}
+              >
+                Close
+              </button>
+            </header>
+            <div className="jj-full-diff-body">
+              <DiffPreview
+                path={diffTarget.path}
+                patch={diffPatch}
+                loading={diffLoading}
+                error={diffError}
+              />
+            </div>
+          </section>
+        </div>
       )}
       {projectPickerOpen && (
         <div
