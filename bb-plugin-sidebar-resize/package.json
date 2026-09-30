@@ -1,0 +1,28 @@
+{
+  "name": "bb-plugin-sidebar-resize",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Resize the BB sidebar navigation and project/thread list split.",
+  "scripts": {
+    "build": "bb plugin build"
+  },
+  "engines": {
+    "bb": ">=0.44",
+    "bbPluginSdk": ">=0.5.29"
+  },
+  "bb": {
+    "name": "Sidebar Resize",
+    "description": "Resize the sidebar navigation and project/thread list split.",
+    "branding": {
+      "icon": "PanelTop"
+    },
+    "server": "./server.ts",
+    "app": "./app.tsx"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.5.29",
+    "@types/node": "^22.0.0",
+    "typescript": "^7.0.2"
+  }
+}
