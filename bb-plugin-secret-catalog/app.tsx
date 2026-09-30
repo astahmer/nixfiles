@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { definePluginApp, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { rpcContract, secretEntrySchema } from "./contract";
 import type { z } from "zod";
@@ -23,11 +24,12 @@ const entryScope = (scope: string): MutableScope =>
 
 const styles = `
 .secret-page{height:100%;min-height:0;display:flex;flex-direction:column;color:var(--foreground);background:var(--background);font:13px/1.45 var(--font-sans,system-ui)}
-.secret-toolbar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap}.secret-brand{font-size:15px;font-weight:650;margin-right:auto}.secret-input,.secret-button{border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--foreground);padding:7px 10px}.secret-input{background:var(--background);min-width:90px}.secret-path{width:min(420px,48vw)}.secret-button{cursor:pointer}.secret-button:hover,.secret-row:hover{background:var(--accent)}.secret-button:disabled{opacity:.5;cursor:default}.secret-content{display:flex;min-height:0;flex:1}.secret-list{width:min(42%,420px);min-width:260px;overflow:auto;border-right:1px solid var(--border)}.secret-detail{min-width:0;flex:1;overflow:auto}.secret-search{width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--border);padding:12px 14px;background:var(--background);color:var(--foreground);outline:none}.secret-row{display:flex;gap:9px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer}.secret-row[data-selected=true]{background:var(--accent)}.secret-row-main{min-width:0;flex:1}.secret-alias{font-weight:600;overflow-wrap:anywhere}.secret-meta,.secret-muted{color:var(--muted-foreground);font-size:11px}.secret-detail-title{padding:15px 16px;border-bottom:1px solid var(--border);font-weight:650}.secret-value{margin:14px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);font:12px/1.5 var(--font-mono,monospace);white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}.secret-actions{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap}.secret-empty{padding:28px 18px;text-align:center;color:var(--muted-foreground)}.secret-error{padding:10px 16px;color:var(--destructive);border-bottom:1px solid var(--border)}
+.secret-toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}.secret-brand{font-size:15px;font-weight:650;white-space:nowrap;margin-right:8px}.secret-input,.secret-button{border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--foreground);padding:7px 10px;font:inherit}.secret-input{background:var(--background);min-width:90px}.secret-host{width:min(260px,28vw);flex:0 1 auto}.secret-project-picker{display:flex;min-width:0;flex:1}.secret-project-picker .secret-path{width:100%;border-radius:6px 0 0 6px}.secret-project-picker .secret-button{border-radius:0 6px 6px 0}.secret-button{cursor:pointer;white-space:nowrap}.secret-button:hover,.secret-row:hover{background:var(--accent)}.secret-button:disabled{opacity:.5;cursor:default}.secret-content{display:flex;min-height:0;flex:1}.secret-list{width:min(38%,390px);min-width:260px;overflow:auto;border-right:1px solid var(--border)}.secret-detail{min-width:0;flex:1;overflow:auto}.secret-search{width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--border);padding:9px 12px;background:var(--background);color:var(--foreground);outline:none}.secret-row{width:100%;display:flex;gap:8px;align-items:center;padding:6px 12px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.secret-row[data-selected=true]{background:var(--accent)}.secret-row:focus-visible,.secret-search:focus-visible,.secret-input:focus-visible,.secret-button:focus-visible{outline:2px solid var(--ring,var(--primary));outline-offset:-2px}.secret-row-main{min-width:0;flex:1}.secret-alias{font-weight:600;line-height:1.25;overflow-wrap:anywhere}.secret-meta,.secret-muted{color:var(--muted-foreground);font-size:11px}.secret-row .secret-meta{line-height:1.25}.secret-detail-title{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:650}.secret-detail-toolbar{display:flex;flex-direction:column;align-items:flex-start;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}.secret-environment{display:flex;align-items:center;gap:8px;color:var(--muted-foreground);font-size:11px}.secret-environment .secret-input{width:130px}.secret-primary-actions,.secret-manage-actions{display:flex;gap:6px;align-items:center}.secret-manage{position:relative}.secret-manage summary{padding:7px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;list-style:none}.secret-manage summary::-webkit-details-marker{display:none}.secret-manage-actions{padding-top:7px}.secret-value{margin:14px;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--card);font:12px/1.5 var(--font-mono,monospace);white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}.secret-actions{display:flex;gap:8px;padding:12px 14px;flex-wrap:wrap}.secret-empty{padding:22px 16px;text-align:center;color:var(--muted-foreground)}.secret-error{padding:10px 16px;color:var(--destructive);border-bottom:1px solid var(--border)}
 .secret-editor{padding:16px;display:flex;flex-direction:column;gap:12px;max-width:600px}.secret-editor label{display:flex;flex-direction:column;gap:5px}.secret-editor input,.secret-editor select{border:1px solid var(--border);border-radius:6px;background:var(--background);color:var(--foreground);padding:8px}.secret-editor-note{color:var(--muted-foreground);font-size:11px}
-.secret-host{max-width:240px}.secret-scope{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border)}.secret-scope button{border:0;border-radius:5px;background:transparent;color:var(--muted-foreground);padding:6px 10px;cursor:pointer}.secret-scope button[data-active=true]{background:var(--accent);color:var(--foreground)}.secret-browser{position:absolute;z-index:4;inset:56px 16px auto auto;width:min(520px,90vw);max-height:70vh;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--card);box-shadow:0 8px 32px #0008}.secret-browser-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}.secret-browser-path{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis}.secret-browser-entry{display:block;width:100%;padding:8px;border:0;border-radius:4px;background:transparent;color:var(--foreground);text-align:left;cursor:pointer}.secret-browser-entry:hover{background:var(--accent)}.secret-toolbar{position:relative}
+.secret-list-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border)}.secret-scope{display:flex;min-width:0;gap:2px}.secret-scope button{border:0;border-radius:5px;background:transparent;color:var(--muted-foreground);padding:6px 8px;cursor:pointer;font:inherit;font-size:12px}.secret-scope button[data-active=true]{background:var(--accent);color:var(--foreground)}.secret-list-head .secret-button{padding:6px 9px}.secret-picker-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;background:rgb(0 0 0/.58)}.secret-picker{display:flex;flex-direction:column;width:min(720px,92vw);max-height:min(760px,84vh);padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--foreground);box-shadow:0 18px 60px #000a}.secret-picker-header{display:flex;align-items:center;gap:8px}.secret-picker-path{min-width:0;flex:1}.secret-picker-path input{width:100%;box-sizing:border-box;border:0;background:transparent;color:var(--foreground);font:14px/1.4 var(--font-mono,monospace);outline:none}.secret-picker-section{padding:12px 4px 6px;color:var(--muted-foreground);font-size:11px}.secret-picker-list{min-height:120px;overflow:auto}.secret-picker-entry{display:flex;width:100%;align-items:center;gap:10px;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.secret-picker-entry[data-active=true],.secret-picker-entry:hover{background:var(--accent)}.secret-picker-entry:focus-visible{outline:2px solid var(--ring,var(--primary))}.secret-picker-entry-icon{width:18px;color:var(--muted-foreground)}.secret-picker-footer{display:flex;justify-content:center;gap:14px;padding:10px 4px 2px;border-top:1px solid var(--border);color:var(--muted-foreground);font-size:11px}.secret-picker-footer kbd{padding:2px 5px;border:1px solid var(--border);border-radius:4px;color:var(--foreground)}
 .secret-confirm-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgb(0 0 0/.62)}.secret-confirm{width:min(440px,100%);padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--foreground);box-shadow:0 16px 48px #000a}.secret-confirm h2{margin:0 0 8px;font-size:16px}.secret-confirm p{margin:0 0 16px;color:var(--muted-foreground)}.secret-button-danger{border-color:var(--destructive);background:var(--destructive);color:var(--destructive-foreground,#fff)}.secret-button-danger:hover{filter:brightness(1.08)}
-@media(max-width:700px){.secret-content{flex-direction:column}.secret-list{width:100%;min-width:0;max-height:48%;border-right:0;border-bottom:1px solid var(--border)}.secret-path{width:60vw}}
+.secret-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.secret-scope button:disabled{opacity:.45;cursor:default}.secret-picker-header .secret-button{display:flex;align-items:center;gap:4px}.secret-picker-header .secret-button kbd{margin-left:5px;color:var(--muted-foreground);font-size:10px}.secret-picker-entry-icon{position:relative;display:flex;align-items:center}.secret-picker-entry-icon:before{content:"";display:block;width:13px;height:9px;border:1.5px solid currentColor;border-radius:2px}.secret-picker-entry-icon:after{content:"";position:absolute;top:1px;left:2px;width:5px;height:2px;border:1.5px solid currentColor;border-bottom:0;border-radius:2px 2px 0 0}
+@media(max-width:700px){.secret-toolbar{flex-wrap:wrap}.secret-brand{width:100%}.secret-host{width:40%}.secret-project-picker{flex:1}.secret-content{flex-direction:column}.secret-list{width:100%;min-width:0;max-height:48%;border-right:0;border-bottom:1px solid var(--border)}.secret-path{width:60vw}.secret-list-head{flex-wrap:wrap}}
 `;
 
 function Page() {
@@ -38,6 +40,8 @@ function Page() {
   const [cwd, setCwd] = useState("");
   const [activeScope, setActiveScope] = useState<SecretScope>("global");
   const [browser, setBrowser] = useState<DirectoryResult | null>(null);
+  const [browserPath, setBrowserPath] = useState("");
+  const [browserIndex, setBrowserIndex] = useState(0);
   const [entries, setEntries] = useState<SecretEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
@@ -62,6 +66,16 @@ function Page() {
       ),
     );
   }, [entries, search]);
+  const selectedFilteredIndex = filtered.findIndex((entry) => entryId(entry) === selectedId);
+  const directories = browser?.entries.filter((entry) => entry.kind === "directory") ?? [];
+
+  const selectEntry = (entry: SecretEntry) => {
+    setSelectedId(entryId(entry));
+    setEnvironment(entry.env);
+    setValue(null);
+    setMessage(null);
+    closeEditor();
+  };
 
   const loadEntries = useCallback(
     async (selectedHostId: string, scope: SecretScope, projectPath: string) => {
@@ -247,18 +261,57 @@ function Page() {
     try {
       const result = await sdk.hosts.directory({ hostId, ...(path ? { path } : {}) });
       setBrowser(result);
+      setBrowserPath(result.directory);
+      setBrowserIndex(0);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   };
 
   const chooseProject = async () => {
-    if (!hostId || !browser) return;
-    setCwd(browser.directory);
+    if (!hostId || !browserPath.trim()) return;
+    const selectedPath = browserPath.trim();
+    setCwd(selectedPath);
     setBrowser(null);
     setActiveScope("all");
-    await loadEntries(hostId, "all", browser.directory);
+    await loadEntries(hostId, "all", selectedPath);
   };
+
+  const handleBrowserKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (directories.length > 0) {
+        setBrowserIndex((current) =>
+          event.key === "ArrowDown"
+            ? Math.min(current + 1, directories.length - 1)
+            : Math.max(current - 1, 0),
+        );
+      }
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (event.metaKey || event.ctrlKey) {
+        void chooseProject();
+        return;
+      }
+      const directory = directories[browserIndex];
+      if (directory) void browseDirectory(directory.path);
+      else if (browserPath.trim()) void browseDirectory(browserPath.trim());
+      return;
+    }
+    if (event.key === "Backspace" && event.currentTarget.selectionStart === 0 && browser?.parent) {
+      event.preventDefault();
+      void browseDirectory(browser.parent);
+    }
+    if (event.key === "Escape") setBrowser(null);
+  };
+
+  useEffect(() => {
+    document
+      .getElementById(`secret-picker-entry-${browserIndex}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [browserIndex, browser]);
 
   const openUpdate = () => {
     if (!selected) return;
@@ -303,66 +356,110 @@ function Page() {
             </option>
           ))}
         </select>
-        <input
-          className="secret-input secret-path"
-          aria-label="Project directory on selected machine"
-          placeholder="Choose a project folder…"
-          value={cwd}
-          onChange={(event) => setCwd(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              setActiveScope("all");
-              void loadEntries(hostId, "all", cwd);
-            }
+        <div className="secret-project-picker">
+          <input
+            className="secret-input secret-path"
+            aria-label="Project directory on selected machine"
+            placeholder="Choose a project folder…"
+            value={cwd}
+            onChange={(event) => setCwd(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                setActiveScope("all");
+                void loadEntries(hostId, "all", cwd);
+              }
+            }}
+          />
+          <button
+            className="secret-button"
+            aria-label="Browse project folders"
+            title="Browse project folders"
+            disabled={busy || !hostId}
+            onClick={() => void browseDirectory(cwd.trim() || undefined)}
+          >
+            ▾
+          </button>
+        </div>
+      </header>
+      {browser && (
+        <div
+          className="secret-picker-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setBrowser(null);
           }}
-        />
-        <button
-          className="secret-button"
-          disabled={busy || !hostId}
-          onClick={() => void browseDirectory()}
         >
-          Browse…
-        </button>
-        <button
-          className="secret-button"
-          disabled={busy || !hostId || (activeScope !== "global" && !cwd.trim())}
-          onClick={openCreate}
-        >
-          New alias
-        </button>
-        {browser && (
-          <div className="secret-browser" role="dialog" aria-label="Choose project folder">
-            <div className="secret-browser-head">
+          <section
+            className="secret-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="secret-picker-title"
+          >
+            <h2 id="secret-picker-title" className="secret-sr-only">
+              Choose project folder
+            </h2>
+            <div className="secret-picker-header">
               <button
                 className="secret-button"
+                aria-label="Go to parent folder"
+                title="Go to parent folder"
                 disabled={!browser.parent}
                 onClick={() => browser.parent && void browseDirectory(browser.parent)}
               >
-                Up
+                ←
               </button>
-              <span className="secret-browser-path">{browser.directory}</span>
-              <button className="secret-button" onClick={() => setBrowser(null)}>
-                Close
+              <div className="secret-picker-path">
+                <input
+                  autoFocus
+                  aria-label="Current folder path"
+                  value={browserPath}
+                  onChange={(event) => setBrowserPath(event.target.value)}
+                  onKeyDown={handleBrowserKeyDown}
+                />
+              </div>
+              <button className="secret-button" onClick={() => void chooseProject()}>
+                Add <kbd>⌘ Enter</kbd>
               </button>
             </div>
-            <button className="secret-button" onClick={() => void chooseProject()}>
-              Use this folder
-            </button>
-            {browser.entries
-              .filter((entry) => entry.kind === "directory")
-              .map((entry) => (
+            <div className="secret-picker-section">Directories</div>
+            <div className="secret-picker-list" role="listbox" aria-label="Directories">
+              {directories.map((entry, index) => (
                 <button
-                  className="secret-browser-entry"
+                  id={`secret-picker-entry-${index}`}
+                  className="secret-picker-entry"
                   key={entry.path}
+                  role="option"
+                  aria-selected={browserIndex === index}
+                  data-active={browserIndex === index}
+                  onMouseEnter={() => setBrowserIndex(index)}
+                  onFocus={() => setBrowserIndex(index)}
                   onClick={() => void browseDirectory(entry.path)}
                 >
-                  📁 {entry.name}
+                  <span className="secret-picker-entry-icon" aria-hidden="true"></span>
+                  {entry.name}
                 </button>
               ))}
-            {browser.entries.length === 0 && <div className="secret-empty">No subfolders.</div>}
-          </div>
-        )}
-      </header>
+              {directories.length === 0 && <div className="secret-empty">No subfolders.</div>}
+            </div>
+            <footer className="secret-picker-footer">
+              <span>
+                <kbd>↑</kbd> <kbd>↓</kbd> Navigate
+              </span>
+              <span>
+                <kbd>Enter</kbd> Open
+              </span>
+              <span>
+                <kbd>⌘ Enter</kbd> Select
+              </span>
+              <span>
+                <kbd>Backspace</kbd> Back
+              </span>
+              <span>
+                <kbd>Esc</kbd> Close
+              </span>
+            </footer>
+          </section>
+        </div>
+      )}
       {error && (
         <div className="secret-error" role="alert">
           {error}
@@ -414,24 +511,33 @@ function Page() {
       )}
       <div className="secret-content">
         <aside className="secret-list" aria-label="Configured aliases">
-          <nav className="secret-scope" aria-label="Secret scope">
-            {(["all", "project", "global", "local"] as const).map((scope) => (
-              <button
-                key={scope}
-                data-active={activeScope === scope}
-                disabled={
-                  (scope === "project" && !cwd.trim()) || (scope === "local" && !cwd.trim())
-                }
-                onClick={() => {
-                  setActiveScope(scope);
-                  void refresh(scope);
-                }}
-              >
-                {scope[0]?.toLocaleUpperCase()}
-                {scope.slice(1)}
-              </button>
-            ))}
-          </nav>
+          <div className="secret-list-head">
+            <nav className="secret-scope" aria-label="Secret scope">
+              {(["all", "project", "global", "local"] as const).map((scope) => (
+                <button
+                  key={scope}
+                  data-active={activeScope === scope}
+                  disabled={
+                    (scope === "project" && !cwd.trim()) || (scope === "local" && !cwd.trim())
+                  }
+                  onClick={() => {
+                    setActiveScope(scope);
+                    void refresh(scope);
+                  }}
+                >
+                  {scope[0]?.toLocaleUpperCase()}
+                  {scope.slice(1)}
+                </button>
+              ))}
+            </nav>
+            <button
+              className="secret-button"
+              disabled={busy || !hostId || (activeScope !== "global" && !cwd.trim())}
+              onClick={openCreate}
+            >
+              + New
+            </button>
+          </div>
           <input
             className="secret-search"
             aria-label="Search aliases"
@@ -439,27 +545,46 @@ function Page() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          {filtered.map((entry) => (
-            <div
-              className="secret-row"
-              key={entryId(entry)}
-              data-selected={selectedId === entryId(entry)}
-              onClick={() => {
-                setSelectedId(entryId(entry));
-                setEnvironment(entry.env);
-                setValue(null);
-                setMessage(null);
-                closeEditor();
-              }}
-            >
-              <span className="secret-row-main">
-                <div className="secret-alias">{entry.alias}</div>
-                <div className="secret-meta">
-                  {entry.scope} · {entry.env} · {entry.item}
-                </div>
-              </span>
-            </div>
-          ))}
+          <div role="listbox" aria-label="Configured aliases">
+            {filtered.map((entry, index) => (
+              <button
+                className="secret-row"
+                id={`secret-option-${index}`}
+                key={entryId(entry)}
+                type="button"
+                role="option"
+                aria-selected={selectedId === entryId(entry)}
+                tabIndex={
+                  index === selectedFilteredIndex || (selectedFilteredIndex < 0 && index === 0)
+                    ? 0
+                    : -1
+                }
+                data-selected={selectedId === entryId(entry)}
+                onClick={() => selectEntry(entry)}
+                onKeyDown={(event) => {
+                  let nextIndex = index;
+                  if (event.key === "ArrowDown")
+                    nextIndex = Math.min(index + 1, filtered.length - 1);
+                  else if (event.key === "ArrowUp") nextIndex = Math.max(index - 1, 0);
+                  else if (event.key === "Home") nextIndex = 0;
+                  else if (event.key === "End") nextIndex = filtered.length - 1;
+                  else return;
+                  event.preventDefault();
+                  const nextEntry = filtered[nextIndex];
+                  if (!nextEntry) return;
+                  selectEntry(nextEntry);
+                  document.getElementById(`secret-option-${nextIndex}`)?.focus();
+                }}
+              >
+                <span className="secret-row-main">
+                  <div className="secret-alias">{entry.alias}</div>
+                  <div className="secret-meta">
+                    {entry.scope} · {entry.env} · {entry.item}
+                  </div>
+                </span>
+              </button>
+            ))}
+          </div>
           {entries.length > 0 && filtered.length === 0 && (
             <div className="secret-empty">No aliases match.</div>
           )}
@@ -561,8 +686,8 @@ function Page() {
                   {selected.scope} · {selected.envKey} · {selected.field}
                 </div>
               </div>
-              <div className="secret-actions">
-                <label className="secret-muted">
+              <div className="secret-detail-toolbar">
+                <label className="secret-environment">
                   Environment{" "}
                   <input
                     className="secret-input"
@@ -573,33 +698,40 @@ function Page() {
                     }}
                   />
                 </label>
-                <button
-                  className="secret-button"
-                  disabled={busy || !environment.trim()}
-                  onClick={() => void copy()}
-                >
-                  Copy with secret CLI
-                </button>
-                <button
-                  className="secret-button"
-                  disabled={busy || !environment.trim()}
-                  onClick={() => (value === null ? void reveal() : setValue(null))}
-                >
-                  {value === null ? "Reveal value" : "Hide value"}
-                </button>
-                <button className="secret-button" disabled={busy} onClick={openUpdate}>
-                  Edit alias / value
-                </button>
-                <button
-                  className="secret-button"
-                  disabled={busy}
-                  onClick={() => {
-                    setError(null);
-                    setRemoveConfirmation(true);
-                  }}
-                >
-                  Remove alias
-                </button>
+                <div className="secret-primary-actions">
+                  <button
+                    className="secret-button"
+                    disabled={busy || !environment.trim()}
+                    onClick={() => void copy()}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    className="secret-button"
+                    disabled={busy || !environment.trim()}
+                    onClick={() => (value === null ? void reveal() : setValue(null))}
+                  >
+                    {value === null ? "Reveal value" : "Hide value"}
+                  </button>
+                </div>
+                <details className="secret-manage">
+                  <summary>Manage</summary>
+                  <div className="secret-manage-actions">
+                    <button className="secret-button" disabled={busy} onClick={openUpdate}>
+                      Edit alias / value
+                    </button>
+                    <button
+                      className="secret-button secret-button-danger"
+                      disabled={busy}
+                      onClick={() => {
+                        setError(null);
+                        setRemoveConfirmation(true);
+                      }}
+                    >
+                      Remove alias
+                    </button>
+                  </div>
+                </details>
               </div>
               {message && (
                 <div className="secret-actions secret-muted" role="status">
