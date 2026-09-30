@@ -16,8 +16,8 @@ names and provider-discovered models appear in BB’s model picker.
 
 The page reads and stores only the email claim from Codex `auth.json`; it never
 returns or logs the token. OpenCode Go credentials stay in OpenCode’s auth file.
-The model section shows the live catalog for the selected machine and provides
-checkboxes to hide models from that account’s picker entry. Runtime paths inherit
+The model section shows the live catalog for the selected machine and supports
+favorites, visibility, ordering, and custom model entries. Runtime paths inherit
 from the all-projects/all-machines default, with more specific project and
 machine paths taking precedence.
 

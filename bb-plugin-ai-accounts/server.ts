@@ -25,6 +25,15 @@ const accountSchema = z.object({
   email: z.string().email().optional(),
   enabled: z.boolean().default(true),
   hiddenModelIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+  favoriteModelIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+  modelOrder: z.array(z.string().min(1).max(160)).max(500).default([]),
+  customModels: z.array(z.object({
+    id: z.string().trim().min(1).max(160).refine((id) => !/[\u0000-\u001f\u007f]/u.test(id)),
+    displayName: z.string().trim().min(1).max(80).refine((name) => !/[\u0000-\u001f\u007f]/u.test(name)),
+  })).max(100).default([]).refine(
+    (models) => new Set(models.map((model) => model.id)).size === models.length,
+    "Custom model IDs must be unique.",
+  ),
 });
 const stateSchema = z.object({ accounts: z.array(accountSchema).max(100) }).refine(
   (state) => new Set(state.accounts.map((account) => account.id)).size === state.accounts.length,
@@ -121,6 +130,7 @@ export default async function plugin(bb: BbPluginApi) {
   };
 
   const registrations = new Map<string, { dispose(): void }>();
+  const environmentContributions = new Set<string>();
   const syncProviders = async () => {
     for (const registration of registrations.values()) registration.dispose();
     registrations.clear();
@@ -152,6 +162,9 @@ export default async function plugin(bb: BbPluginApi) {
           acpDialect: "generic",
           accountId: account.id,
           hiddenModelIds: account.hiddenModelIds,
+          favoriteModelIds: account.favoriteModelIds,
+          modelOrder: account.modelOrder,
+          customModels: account.customModels,
         },
         capabilities: {
           supportsServiceTier: false,
@@ -168,16 +181,19 @@ export default async function plugin(bb: BbPluginApi) {
         env: { passthrough: [account.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"] },
       }));
       const variable = account.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME";
-      bb.providers.experimental_contributeEnv(providerId, async (context) => {
-        const current = await readState();
-        const configured = current.accounts.find((profile) => profile.id === account.id);
-        if (configured === undefined || !configured.enabled) return [];
-        return [{
-          name: variable,
-          value: accountPathFor(configured, context.projectId, context.hostId),
-          reason: "Use the account path configured for this project and machine in AI Accounts.",
-        }];
-      });
+      if (!environmentContributions.has(providerId)) {
+        bb.providers.experimental_contributeEnv(providerId, async (context) => {
+          const current = await readState();
+          const configured = current.accounts.find((profile) => profile.id === account.id);
+          if (configured === undefined || !configured.enabled) return [];
+          return [{
+            name: variable,
+            value: accountPathFor(configured, context.projectId, context.hostId),
+            reason: "Use the account path configured for this project and machine in AI Accounts.",
+          }];
+        });
+        environmentContributions.add(providerId);
+      }
     }
   };
 

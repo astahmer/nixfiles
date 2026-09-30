@@ -8,8 +8,8 @@ description: Manage separate Codex ChatGPT and OpenCode Go subscription profiles
 Use the **AI Accounts** page in BB to add profiles, edit display names and
 runtime paths by project and machine, refresh Codex email identity, and enable
 or hide a profile from BB's provider picker. Each enabled profile gets an
-independent provider and live model catalog. Choose models with the catalog
-checkboxes; BB reads the available model IDs from the selected provider machine.
+independent provider and live model catalog. Favorite, hide, reorder, or add
+models from the catalog; BB reads available IDs from the provider machine.
 
 Use \`bb ai-accounts list\` to inspect profile names and paths. Use
 \`bb ai-accounts login <account-id>\` to print its shell sign-in command.

@@ -1,6 +1,24 @@
 import { experimental_acpProviderBridge } from "@get-bb/plugin-sdk/provider-bridge/acp";
+import { z } from "zod";
 
-const hiddenByRequest = new Map<string, Set<string>>();
+const preferencesByRequest = new Map<string, {
+  hiddenModelIds: Set<string>;
+  modelOrder: string[];
+  customModels: Array<{ id: string; displayName: string }>;
+}>();
+const requestSchema = z.object({
+  id: z.union([z.string(), z.number()]),
+  params: z.object({ providerOptions: z.record(z.string(), z.unknown()).optional() }).passthrough(),
+}).passthrough();
+const providerOptionsSchema = z.object({
+  hiddenModelIds: z.array(z.string()).optional(),
+  modelOrder: z.array(z.string()).optional(),
+  customModels: z.array(z.object({ id: z.string(), displayName: z.string() })).optional(),
+});
+const responseSchema = z.object({
+  id: z.union([z.string(), z.number()]),
+  result: z.object({ models: z.array(z.unknown()).optional(), selectedOnlyModels: z.array(z.unknown()).optional() }).passthrough().optional(),
+}).passthrough();
 const originalWrite = process.stdout.write.bind(process.stdout);
 let outputBuffer = "";
 
@@ -8,26 +26,49 @@ const forwardLine = (line: string) => {
   if (!line) return;
   let output = line;
   try {
-    const response: unknown = JSON.parse(line);
-    if (typeof response === "object" && response !== null && "id" in response) {
-      const id = String(response.id);
-      const hidden = hiddenByRequest.get(id);
-      if (hidden && "result" in response && typeof response.result === "object" && response.result !== null) {
-        const result = response.result as { models?: unknown; selectedOnlyModels?: unknown };
-        const filter = (models: unknown) =>
-          Array.isArray(models)
-            ? models.filter((model) => typeof model !== "object" || model === null || !("id" in model) || typeof model.id !== "string" || !hidden.has(model.id))
-            : models;
-        output = JSON.stringify({
-          ...response,
-          result: {
-            ...result,
-            ...(result.models === undefined ? {} : { models: filter(result.models) }),
-            ...(result.selectedOnlyModels === undefined ? {} : { selectedOnlyModels: filter(result.selectedOnlyModels) }),
-          },
-        });
-      }
-      hiddenByRequest.delete(id);
+    const decoded = responseSchema.safeParse(JSON.parse(line));
+    if (decoded.success) {
+        const id = String(decoded.data.id);
+        const preferences = preferencesByRequest.get(id);
+        if (preferences && decoded.data.result) {
+          const filterAndSort = (models: unknown[]) => {
+            const byId = new Map<string, unknown>();
+            for (const model of models) {
+              const modelId = modelIdOf(model);
+              if (modelId && !preferences.hiddenModelIds.has(modelId)) byId.set(modelId, model);
+            }
+            for (const custom of preferences.customModels) {
+              if (!preferences.hiddenModelIds.has(custom.id) && !byId.has(custom.id)) {
+                byId.set(custom.id, {
+                  id: custom.id,
+                  model: custom.id,
+                  displayName: custom.displayName,
+                  description: "Custom provider model",
+                  isDefault: false,
+                  defaultReasoningEffort: "medium",
+                  supportedReasoningEfforts: [{ reasoningEffort: "medium", description: "Medium" }],
+                });
+              }
+            }
+            return Array.from(byId.entries()).sort(([left], [right]) => {
+              const leftIndex = preferences.modelOrder.indexOf(left);
+              const rightIndex = preferences.modelOrder.indexOf(right);
+              if (leftIndex < 0 && rightIndex < 0) return 0;
+              if (leftIndex < 0) return 1;
+              if (rightIndex < 0) return -1;
+              return leftIndex - rightIndex;
+            }).map(([, model]) => model);
+          };
+          output = JSON.stringify({
+            ...decoded.data,
+            result: {
+              ...decoded.data.result,
+              ...(decoded.data.result.models === undefined ? {} : { models: filterAndSort(decoded.data.result.models) }),
+              ...(decoded.data.result.selectedOnlyModels === undefined ? {} : { selectedOnlyModels: filterAndSort(decoded.data.result.selectedOnlyModels) }),
+            },
+          });
+        }
+        preferencesByRequest.delete(id);
     }
   } catch {
     output = line;
@@ -52,12 +93,19 @@ export const experimental_providerBridge = {
   ...experimental_acpProviderBridge,
   handleLine(line: string) {
     try {
-      const request: unknown = JSON.parse(line);
-      if (typeof request === "object" && request !== null && "id" in request && "params" in request && typeof request.params === "object" && request.params !== null) {
-        const params = request.params as { providerOptions?: Record<string, unknown> };
-        const hiddenModels = params.providerOptions?.hiddenModelIds;
-        if (Array.isArray(hiddenModels) && hiddenModels.every((model) => typeof model === "string")) {
-          hiddenByRequest.set(String(request.id), new Set(hiddenModels));
+      const decoded = requestSchema.safeParse(JSON.parse(line));
+      if (decoded.success) {
+        const options = providerOptionsSchema.safeParse(decoded.data.params.providerOptions ?? {});
+        if (options.success && (options.data.hiddenModelIds || options.data.modelOrder || options.data.customModels)) {
+          preferencesByRequest.set(String(decoded.data.id), {
+            hiddenModelIds: new Set(options.data.hiddenModelIds ?? []),
+            modelOrder: options.data.modelOrder ?? [],
+            customModels: options.data.customModels ?? [],
+          });
+          if (preferencesByRequest.size > 256) {
+            const oldestRequestId = preferencesByRequest.keys().next().value;
+            if (oldestRequestId !== undefined) preferencesByRequest.delete(oldestRequestId);
+          }
         }
       }
     } catch {
@@ -65,4 +113,9 @@ export const experimental_providerBridge = {
     }
     experimental_acpProviderBridge.handleLine(line);
   },
+};
+
+const modelIdOf = (model: unknown) => {
+  const decoded = z.object({ id: z.string().optional(), modelId: z.string().optional() }).passthrough().safeParse(model);
+  return decoded.success ? decoded.data.id ?? decoded.data.modelId : undefined;
 };
