@@ -42,9 +42,22 @@ const repositoryRoot = async (inputPath: string): Promise<string> => {
 };
 
 const listRevisions = async (root: string) => {
-  const template = String.raw`"{\"commitId\": " ++ json(commit_id.short()) ++ ", \"changeId\": " ++ json(change_id.short()) ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short())) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
+  const template = String.raw`"{\"commitId\": " ++ json(commit_id.short(40)) ++ ", \"changeId\": " ++ json(change_id.short(40)) ++ ", \"changeIdPrefix\": " ++ json(change_id.shortest().prefix()) ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short(40))) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
   const raw = await run(root, ["log", "--no-graph", "-r", "all()", "-n", "500", "-T", template]);
   return z.array(revisionSchema).parse(raw.split("\n").filter(Boolean).map((line) => JSON.parse(line)));
+};
+
+const lastPushAt = async (root: string) => {
+  const template = String.raw`json(time.start().format("%s")) ++ "\t" ++ json(description) ++ "\n"`;
+  const raw = await run(root, ["op", "log", "--no-graph", "-n", "500", "--at-op=@", "--ignore-working-copy", "-T", template], 256_000);
+  for (const line of raw.split("\n").filter(Boolean)) {
+    const [rawTimestamp, rawDescription] = line.split("\t");
+    if (!rawTimestamp || !rawDescription) continue;
+    const description = z.string().parse(JSON.parse(rawDescription));
+    if (!description.toLowerCase().startsWith("push ")) continue;
+    return Number(z.string().parse(JSON.parse(rawTimestamp)));
+  }
+  return null;
 };
 
 const parseFileChanges = (summary: string) => summary.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => ({
@@ -68,13 +81,14 @@ export default experimental_defineHostEntry({
   handlers: {
     inspect: async ({ path }) => {
       const root = await repositoryRoot(path);
-      const [revisionList, currentRevision, fileChanges, workspaceList] = await Promise.all([
+      const [revisionList, currentRevision, lastPush, fileChanges, workspaceList] = await Promise.all([
         listRevisions(root),
-        run(root, ["log", "--no-graph", "-r", "@", "-T", "commit_id.short()"]).then((value) => value.trim()),
+        run(root, ["log", "--no-graph", "-r", "@", "-T", "commit_id.short(40)"]).then((value) => value.trim()),
+        lastPushAt(root),
         changes(root),
         workspaces(root),
       ]);
-      return { root, currentRevision, revisions: revisionList, changes: fileChanges, workspaces: workspaceList };
+      return { root, currentRevision, lastPushAt: lastPush, revisions: revisionList, changes: fileChanges, workspaces: workspaceList };
     },
     revisionFiles: async ({ path, revision }) => {
       const root = await repositoryRoot(path);

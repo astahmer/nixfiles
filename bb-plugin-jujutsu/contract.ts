@@ -8,6 +8,7 @@ const fileDiffInput = repositoryInput.extend({ file: z.string().min(1).max(4096)
 export const revisionSchema = z.object({
   commitId: z.string(),
   changeId: z.string(),
+  changeIdPrefix: z.string(),
   description: z.string(),
   timestamp: z.number(),
   parents: z.array(z.string()),
@@ -24,6 +25,7 @@ export const hostContract = defineRpcContract({
     output: z.object({
       root: z.string(),
       currentRevision: z.string(),
+      lastPushAt: z.number().nullable(),
       revisions: z.array(revisionSchema),
       changes: z.array(fileChangeSchema),
       workspaces: z.array(z.object({ name: z.string(), path: z.string(), revision: z.string() })),

@@ -7,7 +7,7 @@ const revisionTarget = target.extend({ revision: z.string().min(1).max(128) });
 const fileDiffTarget = target.extend({ file: z.string().min(1).max(4096), revision: z.string().min(1).max(128).optional() });
 
 export const rpcContract = defineRpcContract({
-  inspect: { input: target, output: z.object({ root: z.string(), currentRevision: z.string(), revisions: z.array(revisionSchema), changes: z.array(fileChangeSchema), workspaces: z.array(z.object({ name: z.string(), path: z.string(), revision: z.string() })) }) },
+  inspect: { input: target, output: z.object({ root: z.string(), currentRevision: z.string(), lastPushAt: z.number().nullable(), revisions: z.array(revisionSchema), changes: z.array(fileChangeSchema), workspaces: z.array(z.object({ name: z.string(), path: z.string(), revision: z.string() })) }) },
   revisionFiles: { input: revisionTarget, output: z.array(fileChangeSchema) },
   fileDiff: { input: fileDiffTarget, output: z.object({ patch: z.string() }) },
   describe: { input: revisionTarget.extend({ description: z.string().max(10000) }), output: z.object({ ok: z.boolean() }) },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { definePluginApp, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { rpcContract, secretEntrySchema } from "./contract";
@@ -18,6 +18,7 @@ type DirectoryResult = {
   parent: string | null;
   entries: { kind: "directory" | "file"; name: string; path: string }[];
 };
+type KnownProjectPath = { name: string; path: string; hostId: string };
 const entryId = (entry: SecretEntry) => `${entry.scope}:${entry.alias}:${entry.env}`;
 const entryScope = (scope: string): MutableScope =>
   scope === "global" || scope === "local" ? scope : "project";
@@ -37,11 +38,15 @@ function Page() {
   const sdk = useSdk();
   const [hostId, setHostId] = useState("");
   const [hosts, setHosts] = useState<HostOption[]>([]);
+  const [projectPaths, setProjectPaths] = useState<KnownProjectPath[]>([]);
   const [cwd, setCwd] = useState("");
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState("");
+  const [projectIndex, setProjectIndex] = useState(0);
   const [activeScope, setActiveScope] = useState<SecretScope>("global");
   const [browser, setBrowser] = useState<DirectoryResult | null>(null);
-  const [browserPath, setBrowserPath] = useState("");
   const [browserIndex, setBrowserIndex] = useState(0);
+  const directoryRequest = useRef(0);
   const [entries, setEntries] = useState<SecretEntry[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
@@ -68,6 +73,17 @@ function Page() {
   }, [entries, search]);
   const selectedFilteredIndex = filtered.findIndex((entry) => entryId(entry) === selectedId);
   const directories = browser?.entries.filter((entry) => entry.kind === "directory") ?? [];
+  const availableProjectPaths = useMemo(
+    () => projectPaths.filter((project) => project.hostId === hostId),
+    [hostId, projectPaths],
+  );
+  const filteredProjects = useMemo(() => {
+    const query = projectQuery.trim().toLocaleLowerCase();
+    return availableProjectPaths.filter(
+      (project) => !query || `${project.name} ${project.path}`.toLocaleLowerCase().includes(query),
+    );
+  }, [availableProjectPaths, projectQuery]);
+  const isDirectoryQuery = projectQuery.startsWith("/");
 
   const selectEntry = (entry: SecretEntry) => {
     setSelectedId(entryId(entry));
@@ -117,8 +133,21 @@ function Page() {
   useEffect(() => {
     void (async () => {
       try {
-        const [config, availableHosts] = await Promise.all([sdk.system.config(), sdk.hosts.list()]);
+        const [config, availableHosts, projects] = await Promise.all([
+          sdk.system.config(),
+          sdk.hosts.list(),
+          sdk.projects.list({ includePersonal: true }),
+        ]);
         setHosts(availableHosts);
+        setProjectPaths(
+          projects.flatMap((project) =>
+            project.sources.map((source) => ({
+              name: project.name,
+              path: source.path,
+              hostId: source.hostId,
+            })),
+          ),
+        );
         const primary = availableHosts.find((host) => host.id === config.primaryHostId);
         const initialHost = primary ?? availableHosts.find((host) => host.status === "connected");
         if (!initialHost) {
@@ -257,11 +286,13 @@ function Page() {
 
   const browseDirectory = async (path?: string) => {
     if (!hostId) return;
+    const requestId = ++directoryRequest.current;
     setError(null);
     try {
       const result = await sdk.hosts.directory({ hostId, ...(path ? { path } : {}) });
+      if (requestId !== directoryRequest.current) return;
       setBrowser(result);
-      setBrowserPath(result.directory);
+      setProjectQuery(result.directory);
       setBrowserIndex(0);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -269,15 +300,44 @@ function Page() {
   };
 
   const chooseProject = async () => {
-    if (!hostId || !browserPath.trim()) return;
-    const selectedPath = browserPath.trim();
+    if (!hostId || !projectQuery.trim()) return;
+    const selectedPath = projectQuery.trim();
     setCwd(selectedPath);
     setBrowser(null);
+    setProjectPickerOpen(false);
     setActiveScope("all");
     await loadEntries(hostId, "all", selectedPath);
   };
 
+  const chooseKnownProject = async (project: KnownProjectPath) => {
+    setProjectQuery("");
+    setProjectPickerOpen(false);
+    setCwd(project.path);
+    setActiveScope("all");
+    await loadEntries(project.hostId, "all", project.path);
+  };
+
+  const openProjectPicker = () => {
+    directoryRequest.current += 1;
+    setProjectQuery("");
+    setProjectIndex(0);
+    setBrowser(null);
+    setProjectPickerOpen(true);
+  };
+
   const handleBrowserKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!isDirectoryQuery && event.metaKey && /^[1-9]$/.test(event.key)) {
+      const project = filteredProjects[Number(event.key) - 1];
+      if (project) void chooseKnownProject(project);
+      return;
+    }
+    if (!isDirectoryQuery && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      event.preventDefault();
+      setProjectIndex((current) => event.key === "ArrowDown"
+        ? Math.min(current + 1, filteredProjects.length - 1)
+        : Math.max(current - 1, 0));
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       if (directories.length > 0) {
@@ -295,23 +355,38 @@ function Page() {
         void chooseProject();
         return;
       }
+      if (!isDirectoryQuery) {
+        const project = filteredProjects[projectIndex];
+        if (project) void chooseKnownProject(project);
+        return;
+      }
       const directory = directories[browserIndex];
       if (directory) void browseDirectory(directory.path);
-      else if (browserPath.trim()) void browseDirectory(browserPath.trim());
+      else if (projectQuery.trim()) void browseDirectory(projectQuery.trim());
       return;
     }
-    if (event.key === "Backspace" && event.currentTarget.selectionStart === 0 && browser?.parent) {
+    if (isDirectoryQuery && event.key === "Backspace" && event.currentTarget.selectionStart === 0 && browser?.parent) {
       event.preventDefault();
-      void browseDirectory(browser.parent);
+      setProjectQuery(browser.parent);
     }
-    if (event.key === "Escape") setBrowser(null);
+    if (event.key === "Escape") {
+      setProjectPickerOpen(false);
+      setBrowser(null);
+    }
   };
 
   useEffect(() => {
+    if (projectPickerOpen && isDirectoryQuery) {
+      const timeout = window.setTimeout(() => void browseDirectory(projectQuery), 250);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [projectPickerOpen, isDirectoryQuery, projectQuery, hostId]);
+
+  useEffect(() => {
     document
-      .getElementById(`secret-picker-entry-${browserIndex}`)
+      .getElementById(`${isDirectoryQuery ? "secret-picker-entry" : "secret-project-option"}-${isDirectoryQuery ? browserIndex : projectIndex}`)
       ?.scrollIntoView({ block: "nearest" });
-  }, [browserIndex, browser]);
+  }, [browserIndex, browser, isDirectoryQuery, projectIndex]);
 
   const openUpdate = () => {
     if (!selected) return;
@@ -362,30 +437,20 @@ function Page() {
             aria-label="Project directory on selected machine"
             placeholder="Choose a project folder…"
             value={cwd}
-            onChange={(event) => setCwd(event.target.value)}
+            readOnly
+            aria-haspopup="dialog"
+            onClick={openProjectPicker}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                setActiveScope("all");
-                void loadEntries(hostId, "all", cwd);
-              }
+              if (event.key === "Enter" || event.key === " ") openProjectPicker();
             }}
           />
-          <button
-            className="secret-button"
-            aria-label="Browse project folders"
-            title="Browse project folders"
-            disabled={busy || !hostId}
-            onClick={() => void browseDirectory(cwd.trim() || undefined)}
-          >
-            ▾
-          </button>
         </div>
       </header>
-      {browser && (
+      {projectPickerOpen && (
         <div
           className="secret-picker-backdrop"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setBrowser(null);
+            if (event.target === event.currentTarget) setProjectPickerOpen(false);
           }}
         >
           <section
@@ -394,35 +459,24 @@ function Page() {
             aria-modal="true"
             aria-labelledby="secret-picker-title"
           >
-            <h2 id="secret-picker-title" className="secret-sr-only">
-              Choose project folder
-            </h2>
+            <h2 id="secret-picker-title" className="secret-sr-only">Choose project</h2>
             <div className="secret-picker-header">
-              <button
-                className="secret-button"
-                aria-label="Go to parent folder"
-                title="Go to parent folder"
-                disabled={!browser.parent}
-                onClick={() => browser.parent && void browseDirectory(browser.parent)}
-              >
-                ←
-              </button>
+              {isDirectoryQuery && <button className="secret-button" aria-label="Back to projects" onClick={() => { setProjectQuery(""); setBrowser(null); }}>←</button>}
               <div className="secret-picker-path">
                 <input
                   autoFocus
-                  aria-label="Current folder path"
-                  value={browserPath}
-                  onChange={(event) => setBrowserPath(event.target.value)}
+                  aria-label="Search projects or enter a folder path"
+                  placeholder="Search projects or type / for a folder…"
+                  value={projectQuery}
+                  onChange={(event) => { const query = event.target.value; setProjectQuery(query); setProjectIndex(0); setBrowserIndex(0); setBrowser(null); setError(null); if (!query.startsWith("/")) directoryRequest.current += 1; }}
                   onKeyDown={handleBrowserKeyDown}
                 />
               </div>
-              <button className="secret-button" onClick={() => void chooseProject()}>
-                Add <kbd>⌘ Enter</kbd>
-              </button>
+              {isDirectoryQuery && <button className="secret-button" onClick={() => void chooseProject()}>Choose <kbd>⌘ Enter</kbd></button>}
             </div>
-            <div className="secret-picker-section">Directories</div>
-            <div className="secret-picker-list" role="listbox" aria-label="Directories">
-              {directories.map((entry, index) => (
+            <div className="secret-picker-section">{isDirectoryQuery ? "Folders" : "Projects"}</div>
+            <div className="secret-picker-list" role="listbox" aria-label={isDirectoryQuery ? "Folders" : "Projects"}>
+              {isDirectoryQuery ? directories.map((entry, index) => (
                 <button
                   id={`secret-picker-entry-${index}`}
                   className="secret-picker-entry"
@@ -432,30 +486,39 @@ function Page() {
                   data-active={browserIndex === index}
                   onMouseEnter={() => setBrowserIndex(index)}
                   onFocus={() => setBrowserIndex(index)}
-                  onClick={() => void browseDirectory(entry.path)}
+                  onClick={() => { setBrowserIndex(index); void browseDirectory(entry.path); }}
                 >
                   <span className="secret-picker-entry-icon" aria-hidden="true"></span>
                   {entry.name}
                 </button>
+              )) : filteredProjects.map((project, index) => (
+                <button
+                  id={`secret-project-option-${index}`}
+                  className="secret-project-option"
+                  key={`${project.hostId}:${project.name}:${project.path}`}
+                  role="option"
+                  aria-selected={projectIndex === index}
+                  data-active={projectIndex === index}
+                  onMouseEnter={() => setProjectIndex(index)}
+                  onFocus={() => setProjectIndex(index)}
+                  onClick={() => void chooseKnownProject(project)}
+                >
+                  <span className="secret-project-mark" aria-hidden="true">{project.name.slice(0, 2).toLocaleUpperCase()}</span>
+                  <span className="secret-project-option-copy"><span>{project.name}</span><small>Local · {project.path}</small></span>
+                  {index < 9 && <kbd>⌘ {index + 1}</kbd>}
+                </button>
               ))}
-              {directories.length === 0 && <div className="secret-empty">No subfolders.</div>}
+              {isDirectoryQuery && !browser && <div className="secret-empty">Loading folders…</div>}
+              {isDirectoryQuery && browser && directories.length === 0 && <div className="secret-empty">No subfolders here.</div>}
+              {!isDirectoryQuery && filteredProjects.length === 0 && <div className="secret-empty">No known projects match. Type / to browse folders.</div>}
+              {error && <div className="secret-picker-error" role="alert">{error}</div>}
             </div>
             <footer className="secret-picker-footer">
-              <span>
-                <kbd>↑</kbd> <kbd>↓</kbd> Navigate
-              </span>
-              <span>
-                <kbd>Enter</kbd> Open
-              </span>
-              <span>
-                <kbd>⌘ Enter</kbd> Select
-              </span>
-              <span>
-                <kbd>Backspace</kbd> Back
-              </span>
-              <span>
-                <kbd>Esc</kbd> Close
-              </span>
+              <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span>
+              <span><kbd>Enter</kbd> {isDirectoryQuery ? "Open" : "Select"}</span>
+              {isDirectoryQuery && <span><kbd>⌘ Enter</kbd> Choose folder</span>}
+              {isDirectoryQuery && <span><kbd>Backspace</kbd> Back</span>}
+              <span><kbd>Esc</kbd> Close</span>
             </footer>
           </section>
         </div>

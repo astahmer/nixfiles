@@ -4,10 +4,13 @@ Two JJ work surfaces live in one BB sidebar page:
 
 - **Revision graph** lays out parent links on separate lanes, groups rows by
   day, and shows relative time, bookmarks, tags, workspace labels, and a clear
-  working-copy marker. Expand a revision to edit its description and inspect
-  changed files. Day groups collapse. Dragging a revision onto another previews
-  the whole descendant branch inline before rebasing; right-click a revision for
-  common actions.
+  working-copy marker. Change IDs use JJ's shortest unique prefix. Older
+  versions of an evolved change are marked, and the most recent recorded JJ
+  Git push is shown above the graph. Filter by description, then expand a
+  revision to edit its description and inspect changed files. Day groups
+  collapse. Dragging a revision onto another projects the moved branch into the
+  graph, dims its old position, and previews the command before rebasing;
+  right-click a revision for common actions.
 - **Source Control** follows the working copy with expandable `@-1` through
   `@-X` ancestor groups. It provides describe, split, and squash actions, and
   opens BB's native diff viewer only after selecting a file. The ancestor

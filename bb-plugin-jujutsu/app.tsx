@@ -13,6 +13,7 @@ import { layoutRevisionGraph, type RevisionGraphRow } from "./graph-layout";
 type Revision = {
   commitId: string;
   changeId: string;
+  changeIdPrefix: string;
   description: string;
   timestamp: number;
   parents: string[];
@@ -27,6 +28,7 @@ type ProjectPath = { name: string; path: string; hostId: string };
 type Snapshot = {
   root: string;
   currentRevision: string;
+  lastPushAt: number | null;
   revisions: Revision[];
   changes: FileChange[];
   workspaces: { name: string; path: string; revision: string }[];
@@ -40,9 +42,11 @@ type DirectoryResult = {
   parent: string | null;
   entries: { kind: "directory" | "file"; name: string; path: string }[];
 };
+type GraphItem = { revision: Revision; isPreview: boolean; originalId?: string };
 
 const graphPalette = ["#54a5ff", "#c586c0", "#4ec9b0", "#dcdcaa", "#ce9178", "#b5cea8"];
 const laneColor = (lane: number) => graphPalette[lane % graphPalette.length];
+const previewColor = "#a5df6f";
 const label = (revision: Revision) => revision.description.trim().split("\n")[0] || "(no description)";
 const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const relativeTime = (timestamp: number) => {
@@ -88,26 +92,29 @@ const styles = `
 .jj-day-heading{position:sticky;top:0;z-index:2;width:100%;display:flex;align-items:center;gap:7px;padding:6px 10px;border:0;border-bottom:1px solid var(--jj-line);background:var(--background);color:var(--muted-foreground);font-size:11px;font-weight:700;letter-spacing:.06em;text-align:left;text-transform:uppercase;cursor:pointer}.jj-day-heading:hover{background:var(--accent);color:var(--foreground)}.jj-day-heading .jj-count{margin-left:auto}.jj-day-heading .jj-chevron{transform:rotate(90deg)}.jj-day-heading[aria-expanded=false] .jj-chevron{transform:rotate(0)}.jj-move-mode{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid var(--jj-line);background:var(--card);box-shadow:0 3px 12px #0003}.jj-revision[data-dragged=true]{opacity:.42;transform:scale(.99);transition:opacity .12s,transform .12s}.jj-revision[data-drop-target=true]>.jj-revision-button{background:color-mix(in srgb,var(--primary) 18%,var(--background));box-shadow:inset 0 2px var(--primary)}.jj-rebase-preview{position:relative;margin:7px 12px 12px 24px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--primary) 55%,var(--jj-line));border-radius:8px;background:color-mix(in srgb,var(--primary) 7%,var(--card));animation:jj-rebase-enter .18s ease-out;box-shadow:0 8px 24px #0002}.jj-rebase-preview::before{position:absolute;left:-15px;top:-7px;bottom:calc(100% - 12px);width:2px;background:var(--primary);content:""}.jj-rebase-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px;font-size:12px}.jj-rebase-preview-heading>span:last-child{color:var(--muted-foreground);font-size:11px;white-space:nowrap}.jj-rebase-preview-branch{max-height:180px;overflow:auto;border-left:2px solid var(--primary);margin-left:5px;padding-left:10px}.jj-rebase-preview-row{display:flex;align-items:center;gap:8px;min-height:27px;animation:jj-rebase-row-enter .18s ease-out both}.jj-rebase-preview-row:nth-child(2){animation-delay:25ms}.jj-rebase-preview-row:nth-child(3){animation-delay:50ms}.jj-rebase-preview-row:nth-child(4){animation-delay:75ms}.jj-rebase-preview-node{width:9px;height:9px;flex:none;border:2px solid var(--primary);border-radius:50%;background:var(--background);margin-left:-16px}.jj-rebase-preview-row code{margin-left:auto;color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-rebase-preview .jj-confirm-code{display:block;max-width:100%;overflow:auto;margin-top:9px}.jj-rebase-preview-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}@keyframes jj-rebase-enter{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}@keyframes jj-rebase-row-enter{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
 .jj-context-backdrop{position:fixed;inset:0;z-index:40}.jj-context-menu{position:fixed;z-index:41;min-width:190px;padding:5px;border:1px solid var(--jj-line);border-radius:8px;background:var(--popover,var(--card));box-shadow:0 12px 36px #0008}.jj-context-menu button{width:100%;padding:7px 9px;border:0;border-radius:5px;background:transparent;color:var(--foreground);font:inherit;text-align:left;cursor:pointer}.jj-context-menu button:hover,.jj-context-menu button:focus-visible{background:var(--accent);outline:none}.jj-context-menu button:disabled{opacity:.45;cursor:default}.jj-context-menu-separator{height:1px;margin:4px 2px;background:var(--jj-line)}
 .jj-path-picker{display:flex;min-width:0;flex:1}.jj-path-picker .jj-path{border-radius:6px 0 0 6px}.jj-path-picker .jj-browse{border-radius:0 6px 6px 0;white-space:nowrap}.jj-picker-backdrop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:24px;background:rgb(0 0 0/.58)}.jj-picker{display:flex;flex-direction:column;width:min(720px,92vw);max-height:min(760px,84vh);padding:12px;border:1px solid var(--jj-line);border-radius:14px;background:var(--card);box-shadow:0 18px 60px #000a}.jj-picker-header{display:flex;align-items:center;gap:8px}.jj-picker-path{min-width:0;flex:1}.jj-picker-path input{width:100%;box-sizing:border-box;border:0;background:transparent;color:var(--foreground);font:14px/1.4 var(--font-mono,monospace);outline:none}.jj-picker-section{padding:12px 4px 6px;color:var(--muted-foreground);font-size:11px}.jj-picker-list{min-height:120px;overflow:auto}.jj-picker-entry{display:flex;width:100%;align-items:center;gap:10px;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-picker-entry[data-active=true],.jj-picker-entry:hover{background:var(--accent)}.jj-picker-entry:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-picker-entry-icon{width:18px;color:var(--muted-foreground)}.jj-picker-footer{display:flex;justify-content:center;gap:14px;padding:10px 4px 2px;border-top:1px solid var(--jj-line);color:var(--muted-foreground);font-size:11px}.jj-picker-footer kbd{padding:2px 5px;border:1px solid var(--jj-line);border-radius:4px;color:var(--foreground)}
+.jj-context{flex-wrap:wrap}.jj-filter{width:180px;margin-left:auto;padding:4px 7px;font:11px var(--font-sans,system-ui)}.jj-push-marker{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--jj-line);background:color-mix(in srgb,var(--muted) 10%,var(--background));color:var(--muted-foreground);font-size:10px}.jj-push-marker strong{font-weight:600;letter-spacing:.04em;text-transform:uppercase}.jj-push-marker time{margin-left:auto;font:10px var(--font-mono,monospace)}.jj-revision[data-moved=true]{opacity:.28;filter:saturate(.25)}.jj-revision[data-preview=true]{background:color-mix(in srgb,#a5df6f 10%,var(--background));box-shadow:inset 3px 0 #a5df6f}.jj-revision[data-preview=true] .jj-revision-subject,.jj-revision[data-preview=true] .jj-change-id{color:#a5df6f}.jj-revision[data-preview=true] .jj-badge{border-color:#a5df6f;color:#a5df6f}.jj-revision-title{gap:0}.jj-revision-meta{justify-content:flex-end;gap:8px}.jj-revision-age{color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-change-id{font:10px var(--font-mono,monospace);font-weight:650;letter-spacing:.02em}.jj-change-id-prefix{color:#4fc1ff}.jj-badge-evolved{background:color-mix(in srgb,#b982ff 18%,var(--background));border-color:color-mix(in srgb,#b982ff 55%,var(--jj-line));color:#b982ff}
 `;
 
-const RevisionGraphCell = ({ row, width, laneGap, current }: {
+const RevisionGraphCell = ({ row, width, laneGap, current, preview }: {
   row: RevisionGraphRow;
   width: number;
   laneGap: number;
   current: boolean;
+  preview: boolean;
 }) => {
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = 21;
+  const color = (lane: number) => preview ? previewColor : laneColor(lane);
 
   return <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
     <svg width={width} height="42" viewBox={`0 0 ${width} 42`}>
-      {row.topLanes.map((lane) => <line key={`top-${lane}`} x1={center(lane)} y1="0" x2={center(lane)} y2={middle} stroke={laneColor(lane)} strokeWidth="2" />)}
-      {!row.startsHere && <line x1={center(row.commitLane)} y1="0" x2={center(row.commitLane)} y2={middle} stroke={laneColor(row.commitLane)} strokeWidth="2" />}
-      {row.bottomLanes.map((lane) => <line key={`bottom-${lane}`} x1={center(lane)} y1={middle} x2={center(lane)} y2="42" stroke={laneColor(lane)} strokeWidth="2" />)}
       {row.edges.map((edge, index) => edge.kind === "straight"
-        ? <line key={`edge-${index}`} x1={center(edge.fromLane)} y1={middle} x2={center(edge.toLane)} y2="42" stroke={laneColor(edge.fromLane)} strokeWidth="2" />
-        : <path key={`edge-${index}`} d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 8}, ${center(edge.toLane)} ${middle + 8}, ${center(edge.toLane)} 42`} fill="none" stroke={laneColor(edge.fromLane)} strokeWidth="2" />)}
-      <circle cx={center(row.commitLane)} cy={middle} r="5" fill={current ? "var(--primary)" : "var(--background)"} stroke={laneColor(row.commitLane)} strokeWidth="2" />
+        ? <line key={`edge-${index}`} x1={center(edge.fromLane)} y1={middle} x2={center(edge.toLane)} y2="42" stroke={color(edge.fromLane)} strokeWidth="2" />
+        : <path key={`edge-${index}`} d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 8}, ${center(edge.toLane)} ${middle + 8}, ${center(edge.toLane)} 42`} fill="none" stroke={color(edge.fromLane)} strokeWidth="2" />)}
+      {row.topLanes.map((lane) => <line key={`top-${lane}`} x1={center(lane)} y1="0" x2={center(lane)} y2={middle} stroke={color(lane)} strokeWidth="2" />)}
+      {!row.startsHere && <line x1={center(row.commitLane)} y1="0" x2={center(row.commitLane)} y2={middle} stroke={color(row.commitLane)} strokeWidth="2" />}
+      {row.bottomLanes.map((lane) => <line key={`bottom-${lane}`} x1={center(lane)} y1={middle} x2={center(lane)} y2="42" stroke={color(lane)} strokeWidth="2" />)}
+      <circle cx={center(row.commitLane)} cy={middle} r="5" fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"} stroke={color(row.commitLane)} strokeWidth="2" />
     </svg>
   </span>;
 };
@@ -149,6 +156,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const sdk = useSdk();
   const context = useBbContext();
   const [tab, setTab] = useState<"graph" | "source">("graph");
+  const [graphQuery, setGraphQuery] = useState("");
   const [path, setPath] = useState(() => localStorage.getItem("jj-plugin-path") ?? "");
   const [hostId, setHostId] = useState(() => localStorage.getItem("jj-plugin-host") ?? "");
   const [hosts, setHosts] = useState<{ id: string; name: string; status: string }[]>([]);
@@ -184,8 +192,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [moveSource, setMoveSource] = useState<Revision | null>(null);
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(() => new Set());
   const [directoryBrowser, setDirectoryBrowser] = useState<DirectoryResult | null>(null);
-  const [directoryPath, setDirectoryPath] = useState("");
   const [directoryIndex, setDirectoryIndex] = useState(0);
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState("");
+  const [projectIndex, setProjectIndex] = useState(0);
+  const directoryRequest = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -289,12 +300,22 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     if (!hostId && matchingProjects.length === 1) setHostId(matchingProjects[0].hostId);
   };
 
+  const filteredProjectPaths = useMemo(() => {
+    const query = projectQuery.trim().toLocaleLowerCase();
+    return availableProjectPaths.filter((projectPath) =>
+      !query || `${projectPath.name} ${projectPath.path}`.toLocaleLowerCase().includes(query),
+    );
+  }, [availableProjectPaths, projectQuery]);
+  const isDirectoryQuery = projectQuery.startsWith("/");
+
   const browseDirectory = async (nextPath?: string) => {
     if (!hostId) return;
+    const requestId = ++directoryRequest.current;
     try {
       const result = await sdk.hosts.directory({ hostId, ...(nextPath ? { path: nextPath } : {}) });
+      if (requestId !== directoryRequest.current) return;
       setDirectoryBrowser(result);
-      setDirectoryPath(result.directory);
+      setProjectQuery(result.directory);
       setDirectoryIndex(0);
       setError(null);
     } catch (cause) {
@@ -303,15 +324,46 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   };
 
   const chooseDirectory = () => {
-    const selectedPath = directoryPath.trim();
+    const selectedPath = projectQuery.trim();
     if (!selectedPath) return;
     changePath(selectedPath);
     setDirectoryBrowser(null);
+    setProjectPickerOpen(false);
     void inspectAt(selectedPath, hostId);
+  };
+
+  const chooseProjectPath = (projectPath: ProjectPath) => {
+    directoryRequest.current += 1;
+    setHostId(projectPath.hostId);
+    setPath(projectPath.path);
+    setProjectPickerOpen(false);
+    setDirectoryBrowser(null);
+    void inspectAt(projectPath.path, projectPath.hostId);
+  };
+
+  const openProjectPicker = () => {
+    directoryRequest.current += 1;
+    setProjectQuery("");
+    setProjectIndex(0);
+    setDirectoryIndex(0);
+    setDirectoryBrowser(null);
+    setProjectPickerOpen(true);
   };
 
   const directoryEntries = directoryBrowser?.entries.filter((entry) => entry.kind === "directory") ?? [];
   const handleDirectoryKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDirectoryQuery && event.metaKey && /^[1-9]$/.test(event.key)) {
+      const projectPath = filteredProjectPaths[Number(event.key) - 1];
+      if (projectPath) chooseProjectPath(projectPath);
+      return;
+    }
+    if (!isDirectoryQuery && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      event.preventDefault();
+      setProjectIndex((current) => Math.max(0, event.key === "ArrowDown"
+        ? Math.min(current + 1, filteredProjectPaths.length - 1)
+        : current - 1));
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setDirectoryIndex((current) => event.key === "ArrowDown"
@@ -325,21 +377,36 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         chooseDirectory();
         return;
       }
+      if (!isDirectoryQuery) {
+        const projectPath = filteredProjectPaths[projectIndex];
+        if (projectPath) chooseProjectPath(projectPath);
+        return;
+      }
       const directory = directoryEntries[directoryIndex];
       if (directory) void browseDirectory(directory.path);
-      else if (directoryPath.trim()) void browseDirectory(directoryPath.trim());
+      else if (projectQuery.trim()) void browseDirectory(projectQuery.trim());
       return;
     }
-    if (event.key === "Backspace" && event.currentTarget.selectionStart === 0 && directoryBrowser?.parent) {
+    if (isDirectoryQuery && event.key === "Backspace" && event.currentTarget.selectionStart === 0 && directoryBrowser?.parent) {
       event.preventDefault();
-      void browseDirectory(directoryBrowser.parent);
+      setProjectQuery(directoryBrowser.parent);
     }
-    if (event.key === "Escape") setDirectoryBrowser(null);
+    if (event.key === "Escape") {
+      setProjectPickerOpen(false);
+      setDirectoryBrowser(null);
+    }
   };
 
   useEffect(() => {
-    document.getElementById(`jj-picker-entry-${directoryIndex}`)?.scrollIntoView({ block: "nearest" });
-  }, [directoryBrowser, directoryIndex]);
+    if (projectPickerOpen && isDirectoryQuery) {
+      const timeout = window.setTimeout(() => void browseDirectory(projectQuery), 250);
+      return () => window.clearTimeout(timeout);
+    }
+  }, [projectPickerOpen, isDirectoryQuery, projectQuery, hostId]);
+
+  useEffect(() => {
+    document.getElementById(`${isDirectoryQuery ? "jj-picker-entry" : "jj-project-option"}-${isDirectoryQuery ? directoryIndex : projectIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [directoryBrowser, directoryIndex, isDirectoryQuery, projectIndex]);
 
   useEffect(() => {
     if (!snapshot) return;
@@ -390,10 +457,38 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [diffTarget?.path, diffTarget?.revision, hostId, path, rpc]);
 
   const revisions = snapshot?.revisions ?? [];
-  const graphRows = useMemo(() => layoutRevisionGraph(revisions), [revisions]);
+  const evolvedChangeIds = useMemo(() => {
+    const newestByChangeId = new Map<string, number>();
+    revisions.forEach((revision) => newestByChangeId.set(revision.changeId, Math.max(newestByChangeId.get(revision.changeId) ?? 0, revision.timestamp)));
+    return new Set(revisions.filter((revision) => revision.timestamp < (newestByChangeId.get(revision.changeId) ?? revision.timestamp)).map((revision) => revision.commitId));
+  }, [revisions]);
+  const graphItems = useMemo(() => {
+    const originalItems: GraphItem[] = revisions.map((revision) => ({ revision, isPreview: false }));
+    if (!pendingRebase) return originalItems;
+    const branchIds = new Set(pendingRebase.branch.map((revision) => revision.commitId));
+    const projectedItems: GraphItem[] = pendingRebase.branch.map((revision) => ({
+      isPreview: true,
+      originalId: revision.commitId,
+      revision: {
+        ...revision,
+        commitId: `${revision.commitId}:preview`,
+        timestamp: pendingRebase.destination.timestamp,
+        parents: revision.commitId === pendingRebase.source.commitId
+          ? [pendingRebase.destination.commitId]
+          : revision.parents.map((parentId) => branchIds.has(parentId) ? `${parentId}:preview` : parentId),
+      },
+    }));
+    const result: GraphItem[] = [];
+    revisions.forEach((revision) => {
+      if (revision.commitId === pendingRebase.destination.commitId) result.push(...projectedItems);
+      result.push({ revision, isPreview: false });
+    });
+    return result;
+  }, [pendingRebase, revisions]);
+  const graphRows = useMemo(() => layoutRevisionGraph(graphItems.map((item) => item.revision)), [graphItems]);
   const graphGroups = useMemo(() => {
-    const groups: { day: string; rows: { revision: Revision; row: RevisionGraphRow; index: number }[] }[] = [];
-    revisions.forEach((revision, index) => {
+    const groups: { day: string; rows: { revision: Revision; row: RevisionGraphRow; index: number; isPreview: boolean }[] }[] = [];
+    graphItems.forEach(({ revision, isPreview }, index) => {
       const row = graphRows[index];
       if (!row) return;
       const day = revisionDay(revision.timestamp);
@@ -402,10 +497,10 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         group = { day, rows: [] };
         groups.push(group);
       }
-      group.rows.push({ revision, row, index });
+      group.rows.push({ revision, row, index, isPreview });
     });
     return groups;
-  }, [graphRows, revisions]);
+  }, [graphItems, graphRows]);
   const revisionById = useMemo(() => new Map(revisions.map((revision) => [revision.commitId, revision])), [revisions]);
   const maximumLaneCount = graphRows.reduce((maximum, row) => Math.max(maximum, row.laneCount), 1);
   const graphWidth = Math.min(116, 20 + (maximumLaneCount - 1) * 16);
@@ -555,31 +650,32 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         {hosts.map((host) => <option key={host.id} value={host.id} disabled={host.status !== "connected"}>{host.name}{host.status === "connected" ? "" : " (disconnected)"}</option>)}
       </select>
       <div className="jj-path-picker">
-        <input className="jj-input jj-path" aria-label="Project path" list="jj-project-paths" placeholder="Choose BB project or paste path" value={path} onChange={(event) => changePath(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void refresh(); }} />
-        <button className="jj-button jj-browse" aria-label="Browse project folders" title="Browse project folders" disabled={!hostId || busy} onClick={() => void browseDirectory(path.trim() || undefined)}>▾</button>
+        <input className="jj-input jj-path" aria-label="Project path" placeholder="Choose a project folder…" value={path} readOnly aria-haspopup="dialog" onClick={openProjectPicker} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openProjectPicker(); }} />
       </div>
-      <datalist id="jj-project-paths">{availableProjectPaths.map((projectPath) => <option key={`${projectPath.name}:${projectPath.path}`} value={projectPath.path} label={projectPath.name} />)}</datalist>
       <button className="jj-button jj-refresh" disabled={busy || !path || !hostId} onClick={() => void refresh()}>{busy ? "Loading…" : "Refresh"}</button>
     </header>
     {error && <div role="alert" className="jj-error">{error}</div>}
     {!snapshot ? <div className="jj-empty">Choose a BB project path or paste a path inside a Jujutsu workspace.</div> : <>
-      <div className="jj-context"><span className="jj-context-path" title={snapshot.root}>{snapshot.root}</span><span>·</span><span>{snapshot.revisions.length} revisions</span><span>·</span><span>{snapshot.workspaces.length} workspaces</span></div>
+      <div className="jj-context"><span className="jj-context-path" title={snapshot.root}>{snapshot.root}</span><span>·</span><span>{snapshot.revisions.length} revisions</span><span>·</span><span>{snapshot.workspaces.length} workspaces</span><input className="jj-input jj-filter" aria-label="Filter revisions by description" placeholder="Filter descriptions…" value={graphQuery} onChange={(event) => setGraphQuery(event.target.value)} /></div>
+      {snapshot.lastPushAt !== null && <div className="jj-push-marker"><strong>Last recorded push</strong><span>to a jj Git remote</span><time title={new Date(snapshot.lastPushAt * 1000).toLocaleString()}>{relativeTime(snapshot.lastPushAt)}</time></div>}
       {tab === "graph" ? <main className="jj-history" aria-label="Jujutsu revision graph">
         {moveSource && <div className="jj-move-mode" role="status"><span>Choose where to move the branch from <strong>{label(moveSource)}</strong>.</span><button className="jj-button" onClick={() => setMoveSource(null)}>Cancel</button></div>}
-        {graphGroups.map((group) => <section className="jj-day-group" key={group.day}>
+        {graphGroups.filter((group) => group.rows.some(({ revision }) => !graphQuery.trim() || label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase()))).map((group) => <section className="jj-day-group" key={group.day}>
           <button className="jj-day-heading" aria-expanded={!collapsedDays.has(group.day)} onClick={() => setCollapsedDays((current) => {
             const next = new Set(current);
             if (next.has(group.day)) next.delete(group.day);
             else next.add(group.day);
             return next;
           })}><span className="jj-chevron">›</span><span>{group.day}</span><span className="jj-count">{group.rows.length}</span></button>
-          {!collapsedDays.has(group.day) && group.rows.map(({ revision, row: graphRow }) => {
+          {!collapsedDays.has(group.day) && group.rows.filter(({ revision }) => !graphQuery.trim() || label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase())).map(({ revision, row: graphRow, isPreview }) => {
             const isCurrent = revision.commitId === snapshot.currentRevision;
             const isSelected = selectedRevision?.commitId === revision.commitId;
-            const isDragged = draggedBranchIds.has(revision.commitId);
+            const isDragged = draggedBranchIds.has(revision.commitId) || Boolean(pendingRebase?.branch.some((branchRevision) => branchRevision.commitId === revision.commitId));
             const pendingHere = pendingRebase?.destination.commitId === revision.commitId;
-            return <article className="jj-revision" key={revision.commitId} data-selected={isSelected} data-current={isCurrent} data-dragged={isDragged} data-drop-target={dropTargetId === revision.commitId} onDragEnter={(event) => { event.preventDefault(); setDropTargetId(revision.commitId); }} onDragOver={(event) => { event.preventDefault(); setDropTargetId(revision.commitId); }} onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetId(null); }} onDrop={(event) => dropOnRevision(revision, event)} onContextMenu={(event) => { event.preventDefault(); openRevisionContextMenu(revision, event.clientX, event.clientY); }}>
-              <button className="jj-revision-button" style={{ gridTemplateColumns: `${graphWidth}px minmax(0,1fr) auto` }} aria-current={isCurrent ? "true" : undefined} aria-expanded={isSelected} onClick={() => handleRevisionClick(revision)} onKeyDown={(event) => { if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) { event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); openRevisionContextMenu(revision, bounds.left + 28, bounds.top + 24); } }} draggable onDragStart={(event) => {
+            const changePrefix = revision.changeIdPrefix;
+            const isEvolved = !isPreview && evolvedChangeIds.has(revision.commitId);
+            return <article className="jj-revision" key={revision.commitId} data-selected={isSelected} data-current={isCurrent} data-dragged={isDragged && !isPreview} data-moved={isDragged && !isPreview} data-preview={isPreview} data-drop-target={dropTargetId === revision.commitId} onDragEnter={(event) => { if (!isPreview) { event.preventDefault(); setDropTargetId(revision.commitId); } }} onDragOver={(event) => { if (!isPreview) { event.preventDefault(); setDropTargetId(revision.commitId); } }} onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetId(null); }} onDrop={(event) => { if (!isPreview) dropOnRevision(revision, event); }} onContextMenu={(event) => { if (!isPreview) { event.preventDefault(); openRevisionContextMenu(revision, event.clientX, event.clientY); } }}>
+              <button className="jj-revision-button" style={{ gridTemplateColumns: `${graphWidth}px minmax(0,1fr) auto` }} aria-current={isCurrent ? "true" : undefined} aria-expanded={isSelected} onClick={() => !isPreview && handleRevisionClick(revision)} onKeyDown={(event) => { if (!isPreview && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) { event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); openRevisionContextMenu(revision, bounds.left + 28, bounds.top + 24); } }} draggable={!isPreview} onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = "move";
                 event.dataTransfer.setData("text/jj-revision", revision.commitId);
                 setDraggedRevisionId(revision.commitId);
@@ -601,9 +697,9 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                 event.dataTransfer.setDragImage(ghost, 16, 16);
                 window.setTimeout(() => ghost.remove(), 0);
               }} onDragEnd={() => { setDraggedRevisionId(null); setDropTargetId(null); }}>
-                <RevisionGraphCell row={graphRow} width={graphWidth} laneGap={laneGap} current={isCurrent} />
+                <RevisionGraphCell row={graphRow} width={graphWidth} laneGap={laneGap} current={isCurrent} preview={isPreview} />
                 <span className="jj-revision-main">
-                  <span className="jj-revision-title"><span className="jj-revision-subject">{label(revision)}</span><span className="jj-revision-age" title={new Date(revision.timestamp * 1000).toLocaleString()}>{relativeTime(revision.timestamp)}</span></span>
+                  <span className="jj-revision-title">{isEvolved && <span className="jj-badge jj-badge-evolved">Evolved</span>}<span className="jj-revision-subject">{label(revision)}</span></span>
                   <span className="jj-labels">
                     {isCurrent && <span className="jj-badge jj-badge-current">@</span>}
                     {revision.bookmarks.map((bookmark) => <span className="jj-badge jj-badge-bookmark" key={bookmark}>{bookmark}</span>)}
@@ -611,7 +707,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                     {revision.workspaces.map((workspace) => <span className={`jj-badge jj-badge-workspace${workspace === "default" ? " jj-badge-workspace-default" : ""}`} key={workspace}>{workspace}</span>)}
                   </span>
                 </span>
-                <span className="jj-revision-meta"><code>{revision.changeId}</code><span className="jj-chevron">›</span></span>
+                <span className="jj-revision-meta"><time className="jj-revision-age" title={new Date(revision.timestamp * 1000).toLocaleString()}>{relativeTime(revision.timestamp)}</time><code className="jj-change-id" title={`Change ID ${revision.changeId}`}><span className="jj-change-id-prefix">{changePrefix}</span>{revision.changeId.slice(changePrefix.length)}</code><span className="jj-chevron">›</span></span>
               </button>
               {isSelected && renderRevisionDetails(revision)}
               {pendingHere && <div className="jj-rebase-preview" role="group" aria-label="Preview branch rebase">
@@ -690,19 +786,22 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         </div>
       </main>}
     </>}
-    {directoryBrowser && <div className="jj-picker-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDirectoryBrowser(null); }}>
-      <section className="jj-picker" role="dialog" aria-modal="true" aria-label="Choose project folder">
+    {projectPickerOpen && <div className="jj-picker-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setProjectPickerOpen(false); }}>
+      <section className="jj-picker" role="dialog" aria-modal="true" aria-label="Choose project">
         <div className="jj-picker-header">
-          <button className="jj-button" aria-label="Go to parent folder" title="Go to parent folder" disabled={!directoryBrowser.parent} onClick={() => directoryBrowser.parent && void browseDirectory(directoryBrowser.parent)}>←</button>
-          <div className="jj-picker-path"><input autoFocus aria-label="Current folder path" value={directoryPath} onChange={(event) => setDirectoryPath(event.target.value)} onKeyDown={handleDirectoryKeyDown} /></div>
-          <button className="jj-button" onClick={chooseDirectory}>Choose <kbd>⌘ Enter</kbd></button>
+          {isDirectoryQuery && <button className="jj-button" aria-label="Back to projects" onClick={() => { setProjectQuery(""); setDirectoryBrowser(null); }}>←</button>}
+          <div className="jj-picker-path"><input autoFocus aria-label="Search projects or enter a folder path" placeholder="Search projects or type / for a folder…" value={projectQuery} onChange={(event) => { const query = event.target.value; setProjectQuery(query); setProjectIndex(0); setDirectoryIndex(0); setDirectoryBrowser(null); setError(null); if (!query.startsWith("/")) directoryRequest.current += 1; }} onKeyDown={handleDirectoryKeyDown} /></div>
+          {isDirectoryQuery && <button className="jj-button" onClick={chooseDirectory}>Choose <kbd>⌘ Enter</kbd></button>}
         </div>
-        <div className="jj-picker-section">Directories</div>
-        <div className="jj-picker-list" role="listbox" aria-label="Directories">
-          {directoryEntries.map((entry, index) => <button id={`jj-picker-entry-${index}`} className="jj-picker-entry" key={entry.path} role="option" aria-selected={directoryIndex === index} data-active={directoryIndex === index} onMouseEnter={() => setDirectoryIndex(index)} onFocus={() => setDirectoryIndex(index)} onClick={() => void browseDirectory(entry.path)}><span className="jj-picker-entry-icon" aria-hidden="true">▱</span>{entry.name}</button>)}
-          {directoryEntries.length === 0 && <div className="jj-selection-hint">No subfolders.</div>}
+        <div className="jj-picker-section">{isDirectoryQuery ? "Folders" : "Projects"}</div>
+        <div className="jj-picker-list" role="listbox" aria-label={isDirectoryQuery ? "Folders" : "Projects"}>
+          {isDirectoryQuery ? directoryEntries.map((entry, index) => <button id={`jj-picker-entry-${index}`} className="jj-picker-entry" key={entry.path} role="option" aria-selected={directoryIndex === index} data-active={directoryIndex === index} onMouseEnter={() => setDirectoryIndex(index)} onFocus={() => setDirectoryIndex(index)} onClick={() => { setDirectoryIndex(index); void browseDirectory(entry.path); }}><span className="jj-picker-entry-icon" aria-hidden="true"></span>{entry.name}</button>) : filteredProjectPaths.map((projectPath, index) => <button id={`jj-project-option-${index}`} className="jj-project-option" key={`${projectPath.hostId}:${projectPath.name}:${projectPath.path}`} role="option" aria-selected={projectIndex === index} data-active={projectIndex === index} onMouseEnter={() => setProjectIndex(index)} onFocus={() => setProjectIndex(index)} onClick={() => chooseProjectPath(projectPath)}><span className="jj-project-mark" aria-hidden="true">{projectPath.name.slice(0, 2).toLocaleUpperCase()}</span><span className="jj-project-copy"><span>{projectPath.name}</span><small>Local · {projectPath.path}</small></span>{index < 9 && <kbd>⌘ {index + 1}</kbd>}</button>)}
+          {isDirectoryQuery && !directoryBrowser && <div className="jj-selection-hint">Loading folders…</div>}
+          {isDirectoryQuery && directoryBrowser && directoryEntries.length === 0 && <div className="jj-selection-hint">No subfolders here.</div>}
+          {!isDirectoryQuery && filteredProjectPaths.length === 0 && <div className="jj-selection-hint">No known projects match. Type / to browse folders.</div>}
+          {error && <div className="jj-error-inline" role="alert">{error}</div>}
         </div>
-        <footer className="jj-picker-footer"><span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span><span><kbd>Enter</kbd> Open</span><span><kbd>⌘ Enter</kbd> Choose</span><span><kbd>Backspace</kbd> Back</span><span><kbd>Esc</kbd> Close</span></footer>
+        <footer className="jj-picker-footer"><span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span><span><kbd>Enter</kbd> {isDirectoryQuery ? "Open" : "Select"}</span>{isDirectoryQuery && <><span><kbd>⌘ Enter</kbd> Choose folder</span><span><kbd>Backspace</kbd> Back</span></>}<span><kbd>Esc</kbd> Close</span></footer>
       </section>
     </div>}
     {revisionContextMenu && <>
