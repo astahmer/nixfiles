@@ -46,8 +46,6 @@ type DirectoryResult = {
 };
 type GraphItem = { revision: Revision; isPreview: boolean; originalId?: string };
 
-const graphPalette = ["#54a5ff", "#c586c0", "#4ec9b0", "#dcdcaa", "#ce9178", "#b5cea8"];
-const laneColor = (lane: number) => graphPalette[lane % graphPalette.length];
 const previewColor = "#a5df6f";
 const label = (revision: Revision) =>
   revision.description.trim().split("\n")[0] || "(no description)";
@@ -72,7 +70,7 @@ const revisionDay = (timestamp: number) => {
 };
 
 const styles = `
-.jj-page{--jj-line:var(--border);height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;position:relative;background:var(--background);color:var(--foreground);font:13px/1.45 var(--font-sans,system-ui);container-type:inline-size}
+.jj-page{--jj-line:var(--border);--jj-rail:color-mix(in srgb,var(--muted-foreground) 48%,var(--background));--jj-workspace:#4ec9b0;--jj-evolved:#b982ff;height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden;position:relative;background:var(--background);color:var(--foreground);font:13px/1.45 var(--font-sans,system-ui);container-type:inline-size}
 .jj-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--jj-line);flex:none}
 .jj-brand{font-size:14px;font-weight:650;white-space:nowrap;margin-right:4px}.jj-tabs{display:flex;gap:4px;margin-right:auto}.jj-tab,.jj-button{border:1px solid var(--jj-line);border-radius:6px;background:var(--card);color:var(--foreground);padding:6px 10px;cursor:pointer}.jj-tab[aria-selected=true],.jj-button-primary{background:var(--accent);font-weight:600}.jj-button:hover,.jj-tab:hover{background:var(--accent)}.jj-button:disabled{opacity:.5;cursor:not-allowed}
 .jj-input{border:1px solid var(--jj-line);border-radius:6px;background:var(--background);color:var(--foreground);padding:7px 9px;min-width:0}.jj-host{width:150px}.jj-path{flex:1;width:auto;min-width:140px}.jj-toolbar .jj-refresh{white-space:nowrap}
@@ -94,6 +92,17 @@ const styles = `
 .jj-picker{width:min(1000px,86vw);max-height:min(780px,84vh);padding:16px 10px 0;overflow:hidden}.jj-picker-header{padding:0 10px 12px;border-bottom:1px solid var(--jj-line)}.jj-picker-path input{height:44px;padding:0 8px;font:16px/1.4 var(--font-sans,system-ui)}.jj-picker-section{padding:16px 16px 8px;font-size:12px}.jj-picker-list{max-height:min(620px,65vh);min-height:160px;padding:0 7px 8px;overflow:auto}.jj-project-option{display:flex;width:100%;min-height:70px;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-project-option[data-active=true],.jj-project-option:hover{background:var(--accent)}.jj-project-option:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-project-option kbd{margin-left:auto;color:var(--muted-foreground)}.jj-project-mark{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:7px;background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary);font-size:10px;font-weight:700}.jj-project-option:nth-child(6n + 2) .jj-project-mark{background:#ff910022;color:#ff9100}.jj-project-option:nth-child(6n + 3) .jj-project-mark{background:#00bcd422;color:#00bcd4}.jj-project-option:nth-child(6n + 4) .jj-project-mark{background:#8b5cf622;color:#a78bfa}.jj-project-option:nth-child(6n + 5) .jj-project-mark{background:#10b98122;color:#10b981}.jj-project-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;font-size:15px}.jj-project-copy small{overflow:hidden;color:var(--muted-foreground);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.jj-picker-footer{justify-content:flex-start;gap:18px;padding:12px 16px;background:var(--background)}.jj-picker-entry{min-height:42px;padding:8px 12px;border-radius:8px}.jj-picker-error{padding:10px 16px;color:var(--destructive)}
 .jj-context{flex-wrap:wrap}.jj-filter{width:180px;margin-left:auto;padding:4px 7px;font:11px var(--font-sans,system-ui)}.jj-push-marker{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--jj-line);background:color-mix(in srgb,var(--muted) 10%,var(--background));color:var(--muted-foreground);font-size:10px}.jj-push-marker strong{font-weight:600;letter-spacing:.04em;text-transform:uppercase}.jj-push-marker time{margin-left:auto;font:10px var(--font-mono,monospace)}.jj-revision[data-moved=true]{opacity:.28;filter:saturate(.25)}.jj-revision[data-preview=true]{background:color-mix(in srgb,#a5df6f 10%,var(--background));box-shadow:inset 3px 0 #a5df6f}.jj-revision[data-preview=true] .jj-revision-subject,.jj-revision[data-preview=true] .jj-change-id{color:#a5df6f}.jj-revision[data-preview=true] .jj-badge{border-color:#a5df6f;color:#a5df6f}.jj-revision-title{gap:0}.jj-revision-meta{justify-content:flex-end;gap:8px}.jj-revision-age{color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-change-id{font:10px var(--font-mono,monospace);font-weight:650;letter-spacing:.02em}.jj-change-id-prefix{color:#4fc1ff}.jj-badge-evolved{background:color-mix(in srgb,#b982ff 18%,var(--background));border-color:color-mix(in srgb,#b982ff 55%,var(--jj-line));color:#b982ff}
 .jj-revision-button{min-height:29px;padding-block:0}.jj-graph-cell,.jj-graph-cell svg{height:29px}.jj-revision-main{min-width:0;flex-direction:row;align-items:center;gap:7px}.jj-revision-title{flex:1;min-width:0}.jj-revision-subject{font-size:12px}.jj-labels{min-width:0;max-width:42%;min-height:0;max-height:17px;flex:none;flex-wrap:nowrap}.jj-revision-meta{gap:6px}.jj-change-id{min-width:2ch;text-align:right}.jj-revision[data-empty=true] .jj-revision-subject{color:var(--muted-foreground);font-style:italic}.jj-badge-empty{background:color-mix(in srgb,#8b8b8b 14%,var(--background));border-color:#777;color:#aaa;font-size:9px}.jj-rebase-preview-branch[hidden]{display:none}.jj-preview-toggle{padding:3px 6px;border:1px solid var(--jj-line);border-radius:5px;background:var(--background);color:var(--foreground);font:inherit;cursor:pointer}.jj-context-menu{max-height:min(80vh,520px);overflow-y:auto;overscroll-behavior:contain}.jj-push-marker{min-height:26px;padding:4px 10px;border-block:1px solid color-mix(in srgb,var(--muted-foreground) 28%,var(--jj-line));background:color-mix(in srgb,var(--muted) 13%,var(--background));box-shadow:inset 3px 0 color-mix(in srgb,var(--muted-foreground) 38%,transparent)}
+.jj-day-heading{position:sticky;top:0;z-index:2;width:100%;height:23px;min-height:23px;display:grid;align-items:center;gap:4px;padding:0 8px 0 0;border:0;border-bottom:1px solid var(--jj-line);background:var(--background);color:var(--muted-foreground);font-size:10px;font-weight:700;letter-spacing:.07em;text-align:left;text-transform:uppercase;cursor:pointer}
+.jj-day-heading:hover{background:var(--accent);color:var(--foreground)}
+.jj-day-graph{position:relative;display:block;height:22px}
+.jj-day-graph svg{position:absolute;inset:0}
+.jj-day-heading-content{display:flex;min-width:0;align-items:center;gap:7px}
+.jj-day-heading-content .jj-count{margin-left:auto}
+.jj-day-heading .jj-chevron{transform:rotate(90deg)}
+.jj-day-heading[aria-expanded=false] .jj-chevron{transform:rotate(0)}
+.jj-revision-title{display:flex;flex:1;min-width:0;align-items:center;gap:4px;overflow:hidden;white-space:nowrap}
+.jj-revision-title .jj-badge{flex:none;max-width:160px}
+.jj-revision-subject{min-width:0;flex:1}
 `;
 
 const RevisionGraphCell = ({
@@ -103,6 +112,8 @@ const RevisionGraphCell = ({
   current,
   preview,
   empty,
+  evolved,
+  workspace,
 }: {
   row: RevisionGraphRow;
   width: number;
@@ -110,10 +121,27 @@ const RevisionGraphCell = ({
   current: boolean;
   preview: boolean;
   empty: boolean;
+  evolved: boolean;
+  workspace: boolean;
 }) => {
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = 21;
-  const color = (lane: number) => (preview ? previewColor : laneColor(lane));
+  const nodeColor = preview
+    ? previewColor
+    : current
+      ? "var(--primary)"
+      : evolved
+        ? "var(--jj-evolved)"
+        : workspace
+          ? "var(--jj-workspace)"
+          : "var(--primary)";
+  const fill = preview
+    ? previewColor
+    : current
+      ? "var(--primary)"
+      : workspace
+        ? "var(--jj-workspace)"
+        : "var(--background)";
 
   return (
     <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
@@ -126,16 +154,16 @@ const RevisionGraphCell = ({
               y1={middle}
               x2={center(edge.toLane)}
               y2="42"
-              stroke={color(edge.fromLane)}
-              strokeWidth="2"
+              stroke={preview ? previewColor : "var(--jj-rail)"}
+              strokeWidth="1.5"
             />
           ) : (
             <path
               key={`edge-${index}`}
               d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 8}, ${center(edge.toLane)} ${middle + 8}, ${center(edge.toLane)} 42`}
               fill="none"
-              stroke={color(edge.fromLane)}
-              strokeWidth="2"
+              stroke={preview ? previewColor : "var(--jj-rail)"}
+              strokeWidth="1.5"
             />
           ),
         )}
@@ -146,8 +174,8 @@ const RevisionGraphCell = ({
             y1="0"
             x2={center(lane)}
             y2={middle}
-            stroke={color(lane)}
-            strokeWidth="2"
+            stroke={preview ? previewColor : "var(--jj-rail)"}
+            strokeWidth="1.5"
           />
         ))}
         {!row.startsHere && (
@@ -156,8 +184,8 @@ const RevisionGraphCell = ({
             y1="0"
             x2={center(row.commitLane)}
             y2={middle}
-            stroke={color(row.commitLane)}
-            strokeWidth="2"
+            stroke={preview ? previewColor : "var(--jj-rail)"}
+            strokeWidth="1.5"
           />
         )}
         {row.bottomLanes.map((lane) => (
@@ -167,8 +195,8 @@ const RevisionGraphCell = ({
             y1={middle}
             x2={center(lane)}
             y2="42"
-            stroke={color(lane)}
-            strokeWidth="2"
+            stroke={preview ? previewColor : "var(--jj-rail)"}
+            strokeWidth="1.5"
           />
         ))}
         {empty ? (
@@ -178,8 +206,8 @@ const RevisionGraphCell = ({
             width="9"
             height="9"
             transform={`rotate(45 ${center(row.commitLane)} ${middle})`}
-            fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"}
-            stroke={color(row.commitLane)}
+            fill={fill}
+            stroke={nodeColor}
             strokeWidth="2"
             strokeDasharray="2 1"
           />
@@ -188,8 +216,8 @@ const RevisionGraphCell = ({
             cx={center(row.commitLane)}
             cy={middle}
             r="5"
-            fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"}
-            stroke={color(row.commitLane)}
+            fill={fill}
+            stroke={nodeColor}
             strokeWidth="2"
           />
         )}
@@ -716,7 +744,25 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       }
       group.rows.push({ revision, row, index, isPreview });
     });
-    return groups;
+    const dayCounts = new Map<string, number>();
+    groups.forEach((group) =>
+      dayCounts.set(group.day, (dayCounts.get(group.day) ?? 0) + group.rows.length),
+    );
+    const seenDays = new Set<string>();
+    return groups.map((group) => {
+      const firstRow = group.rows[0];
+      const showHeading = !seenDays.has(group.day);
+      seenDays.add(group.day);
+      return {
+        ...group,
+        activeLanes: [
+          ...firstRow.row.topLanes,
+          ...(firstRow.row.startsHere ? [] : [firstRow.row.commitLane]),
+        ].sort((left, right) => left - right),
+        dayCount: dayCounts.get(group.day) ?? group.rows.length,
+        showHeading,
+      };
+    });
   }, [graphItems, graphRows]);
   const revisionById = useMemo(
     () => new Map(revisions.map((revision) => [revision.commitId, revision])),
@@ -1047,23 +1093,46 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                   ),
                 )
                 .map((group) => (
-                  <section className="jj-day-group" key={group.day}>
-                    <button
-                      className="jj-day-heading"
-                      aria-expanded={!collapsedDays.has(group.day)}
-                      onClick={() =>
-                        setCollapsedDays((current) => {
-                          const next = new Set(current);
-                          if (next.has(group.day)) next.delete(group.day);
-                          else next.add(group.day);
-                          return next;
-                        })
-                      }
-                    >
-                      <span className="jj-chevron">›</span>
-                      <span>{group.day}</span>
-                      <span className="jj-count">{group.rows.length}</span>
-                    </button>
+                  <section
+                    className="jj-day-group"
+                    key={`${group.day}:${group.rows[0]?.revision.commitId ?? "empty"}`}
+                  >
+                    {group.showHeading && (
+                      <button
+                        className="jj-day-heading"
+                        style={{ gridTemplateColumns: `${graphWidth}px minmax(0,1fr)` }}
+                        aria-expanded={!collapsedDays.has(group.day)}
+                        onClick={() =>
+                          setCollapsedDays((current) => {
+                            const next = new Set(current);
+                            if (next.has(group.day)) next.delete(group.day);
+                            else next.add(group.day);
+                            return next;
+                          })
+                        }
+                      >
+                        <span className="jj-day-graph" aria-hidden="true">
+                          <svg width={graphWidth} height="22" viewBox={`0 0 ${graphWidth} 22`}>
+                            {group.activeLanes.map((lane) => (
+                              <line
+                                key={lane}
+                                x1={10 + lane * laneGap}
+                                y1="0"
+                                x2={10 + lane * laneGap}
+                                y2="22"
+                                stroke="var(--jj-rail)"
+                                strokeWidth="1.5"
+                              />
+                            ))}
+                          </svg>
+                        </span>
+                        <span className="jj-day-heading-content">
+                          <span className="jj-chevron">›</span>
+                          <span>{group.day}</span>
+                          <span className="jj-count">{group.dayCount}</span>
+                        </span>
+                      </button>
+                    )}
                     {!collapsedDays.has(group.day) &&
                       group.rows
                         .filter(
@@ -1203,21 +1272,25 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                     current={isCurrent}
                                     preview={isPreview}
                                     empty={revision.empty}
+                                    evolved={isEvolved}
+                                    workspace={revision.workspaces.length > 0}
                                   />
-                                  <span className="jj-revision-main">
+                                  <span
+                                    className="jj-revision-main"
+                                    style={{ marginLeft: graphRow.commitLane * laneGap }}
+                                  >
                                     <span className="jj-revision-title">
-                                      {isEvolved && (
-                                        <span className="jj-badge jj-badge-evolved">Evolved</span>
-                                      )}
-                                      {revision.empty && (
-                                        <span className="jj-badge jj-badge-empty">Empty</span>
-                                      )}
-                                      <span className="jj-revision-subject">{label(revision)}</span>
-                                    </span>
-                                    <span className="jj-labels">
                                       {isCurrent && (
                                         <span className="jj-badge jj-badge-current">@</span>
                                       )}
+                                      {revision.workspaces.map((workspace) => (
+                                        <span
+                                          className={`jj-badge jj-badge-workspace${workspace === "default" ? " jj-badge-workspace-default" : ""}`}
+                                          key={workspace}
+                                        >
+                                          {workspace}
+                                        </span>
+                                      ))}
                                       {revision.bookmarks.map((bookmark) => (
                                         <span className="jj-badge jj-badge-bookmark" key={bookmark}>
                                           {bookmark}
@@ -1228,14 +1301,13 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                           {tag}
                                         </span>
                                       ))}
-                                      {revision.workspaces.map((workspace) => (
-                                        <span
-                                          className={`jj-badge jj-badge-workspace${workspace === "default" ? " jj-badge-workspace-default" : ""}`}
-                                          key={workspace}
-                                        >
-                                          {workspace}
-                                        </span>
-                                      ))}
+                                      {isEvolved && (
+                                        <span className="jj-badge jj-badge-evolved">Evolved</span>
+                                      )}
+                                      {revision.empty && (
+                                        <span className="jj-badge jj-badge-empty">Empty</span>
+                                      )}
+                                      <span className="jj-revision-subject">{label(revision)}</span>
                                     </span>
                                   </span>
                                   <span className="jj-revision-meta">
