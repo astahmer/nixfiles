@@ -29,7 +29,7 @@ const styles = `
 .secret-editor{padding:16px;display:flex;flex-direction:column;gap:12px;max-width:600px}.secret-editor label{display:flex;flex-direction:column;gap:5px}.secret-editor input,.secret-editor select{border:1px solid var(--border);border-radius:6px;background:var(--background);color:var(--foreground);padding:8px}.secret-editor-note{color:var(--muted-foreground);font-size:11px}
 .secret-list-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:6px 8px;border-bottom:1px solid var(--border)}.secret-scope{display:flex;min-width:0;gap:2px}.secret-scope button{border:0;border-radius:5px;background:transparent;color:var(--muted-foreground);padding:6px 8px;cursor:pointer;font:inherit;font-size:12px}.secret-scope button[data-active=true]{background:var(--accent);color:var(--foreground)}.secret-list-head .secret-button{padding:6px 9px}.secret-picker-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;background:rgb(0 0 0/.58)}.secret-picker{display:flex;flex-direction:column;width:min(720px,92vw);max-height:min(760px,84vh);padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--foreground);box-shadow:0 18px 60px #000a}.secret-picker-header{display:flex;align-items:center;gap:8px}.secret-picker-path{min-width:0;flex:1}.secret-picker-path input{width:100%;box-sizing:border-box;border:0;background:transparent;color:var(--foreground);font:14px/1.4 var(--font-mono,monospace);outline:none}.secret-picker-section{padding:12px 4px 6px;color:var(--muted-foreground);font-size:11px}.secret-picker-list{min-height:120px;overflow:auto}.secret-picker-entry{display:flex;width:100%;align-items:center;gap:10px;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.secret-picker-entry[data-active=true],.secret-picker-entry:hover{background:var(--accent)}.secret-picker-entry:focus-visible{outline:2px solid var(--ring,var(--primary))}.secret-picker-entry-icon{width:18px;color:var(--muted-foreground)}.secret-picker-footer{display:flex;justify-content:center;gap:14px;padding:10px 4px 2px;border-top:1px solid var(--border);color:var(--muted-foreground);font-size:11px}.secret-picker-footer kbd{padding:2px 5px;border:1px solid var(--border);border-radius:4px;color:var(--foreground)}
 .secret-confirm-backdrop{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgb(0 0 0/.62)}.secret-confirm{width:min(440px,100%);padding:20px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--foreground);box-shadow:0 16px 48px #000a}.secret-confirm h2{margin:0 0 8px;font-size:16px}.secret-confirm p{margin:0 0 16px;color:var(--muted-foreground)}.secret-button-danger{border-color:var(--destructive);background:var(--destructive);color:var(--destructive-foreground,#fff)}.secret-button-danger:hover{filter:brightness(1.08)}
-.secret-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.secret-scope button:disabled{opacity:.45;cursor:default}.secret-picker-header .secret-button{display:flex;align-items:center;gap:4px}.secret-picker-header .secret-button kbd{margin-left:5px;color:var(--muted-foreground);font-size:10px}.secret-picker-entry-icon{position:relative;display:flex;align-items:center}.secret-picker-entry-icon:before{content:"";display:block;width:13px;height:9px;border:1.5px solid currentColor;border-radius:2px}.secret-picker-entry-icon:after{content:"";position:absolute;top:1px;left:2px;width:5px;height:2px;border:1.5px solid currentColor;border-bottom:0;border-radius:2px 2px 0 0}
+.secret-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.secret-scope button:disabled{opacity:.45;cursor:default}.secret-picker-header .secret-button{display:flex;align-items:center;gap:4px}.secret-picker-header .secret-button kbd{margin-left:5px;color:var(--muted-foreground);font-size:10px}.secret-picker-entry-icon{position:relative;display:flex;align-items:center}.secret-picker-entry-icon:before{content:"";display:block;width:13px;height:9px;border:1.5px solid currentColor;border-radius:2px}.secret-picker-entry-icon:after{content:"";position:absolute;top:1px;left:2px;width:5px;height:2px;border:1.5px solid currentColor;border-bottom:0;border-radius:2px 2px 0 0}.secret-toolbar .secret-project-picker .secret-path{border-radius:6px;cursor:pointer}.secret-project-picker .secret-path:hover{border-color:var(--ring,var(--primary))}.secret-picker{width:min(1000px,86vw);max-height:min(780px,84vh);padding:16px 10px 0;overflow:hidden}.secret-picker-header{padding:0 10px 12px;border-bottom:1px solid var(--border)}.secret-picker-header .secret-button{flex:none}.secret-picker-path input{height:44px;padding:0 8px;font:16px/1.4 var(--font-sans,system-ui)}.secret-picker-section{padding:16px 16px 8px;font-size:12px}.secret-picker-list{max-height:min(620px,65vh);min-height:160px;padding:0 7px 8px;overflow:auto}.secret-project-option{display:flex;width:100%;min-height:70px;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.secret-project-option[data-active=true],.secret-project-option:hover{background:var(--accent)}.secret-project-option:focus-visible{outline:2px solid var(--ring,var(--primary))}.secret-project-option kbd{margin-left:auto;color:var(--muted-foreground)}.secret-project-mark{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:7px;background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary);font-size:10px;font-weight:700}.secret-project-option:nth-child(6n + 2) .secret-project-mark{background:#ff910022;color:#ff9100}.secret-project-option:nth-child(6n + 3) .secret-project-mark{background:#00bcd422;color:#00bcd4}.secret-project-option:nth-child(6n + 4) .secret-project-mark{background:#8b5cf622;color:#a78bfa}.secret-project-option:nth-child(6n + 5) .secret-project-mark{background:#10b98122;color:#10b981}.secret-project-option-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;font-size:15px}.secret-project-option-copy small{overflow:hidden;color:var(--muted-foreground);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.secret-picker-footer{justify-content:flex-start;gap:18px;padding:12px 16px;background:var(--background)}.secret-picker-error{padding:10px 16px;color:var(--destructive)}
 @media(max-width:700px){.secret-toolbar{flex-wrap:wrap}.secret-brand{width:100%}.secret-host{width:40%}.secret-project-picker{flex:1}.secret-content{flex-direction:column}.secret-list{width:100%;min-width:0;max-height:48%;border-right:0;border-bottom:1px solid var(--border)}.secret-path{width:60vw}.secret-list-head{flex-wrap:wrap}}
 `;
 
@@ -295,12 +295,14 @@ function Page() {
       setProjectQuery(result.directory);
       setBrowserIndex(0);
     } catch (cause) {
+      if (requestId !== directoryRequest.current) return;
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   };
 
   const chooseProject = async () => {
     if (!hostId || !projectQuery.trim()) return;
+    directoryRequest.current += 1;
     const selectedPath = projectQuery.trim();
     setCwd(selectedPath);
     setBrowser(null);
@@ -310,8 +312,10 @@ function Page() {
   };
 
   const chooseKnownProject = async (project: KnownProjectPath) => {
+    directoryRequest.current += 1;
     setProjectQuery("");
     setProjectPickerOpen(false);
+    setHostId(project.hostId);
     setCwd(project.path);
     setActiveScope("all");
     await loadEntries(project.hostId, "all", project.path);
@@ -333,9 +337,11 @@ function Page() {
     }
     if (!isDirectoryQuery && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
-      setProjectIndex((current) => event.key === "ArrowDown"
-        ? Math.min(current + 1, filteredProjects.length - 1)
-        : Math.max(current - 1, 0));
+      setProjectIndex((current) =>
+        event.key === "ArrowDown"
+          ? Math.max(0, Math.min(current + 1, filteredProjects.length - 1))
+          : Math.max(current - 1, 0),
+      );
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -365,11 +371,17 @@ function Page() {
       else if (projectQuery.trim()) void browseDirectory(projectQuery.trim());
       return;
     }
-    if (isDirectoryQuery && event.key === "Backspace" && event.currentTarget.selectionStart === 0 && browser?.parent) {
+    if (
+      isDirectoryQuery &&
+      event.key === "Backspace" &&
+      event.currentTarget.selectionStart === 0 &&
+      browser?.parent
+    ) {
       event.preventDefault();
       setProjectQuery(browser.parent);
     }
     if (event.key === "Escape") {
+      directoryRequest.current += 1;
       setProjectPickerOpen(false);
       setBrowser(null);
     }
@@ -384,7 +396,9 @@ function Page() {
 
   useEffect(() => {
     document
-      .getElementById(`${isDirectoryQuery ? "secret-picker-entry" : "secret-project-option"}-${isDirectoryQuery ? browserIndex : projectIndex}`)
+      .getElementById(
+        `${isDirectoryQuery ? "secret-picker-entry" : "secret-project-option"}-${isDirectoryQuery ? browserIndex : projectIndex}`,
+      )
       ?.scrollIntoView({ block: "nearest" });
   }, [browserIndex, browser, isDirectoryQuery, projectIndex]);
 
@@ -450,7 +464,10 @@ function Page() {
         <div
           className="secret-picker-backdrop"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setProjectPickerOpen(false);
+            if (event.target === event.currentTarget) {
+              directoryRequest.current += 1;
+              setProjectPickerOpen(false);
+            }
           }}
         >
           <section
@@ -459,66 +476,132 @@ function Page() {
             aria-modal="true"
             aria-labelledby="secret-picker-title"
           >
-            <h2 id="secret-picker-title" className="secret-sr-only">Choose project</h2>
+            <h2 id="secret-picker-title" className="secret-sr-only">
+              Choose project
+            </h2>
             <div className="secret-picker-header">
-              {isDirectoryQuery && <button className="secret-button" aria-label="Back to projects" onClick={() => { setProjectQuery(""); setBrowser(null); }}>←</button>}
+              {isDirectoryQuery && (
+                <button
+                  className="secret-button"
+                  aria-label="Back to projects"
+                  onClick={() => {
+                    setProjectQuery("");
+                    setBrowser(null);
+                  }}
+                >
+                  ←
+                </button>
+              )}
               <div className="secret-picker-path">
                 <input
                   autoFocus
                   aria-label="Search projects or enter a folder path"
                   placeholder="Search projects or type / for a folder…"
                   value={projectQuery}
-                  onChange={(event) => { const query = event.target.value; setProjectQuery(query); setProjectIndex(0); setBrowserIndex(0); setBrowser(null); setError(null); if (!query.startsWith("/")) directoryRequest.current += 1; }}
+                  onChange={(event) => {
+                    const query = event.target.value;
+                    setProjectQuery(query);
+                    setProjectIndex(0);
+                    setBrowserIndex(0);
+                    setBrowser(null);
+                    setError(null);
+                    if (!query.startsWith("/")) directoryRequest.current += 1;
+                  }}
                   onKeyDown={handleBrowserKeyDown}
                 />
               </div>
-              {isDirectoryQuery && <button className="secret-button" onClick={() => void chooseProject()}>Choose <kbd>⌘ Enter</kbd></button>}
+              {isDirectoryQuery && (
+                <button className="secret-button" onClick={() => void chooseProject()}>
+                  Choose <kbd>⌘ Enter</kbd>
+                </button>
+              )}
             </div>
             <div className="secret-picker-section">{isDirectoryQuery ? "Folders" : "Projects"}</div>
-            <div className="secret-picker-list" role="listbox" aria-label={isDirectoryQuery ? "Folders" : "Projects"}>
-              {isDirectoryQuery ? directories.map((entry, index) => (
-                <button
-                  id={`secret-picker-entry-${index}`}
-                  className="secret-picker-entry"
-                  key={entry.path}
-                  role="option"
-                  aria-selected={browserIndex === index}
-                  data-active={browserIndex === index}
-                  onMouseEnter={() => setBrowserIndex(index)}
-                  onFocus={() => setBrowserIndex(index)}
-                  onClick={() => { setBrowserIndex(index); void browseDirectory(entry.path); }}
-                >
-                  <span className="secret-picker-entry-icon" aria-hidden="true"></span>
-                  {entry.name}
-                </button>
-              )) : filteredProjects.map((project, index) => (
-                <button
-                  id={`secret-project-option-${index}`}
-                  className="secret-project-option"
-                  key={`${project.hostId}:${project.name}:${project.path}`}
-                  role="option"
-                  aria-selected={projectIndex === index}
-                  data-active={projectIndex === index}
-                  onMouseEnter={() => setProjectIndex(index)}
-                  onFocus={() => setProjectIndex(index)}
-                  onClick={() => void chooseKnownProject(project)}
-                >
-                  <span className="secret-project-mark" aria-hidden="true">{project.name.slice(0, 2).toLocaleUpperCase()}</span>
-                  <span className="secret-project-option-copy"><span>{project.name}</span><small>Local · {project.path}</small></span>
-                  {index < 9 && <kbd>⌘ {index + 1}</kbd>}
-                </button>
-              ))}
+            <div
+              className="secret-picker-list"
+              role="listbox"
+              aria-label={isDirectoryQuery ? "Folders" : "Projects"}
+            >
+              {isDirectoryQuery
+                ? directories.map((entry, index) => (
+                    <button
+                      id={`secret-picker-entry-${index}`}
+                      className="secret-picker-entry"
+                      key={entry.path}
+                      role="option"
+                      aria-selected={browserIndex === index}
+                      data-active={browserIndex === index}
+                      onMouseEnter={() => setBrowserIndex(index)}
+                      onFocus={() => setBrowserIndex(index)}
+                      onClick={() => {
+                        setBrowserIndex(index);
+                        void browseDirectory(entry.path);
+                      }}
+                    >
+                      <span className="secret-picker-entry-icon" aria-hidden="true"></span>
+                      {entry.name}
+                    </button>
+                  ))
+                : filteredProjects.map((project, index) => (
+                    <button
+                      id={`secret-project-option-${index}`}
+                      className="secret-project-option"
+                      key={`${project.hostId}:${project.name}:${project.path}`}
+                      role="option"
+                      aria-selected={projectIndex === index}
+                      data-active={projectIndex === index}
+                      onMouseEnter={() => setProjectIndex(index)}
+                      onFocus={() => setProjectIndex(index)}
+                      onClick={() => void chooseKnownProject(project)}
+                    >
+                      <span className="secret-project-mark" aria-hidden="true">
+                        {project.name.slice(0, 2).toLocaleUpperCase()}
+                      </span>
+                      <span className="secret-project-option-copy">
+                        <span>{project.name}</span>
+                        <small>
+                          {hosts.find((host) => host.id === project.hostId)?.name ?? "Machine"} ·{" "}
+                          {project.path}
+                        </small>
+                      </span>
+                      {index < 9 && <kbd>⌘ {index + 1}</kbd>}
+                    </button>
+                  ))}
               {isDirectoryQuery && !browser && <div className="secret-empty">Loading folders…</div>}
-              {isDirectoryQuery && browser && directories.length === 0 && <div className="secret-empty">No subfolders here.</div>}
-              {!isDirectoryQuery && filteredProjects.length === 0 && <div className="secret-empty">No known projects match. Type / to browse folders.</div>}
-              {error && <div className="secret-picker-error" role="alert">{error}</div>}
+              {isDirectoryQuery && browser && directories.length === 0 && (
+                <div className="secret-empty">No subfolders here.</div>
+              )}
+              {!isDirectoryQuery && filteredProjects.length === 0 && (
+                <div className="secret-empty">
+                  No known projects match. Type / to browse folders.
+                </div>
+              )}
+              {error && (
+                <div className="secret-picker-error" role="alert">
+                  {error}
+                </div>
+              )}
             </div>
             <footer className="secret-picker-footer">
-              <span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span>
-              <span><kbd>Enter</kbd> {isDirectoryQuery ? "Open" : "Select"}</span>
-              {isDirectoryQuery && <span><kbd>⌘ Enter</kbd> Choose folder</span>}
-              {isDirectoryQuery && <span><kbd>Backspace</kbd> Back</span>}
-              <span><kbd>Esc</kbd> Close</span>
+              <span>
+                <kbd>↑</kbd> <kbd>↓</kbd> Navigate
+              </span>
+              <span>
+                <kbd>Enter</kbd> {isDirectoryQuery ? "Open" : "Select"}
+              </span>
+              {isDirectoryQuery && (
+                <span>
+                  <kbd>⌘ Enter</kbd> Choose folder
+                </span>
+              )}
+              {isDirectoryQuery && (
+                <span>
+                  <kbd>Backspace</kbd> Back
+                </span>
+              )}
+              <span>
+                <kbd>Esc</kbd> Close
+              </span>
             </footer>
           </section>
         </div>

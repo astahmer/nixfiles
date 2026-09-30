@@ -47,18 +47,23 @@ type GraphItem = { revision: Revision; isPreview: boolean; originalId?: string }
 const graphPalette = ["#54a5ff", "#c586c0", "#4ec9b0", "#dcdcaa", "#ce9178", "#b5cea8"];
 const laneColor = (lane: number) => graphPalette[lane % graphPalette.length];
 const previewColor = "#a5df6f";
-const label = (revision: Revision) => revision.description.trim().split("\n")[0] || "(no description)";
+const label = (revision: Revision) =>
+  revision.description.trim().split("\n")[0] || "(no description)";
 const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const relativeTime = (timestamp: number) => {
   const elapsedSeconds = timestamp - Date.now() / 1000;
   const elapsedMinutes = elapsedSeconds / 60;
   const elapsedHours = elapsedMinutes / 60;
   const elapsedDays = elapsedHours / 24;
-  if (Math.abs(elapsedSeconds) < 60) return relativeTimeFormat.format(Math.round(elapsedSeconds), "second");
-  if (Math.abs(elapsedMinutes) < 60) return relativeTimeFormat.format(Math.round(elapsedMinutes), "minute");
-  if (Math.abs(elapsedHours) < 24) return relativeTimeFormat.format(Math.round(elapsedHours), "hour");
+  if (Math.abs(elapsedSeconds) < 60)
+    return relativeTimeFormat.format(Math.round(elapsedSeconds), "second");
+  if (Math.abs(elapsedMinutes) < 60)
+    return relativeTimeFormat.format(Math.round(elapsedMinutes), "minute");
+  if (Math.abs(elapsedHours) < 24)
+    return relativeTimeFormat.format(Math.round(elapsedHours), "hour");
   if (Math.abs(elapsedDays) < 30) return relativeTimeFormat.format(Math.round(elapsedDays), "day");
-  if (Math.abs(elapsedDays) < 365) return relativeTimeFormat.format(Math.round(elapsedDays / 30), "month");
+  if (Math.abs(elapsedDays) < 365)
+    return relativeTimeFormat.format(Math.round(elapsedDays / 30), "month");
   return relativeTimeFormat.format(Math.round(elapsedDays / 365), "year");
 };
 const revisionDay = (timestamp: number) => {
@@ -92,10 +97,17 @@ const styles = `
 .jj-day-heading{position:sticky;top:0;z-index:2;width:100%;display:flex;align-items:center;gap:7px;padding:6px 10px;border:0;border-bottom:1px solid var(--jj-line);background:var(--background);color:var(--muted-foreground);font-size:11px;font-weight:700;letter-spacing:.06em;text-align:left;text-transform:uppercase;cursor:pointer}.jj-day-heading:hover{background:var(--accent);color:var(--foreground)}.jj-day-heading .jj-count{margin-left:auto}.jj-day-heading .jj-chevron{transform:rotate(90deg)}.jj-day-heading[aria-expanded=false] .jj-chevron{transform:rotate(0)}.jj-move-mode{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid var(--jj-line);background:var(--card);box-shadow:0 3px 12px #0003}.jj-revision[data-dragged=true]{opacity:.42;transform:scale(.99);transition:opacity .12s,transform .12s}.jj-revision[data-drop-target=true]>.jj-revision-button{background:color-mix(in srgb,var(--primary) 18%,var(--background));box-shadow:inset 0 2px var(--primary)}.jj-rebase-preview{position:relative;margin:7px 12px 12px 24px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--primary) 55%,var(--jj-line));border-radius:8px;background:color-mix(in srgb,var(--primary) 7%,var(--card));animation:jj-rebase-enter .18s ease-out;box-shadow:0 8px 24px #0002}.jj-rebase-preview::before{position:absolute;left:-15px;top:-7px;bottom:calc(100% - 12px);width:2px;background:var(--primary);content:""}.jj-rebase-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px;font-size:12px}.jj-rebase-preview-heading>span:last-child{color:var(--muted-foreground);font-size:11px;white-space:nowrap}.jj-rebase-preview-branch{max-height:180px;overflow:auto;border-left:2px solid var(--primary);margin-left:5px;padding-left:10px}.jj-rebase-preview-row{display:flex;align-items:center;gap:8px;min-height:27px;animation:jj-rebase-row-enter .18s ease-out both}.jj-rebase-preview-row:nth-child(2){animation-delay:25ms}.jj-rebase-preview-row:nth-child(3){animation-delay:50ms}.jj-rebase-preview-row:nth-child(4){animation-delay:75ms}.jj-rebase-preview-node{width:9px;height:9px;flex:none;border:2px solid var(--primary);border-radius:50%;background:var(--background);margin-left:-16px}.jj-rebase-preview-row code{margin-left:auto;color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-rebase-preview .jj-confirm-code{display:block;max-width:100%;overflow:auto;margin-top:9px}.jj-rebase-preview-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}@keyframes jj-rebase-enter{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}@keyframes jj-rebase-row-enter{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
 .jj-context-backdrop{position:fixed;inset:0;z-index:40}.jj-context-menu{position:fixed;z-index:41;min-width:190px;padding:5px;border:1px solid var(--jj-line);border-radius:8px;background:var(--popover,var(--card));box-shadow:0 12px 36px #0008}.jj-context-menu button{width:100%;padding:7px 9px;border:0;border-radius:5px;background:transparent;color:var(--foreground);font:inherit;text-align:left;cursor:pointer}.jj-context-menu button:hover,.jj-context-menu button:focus-visible{background:var(--accent);outline:none}.jj-context-menu button:disabled{opacity:.45;cursor:default}.jj-context-menu-separator{height:1px;margin:4px 2px;background:var(--jj-line)}
 .jj-path-picker{display:flex;min-width:0;flex:1}.jj-path-picker .jj-path{border-radius:6px 0 0 6px}.jj-path-picker .jj-browse{border-radius:0 6px 6px 0;white-space:nowrap}.jj-picker-backdrop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;padding:24px;background:rgb(0 0 0/.58)}.jj-picker{display:flex;flex-direction:column;width:min(720px,92vw);max-height:min(760px,84vh);padding:12px;border:1px solid var(--jj-line);border-radius:14px;background:var(--card);box-shadow:0 18px 60px #000a}.jj-picker-header{display:flex;align-items:center;gap:8px}.jj-picker-path{min-width:0;flex:1}.jj-picker-path input{width:100%;box-sizing:border-box;border:0;background:transparent;color:var(--foreground);font:14px/1.4 var(--font-mono,monospace);outline:none}.jj-picker-section{padding:12px 4px 6px;color:var(--muted-foreground);font-size:11px}.jj-picker-list{min-height:120px;overflow:auto}.jj-picker-entry{display:flex;width:100%;align-items:center;gap:10px;padding:7px 9px;border:0;border-radius:6px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-picker-entry[data-active=true],.jj-picker-entry:hover{background:var(--accent)}.jj-picker-entry:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-picker-entry-icon{width:18px;color:var(--muted-foreground)}.jj-picker-footer{display:flex;justify-content:center;gap:14px;padding:10px 4px 2px;border-top:1px solid var(--jj-line);color:var(--muted-foreground);font-size:11px}.jj-picker-footer kbd{padding:2px 5px;border:1px solid var(--jj-line);border-radius:4px;color:var(--foreground)}
+.jj-picker{width:min(1000px,86vw);max-height:min(780px,84vh);padding:16px 10px 0;overflow:hidden}.jj-picker-header{padding:0 10px 12px;border-bottom:1px solid var(--jj-line)}.jj-picker-path input{height:44px;padding:0 8px;font:16px/1.4 var(--font-sans,system-ui)}.jj-picker-section{padding:16px 16px 8px;font-size:12px}.jj-picker-list{max-height:min(620px,65vh);min-height:160px;padding:0 7px 8px;overflow:auto}.jj-project-option{display:flex;width:100%;min-height:70px;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-project-option[data-active=true],.jj-project-option:hover{background:var(--accent)}.jj-project-option:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-project-option kbd{margin-left:auto;color:var(--muted-foreground)}.jj-project-mark{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:7px;background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary);font-size:10px;font-weight:700}.jj-project-option:nth-child(6n + 2) .jj-project-mark{background:#ff910022;color:#ff9100}.jj-project-option:nth-child(6n + 3) .jj-project-mark{background:#00bcd422;color:#00bcd4}.jj-project-option:nth-child(6n + 4) .jj-project-mark{background:#8b5cf622;color:#a78bfa}.jj-project-option:nth-child(6n + 5) .jj-project-mark{background:#10b98122;color:#10b981}.jj-project-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;font-size:15px}.jj-project-copy small{overflow:hidden;color:var(--muted-foreground);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.jj-picker-footer{justify-content:flex-start;gap:18px;padding:12px 16px;background:var(--background)}.jj-picker-entry{min-height:42px;padding:8px 12px;border-radius:8px}.jj-picker-error{padding:10px 16px;color:var(--destructive)}
 .jj-context{flex-wrap:wrap}.jj-filter{width:180px;margin-left:auto;padding:4px 7px;font:11px var(--font-sans,system-ui)}.jj-push-marker{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--jj-line);background:color-mix(in srgb,var(--muted) 10%,var(--background));color:var(--muted-foreground);font-size:10px}.jj-push-marker strong{font-weight:600;letter-spacing:.04em;text-transform:uppercase}.jj-push-marker time{margin-left:auto;font:10px var(--font-mono,monospace)}.jj-revision[data-moved=true]{opacity:.28;filter:saturate(.25)}.jj-revision[data-preview=true]{background:color-mix(in srgb,#a5df6f 10%,var(--background));box-shadow:inset 3px 0 #a5df6f}.jj-revision[data-preview=true] .jj-revision-subject,.jj-revision[data-preview=true] .jj-change-id{color:#a5df6f}.jj-revision[data-preview=true] .jj-badge{border-color:#a5df6f;color:#a5df6f}.jj-revision-title{gap:0}.jj-revision-meta{justify-content:flex-end;gap:8px}.jj-revision-age{color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-change-id{font:10px var(--font-mono,monospace);font-weight:650;letter-spacing:.02em}.jj-change-id-prefix{color:#4fc1ff}.jj-badge-evolved{background:color-mix(in srgb,#b982ff 18%,var(--background));border-color:color-mix(in srgb,#b982ff 55%,var(--jj-line));color:#b982ff}
 `;
 
-const RevisionGraphCell = ({ row, width, laneGap, current, preview }: {
+const RevisionGraphCell = ({
+  row,
+  width,
+  laneGap,
+  current,
+  preview,
+}: {
   row: RevisionGraphRow;
   width: number;
   laneGap: number;
@@ -104,30 +116,101 @@ const RevisionGraphCell = ({ row, width, laneGap, current, preview }: {
 }) => {
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = 21;
-  const color = (lane: number) => preview ? previewColor : laneColor(lane);
+  const color = (lane: number) => (preview ? previewColor : laneColor(lane));
 
-  return <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
-    <svg width={width} height="42" viewBox={`0 0 ${width} 42`}>
-      {row.edges.map((edge, index) => edge.kind === "straight"
-        ? <line key={`edge-${index}`} x1={center(edge.fromLane)} y1={middle} x2={center(edge.toLane)} y2="42" stroke={color(edge.fromLane)} strokeWidth="2" />
-        : <path key={`edge-${index}`} d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 8}, ${center(edge.toLane)} ${middle + 8}, ${center(edge.toLane)} 42`} fill="none" stroke={color(edge.fromLane)} strokeWidth="2" />)}
-      {row.topLanes.map((lane) => <line key={`top-${lane}`} x1={center(lane)} y1="0" x2={center(lane)} y2={middle} stroke={color(lane)} strokeWidth="2" />)}
-      {!row.startsHere && <line x1={center(row.commitLane)} y1="0" x2={center(row.commitLane)} y2={middle} stroke={color(row.commitLane)} strokeWidth="2" />}
-      {row.bottomLanes.map((lane) => <line key={`bottom-${lane}`} x1={center(lane)} y1={middle} x2={center(lane)} y2="42" stroke={color(lane)} strokeWidth="2" />)}
-      <circle cx={center(row.commitLane)} cy={middle} r="5" fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"} stroke={color(row.commitLane)} strokeWidth="2" />
-    </svg>
-  </span>;
+  return (
+    <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
+      <svg width={width} height="42" viewBox={`0 0 ${width} 42`}>
+        {row.edges.map((edge, index) =>
+          edge.kind === "straight" ? (
+            <line
+              key={`edge-${index}`}
+              x1={center(edge.fromLane)}
+              y1={middle}
+              x2={center(edge.toLane)}
+              y2="42"
+              stroke={color(edge.fromLane)}
+              strokeWidth="2"
+            />
+          ) : (
+            <path
+              key={`edge-${index}`}
+              d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 8}, ${center(edge.toLane)} ${middle + 8}, ${center(edge.toLane)} 42`}
+              fill="none"
+              stroke={color(edge.fromLane)}
+              strokeWidth="2"
+            />
+          ),
+        )}
+        {row.topLanes.map((lane) => (
+          <line
+            key={`top-${lane}`}
+            x1={center(lane)}
+            y1="0"
+            x2={center(lane)}
+            y2={middle}
+            stroke={color(lane)}
+            strokeWidth="2"
+          />
+        ))}
+        {!row.startsHere && (
+          <line
+            x1={center(row.commitLane)}
+            y1="0"
+            x2={center(row.commitLane)}
+            y2={middle}
+            stroke={color(row.commitLane)}
+            strokeWidth="2"
+          />
+        )}
+        {row.bottomLanes.map((lane) => (
+          <line
+            key={`bottom-${lane}`}
+            x1={center(lane)}
+            y1={middle}
+            x2={center(lane)}
+            y2="42"
+            stroke={color(lane)}
+            strokeWidth="2"
+          />
+        ))}
+        <circle
+          cx={center(row.commitLane)}
+          cy={middle}
+          r="5"
+          fill={current ? "var(--primary)" : preview ? previewColor : "var(--background)"}
+          stroke={color(row.commitLane)}
+          strokeWidth="2"
+        />
+      </svg>
+    </span>
+  );
 };
 
-const DiffPreview = ({ path, patch, loading, error }: {
+const DiffPreview = ({
+  path,
+  patch,
+  loading,
+  error,
+}: {
   path: string | null;
   patch: string | null;
   loading: boolean;
   error: string | null;
 }) => {
   if (!path) return <div className="jj-diff-empty">Select a changed file to preview its diff.</div>;
-  if (loading) return <div className="jj-diff-empty" role="status">Loading diff…</div>;
-  if (error) return <div className="jj-error-inline" role="alert">{error}</div>;
+  if (loading)
+    return (
+      <div className="jj-diff-empty" role="status">
+        Loading diff…
+      </div>
+    );
+  if (error)
+    return (
+      <div className="jj-error-inline" role="alert">
+        {error}
+      </div>
+    );
   if (!patch) return <div className="jj-diff-empty">No textual diff for this file.</div>;
   return <BbDiff patch={patch} path={path} overflow="scroll" />;
 };
@@ -136,11 +219,17 @@ const FilePath = ({ path }: { path: string }) => {
   const parts = path.split("/");
   const fileName = parts.pop() ?? path;
   const directory = parts.join("/");
-  return <span className="jj-file-path" title={path}>{directory && <span className="jj-file-directory">{directory}/</span>}<span className="jj-file-name">{fileName}</span></span>;
+  return (
+    <span className="jj-file-path" title={path}>
+      {directory && <span className="jj-file-directory">{directory}/</span>}
+      <span className="jj-file-name">{fileName}</span>
+    </span>
+  );
 };
 
 const statusClass = (status: string) => {
-  if (status === "A" || status === "?" || status.toLowerCase().includes("added")) return "jj-status-added";
+  if (status === "A" || status === "?" || status.toLowerCase().includes("added"))
+    return "jj-status-added";
   if (status === "D" || status.toLowerCase().includes("deleted")) return "jj-status-deleted";
   if (status === "R" || status.toLowerCase().includes("renamed")) return "jj-status-renamed";
   return "";
@@ -148,7 +237,16 @@ const statusClass = (status: string) => {
 
 const ThreadHeaderAction = () => {
   const navigation = useBbNavigate();
-  return <button type="button" className="jj-button" aria-label="Open Jujutsu workbench" onClick={() => navigation.openThreadPanel({ actionId: "thread-workbench", title: "Jujutsu" })}>JJ</button>;
+  return (
+    <button
+      type="button"
+      className="jj-button"
+      aria-label="Open Jujutsu workbench"
+      onClick={() => navigation.openThreadPanel({ actionId: "thread-workbench", title: "Jujutsu" })}
+    >
+      JJ
+    </button>
+  );
 };
 
 const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
@@ -174,7 +272,9 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [workingDescription, setWorkingDescription] = useState("");
   const [editingWorkingDescription, setEditingWorkingDescription] = useState(false);
   const [splitMessage, setSplitMessage] = useState("Split selected files from @");
-  const [recentDepth, setRecentDepth] = useState(() => Number(localStorage.getItem("jj-plugin-recent") ?? 10));
+  const [recentDepth, setRecentDepth] = useState(() =>
+    Number(localStorage.getItem("jj-plugin-recent") ?? 10),
+  );
   const [selectedWorkingFiles, setSelectedWorkingFiles] = useState<string[]>([]);
   const [selectedRevisionFiles, setSelectedRevisionFiles] = useState<string[]>([]);
   const [changesExpanded, setChangesExpanded] = useState(true);
@@ -200,31 +300,37 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const inspectAt = useCallback(async (targetPath: string, targetHostId: string) => {
-    if (!targetPath.trim() || !targetHostId.trim()) return;
-    setBusy(true);
-    try {
-      const normalizedPath = targetPath.trim();
-      const normalizedHostId = targetHostId.trim();
-      const result = await rpc.call("inspect", { path: normalizedPath, hostId: normalizedHostId });
-      setSnapshot(result);
-      setPendingRebase(null);
-      setMoveSource(null);
-      setRevisionContextMenu(null);
-      setSelectedRevision(null);
-      setRevisionFiles([]);
-      setDiffTarget(null);
-      setSelectedWorkingFiles([]);
-      setSelectedRevisionFiles([]);
-      setError(null);
-      localStorage.setItem("jj-plugin-path", normalizedPath);
-      localStorage.setItem("jj-plugin-host", normalizedHostId);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }, [rpc]);
+  const inspectAt = useCallback(
+    async (targetPath: string, targetHostId: string) => {
+      if (!targetPath.trim() || !targetHostId.trim()) return;
+      setBusy(true);
+      try {
+        const normalizedPath = targetPath.trim();
+        const normalizedHostId = targetHostId.trim();
+        const result = await rpc.call("inspect", {
+          path: normalizedPath,
+          hostId: normalizedHostId,
+        });
+        setSnapshot(result);
+        setPendingRebase(null);
+        setMoveSource(null);
+        setRevisionContextMenu(null);
+        setSelectedRevision(null);
+        setRevisionFiles([]);
+        setDiffTarget(null);
+        setSelectedWorkingFiles([]);
+        setSelectedRevisionFiles([]);
+        setError(null);
+        localStorage.setItem("jj-plugin-path", normalizedPath);
+        localStorage.setItem("jj-plugin-host", normalizedHostId);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [rpc],
+  );
   const refresh = useCallback(() => inspectAt(path, hostId), [hostId, inspectAt, path]);
 
   useEffect(() => {
@@ -235,32 +341,48 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
 
   useEffect(() => {
     let active = true;
-    sdk.hosts.list().then((availableHosts) => {
-      if (!active) return;
-      const nextHosts = availableHosts.map((host) => ({ id: host.id, name: host.name, status: host.status }));
-      setHosts(nextHosts);
-      const connectedHosts = nextHosts.filter((host) => host.status === "connected");
-      if (connectedHosts.length === 1) {
-        const onlyHost = connectedHosts[0];
-        setHostId(onlyHost.id);
-        const savedPath = localStorage.getItem("jj-plugin-path") ?? "";
-        const savedHostId = localStorage.getItem("jj-plugin-host") ?? "";
-        if (savedPath && savedHostId !== onlyHost.id) void inspectAt(savedPath, onlyHost.id);
-      }
-    }).catch((cause) => {
-      if (active) setError(cause instanceof Error ? cause.message : String(cause));
-    });
-    sdk.projects.list({ includePersonal: true }).then((projects) => {
-      if (!active) return;
-      setProjectPaths(projects.flatMap((project) => project.sources.map((source) => ({
-        name: project.name,
-        path: source.path,
-        hostId: source.hostId,
-      }))));
-    }).catch((cause) => {
-      if (active) setError(cause instanceof Error ? cause.message : String(cause));
-    });
-    return () => { active = false; };
+    sdk.hosts
+      .list()
+      .then((availableHosts) => {
+        if (!active) return;
+        const nextHosts = availableHosts.map((host) => ({
+          id: host.id,
+          name: host.name,
+          status: host.status,
+        }));
+        setHosts(nextHosts);
+        const connectedHosts = nextHosts.filter((host) => host.status === "connected");
+        if (connectedHosts.length === 1) {
+          const onlyHost = connectedHosts[0];
+          setHostId(onlyHost.id);
+          const savedPath = localStorage.getItem("jj-plugin-path") ?? "";
+          const savedHostId = localStorage.getItem("jj-plugin-host") ?? "";
+          if (savedPath && savedHostId !== onlyHost.id) void inspectAt(savedPath, onlyHost.id);
+        }
+      })
+      .catch((cause) => {
+        if (active) setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    sdk.projects
+      .list({ includePersonal: true })
+      .then((projects) => {
+        if (!active) return;
+        setProjectPaths(
+          projects.flatMap((project) =>
+            project.sources.map((source) => ({
+              name: project.name,
+              path: source.path,
+              hostId: source.hostId,
+            })),
+          ),
+        );
+      })
+      .catch((cause) => {
+        if (active) setError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      active = false;
+    };
   }, [inspectAt, sdk]);
 
   useEffect(() => {
@@ -278,7 +400,10 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         return;
       }
       if (!context.projectId) return;
-      const environments = await sdk.environments.list({ projectId: context.projectId, status: "ready" });
+      const environments = await sdk.environments.list({
+        projectId: context.projectId,
+        status: "ready",
+      });
       const environment = environments.find((candidate) => candidate.path !== null);
       if (!active || !environment?.path) return;
       setPath(environment.path);
@@ -288,12 +413,24 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     resolveEnvironment().catch((cause) => {
       if (active) setError(cause instanceof Error ? cause.message : String(cause));
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [context.projectId, context.threadId, inspectAt, panelThreadId, sdk]);
 
-  const availableProjectPaths = useMemo(() => projectPaths
-    .filter((projectPath) => !hostId || projectPath.hostId === hostId)
-    .filter((projectPath, index, all) => all.findIndex((candidate) => candidate.path === projectPath.path && candidate.name === projectPath.name) === index), [hostId, projectPaths]);
+  const availableProjectPaths = useMemo(
+    () =>
+      projectPaths
+        .filter((projectPath) => !hostId || projectPath.hostId === hostId)
+        .filter(
+          (projectPath, index, all) =>
+            all.findIndex(
+              (candidate) =>
+                candidate.path === projectPath.path && candidate.name === projectPath.name,
+            ) === index,
+        ),
+    [hostId, projectPaths],
+  );
   const changePath = (nextPath: string) => {
     setPath(nextPath);
     const matchingProjects = projectPaths.filter((projectPath) => projectPath.path === nextPath);
@@ -302,8 +439,9 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
 
   const filteredProjectPaths = useMemo(() => {
     const query = projectQuery.trim().toLocaleLowerCase();
-    return availableProjectPaths.filter((projectPath) =>
-      !query || `${projectPath.name} ${projectPath.path}`.toLocaleLowerCase().includes(query),
+    return availableProjectPaths.filter(
+      (projectPath) =>
+        !query || `${projectPath.name} ${projectPath.path}`.toLocaleLowerCase().includes(query),
     );
   }, [availableProjectPaths, projectQuery]);
   const isDirectoryQuery = projectQuery.startsWith("/");
@@ -319,6 +457,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       setDirectoryIndex(0);
       setError(null);
     } catch (cause) {
+      if (requestId !== directoryRequest.current) return;
       setError(cause instanceof Error ? cause.message : String(cause));
     }
   };
@@ -326,6 +465,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const chooseDirectory = () => {
     const selectedPath = projectQuery.trim();
     if (!selectedPath) return;
+    directoryRequest.current += 1;
     changePath(selectedPath);
     setDirectoryBrowser(null);
     setProjectPickerOpen(false);
@@ -350,7 +490,8 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setProjectPickerOpen(true);
   };
 
-  const directoryEntries = directoryBrowser?.entries.filter((entry) => entry.kind === "directory") ?? [];
+  const directoryEntries =
+    directoryBrowser?.entries.filter((entry) => entry.kind === "directory") ?? [];
   const handleDirectoryKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (!isDirectoryQuery && event.metaKey && /^[1-9]$/.test(event.key)) {
       const projectPath = filteredProjectPaths[Number(event.key) - 1];
@@ -359,16 +500,23 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     }
     if (!isDirectoryQuery && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
       event.preventDefault();
-      setProjectIndex((current) => Math.max(0, event.key === "ArrowDown"
-        ? Math.min(current + 1, filteredProjectPaths.length - 1)
-        : current - 1));
+      setProjectIndex((current) =>
+        Math.max(
+          0,
+          event.key === "ArrowDown"
+            ? Math.min(current + 1, filteredProjectPaths.length - 1)
+            : current - 1,
+        ),
+      );
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      setDirectoryIndex((current) => event.key === "ArrowDown"
-        ? Math.max(0, Math.min(current + 1, directoryEntries.length - 1))
-        : Math.max(current - 1, 0));
+      setDirectoryIndex((current) =>
+        event.key === "ArrowDown"
+          ? Math.max(0, Math.min(current + 1, directoryEntries.length - 1))
+          : Math.max(current - 1, 0),
+      );
       return;
     }
     if (event.key === "Enter") {
@@ -387,11 +535,17 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       else if (projectQuery.trim()) void browseDirectory(projectQuery.trim());
       return;
     }
-    if (isDirectoryQuery && event.key === "Backspace" && event.currentTarget.selectionStart === 0 && directoryBrowser?.parent) {
+    if (
+      isDirectoryQuery &&
+      event.key === "Backspace" &&
+      event.currentTarget.selectionStart === 0 &&
+      directoryBrowser?.parent
+    ) {
       event.preventDefault();
       setProjectQuery(directoryBrowser.parent);
     }
     if (event.key === "Escape") {
+      directoryRequest.current += 1;
       setProjectPickerOpen(false);
       setDirectoryBrowser(null);
     }
@@ -405,12 +559,18 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [projectPickerOpen, isDirectoryQuery, projectQuery, hostId]);
 
   useEffect(() => {
-    document.getElementById(`${isDirectoryQuery ? "jj-picker-entry" : "jj-project-option"}-${isDirectoryQuery ? directoryIndex : projectIndex}`)?.scrollIntoView({ block: "nearest" });
+    document
+      .getElementById(
+        `${isDirectoryQuery ? "jj-picker-entry" : "jj-project-option"}-${isDirectoryQuery ? directoryIndex : projectIndex}`,
+      )
+      ?.scrollIntoView({ block: "nearest" });
   }, [directoryBrowser, directoryIndex, isDirectoryQuery, projectIndex]);
 
   useEffect(() => {
     if (!snapshot) return;
-    const workingRevision = snapshot.revisions.find((revision) => revision.commitId === snapshot.currentRevision);
+    const workingRevision = snapshot.revisions.find(
+      (revision) => revision.commitId === snapshot.currentRevision,
+    );
     setWorkingDescription(workingRevision?.description ?? "");
   }, [snapshot]);
 
@@ -425,11 +585,20 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     setSelectedRevisionFiles([]);
     setRevisionFilesLoading(true);
     setRevisionFilesError(null);
-    void rpc.call("revisionFiles", { path, hostId, revision: selectedRevision.commitId })
-      .then((files) => { if (active) setRevisionFiles(files); })
-      .catch((cause) => { if (active) setRevisionFilesError(cause instanceof Error ? cause.message : String(cause)); })
-      .finally(() => { if (active) setRevisionFilesLoading(false); });
-    return () => { active = false; };
+    void rpc
+      .call("revisionFiles", { path, hostId, revision: selectedRevision.commitId })
+      .then((files) => {
+        if (active) setRevisionFiles(files);
+      })
+      .catch((cause) => {
+        if (active) setRevisionFilesError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (active) setRevisionFilesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [hostId, path, rpc, selectedRevision?.commitId, snapshot]);
 
   useEffect(() => {
@@ -449,21 +618,45 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       file: diffTarget.path,
       ...(diffTarget.revision ? { revision: diffTarget.revision } : {}),
     };
-    void rpc.call("fileDiff", input)
-      .then((result) => { if (active) setDiffPatch(result.patch); })
-      .catch((cause) => { if (active) setDiffError(cause instanceof Error ? cause.message : String(cause)); })
-      .finally(() => { if (active) setDiffLoading(false); });
-    return () => { active = false; };
+    void rpc
+      .call("fileDiff", input)
+      .then((result) => {
+        if (active) setDiffPatch(result.patch);
+      })
+      .catch((cause) => {
+        if (active) setDiffError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (active) setDiffLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [diffTarget?.path, diffTarget?.revision, hostId, path, rpc]);
 
   const revisions = snapshot?.revisions ?? [];
   const evolvedChangeIds = useMemo(() => {
     const newestByChangeId = new Map<string, number>();
-    revisions.forEach((revision) => newestByChangeId.set(revision.changeId, Math.max(newestByChangeId.get(revision.changeId) ?? 0, revision.timestamp)));
-    return new Set(revisions.filter((revision) => revision.timestamp < (newestByChangeId.get(revision.changeId) ?? revision.timestamp)).map((revision) => revision.commitId));
+    revisions.forEach((revision) =>
+      newestByChangeId.set(
+        revision.changeId,
+        Math.max(newestByChangeId.get(revision.changeId) ?? 0, revision.timestamp),
+      ),
+    );
+    return new Set(
+      revisions
+        .filter(
+          (revision) =>
+            revision.timestamp < (newestByChangeId.get(revision.changeId) ?? revision.timestamp),
+        )
+        .map((revision) => revision.commitId),
+    );
   }, [revisions]);
   const graphItems = useMemo(() => {
-    const originalItems: GraphItem[] = revisions.map((revision) => ({ revision, isPreview: false }));
+    const originalItems: GraphItem[] = revisions.map((revision) => ({
+      revision,
+      isPreview: false,
+    }));
     if (!pendingRebase) return originalItems;
     const branchIds = new Set(pendingRebase.branch.map((revision) => revision.commitId));
     const projectedItems: GraphItem[] = pendingRebase.branch.map((revision) => ({
@@ -473,9 +666,12 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         ...revision,
         commitId: `${revision.commitId}:preview`,
         timestamp: pendingRebase.destination.timestamp,
-        parents: revision.commitId === pendingRebase.source.commitId
-          ? [pendingRebase.destination.commitId]
-          : revision.parents.map((parentId) => branchIds.has(parentId) ? `${parentId}:preview` : parentId),
+        parents:
+          revision.commitId === pendingRebase.source.commitId
+            ? [pendingRebase.destination.commitId]
+            : revision.parents.map((parentId) =>
+                branchIds.has(parentId) ? `${parentId}:preview` : parentId,
+              ),
       },
     }));
     const result: GraphItem[] = [];
@@ -485,9 +681,15 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     });
     return result;
   }, [pendingRebase, revisions]);
-  const graphRows = useMemo(() => layoutRevisionGraph(graphItems.map((item) => item.revision)), [graphItems]);
+  const graphRows = useMemo(
+    () => layoutRevisionGraph(graphItems.map((item) => item.revision)),
+    [graphItems],
+  );
   const graphGroups = useMemo(() => {
-    const groups: { day: string; rows: { revision: Revision; row: RevisionGraphRow; index: number; isPreview: boolean }[] }[] = [];
+    const groups: {
+      day: string;
+      rows: { revision: Revision; row: RevisionGraphRow; index: number; isPreview: boolean }[];
+    }[] = [];
     graphItems.forEach(({ revision, isPreview }, index) => {
       const row = graphRows[index];
       if (!row) return;
@@ -501,7 +703,10 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     });
     return groups;
   }, [graphItems, graphRows]);
-  const revisionById = useMemo(() => new Map(revisions.map((revision) => [revision.commitId, revision])), [revisions]);
+  const revisionById = useMemo(
+    () => new Map(revisions.map((revision) => [revision.commitId, revision])),
+    [revisions],
+  );
   const maximumLaneCount = graphRows.reduce((maximum, row) => Math.max(maximum, row.laneCount), 1);
   const graphWidth = Math.min(116, 20 + (maximumLaneCount - 1) * 16);
   const laneGap = maximumLaneCount <= 1 ? 0 : (graphWidth - 20) / (maximumLaneCount - 1);
@@ -534,7 +739,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     }
   };
   const selectRevision = (revision: Revision) => {
-    setSelectedRevision((current) => current?.commitId === revision.commitId ? null : revision);
+    setSelectedRevision((current) => (current?.commitId === revision.commitId ? null : revision));
     setDescription(revision.description);
     setDiffTarget(null);
   };
@@ -559,12 +764,16 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     if (!bounds || bounds.height === 0) return;
     changeSourcePanePercent(((clientY - bounds.top) / bounds.height) * 100);
   };
-  const saveDescription = () => selectedRevision && void runAction(() => rpc.call("describe", {
-    path,
-    hostId,
-    revision: selectedRevision.commitId,
-    description,
-  }));
+  const saveDescription = () =>
+    selectedRevision &&
+    void runAction(() =>
+      rpc.call("describe", {
+        path,
+        hostId,
+        revision: selectedRevision.commitId,
+        description,
+      }),
+    );
   const dropOnRevision = (destination: Revision, event: React.DragEvent) => {
     event.preventDefault();
     const sourceId = event.dataTransfer.getData("text/jj-revision");
@@ -572,19 +781,22 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     if (source && source.commitId !== destination.commitId) beginRebasePreview(source, destination);
     setDropTargetId(null);
   };
-  const branchFrom = (sourceId: string) => revisions.filter((candidate) => {
-    const pending = [...candidate.parents];
-    const visited = new Set<string>();
-    while (pending.length > 0) {
-      const revisionId = pending.pop();
-      if (!revisionId || visited.has(revisionId)) continue;
-      if (revisionId === sourceId) return true;
-      visited.add(revisionId);
-      pending.push(...(revisionById.get(revisionId)?.parents ?? []));
-    }
-    return candidate.commitId === sourceId;
-  });
-  const draggedBranchIds = new Set(draggedRevisionId ? branchFrom(draggedRevisionId).map((revision) => revision.commitId) : []);
+  const branchFrom = (sourceId: string) =>
+    revisions.filter((candidate) => {
+      const pending = [...candidate.parents];
+      const visited = new Set<string>();
+      while (pending.length > 0) {
+        const revisionId = pending.pop();
+        if (!revisionId || visited.has(revisionId)) continue;
+        if (revisionId === sourceId) return true;
+        visited.add(revisionId);
+        pending.push(...(revisionById.get(revisionId)?.parents ?? []));
+      }
+      return candidate.commitId === sourceId;
+    });
+  const draggedBranchIds = new Set(
+    draggedRevisionId ? branchFrom(draggedRevisionId).map((revision) => revision.commitId) : [],
+  );
   const beginRebasePreview = (source: Revision, destination: Revision) => {
     const branch = branchFrom(source.commitId);
     if (branch.some((revision) => revision.commitId === destination.commitId)) {
@@ -609,212 +821,1059 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   };
   const confirmRebase = async () => {
     if (!pendingRebase) return;
-    const didRebase = await runAction(() => rpc.call("rebase", {
-      path,
-      hostId,
-      revision: pendingRebase.source.commitId,
-      destination: pendingRebase.destination.commitId,
-    }));
+    const didRebase = await runAction(() =>
+      rpc.call("rebase", {
+        path,
+        hostId,
+        revision: pendingRebase.source.commitId,
+        destination: pendingRebase.destination.commitId,
+      }),
+    );
     if (didRebase) setPendingRebase(null);
   };
 
-  const renderRevisionDetails = (revision: Revision) => <section className="jj-revision-details" aria-label={`Details for ${label(revision)}`}>
-    <div className="jj-detail-toolbar">
-      <textarea className="jj-input jj-description-edit" aria-label="Revision description" value={description} onChange={(event) => setDescription(event.target.value)} />
-      <div className="jj-detail-actions-row">
-        <button className="jj-button" disabled={busy} onClick={() => void saveDescription()}>Describe</button>
-        <button className="jj-button jj-button-squash" disabled={busy || revision.parents.length === 0} onClick={() => void runAction(() => rpc.call("squash", { path, hostId, revision: revision.commitId, destination: revision.parents[0] ?? "@-" }))}>Squash into parent</button>
+  const renderRevisionDetails = (revision: Revision) => (
+    <section className="jj-revision-details" aria-label={`Details for ${label(revision)}`}>
+      <div className="jj-detail-toolbar">
+        <textarea
+          className="jj-input jj-description-edit"
+          aria-label="Revision description"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+        <div className="jj-detail-actions-row">
+          <button className="jj-button" disabled={busy} onClick={() => void saveDescription()}>
+            Describe
+          </button>
+          <button
+            className="jj-button jj-button-squash"
+            disabled={busy || revision.parents.length === 0}
+            onClick={() =>
+              void runAction(() =>
+                rpc.call("squash", {
+                  path,
+                  hostId,
+                  revision: revision.commitId,
+                  destination: revision.parents[0] ?? "@-",
+                }),
+              )
+            }
+          >
+            Squash into parent
+          </button>
+        </div>
       </div>
-    </div>
-    <div className="jj-section-heading">Changed files <span className="jj-count">{revisionFilesLoading ? "…" : revisionFiles.length}</span></div>
-    {revisionFilesError && <div className="jj-error-inline" role="alert">{revisionFilesError}</div>}
-    {revisionFilesLoading && <div className="jj-selection-hint" role="status">Loading changed files…</div>}
-    {!revisionFilesLoading && revisionFiles.length === 0 && <div className="jj-selection-hint">No file changes in this revision.</div>}
-    <div className="jj-file-list">{revisionFiles.map((file) => <div key={file.path}>
-      <button className="jj-file-button" data-selected={diffTarget?.revision === revision.commitId && diffTarget.path === file.path} onClick={() => selectFileDiff(file.path, revision.commitId)}>
-        <span className={`jj-status ${statusClass(file.status)}`}>{file.status}</span><FilePath path={file.path} />
-      </button>
-      {diffTarget?.revision === revision.commitId && diffTarget.path === file.path && <div className="jj-file-preview"><DiffPreview path={file.path} patch={diffPatch} loading={diffLoading} error={diffError} /></div>}
-    </div>)}</div>
-  </section>;
-
-  return <div className="jj-page">
-    <style>{styles}</style>
-    <header className="jj-toolbar">
-      <nav className="jj-tabs" aria-label="Jujutsu views">
-        <button className="jj-tab" aria-selected={tab === "graph"} onClick={() => setTab("graph")}>Revision graph</button>
-        <button className="jj-tab" aria-selected={tab === "source"} onClick={() => setTab("source")}>Source Control</button>
-      </nav>
-      <select className="jj-input jj-host" aria-label="BB machine" value={hostId} onChange={(event) => setHostId(event.target.value)}>
-        <option value="">Select machine</option>
-        {hosts.map((host) => <option key={host.id} value={host.id} disabled={host.status !== "connected"}>{host.name}{host.status === "connected" ? "" : " (disconnected)"}</option>)}
-      </select>
-      <div className="jj-path-picker">
-        <input className="jj-input jj-path" aria-label="Project path" placeholder="Choose a project folder…" value={path} readOnly aria-haspopup="dialog" onClick={openProjectPicker} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openProjectPicker(); }} />
+      <div className="jj-section-heading">
+        Changed files{" "}
+        <span className="jj-count">{revisionFilesLoading ? "…" : revisionFiles.length}</span>
       </div>
-      <button className="jj-button jj-refresh" disabled={busy || !path || !hostId} onClick={() => void refresh()}>{busy ? "Loading…" : "Refresh"}</button>
-    </header>
-    {error && <div role="alert" className="jj-error">{error}</div>}
-    {!snapshot ? <div className="jj-empty">Choose a BB project path or paste a path inside a Jujutsu workspace.</div> : <>
-      <div className="jj-context"><span className="jj-context-path" title={snapshot.root}>{snapshot.root}</span><span>·</span><span>{snapshot.revisions.length} revisions</span><span>·</span><span>{snapshot.workspaces.length} workspaces</span><input className="jj-input jj-filter" aria-label="Filter revisions by description" placeholder="Filter descriptions…" value={graphQuery} onChange={(event) => setGraphQuery(event.target.value)} /></div>
-      {snapshot.lastPushAt !== null && <div className="jj-push-marker"><strong>Last recorded push</strong><span>to a jj Git remote</span><time title={new Date(snapshot.lastPushAt * 1000).toLocaleString()}>{relativeTime(snapshot.lastPushAt)}</time></div>}
-      {tab === "graph" ? <main className="jj-history" aria-label="Jujutsu revision graph">
-        {moveSource && <div className="jj-move-mode" role="status"><span>Choose where to move the branch from <strong>{label(moveSource)}</strong>.</span><button className="jj-button" onClick={() => setMoveSource(null)}>Cancel</button></div>}
-        {graphGroups.filter((group) => group.rows.some(({ revision }) => !graphQuery.trim() || label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase()))).map((group) => <section className="jj-day-group" key={group.day}>
-          <button className="jj-day-heading" aria-expanded={!collapsedDays.has(group.day)} onClick={() => setCollapsedDays((current) => {
-            const next = new Set(current);
-            if (next.has(group.day)) next.delete(group.day);
-            else next.add(group.day);
-            return next;
-          })}><span className="jj-chevron">›</span><span>{group.day}</span><span className="jj-count">{group.rows.length}</span></button>
-          {!collapsedDays.has(group.day) && group.rows.filter(({ revision }) => !graphQuery.trim() || label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase())).map(({ revision, row: graphRow, isPreview }) => {
-            const isCurrent = revision.commitId === snapshot.currentRevision;
-            const isSelected = selectedRevision?.commitId === revision.commitId;
-            const isDragged = draggedBranchIds.has(revision.commitId) || Boolean(pendingRebase?.branch.some((branchRevision) => branchRevision.commitId === revision.commitId));
-            const pendingHere = pendingRebase?.destination.commitId === revision.commitId;
-            const changePrefix = revision.changeIdPrefix;
-            const isEvolved = !isPreview && evolvedChangeIds.has(revision.commitId);
-            return <article className="jj-revision" key={revision.commitId} data-selected={isSelected} data-current={isCurrent} data-dragged={isDragged && !isPreview} data-moved={isDragged && !isPreview} data-preview={isPreview} data-drop-target={dropTargetId === revision.commitId} onDragEnter={(event) => { if (!isPreview) { event.preventDefault(); setDropTargetId(revision.commitId); } }} onDragOver={(event) => { if (!isPreview) { event.preventDefault(); setDropTargetId(revision.commitId); } }} onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTargetId(null); }} onDrop={(event) => { if (!isPreview) dropOnRevision(revision, event); }} onContextMenu={(event) => { if (!isPreview) { event.preventDefault(); openRevisionContextMenu(revision, event.clientX, event.clientY); } }}>
-              <button className="jj-revision-button" style={{ gridTemplateColumns: `${graphWidth}px minmax(0,1fr) auto` }} aria-current={isCurrent ? "true" : undefined} aria-expanded={isSelected} onClick={() => !isPreview && handleRevisionClick(revision)} onKeyDown={(event) => { if (!isPreview && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) { event.preventDefault(); const bounds = event.currentTarget.getBoundingClientRect(); openRevisionContextMenu(revision, bounds.left + 28, bounds.top + 24); } }} draggable={!isPreview} onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/jj-revision", revision.commitId);
-                setDraggedRevisionId(revision.commitId);
-                const ghost = document.createElement("div");
-                ghost.style.cssText = "position:absolute;top:-1000px;left:-1000px;width:300px;padding:8px 12px;border:1px solid #54a5ff;border-radius:8px;background:#20242b;color:#fff;font:12px system-ui;box-shadow:0 8px 24px #0008";
-                branchFrom(revision.commitId).slice(0, 6).forEach((branchRevision, index) => {
-                  const ghostRow = document.createElement("div");
-                  ghostRow.textContent = `${index === 0 ? "●" : "│"}  ${label(branchRevision)}`;
-                  ghostRow.style.cssText = "padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
-                  ghost.append(ghostRow);
-                });
-                if (branchFrom(revision.commitId).length > 6) {
-                  const remainder = document.createElement("div");
-                  remainder.textContent = `… and ${branchFrom(revision.commitId).length - 6} more revisions`;
-                  remainder.style.cssText = "padding:4px 0;color:#aaa";
-                  ghost.append(remainder);
-                }
-                document.body.append(ghost);
-                event.dataTransfer.setDragImage(ghost, 16, 16);
-                window.setTimeout(() => ghost.remove(), 0);
-              }} onDragEnd={() => { setDraggedRevisionId(null); setDropTargetId(null); }}>
-                <RevisionGraphCell row={graphRow} width={graphWidth} laneGap={laneGap} current={isCurrent} preview={isPreview} />
-                <span className="jj-revision-main">
-                  <span className="jj-revision-title">{isEvolved && <span className="jj-badge jj-badge-evolved">Evolved</span>}<span className="jj-revision-subject">{label(revision)}</span></span>
-                  <span className="jj-labels">
-                    {isCurrent && <span className="jj-badge jj-badge-current">@</span>}
-                    {revision.bookmarks.map((bookmark) => <span className="jj-badge jj-badge-bookmark" key={bookmark}>{bookmark}</span>)}
-                    {revision.tags.map((tag) => <span className="jj-badge jj-badge-tag" key={tag}>{tag}</span>)}
-                    {revision.workspaces.map((workspace) => <span className={`jj-badge jj-badge-workspace${workspace === "default" ? " jj-badge-workspace-default" : ""}`} key={workspace}>{workspace}</span>)}
-                  </span>
-                </span>
-                <span className="jj-revision-meta"><time className="jj-revision-age" title={new Date(revision.timestamp * 1000).toLocaleString()}>{relativeTime(revision.timestamp)}</time><code className="jj-change-id" title={`Change ID ${revision.changeId}`}><span className="jj-change-id-prefix">{changePrefix}</span>{revision.changeId.slice(changePrefix.length)}</code><span className="jj-chevron">›</span></span>
-              </button>
-              {isSelected && renderRevisionDetails(revision)}
-              {pendingHere && <div className="jj-rebase-preview" role="group" aria-label="Preview branch rebase">
-                <div className="jj-rebase-preview-heading"><span>Move branch onto <strong>{label(revision)}</strong></span><span>{pendingRebase.branch.length} {pendingRebase.branch.length === 1 ? "revision" : "revisions"} will move</span></div>
-                <div className="jj-rebase-preview-branch">{pendingRebase.branch.map((branchRevision) => <div className="jj-rebase-preview-row" key={branchRevision.commitId}><span className="jj-rebase-preview-node" aria-hidden="true" />{label(branchRevision)}<code>{branchRevision.changeId.slice(0, 8)}</code></div>)}</div>
-                <code className="jj-confirm-code">jj rebase -s {pendingRebase.source.commitId} -d {pendingRebase.destination.commitId}</code>
-                <div className="jj-rebase-preview-actions"><button className="jj-button" disabled={busy} onClick={() => setPendingRebase(null)}>Cancel</button><button className="jj-button jj-button-primary" disabled={busy} onClick={() => void confirmRebase()}>{busy ? "Moving…" : "Rebase branch"}</button></div>
-              </div>}
-            </article>;
-          })}
-        </section>)}
-      </main> : <main className="jj-scm">
-        <div className="jj-scm-heading">Changes <span className="jj-count">{snapshot.changes.length}</span></div>
-        <div className="jj-scm-layout">
-          <div className="jj-scm-list" ref={sourceListRef}>
-            <section className={`jj-group jj-working-group${diffTarget ? "" : " jj-working-group-fill"}`} style={diffTarget ? { flexBasis: `${changesPanePercent}%` } : undefined}>
-              <button className="jj-group-header" aria-expanded={changesExpanded} onClick={() => setChangesExpanded((expanded) => !expanded)}><span className="jj-chevron">›</span><span>Working Copy</span><span className="jj-badge jj-badge-current">@</span><span className="jj-count">{snapshot.changes.length}</span></button>
-              {changesExpanded && <div className="jj-group-content jj-working-content">
-                {snapshot.changes.length === 0 ? <div className="jj-selection-hint">Working copy clean</div> : snapshot.changes.map((file) => <div className="jj-file-entry" key={file.path}>
-                  <input className="jj-checkbox" type="checkbox" aria-label={`Select ${file.path} for split`} checked={selectedWorkingFiles.includes(file.path)} onChange={(event) => setSelectedWorkingFiles((current) => event.target.checked ? [...current, file.path] : current.filter((selectedPath) => selectedPath !== file.path))} />
-                  <button className="jj-file-button" data-selected={diffTarget?.revision === null && diffTarget.path === file.path} onClick={() => selectFileDiff(file.path, null)}><span className={`jj-status ${statusClass(file.status)}`}>{file.status}</span><FilePath path={file.path} /></button>
-                </div>)}
-                <div className="jj-working-actions">
-                  {editingWorkingDescription && <textarea className="jj-input" aria-label="Working copy description" placeholder="Describe working copy…" value={workingDescription} onChange={(event) => setWorkingDescription(event.target.value)} />}
-                  <div className="jj-working-actions-row">
-                    <button className="jj-button" disabled={busy} onClick={() => editingWorkingDescription ? void runAction(() => rpc.call("describe", { path, hostId, revision: snapshot.currentRevision, description: workingDescription })) : setEditingWorkingDescription(true)}>{editingWorkingDescription ? "Save description" : "Describe @"}</button>
-                    {editingWorkingDescription && <button className="jj-button" disabled={busy} onClick={() => setEditingWorkingDescription(false)}>Cancel</button>}
-                    <button className="jj-button jj-button-primary" disabled={busy || selectedWorkingFiles.length === 0} onClick={() => void runAction(() => rpc.call("split", { path, hostId, revision: snapshot.currentRevision, files: selectedWorkingFiles, message: splitMessage }))}>Split {selectedWorkingFiles.length || "selected"}</button>
-                  </div>
-                  {selectedWorkingFiles.length > 0 && <input className="jj-input" aria-label="New revision description" value={splitMessage} onChange={(event) => setSplitMessage(event.target.value)} />}
-                </div>
-              </div>}
-            </section>
-            {diffTarget && <div className="jj-scm-resizer" role="separator" aria-label="Resize Changes and Recent revisions panes" aria-orientation="horizontal" aria-valuemin={20} aria-valuemax={80} aria-valuenow={changesPanePercent} tabIndex={0} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); resizeSourcePane(event.clientY); }} onPointerMove={(event) => resizeSourcePane(event.clientY)} onKeyDown={(event) => { if (event.key === "ArrowUp" || event.key === "ArrowDown") { event.preventDefault(); changeSourcePanePercent(changesPanePercent + (event.key === "ArrowUp" ? -5 : 5)); } }} />}
-            {diffTarget && <section className="jj-group jj-history-group">
-              <button className="jj-group-header" aria-expanded={historyExpanded} onClick={() => setHistoryExpanded((expanded) => !expanded)}><span className="jj-chevron">›</span><span>Recent revisions</span></button>
-              {historyExpanded && <div className="jj-group-content">
-                <label className="jj-history-depth">Show @ through @-<input className="jj-input" type="number" min={1} max={80} value={recentDepth} onChange={(event) => { const next = Math.max(1, Math.min(80, Number(event.target.value))); setRecentDepth(next); localStorage.setItem("jj-plugin-recent", String(next)); }} /></label>
-                {recentRevisions.slice(1).map((revision, index) => {
-                  const isExpanded = expandedSourceRevisionId === revision.commitId;
-                  return <section className="jj-ancestor-group" key={revision.commitId}>
-                    <div className="jj-history-item">
-                      <button className="jj-ancestor-header" aria-expanded={isExpanded} onClick={() => toggleSourceRevision(revision)}>
-                        <span className="jj-chevron">›</span><code className="jj-ancestor-label">@-{index + 1}</code><span className="jj-ancestor-subject" title={label(revision)}>{label(revision)}</span>
-                        <span className="jj-ancestor-meta" title={new Date(revision.timestamp * 1000).toLocaleString()}>{relativeTime(revision.timestamp)}</span>
-                      </button>
-                      {revision.parents[0] && <button className="jj-mini-action" disabled={busy} title={`Squash ${label(revision)} into its parent`} onClick={() => void runAction(() => rpc.call("squash", { path, hostId, revision: revision.commitId, destination: revision.parents[0] ?? "@-" }))}>Squash</button>}
-                    </div>
-                    {isExpanded && selectedRevision?.commitId === revision.commitId && <div className="jj-ancestor-files">
-                      <div className="jj-section-heading">Changed files <span className="jj-count">{revisionFilesLoading ? "…" : revisionFiles.length}</span></div>
-                      {revisionFilesError && <div className="jj-error-inline" role="alert">{revisionFilesError}</div>}
-                      {revisionFilesLoading ? <div className="jj-selection-hint">Loading files…</div> : revisionFiles.map((file) => <div className="jj-file-entry" key={file.path}>
-                        <input className="jj-checkbox" type="checkbox" aria-label={`Select ${file.path} for split`} checked={selectedRevisionFiles.includes(file.path)} onChange={(event) => setSelectedRevisionFiles((current) => event.target.checked ? [...current, file.path] : current.filter((selectedPath) => selectedPath !== file.path))} />
-                        <button className="jj-file-button" data-selected={diffTarget?.revision === revision.commitId && diffTarget.path === file.path} onClick={() => selectFileDiff(file.path, revision.commitId)}><span className={`jj-status ${statusClass(file.status)}`}>{file.status}</span><FilePath path={file.path} /></button>
-                      </div>)}
-                      {!revisionFilesLoading && revisionFiles.length === 0 && <div className="jj-selection-hint">No file changes in this revision.</div>}
-                      <div className="jj-ancestor-ops">
-                        <textarea className="jj-input" aria-label="Revision description" value={description} onChange={(event) => setDescription(event.target.value)} />
-                        <div className="jj-ancestor-actions">
-                          <button className="jj-button" disabled={busy} onClick={() => void runAction(() => rpc.call("describe", { path, hostId, revision: revision.commitId, description }))}>Describe</button>
-                          <button className="jj-button" disabled={busy || selectedRevisionFiles.length === 0} onClick={() => void runAction(() => rpc.call("split", { path, hostId, revision: revision.commitId, files: selectedRevisionFiles, message: splitMessage }))}>Split selected</button>
-                          {revision.parents[0] && <button className="jj-button" disabled={busy} onClick={() => void runAction(() => rpc.call("squash", { path, hostId, revision: revision.commitId, destination: revision.parents[0] ?? "@-" }))}>Squash into parent</button>}
-                        </div>
-                        {selectedRevisionFiles.length > 0 && <input className="jj-input" aria-label="New revision description" value={splitMessage} onChange={(event) => setSplitMessage(event.target.value)} />}
-                      </div>
-                    </div>}
-                  </section>;
-                })}
-              </div>}
-            </section>}
+      {revisionFilesError && (
+        <div className="jj-error-inline" role="alert">
+          {revisionFilesError}
+        </div>
+      )}
+      {revisionFilesLoading && (
+        <div className="jj-selection-hint" role="status">
+          Loading changed files…
+        </div>
+      )}
+      {!revisionFilesLoading && revisionFiles.length === 0 && (
+        <div className="jj-selection-hint">No file changes in this revision.</div>
+      )}
+      <div className="jj-file-list">
+        {revisionFiles.map((file) => (
+          <div key={file.path}>
+            <button
+              className="jj-file-button"
+              data-selected={
+                diffTarget?.revision === revision.commitId && diffTarget.path === file.path
+              }
+              onClick={() => selectFileDiff(file.path, revision.commitId)}
+            >
+              <span className={`jj-status ${statusClass(file.status)}`}>{file.status}</span>
+              <FilePath path={file.path} />
+            </button>
+            {diffTarget?.revision === revision.commitId && diffTarget.path === file.path && (
+              <div className="jj-file-preview">
+                <DiffPreview
+                  path={file.path}
+                  patch={diffPatch}
+                  loading={diffLoading}
+                  error={diffError}
+                />
+              </div>
+            )}
           </div>
-          {diffTarget && <aside className="jj-preview">
-            <div className="jj-preview-header"><span>{diffTarget.path}</span><button className="jj-preview-close" aria-label="Close diff preview" onClick={() => setDiffTarget(null)}>Close</button></div>
-            <div className="jj-preview-body"><DiffPreview path={diffTarget.path} patch={diffPatch} loading={diffLoading} error={diffError} /></div>
-          </aside>}
-        </div>
-      </main>}
-    </>}
-    {projectPickerOpen && <div className="jj-picker-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setProjectPickerOpen(false); }}>
-      <section className="jj-picker" role="dialog" aria-modal="true" aria-label="Choose project">
-        <div className="jj-picker-header">
-          {isDirectoryQuery && <button className="jj-button" aria-label="Back to projects" onClick={() => { setProjectQuery(""); setDirectoryBrowser(null); }}>←</button>}
-          <div className="jj-picker-path"><input autoFocus aria-label="Search projects or enter a folder path" placeholder="Search projects or type / for a folder…" value={projectQuery} onChange={(event) => { const query = event.target.value; setProjectQuery(query); setProjectIndex(0); setDirectoryIndex(0); setDirectoryBrowser(null); setError(null); if (!query.startsWith("/")) directoryRequest.current += 1; }} onKeyDown={handleDirectoryKeyDown} /></div>
-          {isDirectoryQuery && <button className="jj-button" onClick={chooseDirectory}>Choose <kbd>⌘ Enter</kbd></button>}
-        </div>
-        <div className="jj-picker-section">{isDirectoryQuery ? "Folders" : "Projects"}</div>
-        <div className="jj-picker-list" role="listbox" aria-label={isDirectoryQuery ? "Folders" : "Projects"}>
-          {isDirectoryQuery ? directoryEntries.map((entry, index) => <button id={`jj-picker-entry-${index}`} className="jj-picker-entry" key={entry.path} role="option" aria-selected={directoryIndex === index} data-active={directoryIndex === index} onMouseEnter={() => setDirectoryIndex(index)} onFocus={() => setDirectoryIndex(index)} onClick={() => { setDirectoryIndex(index); void browseDirectory(entry.path); }}><span className="jj-picker-entry-icon" aria-hidden="true"></span>{entry.name}</button>) : filteredProjectPaths.map((projectPath, index) => <button id={`jj-project-option-${index}`} className="jj-project-option" key={`${projectPath.hostId}:${projectPath.name}:${projectPath.path}`} role="option" aria-selected={projectIndex === index} data-active={projectIndex === index} onMouseEnter={() => setProjectIndex(index)} onFocus={() => setProjectIndex(index)} onClick={() => chooseProjectPath(projectPath)}><span className="jj-project-mark" aria-hidden="true">{projectPath.name.slice(0, 2).toLocaleUpperCase()}</span><span className="jj-project-copy"><span>{projectPath.name}</span><small>Local · {projectPath.path}</small></span>{index < 9 && <kbd>⌘ {index + 1}</kbd>}</button>)}
-          {isDirectoryQuery && !directoryBrowser && <div className="jj-selection-hint">Loading folders…</div>}
-          {isDirectoryQuery && directoryBrowser && directoryEntries.length === 0 && <div className="jj-selection-hint">No subfolders here.</div>}
-          {!isDirectoryQuery && filteredProjectPaths.length === 0 && <div className="jj-selection-hint">No known projects match. Type / to browse folders.</div>}
-          {error && <div className="jj-error-inline" role="alert">{error}</div>}
-        </div>
-        <footer className="jj-picker-footer"><span><kbd>↑</kbd> <kbd>↓</kbd> Navigate</span><span><kbd>Enter</kbd> {isDirectoryQuery ? "Open" : "Select"}</span>{isDirectoryQuery && <><span><kbd>⌘ Enter</kbd> Choose folder</span><span><kbd>Backspace</kbd> Back</span></>}<span><kbd>Esc</kbd> Close</span></footer>
-      </section>
-    </div>}
-    {revisionContextMenu && <>
-      <div className="jj-context-backdrop" onClick={() => setRevisionContextMenu(null)} />
-      <div className="jj-context-menu" role="menu" aria-label={`Actions for ${label(revisionContextMenu.revision)}`} style={{ left: Math.min(revisionContextMenu.x, window.innerWidth - 215), top: Math.min(revisionContextMenu.y, window.innerHeight - 210) }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setRevisionContextMenu(null); }}>
-        <button role="menuitem" onClick={() => { const revision = revisionContextMenu.revision; setSelectedRevision(revision); setDescription(revision.description); setDiffTarget(null); setRevisionContextMenu(null); }}>View diff</button>
-        <button role="menuitem" onClick={() => { const revision = revisionContextMenu.revision; setSelectedRevision(revision); setDescription(revision.description); setDiffTarget(null); setRevisionContextMenu(null); }}>Describe…</button>
-        <div className="jj-context-menu-separator" />
-        <button role="menuitem" disabled={revisionContextMenu.revision.parents.length === 0 || busy} onClick={() => { const revision = revisionContextMenu.revision; const parent = revision.parents[0]; setRevisionContextMenu(null); if (parent) void runAction(() => rpc.call("squash", { path, hostId, revision: revision.commitId, destination: parent })); }}>Squash into parent</button>
-        <button role="menuitem" onClick={() => { setMoveSource(revisionContextMenu.revision); setPendingRebase(null); setRevisionContextMenu(null); }}>Rebase branch onto…</button>
+        ))}
       </div>
-    </>}
-  </div>;
+    </section>
+  );
+
+  return (
+    <div className="jj-page">
+      <style>{styles}</style>
+      <header className="jj-toolbar">
+        <nav className="jj-tabs" aria-label="Jujutsu views">
+          <button
+            className="jj-tab"
+            aria-selected={tab === "graph"}
+            onClick={() => setTab("graph")}
+          >
+            Revision graph
+          </button>
+          <button
+            className="jj-tab"
+            aria-selected={tab === "source"}
+            onClick={() => setTab("source")}
+          >
+            Source Control
+          </button>
+        </nav>
+        <select
+          className="jj-input jj-host"
+          aria-label="BB machine"
+          value={hostId}
+          onChange={(event) => setHostId(event.target.value)}
+        >
+          <option value="">Select machine</option>
+          {hosts.map((host) => (
+            <option key={host.id} value={host.id} disabled={host.status !== "connected"}>
+              {host.name}
+              {host.status === "connected" ? "" : " (disconnected)"}
+            </option>
+          ))}
+        </select>
+        <div className="jj-path-picker">
+          <input
+            className="jj-input jj-path"
+            aria-label="Project path"
+            placeholder="Choose a project folder…"
+            value={path}
+            readOnly
+            aria-haspopup="dialog"
+            onClick={openProjectPicker}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") openProjectPicker();
+            }}
+          />
+        </div>
+        <button
+          className="jj-button jj-refresh"
+          disabled={busy || !path || !hostId}
+          onClick={() => void refresh()}
+        >
+          {busy ? "Loading…" : "Refresh"}
+        </button>
+      </header>
+      {error && (
+        <div role="alert" className="jj-error">
+          {error}
+        </div>
+      )}
+      {!snapshot ? (
+        <div className="jj-empty">
+          Choose a BB project path or paste a path inside a Jujutsu workspace.
+        </div>
+      ) : (
+        <>
+          <div className="jj-context">
+            <span className="jj-context-path" title={snapshot.root}>
+              {snapshot.root}
+            </span>
+            <span>·</span>
+            <span>{snapshot.revisions.length} revisions</span>
+            <span>·</span>
+            <span>{snapshot.workspaces.length} workspaces</span>
+            <input
+              className="jj-input jj-filter"
+              aria-label="Filter revisions by description"
+              placeholder="Filter descriptions…"
+              value={graphQuery}
+              onChange={(event) => setGraphQuery(event.target.value)}
+            />
+          </div>
+          {snapshot.lastPushAt !== null && (
+            <div className="jj-push-marker">
+              <strong>Last recorded push</strong>
+              <span>to a jj Git remote</span>
+              <time title={new Date(snapshot.lastPushAt * 1000).toLocaleString()}>
+                {relativeTime(snapshot.lastPushAt)}
+              </time>
+            </div>
+          )}
+          {tab === "graph" ? (
+            <main className="jj-history" aria-label="Jujutsu revision graph">
+              {moveSource && (
+                <div className="jj-move-mode" role="status">
+                  <span>
+                    Choose where to move the branch from <strong>{label(moveSource)}</strong>.
+                  </span>
+                  <button className="jj-button" onClick={() => setMoveSource(null)}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {graphGroups
+                .filter((group) =>
+                  group.rows.some(
+                    ({ revision }) =>
+                      !graphQuery.trim() ||
+                      label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase()),
+                  ),
+                )
+                .map((group) => (
+                  <section className="jj-day-group" key={group.day}>
+                    <button
+                      className="jj-day-heading"
+                      aria-expanded={!collapsedDays.has(group.day)}
+                      onClick={() =>
+                        setCollapsedDays((current) => {
+                          const next = new Set(current);
+                          if (next.has(group.day)) next.delete(group.day);
+                          else next.add(group.day);
+                          return next;
+                        })
+                      }
+                    >
+                      <span className="jj-chevron">›</span>
+                      <span>{group.day}</span>
+                      <span className="jj-count">{group.rows.length}</span>
+                    </button>
+                    {!collapsedDays.has(group.day) &&
+                      group.rows
+                        .filter(
+                          ({ revision }) =>
+                            !graphQuery.trim() ||
+                            label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase()),
+                        )
+                        .map(({ revision, row: graphRow, isPreview }) => {
+                          const isCurrent = revision.commitId === snapshot.currentRevision;
+                          const isSelected = selectedRevision?.commitId === revision.commitId;
+                          const isDragged =
+                            draggedBranchIds.has(revision.commitId) ||
+                            Boolean(
+                              pendingRebase?.branch.some(
+                                (branchRevision) => branchRevision.commitId === revision.commitId,
+                              ),
+                            );
+                          const pendingHere =
+                            pendingRebase?.destination.commitId === revision.commitId;
+                          const changePrefix = revision.changeIdPrefix;
+                          const isEvolved = !isPreview && evolvedChangeIds.has(revision.commitId);
+                          return (
+                            <article
+                              className="jj-revision"
+                              key={revision.commitId}
+                              data-selected={isSelected}
+                              data-current={isCurrent}
+                              data-dragged={isDragged && !isPreview}
+                              data-moved={isDragged && !isPreview}
+                              data-preview={isPreview}
+                              data-drop-target={dropTargetId === revision.commitId}
+                              onDragEnter={(event) => {
+                                if (!isPreview) {
+                                  event.preventDefault();
+                                  setDropTargetId(revision.commitId);
+                                }
+                              }}
+                              onDragOver={(event) => {
+                                if (!isPreview) {
+                                  event.preventDefault();
+                                  setDropTargetId(revision.commitId);
+                                }
+                              }}
+                              onDragLeave={(event) => {
+                                if (
+                                  !(event.relatedTarget instanceof Node) ||
+                                  !event.currentTarget.contains(event.relatedTarget)
+                                )
+                                  setDropTargetId(null);
+                              }}
+                              onDrop={(event) => {
+                                if (!isPreview) dropOnRevision(revision, event);
+                              }}
+                              onContextMenu={(event) => {
+                                if (!isPreview) {
+                                  event.preventDefault();
+                                  openRevisionContextMenu(revision, event.clientX, event.clientY);
+                                }
+                              }}
+                            >
+                              <button
+                                className="jj-revision-button"
+                                style={{
+                                  gridTemplateColumns: `${graphWidth}px minmax(0,1fr) auto`,
+                                }}
+                                aria-current={isCurrent ? "true" : undefined}
+                                aria-expanded={isSelected}
+                                onClick={() => !isPreview && handleRevisionClick(revision)}
+                                onKeyDown={(event) => {
+                                  if (
+                                    !isPreview &&
+                                    (event.key === "ContextMenu" ||
+                                      (event.shiftKey && event.key === "F10"))
+                                  ) {
+                                    event.preventDefault();
+                                    const bounds = event.currentTarget.getBoundingClientRect();
+                                    openRevisionContextMenu(
+                                      revision,
+                                      bounds.left + 28,
+                                      bounds.top + 24,
+                                    );
+                                  }
+                                }}
+                                draggable={!isPreview}
+                                onDragStart={(event) => {
+                                  event.dataTransfer.effectAllowed = "move";
+                                  event.dataTransfer.setData("text/jj-revision", revision.commitId);
+                                  setDraggedRevisionId(revision.commitId);
+                                  const ghost = document.createElement("div");
+                                  ghost.style.cssText =
+                                    "position:absolute;top:-1000px;left:-1000px;width:300px;padding:8px 12px;border:1px solid #54a5ff;border-radius:8px;background:#20242b;color:#fff;font:12px system-ui;box-shadow:0 8px 24px #0008";
+                                  branchFrom(revision.commitId)
+                                    .slice(0, 6)
+                                    .forEach((branchRevision, index) => {
+                                      const ghostRow = document.createElement("div");
+                                      ghostRow.textContent = `${index === 0 ? "●" : "│"}  ${label(branchRevision)}`;
+                                      ghostRow.style.cssText =
+                                        "padding:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+                                      ghost.append(ghostRow);
+                                    });
+                                  if (branchFrom(revision.commitId).length > 6) {
+                                    const remainder = document.createElement("div");
+                                    remainder.textContent = `… and ${branchFrom(revision.commitId).length - 6} more revisions`;
+                                    remainder.style.cssText = "padding:4px 0;color:#aaa";
+                                    ghost.append(remainder);
+                                  }
+                                  document.body.append(ghost);
+                                  event.dataTransfer.setDragImage(ghost, 16, 16);
+                                  window.setTimeout(() => ghost.remove(), 0);
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedRevisionId(null);
+                                  setDropTargetId(null);
+                                }}
+                              >
+                                <RevisionGraphCell
+                                  row={graphRow}
+                                  width={graphWidth}
+                                  laneGap={laneGap}
+                                  current={isCurrent}
+                                  preview={isPreview}
+                                />
+                                <span className="jj-revision-main">
+                                  <span className="jj-revision-title">
+                                    {isEvolved && (
+                                      <span className="jj-badge jj-badge-evolved">Evolved</span>
+                                    )}
+                                    <span className="jj-revision-subject">{label(revision)}</span>
+                                  </span>
+                                  <span className="jj-labels">
+                                    {isCurrent && (
+                                      <span className="jj-badge jj-badge-current">@</span>
+                                    )}
+                                    {revision.bookmarks.map((bookmark) => (
+                                      <span className="jj-badge jj-badge-bookmark" key={bookmark}>
+                                        {bookmark}
+                                      </span>
+                                    ))}
+                                    {revision.tags.map((tag) => (
+                                      <span className="jj-badge jj-badge-tag" key={tag}>
+                                        {tag}
+                                      </span>
+                                    ))}
+                                    {revision.workspaces.map((workspace) => (
+                                      <span
+                                        className={`jj-badge jj-badge-workspace${workspace === "default" ? " jj-badge-workspace-default" : ""}`}
+                                        key={workspace}
+                                      >
+                                        {workspace}
+                                      </span>
+                                    ))}
+                                  </span>
+                                </span>
+                                <span className="jj-revision-meta">
+                                  <time
+                                    className="jj-revision-age"
+                                    title={new Date(revision.timestamp * 1000).toLocaleString()}
+                                  >
+                                    {relativeTime(revision.timestamp)}
+                                  </time>
+                                  <code
+                                    className="jj-change-id"
+                                    title={`Change ID ${revision.changeId}`}
+                                  >
+                                    <span className="jj-change-id-prefix">{changePrefix}</span>
+                                    {revision.changeId.slice(changePrefix.length)}
+                                  </code>
+                                  <span className="jj-chevron">›</span>
+                                </span>
+                              </button>
+                              {isSelected && renderRevisionDetails(revision)}
+                              {pendingHere && (
+                                <div
+                                  className="jj-rebase-preview"
+                                  role="group"
+                                  aria-label="Preview branch rebase"
+                                >
+                                  <div className="jj-rebase-preview-heading">
+                                    <span>
+                                      Move branch onto <strong>{label(revision)}</strong>
+                                    </span>
+                                    <span>
+                                      {pendingRebase.branch.length}{" "}
+                                      {pendingRebase.branch.length === 1 ? "revision" : "revisions"}{" "}
+                                      will move
+                                    </span>
+                                  </div>
+                                  <div className="jj-rebase-preview-branch">
+                                    {pendingRebase.branch.map((branchRevision) => (
+                                      <div
+                                        className="jj-rebase-preview-row"
+                                        key={branchRevision.commitId}
+                                      >
+                                        <span
+                                          className="jj-rebase-preview-node"
+                                          aria-hidden="true"
+                                        />
+                                        {label(branchRevision)}
+                                        <code>{branchRevision.changeId.slice(0, 8)}</code>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <code className="jj-confirm-code">
+                                    jj rebase -s {pendingRebase.source.commitId} -d{" "}
+                                    {pendingRebase.destination.commitId}
+                                  </code>
+                                  <div className="jj-rebase-preview-actions">
+                                    <button
+                                      className="jj-button"
+                                      disabled={busy}
+                                      onClick={() => setPendingRebase(null)}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      className="jj-button jj-button-primary"
+                                      disabled={busy}
+                                      onClick={() => void confirmRebase()}
+                                    >
+                                      {busy ? "Moving…" : "Rebase branch"}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </article>
+                          );
+                        })}
+                  </section>
+                ))}
+            </main>
+          ) : (
+            <main className="jj-scm">
+              <div className="jj-scm-heading">
+                Changes <span className="jj-count">{snapshot.changes.length}</span>
+              </div>
+              <div className="jj-scm-layout">
+                <div className="jj-scm-list" ref={sourceListRef}>
+                  <section
+                    className={`jj-group jj-working-group${diffTarget ? "" : " jj-working-group-fill"}`}
+                    style={diffTarget ? { flexBasis: `${changesPanePercent}%` } : undefined}
+                  >
+                    <button
+                      className="jj-group-header"
+                      aria-expanded={changesExpanded}
+                      onClick={() => setChangesExpanded((expanded) => !expanded)}
+                    >
+                      <span className="jj-chevron">›</span>
+                      <span>Working Copy</span>
+                      <span className="jj-badge jj-badge-current">@</span>
+                      <span className="jj-count">{snapshot.changes.length}</span>
+                    </button>
+                    {changesExpanded && (
+                      <div className="jj-group-content jj-working-content">
+                        {snapshot.changes.length === 0 ? (
+                          <div className="jj-selection-hint">Working copy clean</div>
+                        ) : (
+                          snapshot.changes.map((file) => (
+                            <div className="jj-file-entry" key={file.path}>
+                              <input
+                                className="jj-checkbox"
+                                type="checkbox"
+                                aria-label={`Select ${file.path} for split`}
+                                checked={selectedWorkingFiles.includes(file.path)}
+                                onChange={(event) =>
+                                  setSelectedWorkingFiles((current) =>
+                                    event.target.checked
+                                      ? [...current, file.path]
+                                      : current.filter(
+                                          (selectedPath) => selectedPath !== file.path,
+                                        ),
+                                  )
+                                }
+                              />
+                              <button
+                                className="jj-file-button"
+                                data-selected={
+                                  diffTarget?.revision === null && diffTarget.path === file.path
+                                }
+                                onClick={() => selectFileDiff(file.path, null)}
+                              >
+                                <span className={`jj-status ${statusClass(file.status)}`}>
+                                  {file.status}
+                                </span>
+                                <FilePath path={file.path} />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                        <div className="jj-working-actions">
+                          {editingWorkingDescription && (
+                            <textarea
+                              className="jj-input"
+                              aria-label="Working copy description"
+                              placeholder="Describe working copy…"
+                              value={workingDescription}
+                              onChange={(event) => setWorkingDescription(event.target.value)}
+                            />
+                          )}
+                          <div className="jj-working-actions-row">
+                            <button
+                              className="jj-button"
+                              disabled={busy}
+                              onClick={() =>
+                                editingWorkingDescription
+                                  ? void runAction(() =>
+                                      rpc.call("describe", {
+                                        path,
+                                        hostId,
+                                        revision: snapshot.currentRevision,
+                                        description: workingDescription,
+                                      }),
+                                    )
+                                  : setEditingWorkingDescription(true)
+                              }
+                            >
+                              {editingWorkingDescription ? "Save description" : "Describe @"}
+                            </button>
+                            {editingWorkingDescription && (
+                              <button
+                                className="jj-button"
+                                disabled={busy}
+                                onClick={() => setEditingWorkingDescription(false)}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                            <button
+                              className="jj-button jj-button-primary"
+                              disabled={busy || selectedWorkingFiles.length === 0}
+                              onClick={() =>
+                                void runAction(() =>
+                                  rpc.call("split", {
+                                    path,
+                                    hostId,
+                                    revision: snapshot.currentRevision,
+                                    files: selectedWorkingFiles,
+                                    message: splitMessage,
+                                  }),
+                                )
+                              }
+                            >
+                              Split {selectedWorkingFiles.length || "selected"}
+                            </button>
+                          </div>
+                          {selectedWorkingFiles.length > 0 && (
+                            <input
+                              className="jj-input"
+                              aria-label="New revision description"
+                              value={splitMessage}
+                              onChange={(event) => setSplitMessage(event.target.value)}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                  {diffTarget && (
+                    <div
+                      className="jj-scm-resizer"
+                      role="separator"
+                      aria-label="Resize Changes and Recent revisions panes"
+                      aria-orientation="horizontal"
+                      aria-valuemin={20}
+                      aria-valuemax={80}
+                      aria-valuenow={changesPanePercent}
+                      tabIndex={0}
+                      onPointerDown={(event) => {
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                        resizeSourcePane(event.clientY);
+                      }}
+                      onPointerMove={(event) => resizeSourcePane(event.clientY)}
+                      onKeyDown={(event) => {
+                        if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                          event.preventDefault();
+                          changeSourcePanePercent(
+                            changesPanePercent + (event.key === "ArrowUp" ? -5 : 5),
+                          );
+                        }
+                      }}
+                    />
+                  )}
+                  {diffTarget && (
+                    <section className="jj-group jj-history-group">
+                      <button
+                        className="jj-group-header"
+                        aria-expanded={historyExpanded}
+                        onClick={() => setHistoryExpanded((expanded) => !expanded)}
+                      >
+                        <span className="jj-chevron">›</span>
+                        <span>Recent revisions</span>
+                      </button>
+                      {historyExpanded && (
+                        <div className="jj-group-content">
+                          <label className="jj-history-depth">
+                            Show @ through @-
+                            <input
+                              className="jj-input"
+                              type="number"
+                              min={1}
+                              max={80}
+                              value={recentDepth}
+                              onChange={(event) => {
+                                const next = Math.max(1, Math.min(80, Number(event.target.value)));
+                                setRecentDepth(next);
+                                localStorage.setItem("jj-plugin-recent", String(next));
+                              }}
+                            />
+                          </label>
+                          {recentRevisions.slice(1).map((revision, index) => {
+                            const isExpanded = expandedSourceRevisionId === revision.commitId;
+                            return (
+                              <section className="jj-ancestor-group" key={revision.commitId}>
+                                <div className="jj-history-item">
+                                  <button
+                                    className="jj-ancestor-header"
+                                    aria-expanded={isExpanded}
+                                    onClick={() => toggleSourceRevision(revision)}
+                                  >
+                                    <span className="jj-chevron">›</span>
+                                    <code className="jj-ancestor-label">@-{index + 1}</code>
+                                    <span className="jj-ancestor-subject" title={label(revision)}>
+                                      {label(revision)}
+                                    </span>
+                                    <span
+                                      className="jj-ancestor-meta"
+                                      title={new Date(revision.timestamp * 1000).toLocaleString()}
+                                    >
+                                      {relativeTime(revision.timestamp)}
+                                    </span>
+                                  </button>
+                                  {revision.parents[0] && (
+                                    <button
+                                      className="jj-mini-action"
+                                      disabled={busy}
+                                      title={`Squash ${label(revision)} into its parent`}
+                                      onClick={() =>
+                                        void runAction(() =>
+                                          rpc.call("squash", {
+                                            path,
+                                            hostId,
+                                            revision: revision.commitId,
+                                            destination: revision.parents[0] ?? "@-",
+                                          }),
+                                        )
+                                      }
+                                    >
+                                      Squash
+                                    </button>
+                                  )}
+                                </div>
+                                {isExpanded && selectedRevision?.commitId === revision.commitId && (
+                                  <div className="jj-ancestor-files">
+                                    <div className="jj-section-heading">
+                                      Changed files{" "}
+                                      <span className="jj-count">
+                                        {revisionFilesLoading ? "…" : revisionFiles.length}
+                                      </span>
+                                    </div>
+                                    {revisionFilesError && (
+                                      <div className="jj-error-inline" role="alert">
+                                        {revisionFilesError}
+                                      </div>
+                                    )}
+                                    {revisionFilesLoading ? (
+                                      <div className="jj-selection-hint">Loading files…</div>
+                                    ) : (
+                                      revisionFiles.map((file) => (
+                                        <div className="jj-file-entry" key={file.path}>
+                                          <input
+                                            className="jj-checkbox"
+                                            type="checkbox"
+                                            aria-label={`Select ${file.path} for split`}
+                                            checked={selectedRevisionFiles.includes(file.path)}
+                                            onChange={(event) =>
+                                              setSelectedRevisionFiles((current) =>
+                                                event.target.checked
+                                                  ? [...current, file.path]
+                                                  : current.filter(
+                                                      (selectedPath) => selectedPath !== file.path,
+                                                    ),
+                                              )
+                                            }
+                                          />
+                                          <button
+                                            className="jj-file-button"
+                                            data-selected={
+                                              diffTarget?.revision === revision.commitId &&
+                                              diffTarget.path === file.path
+                                            }
+                                            onClick={() =>
+                                              selectFileDiff(file.path, revision.commitId)
+                                            }
+                                          >
+                                            <span
+                                              className={`jj-status ${statusClass(file.status)}`}
+                                            >
+                                              {file.status}
+                                            </span>
+                                            <FilePath path={file.path} />
+                                          </button>
+                                        </div>
+                                      ))
+                                    )}
+                                    {!revisionFilesLoading && revisionFiles.length === 0 && (
+                                      <div className="jj-selection-hint">
+                                        No file changes in this revision.
+                                      </div>
+                                    )}
+                                    <div className="jj-ancestor-ops">
+                                      <textarea
+                                        className="jj-input"
+                                        aria-label="Revision description"
+                                        value={description}
+                                        onChange={(event) => setDescription(event.target.value)}
+                                      />
+                                      <div className="jj-ancestor-actions">
+                                        <button
+                                          className="jj-button"
+                                          disabled={busy}
+                                          onClick={() =>
+                                            void runAction(() =>
+                                              rpc.call("describe", {
+                                                path,
+                                                hostId,
+                                                revision: revision.commitId,
+                                                description,
+                                              }),
+                                            )
+                                          }
+                                        >
+                                          Describe
+                                        </button>
+                                        <button
+                                          className="jj-button"
+                                          disabled={busy || selectedRevisionFiles.length === 0}
+                                          onClick={() =>
+                                            void runAction(() =>
+                                              rpc.call("split", {
+                                                path,
+                                                hostId,
+                                                revision: revision.commitId,
+                                                files: selectedRevisionFiles,
+                                                message: splitMessage,
+                                              }),
+                                            )
+                                          }
+                                        >
+                                          Split selected
+                                        </button>
+                                        {revision.parents[0] && (
+                                          <button
+                                            className="jj-button"
+                                            disabled={busy}
+                                            onClick={() =>
+                                              void runAction(() =>
+                                                rpc.call("squash", {
+                                                  path,
+                                                  hostId,
+                                                  revision: revision.commitId,
+                                                  destination: revision.parents[0] ?? "@-",
+                                                }),
+                                              )
+                                            }
+                                          >
+                                            Squash into parent
+                                          </button>
+                                        )}
+                                      </div>
+                                      {selectedRevisionFiles.length > 0 && (
+                                        <input
+                                          className="jj-input"
+                                          aria-label="New revision description"
+                                          value={splitMessage}
+                                          onChange={(event) => setSplitMessage(event.target.value)}
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </section>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </section>
+                  )}
+                </div>
+                {diffTarget && (
+                  <aside className="jj-preview">
+                    <div className="jj-preview-header">
+                      <span>{diffTarget.path}</span>
+                      <button
+                        className="jj-preview-close"
+                        aria-label="Close diff preview"
+                        onClick={() => setDiffTarget(null)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                    <div className="jj-preview-body">
+                      <DiffPreview
+                        path={diffTarget.path}
+                        patch={diffPatch}
+                        loading={diffLoading}
+                        error={diffError}
+                      />
+                    </div>
+                  </aside>
+                )}
+              </div>
+            </main>
+          )}
+        </>
+      )}
+      {projectPickerOpen && (
+        <div
+          className="jj-picker-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              directoryRequest.current += 1;
+              setProjectPickerOpen(false);
+            }
+          }}
+        >
+          <section
+            className="jj-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Choose project"
+          >
+            <div className="jj-picker-header">
+              {isDirectoryQuery && (
+                <button
+                  className="jj-button"
+                  aria-label="Back to projects"
+                  onClick={() => {
+                    setProjectQuery("");
+                    setDirectoryBrowser(null);
+                  }}
+                >
+                  ←
+                </button>
+              )}
+              <div className="jj-picker-path">
+                <input
+                  autoFocus
+                  aria-label="Search projects or enter a folder path"
+                  placeholder="Search projects or type / for a folder…"
+                  value={projectQuery}
+                  onChange={(event) => {
+                    const query = event.target.value;
+                    setProjectQuery(query);
+                    setProjectIndex(0);
+                    setDirectoryIndex(0);
+                    setDirectoryBrowser(null);
+                    setError(null);
+                    if (!query.startsWith("/")) directoryRequest.current += 1;
+                  }}
+                  onKeyDown={handleDirectoryKeyDown}
+                />
+              </div>
+              {isDirectoryQuery && (
+                <button className="jj-button" onClick={chooseDirectory}>
+                  Choose <kbd>⌘ Enter</kbd>
+                </button>
+              )}
+            </div>
+            <div className="jj-picker-section">{isDirectoryQuery ? "Folders" : "Projects"}</div>
+            <div
+              className="jj-picker-list"
+              role="listbox"
+              aria-label={isDirectoryQuery ? "Folders" : "Projects"}
+            >
+              {isDirectoryQuery
+                ? directoryEntries.map((entry, index) => (
+                    <button
+                      id={`jj-picker-entry-${index}`}
+                      className="jj-picker-entry"
+                      key={entry.path}
+                      role="option"
+                      aria-selected={directoryIndex === index}
+                      data-active={directoryIndex === index}
+                      onMouseEnter={() => setDirectoryIndex(index)}
+                      onFocus={() => setDirectoryIndex(index)}
+                      onClick={() => {
+                        setDirectoryIndex(index);
+                        void browseDirectory(entry.path);
+                      }}
+                    >
+                      <span className="jj-picker-entry-icon" aria-hidden="true"></span>
+                      {entry.name}
+                    </button>
+                  ))
+                : filteredProjectPaths.map((projectPath, index) => (
+                    <button
+                      id={`jj-project-option-${index}`}
+                      className="jj-project-option"
+                      key={`${projectPath.hostId}:${projectPath.name}:${projectPath.path}`}
+                      role="option"
+                      aria-selected={projectIndex === index}
+                      data-active={projectIndex === index}
+                      onMouseEnter={() => setProjectIndex(index)}
+                      onFocus={() => setProjectIndex(index)}
+                      onClick={() => chooseProjectPath(projectPath)}
+                    >
+                      <span className="jj-project-mark" aria-hidden="true">
+                        {projectPath.name.slice(0, 2).toLocaleUpperCase()}
+                      </span>
+                      <span className="jj-project-copy">
+                        <span>{projectPath.name}</span>
+                        <small>
+                          {hosts.find((host) => host.id === projectPath.hostId)?.name ?? "Machine"}{" "}
+                          · {projectPath.path}
+                        </small>
+                      </span>
+                      {index < 9 && <kbd>⌘ {index + 1}</kbd>}
+                    </button>
+                  ))}
+              {isDirectoryQuery && !directoryBrowser && (
+                <div className="jj-selection-hint">Loading folders…</div>
+              )}
+              {isDirectoryQuery && directoryBrowser && directoryEntries.length === 0 && (
+                <div className="jj-selection-hint">No subfolders here.</div>
+              )}
+              {!isDirectoryQuery && filteredProjectPaths.length === 0 && (
+                <div className="jj-selection-hint">
+                  No known projects match. Type / to browse folders.
+                </div>
+              )}
+              {error && (
+                <div className="jj-error-inline" role="alert">
+                  {error}
+                </div>
+              )}
+            </div>
+            <footer className="jj-picker-footer">
+              <span>
+                <kbd>↑</kbd> <kbd>↓</kbd> Navigate
+              </span>
+              <span>
+                <kbd>Enter</kbd> {isDirectoryQuery ? "Open" : "Select"}
+              </span>
+              {isDirectoryQuery && (
+                <>
+                  <span>
+                    <kbd>⌘ Enter</kbd> Choose folder
+                  </span>
+                  <span>
+                    <kbd>Backspace</kbd> Back
+                  </span>
+                </>
+              )}
+              <span>
+                <kbd>Esc</kbd> Close
+              </span>
+            </footer>
+          </section>
+        </div>
+      )}
+      {revisionContextMenu && (
+        <>
+          <div className="jj-context-backdrop" onClick={() => setRevisionContextMenu(null)} />
+          <div
+            className="jj-context-menu"
+            role="menu"
+            aria-label={`Actions for ${label(revisionContextMenu.revision)}`}
+            style={{
+              left: Math.min(revisionContextMenu.x, window.innerWidth - 215),
+              top: Math.min(revisionContextMenu.y, window.innerHeight - 210),
+            }}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setRevisionContextMenu(null);
+            }}
+          >
+            <button
+              role="menuitem"
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setSelectedRevision(revision);
+                setDescription(revision.description);
+                setDiffTarget(null);
+                setRevisionContextMenu(null);
+              }}
+            >
+              View diff
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                setSelectedRevision(revision);
+                setDescription(revision.description);
+                setDiffTarget(null);
+                setRevisionContextMenu(null);
+              }}
+            >
+              Describe…
+            </button>
+            <div className="jj-context-menu-separator" />
+            <button
+              role="menuitem"
+              disabled={revisionContextMenu.revision.parents.length === 0 || busy}
+              onClick={() => {
+                const revision = revisionContextMenu.revision;
+                const parent = revision.parents[0];
+                setRevisionContextMenu(null);
+                if (parent)
+                  void runAction(() =>
+                    rpc.call("squash", {
+                      path,
+                      hostId,
+                      revision: revision.commitId,
+                      destination: parent,
+                    }),
+                  );
+              }}
+            >
+              Squash into parent
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMoveSource(revisionContextMenu.revision);
+                setPendingRebase(null);
+                setRevisionContextMenu(null);
+              }}
+            >
+              Rebase branch onto…
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 };
 
 export default definePluginApp((app) => {
@@ -824,8 +1883,27 @@ export default definePluginApp((app) => {
     icon: "GitBranch",
     path: "jj",
     component: () => <Page />,
-    fixedTabs: [{ panelId: "jj-workbench", id: "jj-right-sidebar", title: "Jujutsu", icon: "GitBranch", layout: "flush", component: () => <Page /> }],
+    fixedTabs: [
+      {
+        panelId: "jj-workbench",
+        id: "jj-right-sidebar",
+        title: "Jujutsu",
+        icon: "GitBranch",
+        layout: "flush",
+        component: () => <Page />,
+      },
+    ],
   });
-  app.slots.threadPanelAction({ id: "thread-workbench", title: "Jujutsu workbench", icon: "GitBranch", layout: "flush", component: ({ threadId }) => <Page threadId={threadId} /> });
-  app.slots.experimental_threadHeaderAction({ id: "open-thread-workbench", title: "Jujutsu workbench", component: ThreadHeaderAction });
+  app.slots.threadPanelAction({
+    id: "thread-workbench",
+    title: "Jujutsu workbench",
+    icon: "GitBranch",
+    layout: "flush",
+    component: ({ threadId }) => <Page threadId={threadId} />,
+  });
+  app.slots.experimental_threadHeaderAction({
+    id: "open-thread-workbench",
+    title: "Jujutsu workbench",
+    component: ThreadHeaderAction,
+  });
 });
