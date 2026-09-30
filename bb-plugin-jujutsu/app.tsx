@@ -103,6 +103,7 @@ const styles = `
 .jj-revision-title{display:flex;flex:1;min-width:0;align-items:center;gap:4px;overflow:hidden;white-space:nowrap}
 .jj-revision-title .jj-badge{flex:none;max-width:160px}
 .jj-revision-subject{min-width:0;flex:1}
+.jj-picker{width:min(680px,calc(100vw - 32px));max-height:min(560px,78vh);padding:10px 8px 0;border-radius:12px}.jj-picker-header{padding:0 8px 8px;gap:6px}.jj-picker-path input{height:38px;font-size:14px}.jj-picker-section{padding:10px 12px 5px;font-size:11px}.jj-picker-list{max-height:min(430px,60vh);min-height:0;padding:0 5px 6px}.jj-project-option{min-height:48px;gap:9px;padding:6px 8px;border-radius:6px}.jj-project-mark{width:22px;height:22px;border-radius:6px;font-size:9px}.jj-project-copy{gap:0;font-size:13px}.jj-project-copy small{font-size:10px}.jj-picker-entry{min-height:34px;padding:5px 9px;border-radius:6px}.jj-picker-footer{gap:12px;padding:8px 10px;font-size:10px}.jj-picker-footer kbd{padding:1px 4px}
 `;
 
 const RevisionGraphCell = ({
