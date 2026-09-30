@@ -1,11 +1,105 @@
-import { useEffect, useState } from "react";
-import { definePluginApp, useBbContext, useRpc } from "@get-bb/plugin-sdk/app";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { definePluginApp, useBbContext, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import type { AccountProfile, rpcContract } from "./server";
 import "./app.css";
 
 const reasoningEffortValues = ["none", "low", "medium", "high", "xhigh", "ultracode", "max", "ultra"] as const;
 type ReasoningEffort = typeof reasoningEffortValues[number];
 const isReasoningEffort = (value: string): value is ReasoningEffort => reasoningEffortValues.some((effort) => effort === value);
+
+const GlobalModelPicker = () => {
+  const composer = useComposer();
+  const sdk = useSdk();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [models, setModels] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string; model: string; displayName: string; reasoningEffort: ReasoningEffort }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [popoverPosition, setPopoverPosition] = useState({ left: 12, top: 12, maxHeight: 560 });
+  const visibleModels = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    if (!normalizedQuery) return models;
+    const terms = normalizedQuery.split(/\s+/u);
+    return models.filter((entry) => {
+      const searchable = `${entry.displayName} ${entry.model} ${entry.providerName} ${entry.badge}`.toLocaleLowerCase();
+      return terms.every((term) => searchable.includes(term));
+    });
+  }, [models, query]);
+
+  useEffect(() => {
+    if (!open || models.length || loading) return;
+    let active = true;
+    setLoading(true);
+    setError("");
+    void sdk.providers.list().then(async (providers) => {
+      const accountProviders = providers.filter((provider) => provider.id.startsWith("ai-account-"));
+      const catalogs = await Promise.all(accountProviders.map(async (provider) => {
+        try {
+          const result = await sdk.providers.models({ providerId: provider.id });
+          return result.models.map((model) => ({
+            providerId: provider.id,
+            providerName: provider.displayName.replace(/^[^·]+·\s*/u, ""),
+            badge: provider.displayName.match(/^([^·]+)·/u)?.[1]?.trim() ?? provider.displayName.slice(0, 2).toUpperCase(),
+            color: provider.strings?.iconTint?.dark ?? "#64748B",
+            model: model.model,
+            displayName: model.displayName,
+            reasoningEffort: model.defaultReasoningEffort,
+          }));
+        } catch {
+          return [];
+        }
+      }));
+      if (active) setModels(catalogs.flat().sort((left, right) => left.displayName.localeCompare(right.displayName) || left.providerName.localeCompare(right.providerName)));
+    }).catch(() => {
+      if (active) setError("Could not load account models. Check the selected machine and provider sign-in.");
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [open]);
+
+  const selectModel = async (entry: typeof models[number]) => {
+    setError("");
+    try {
+      await composer.experimental_setSelection({ providerId: entry.providerId, model: entry.model, reasoningLevel: entry.reasoningEffort });
+      setOpen(false);
+      setQuery("");
+    } catch {
+      setError("BB could not apply this model to the current composer.");
+    }
+  };
+
+  return <div className="aa-global-picker">
+    <button className="aa-global-picker-trigger" type="button" aria-expanded={open} onClick={(event) => {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const roomBelow = window.innerHeight - bounds.bottom - 12;
+      const roomAbove = bounds.top - 12;
+      const placeBelow = roomBelow >= roomAbove;
+      const maxHeight = Math.max(120, Math.min(560, placeBelow ? roomBelow : roomAbove - 8));
+      setPopoverPosition({
+        left: Math.max(12, Math.min(bounds.left, window.innerWidth - 452)),
+        top: placeBelow ? bounds.bottom + 8 : Math.max(12, bounds.top - maxHeight - 8),
+        maxHeight,
+      });
+      setOpen((current) => !current);
+    }}>All models <span aria-hidden="true">⌄</span></button>
+    {open ? createPortal(<section className="aa-global-picker-popover" style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }} aria-label="Search all account models">
+      <label className="aa-global-picker-search"><span aria-hidden="true">⌕</span><input autoFocus value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Search all accounts and models" /></label>
+      <div className="aa-global-picker-results">
+        {loading ? <p className="aa-global-picker-empty">Loading account models…</p> : null}
+        {!loading && error ? <p className="aa-global-picker-empty">{error}</p> : null}
+        {!loading && !error && visibleModels.length === 0 ? <p className="aa-global-picker-empty">No matching account models.</p> : null}
+        {visibleModels.map((entry) => <button className="aa-global-picker-row" type="button" key={`${entry.providerId}:${entry.model}`} onClick={() => void selectModel(entry)}>
+          <span className="aa-account-badge" style={{ backgroundColor: entry.color }}>{entry.badge}</span>
+          <span className="aa-global-picker-row-copy"><strong>{entry.displayName}</strong><small>{entry.providerName} · {entry.model}</small></span>
+          <span className="aa-global-picker-effort">{entry.reasoningEffort}</span>
+        </button>)}
+      </div>
+      <footer className="aa-global-picker-footer">Reasoning effort follows the model default. Change it separately in the composer.</footer>
+    </section>, document.body) : null}
+  </div>;
+};
 
 const AccountPage = () => {
   const rpc = useRpc<typeof rpcContract>();
@@ -20,6 +114,7 @@ const AccountPage = () => {
   const [selectedHostId, setSelectedHostId] = useState("");
   const [catalog, setCatalog] = useState<Array<{ id: string; displayName: string; isDefault: boolean; supportedReasoningEfforts: Array<{ reasoningEffort: ReasoningEffort; description: string }>; defaultReasoningEffort: ReasoningEffort }>>([]);
   const [customDraft, setCustomDraft] = useState({ id: "", displayName: "" });
+  const [customModelFormOpen, setCustomModelFormOpen] = useState(false);
   const [refreshingCatalog, setRefreshingCatalog] = useState(false);
   const [scopeMode, setScopeMode] = useState<"default" | "project" | "machine" | "project-machine">("default");
   const [scopeHostId, setScopeHostId] = useState("");
@@ -40,10 +135,11 @@ const AccountPage = () => {
   useEffect(() => {
     void rpc.call("machines", null).then((result) => {
       setMachines(result.machines);
-      const connected = result.machines.find((machine) => machine.status === "connected");
-      if (connected) {
-        setSelectedHostId(connected.id);
-        setScopeHostId(connected.id);
+      const selectedMachine = result.machines.find((machine) => machine.status === "connected") ?? result.machines[0];
+      if (selectedMachine) {
+        setSelectedHostId(selectedMachine.id);
+        setScopeHostId(selectedMachine.id);
+        setScopeMode("machine");
       }
     }).catch(() => setMachines([]));
   }, []);
@@ -55,8 +151,8 @@ const AccountPage = () => {
 
   useEffect(() => {
     if (!selected) return;
-    setScopeMode("default");
-    setScopeHostId("");
+    setScopeMode(selectedHostId ? "machine" : "default");
+    setScopeHostId(selectedHostId);
     setDraft({
       displayName: selected.displayName,
       path: selected.path,
@@ -184,6 +280,26 @@ const AccountPage = () => {
     setDraft((current) => ({ ...current, path: override?.path ?? selected.path }));
   };
 
+  const projectScope = scopeMode === "project" || scopeMode === "project-machine" ? "project" : "all";
+  const machineScope = scopeMode === "machine" || scopeMode === "project-machine" ? scopeHostId : "all";
+
+  const updateProjectScope = (value: string) => {
+    const hasMachine = machineScope !== "all";
+    const mode = value === "project"
+      ? hasMachine ? "project-machine" : "project"
+      : hasMachine ? "machine" : "default";
+    selectScope(mode, scopeHostId);
+  };
+
+  const updateMachineScope = (value: string) => {
+    setScopeHostId(value === "all" ? "" : value);
+    const hasProject = projectScope === "project";
+    const mode = value === "all"
+      ? hasProject ? "project" : "default"
+      : hasProject ? "project-machine" : "machine";
+    selectScope(mode, value === "all" ? "" : value);
+  };
+
   const saveAccount = async () => {
     if (!selected) return;
     const hiddenModelIds = Array.from(new Set(draft.hiddenText.split(/\s+/u).map((model) => model.trim()).filter(Boolean)));
@@ -278,6 +394,7 @@ const AccountPage = () => {
     }
     void persist({ customModels: [...selected.customModels, { id, displayName }], modelOrder: [...selected.modelOrder, id] });
     setCustomDraft({ id: "", displayName: "" });
+    setCustomModelFormOpen(false);
   };
 
   const removeCustomModel = (modelId: string) => {
@@ -325,21 +442,25 @@ const AccountPage = () => {
 
   return (
     <main className="aa-page">
-      <header className="aa-header">
-        <div>
-          <p className="aa-kicker">ACCOUNT DESK</p>
-          <h1>AI Accounts</h1>
-          <p className="aa-subtitle">Keep subscription logins separate and choose exactly which provider models BB can offer.</p>
-        </div>
-        <div className="aa-add-actions">
-          <button disabled={saving} onClick={() => void addAccount("codex")}>＋ Codex account</button>
-          <button disabled={saving} onClick={() => void addAccount("opencode-go")}>＋ OpenCode Go</button>
+      <header className="aa-page-toolbar">
+        <h1>AI Accounts</h1>
+        <div className="aa-scope-bar">
+          <span>Applying settings for</span>
+          <select aria-label="Project scope" value={projectScope} onChange={(event) => updateProjectScope(event.currentTarget.value)}>
+            <option value="all">All projects</option>
+            <option value="project" disabled={!context.projectId}>This project</option>
+          </select>
+          <span>on</span>
+          <select aria-label="Machine scope" value={machineScope} onChange={(event) => updateMachineScope(event.currentTarget.value)}>
+            <option value="all">All machines</option>
+            {machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}</option>)}
+          </select>
         </div>
       </header>
 
       <div className="aa-layout">
         <aside className="aa-rail" aria-label="Provider accounts">
-          <div className="aa-rail-heading"><span>YOUR ACCOUNTS</span><span>{accounts.length}</span></div>
+          <div className="aa-rail-heading"><span>YOUR ACCOUNTS <i>{accounts.length}</i></span><div className="aa-add-actions"><button disabled={saving} onClick={() => void addAccount("codex")}>＋ Codex</button><button disabled={saving} onClick={() => void addAccount("opencode-go")}>＋ OpenCode Go</button></div></div>
           {accounts.length === 0 && <p className="aa-empty">Add an account to give it a private provider entry in the model picker.</p>}
           {(["codex", "opencode-go"] as const).map((provider) => {
             const providerAccounts = accounts.filter((account) => account.provider === provider);
@@ -370,17 +491,6 @@ const AccountPage = () => {
               <label className="aa-switch-label"><span>{selected.enabled ? "Enabled in model picker" : "Hidden from model picker"}</span><input type="checkbox" checked={selected.enabled} onChange={(event) => void persist({ enabled: event.currentTarget.checked })} /><span className="aa-switch" /></label>
             </div>
 
-            <div className="aa-scope-bar">
-              <span>Applying runtime path for</span>
-              <select value={scopeMode} onChange={(event) => selectScope(event.currentTarget.value as typeof scopeMode)}>
-                <option value="default">All projects · all machines</option>
-                <option value="project" disabled={!context.projectId}>This project · all machines</option>
-                <option value="machine">All projects · selected machine</option>
-                <option value="project-machine" disabled={!context.projectId}>This project · selected machine</option>
-              </select>
-              {(scopeMode === "machine" || scopeMode === "project-machine") ? <select value={scopeHostId} onChange={(event) => { setScopeHostId(event.currentTarget.value); selectScope(scopeMode, event.currentTarget.value); }}>{machines.map((machine) => <option key={machine.id} value={machine.id}>{machine.name}</option>)}</select> : null}
-            </div>
-
             <section className="aa-section">
               <div className="aa-section-heading"><div><span className="aa-index">01</span><h3>Account identity</h3></div><button className="aa-quiet" onClick={() => void refreshIdentity()} disabled={selected.provider !== "codex"}>↻ Refresh</button></div>
               <div className="aa-field-grid identity">
@@ -407,13 +517,13 @@ const AccountPage = () => {
                 const next = allHidden ? [] : catalogModels.map((model) => model.id);
                 setDraft((current) => ({ ...current, hiddenText: next.join("\n") }));
                 void persist({ hiddenModelIds: next });
-              }}>{catalogModels.length > 0 && catalogModels.every((model) => hiddenModelIds.has(model.id)) ? "Enable all" : "Disable all"}</button><span>{catalogModels.length} models · {favoriteModels.length} favorites · {hiddenModels.length} hidden</span><button className="aa-quiet" onClick={() => document.getElementById("aa-custom-model-id")?.focus()}>＋ Add custom model</button></div>
+              }}>{catalogModels.length > 0 && catalogModels.every((model) => hiddenModelIds.has(model.id)) ? "Enable all" : "Disable all"}</button><span>{catalogModels.length} models · {favoriteModels.length} favorites · {hiddenModels.length} hidden</span><button className="aa-quiet" onClick={() => setCustomModelFormOpen((open) => !open)}>{customModelFormOpen ? "Cancel" : "＋ Add custom model"}</button></div>
               {catalogModels.length ? <>
                 {favoriteModels.length > 0 ? <section className="aa-model-group"><h4>Favorites</h4>{renderModelRows(favoriteModels)}</section> : null}
                 <section className="aa-model-group"><h4>All</h4>{renderModelRows(availableModels)}</section>
                 {hiddenModels.length > 0 ? <section className="aa-model-group"><h4>Hidden from picker</h4>{renderModelRows(hiddenModels)}</section> : null}
               </> : <p className="aa-empty">{selectedHostId ? "No models returned yet. Sign in on this machine, then refresh the provider catalog." : "Choose a machine to read the provider’s model catalog."}</p>}
-              <div className="aa-custom-model-form"><label>Model ID<input id="aa-custom-model-id" value={customDraft.id} onChange={(event) => setCustomDraft((current) => ({ ...current, id: event.currentTarget.value }))} placeholder="provider/model-id" /></label><label>Display name<input value={customDraft.displayName} onChange={(event) => setCustomDraft((current) => ({ ...current, displayName: event.currentTarget.value }))} placeholder="Custom model" /></label><button className="aa-quiet" onClick={addCustomModel}>Add model</button></div>
+              {customModelFormOpen ? <div className="aa-custom-model-form"><label>Model ID<input id="aa-custom-model-id" value={customDraft.id} onChange={(event) => setCustomDraft((current) => ({ ...current, id: event.currentTarget.value }))} placeholder="provider/model-id" /></label><label>Display name<input value={customDraft.displayName} onChange={(event) => setCustomDraft((current) => ({ ...current, displayName: event.currentTarget.value }))} placeholder="Custom model" /></label><button className="aa-quiet" onClick={addCustomModel}>Add model</button></div> : null}
             </section>
 
             <footer className="aa-footer">
@@ -432,6 +542,11 @@ const AccountPage = () => {
 };
 
 export default definePluginApp((app) => {
+  app.composer.customize({
+    id: "ai-accounts-model-search",
+    scopes: ["new-thread"],
+    actions: [{ id: "global-model-picker", component: GlobalModelPicker }],
+  });
   app.slots.navPanel({
     id: "accounts",
     title: "AI Accounts",

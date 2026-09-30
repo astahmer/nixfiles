@@ -166,7 +166,7 @@ export default async function plugin(bb: BbPluginApi) {
         id: providerId,
         displayName,
         family: account.provider === "codex" ? "codex" : "opencode-go",
-        icon: account.provider === "codex" ? "Bot" : "Sparkles",
+        icon: "./icons/account.svg",
         strings: {
           signInHint: account.provider === "codex"
             ? "Select " + displayName + ", then choose ChatGPT sign-in. This profile stores its login under " + account.path + "."
