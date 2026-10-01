@@ -4,8 +4,9 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
-import { toRemainingPercent, usageChartBucketMs, usageMigrations, usageRangeStart, storeThreadUsageEvents, upsertQuotaPollState, upsertQuotaWindow } from "./usage-history.ts";
+import { toRemainingPercent, usageChartBucketMs, usageMigrations, usageRangeStart, storeThreadUsageEvents, upsertBankedResets, upsertQuotaPollState, upsertQuotaWindow, readLatestQuotaSnapshots } from "./usage-history.ts";
 import { scanLocalUsageHistory } from "./usage-sources.ts";
+import { fetchCodexResetCredits } from "./codex-reset-credits.ts";
 import { providerIconOptions } from "./provider-icons";
 
 const providerSchema = z.enum(["codex", "opencode-go"]);
@@ -66,6 +67,7 @@ const usageSummarySchema = z.object({
   hosts: z.array(z.object({ id: z.string(), name: z.string(), status: z.string() })),
   quota: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number(), status: z.string(), message: z.string().nullable() })),
   quotaHistory: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number() })),
+  bankedResets: z.array(z.object({ accountId: z.string(), hostId: z.string(), balance: z.number(), expiresAt: z.string().nullable(), capturedAt: z.number() })),
   tokenTotals: z.object({ totalTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number(), activeTokens: z.number() }),
   tokenSeries: z.array(z.object({ bucketAt: z.number(), accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), model: z.string().nullable(), totalTokens: z.number(), activeTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number() })),
   tokenBreakdown: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), threadId: z.string().nullable(), projectId: z.string().nullable(), model: z.string().nullable(), source: z.string(), totalTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number() })),
@@ -246,24 +248,21 @@ export default async function plugin(bb: BbPluginApi) {
     const now = Date.now();
     const rangeStart = usageRangeStart(range, now);
     const bucketMs = usageChartBucketMs(range);
-    const quota = usageDb.prepare(`WITH latest AS (
-      SELECT account_id, host_id, window_key, resets_at, MAX(captured_at) AS captured_at
-      FROM quota_snapshots GROUP BY account_id, host_id, window_key, resets_at
-    ) SELECT q.account_id AS accountId, q.account_name AS accountName, q.provider, q.host_id AS hostId,
-      q.window_key AS windowKey, q.label, q.used_percent AS usedPercent, q.resets_at AS resetsAt, q.captured_at AS capturedAt,
-      COALESCE(p.status, 'unknown') AS status, p.message
-      FROM latest l JOIN quota_snapshots q ON q.account_id = l.account_id AND q.host_id = l.host_id
-        AND q.window_key = l.window_key AND q.captured_at = l.captured_at
-        AND (q.resets_at = l.resets_at OR (q.resets_at IS NULL AND l.resets_at IS NULL))
-      LEFT JOIN quota_poll_state p ON p.account_id = q.account_id AND p.host_id = q.host_id
-      ORDER BY q.account_name, q.host_id, q.label`).all() as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number; status: string; message: string | null }>;
+    const quota = readLatestQuotaSnapshots(usageDb).map((entry) => {
+      const poll = usageDb.prepare("SELECT status, message FROM quota_poll_state WHERE account_id = ? AND host_id = ?")
+        .get(entry.accountId, entry.hostId) as { status: string; message: string | null } | undefined;
+      return { ...entry, status: poll?.status ?? "unknown", message: poll?.message ?? null };
+    });
     const quotaHistory = usageDb.prepare(`WITH ranked AS (
       SELECT account_id AS accountId, account_name AS accountName, provider, host_id AS hostId, window_key AS windowKey,
         label, used_percent AS usedPercent, resets_at AS resetsAt, captured_at AS capturedAt,
-        ROW_NUMBER() OVER (PARTITION BY account_id, host_id, window_key, resets_at, CAST(captured_at / ? AS INTEGER) ORDER BY captured_at DESC) AS rank
+        ROW_NUMBER() OVER (PARTITION BY account_id, host_id, window_key, CAST(captured_at / ? AS INTEGER) ORDER BY captured_at DESC, id DESC) AS rank
       FROM quota_snapshots WHERE captured_at >= ?
     ) SELECT accountId, accountName, provider, hostId, windowKey, label, usedPercent, resetsAt, capturedAt
       FROM ranked WHERE rank = 1 ORDER BY capturedAt LIMIT 5000`).all(bucketMs, rangeStart) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number }>;
+    const bankedResets = usageDb.prepare(`SELECT account_id AS accountId, host_id AS hostId, balance,
+      expires_at AS expiresAt, captured_at AS capturedAt FROM quota_banked_resets ORDER BY account_id, host_id`)
+      .all() as Array<{ accountId: string; hostId: string; balance: number; expiresAt: string | null; capturedAt: number }>;
     const tokenTotals = usageDb.prepare(`SELECT
       COALESCE(SUM(total_tokens), 0) AS totalTokens, COALESCE(SUM(input_tokens), 0) AS inputTokens,
       COALESCE(SUM(cached_input_tokens), 0) AS cachedInputTokens, COALESCE(SUM(cache_read_input_tokens), 0) AS cacheReadInputTokens,
@@ -292,6 +291,7 @@ export default async function plugin(bb: BbPluginApi) {
       hosts: hosts.map(({ id, name, status }) => ({ id, name, status })),
       quota: quota.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
       quotaHistory: quotaHistory.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
+      bankedResets,
       tokenTotals,
       tokenSeries,
       tokenBreakdown,
@@ -367,6 +367,13 @@ export default async function plugin(bb: BbPluginApi) {
           path: accountPathFor(account, null, connectedHost.id),
         }));
         await scanLocalUsageHistory({ db: usageDb, accounts: localAccounts, hostId: connectedHost.id });
+        const codexAccounts = accounts.filter((account) => account.enabled && account.provider === "codex");
+        for (let index = 0; index < codexAccounts.length; index += 4) {
+          await Promise.all(codexAccounts.slice(index, index + 4).map(async (account) => {
+            const resets = await fetchCodexResetCredits(accountPathFor(account, null, connectedHost.id));
+            if (resets) upsertBankedResets(usageDb, { accountId: account.id, hostId: connectedHost.id, ...resets, capturedAt: Date.now() });
+          }));
+        }
       }
     })().finally(() => { usageRefresh = null; });
     return usageRefresh;

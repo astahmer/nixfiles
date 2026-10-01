@@ -226,16 +226,17 @@ Resolved for this release: bounded Codex and OpenCode Go local histories are inc
 
 - [x] The Usage panel includes enabled configured accounts and every usage window returned by providers; disabled accounts are excluded.
 - [x] Remaining percent is computed as `100 - provider usedPercent`, with automated checks for 0%, 100%, invalid, absent, and reset-window values.
-- [x] Each limit displays account, window, reset countdown, observation time, and provider freshness/error state.
-- [x] Quota history is keyed by account, host, provider window, and reset cycle; charts separate reset cycles and preserve gaps.
+- [x] Limits are grouped by provider and account, with account cards and a comparison-bar layout; each window displays remaining/used percent, reset countdown, observation time, and provider freshness/error state.
+- [x] The active quota overview keeps the latest snapshot per account, host, and provider window even as reset timestamps move; the stored history remains intact, is bucket-deduplicated, and sparklines separate reset cycles and preserve gaps.
+- [x] Codex banked reset counts and earliest expiry are collected server-side when locally configured credentials and the provider reset-credit endpoint are available; failures leave this optional detail unavailable without breaking quota refresh.
 - [x] Token charts and totals use deduplicated usage facts, preserve reported token categories, and label incomplete or unavailable sources. Estimates are not included in this release.
 - [x] Repeated cumulative usage updates and duplicate local-history scans are idempotent; durable SQLite history and cursors survive plugin reloads/restarts by design.
 - [x] Provider-local ingestion reads configured account paths, stores no credentials or transcript content, and does not depend on Tokitoki.
 - [x] No estimates are displayed; provider token counts remain separate from subscription quota and billed cost.
-- [ ] Verify the footer disclosure's account/window percentages, compact-width behavior, and Usage navigation in the installed plugin runtime.
+- [x] Verify the footer disclosure's account/window percentages, compact-width behavior, and Usage navigation in the installed plugin runtime.
 - [x] The built-in BB Usage page remains host-owned. The supported Appearance preference for its Provider Usage footer shortcut was verified and documented as a user choice.
 - [x] Focused automated checks and plugin build pass.
-- [ ] Live interaction verifies the page, panel navigation, and footer disclosure in the installed plugin runtime.
+- [x] Live interaction verifies the page, panel navigation, and footer disclosure in the installed plugin runtime.
 
 ## Decisions log
 
@@ -249,3 +250,5 @@ Resolved for this release: bounded Codex and OpenCode Go local histories are inc
 | 2026-10-01 | Defer estimated API cost | This implementation has no maintained model-price table; exact token counts are more useful than stale cost estimates. |
 | 2026-10-01 | Keep the native Provider Usage footer toggle user-controlled | BB exposes a supported Appearance preference; plugin code leaves the host preference unchanged. |
 | 2026-10-01 | Require installed-runtime verification before declaring the feature fully accepted | The running plugin is sourced from a different checkout with newer account UI work; replacing it would risk discarding unrelated changes. |
+| 2026-10-01 | Group active quota windows by provider/account and offer comparison bars | Collapsing moving reset timestamps fixes duplicate cards while preserving snapshot history and per-cycle trend boundaries. |
+| 2026-10-01 | Read Codex banked reset credits as optional server-only metadata | The supplemental endpoint supplies reset inventory absent from the quota API; it is bounded, never persisted with credentials, and may be unavailable. |

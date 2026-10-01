@@ -5,7 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import Database from "better-sqlite3";
 import { scanLocalUsageHistory } from "./usage-sources.ts";
-import { decodeUsageTokenTotals, storeThreadUsageEvents, toRemainingPercent, usageMigrations, type UsageDatabase } from "./usage-history.ts";
+import { decodeUsageTokenTotals, readLatestQuotaSnapshots, storeThreadUsageEvents, toRemainingPercent, usageMigrations, type UsageDatabase } from "./usage-history.ts";
+import { parseCodexResetCredits } from "./codex-reset-credits.ts";
 
 const createUsageDatabase = () => {
   const db = new Database(":memory:");
@@ -21,6 +22,36 @@ test("remaining quota math rejects invalid percentages", () => {
   assert.equal(toRemainingPercent(101), null);
   assert.equal(toRemainingPercent(Number.NaN), null);
   assert.equal(toRemainingPercent(Number.POSITIVE_INFINITY), null);
+});
+
+test("latest quota projection keeps one active window as reset timestamps move", () => {
+  const db = createUsageDatabase();
+  const insert = db.prepare(`INSERT INTO quota_snapshots
+    (account_id, account_name, provider, provider_id, host_id, window_key, label, used_percent, resets_at, window_duration_minutes, captured_at)
+    VALUES ('codex', 'Codex Alex', 'codex', 'ai-account-codex', 'host-1', ?, ?, ?, ?, NULL, ?)`);
+  insert.run("session:0", "Session", 25, "2026-10-01T15:30:00.000Z", 1000);
+  insert.run("session:0", "Session", 40, "2026-10-01T15:31:00.000Z", 2000);
+  insert.run("weekly:0", "Weekly", 12, "2026-10-08T15:00:00.000Z", 1000);
+  const latest = readLatestQuotaSnapshots(db);
+  assert.equal(latest.length, 2);
+  assert.deepEqual(latest.map((entry) => [entry.windowKey, entry.usedPercent, entry.resetsAt]), [
+    ["session:0", 40, "2026-10-01T15:31:00.000Z"],
+    ["weekly:0", 12, "2026-10-08T15:00:00.000Z"],
+  ]);
+  db.close();
+});
+
+test("banked reset parsing reports available count and earliest valid expiry", () => {
+  assert.deepEqual(parseCodexResetCredits({
+    available_count: 3,
+    credits: [
+      { status: "available", expires_at: "2026-10-05T12:00:00.000Z" },
+      { status: "used", expires_at: "2026-10-02T12:00:00.000Z" },
+      { status: "available", expires_at: "2026-10-03T12:00:00.000Z" },
+    ],
+  }), { balance: 3, expiresAt: "2026-10-03T12:00:00.000Z" });
+  assert.deepEqual(parseCodexResetCredits({ available_count: 0, credits: [] }), { balance: 0, expiresAt: null });
+  assert.equal(parseCodexResetCredits({ available_count: -1 }), null);
 });
 
 test("token payload decoding preserves provider reported categories", () => {

@@ -107,7 +107,50 @@ export const usageMigrations = [
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );`,
+  `CREATE TABLE quota_banked_resets (
+    account_id TEXT NOT NULL,
+    host_id TEXT NOT NULL,
+    balance INTEGER NOT NULL CHECK (balance >= 0),
+    expires_at TEXT,
+    captured_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, host_id)
+  );`,
 ];
+
+export const readLatestQuotaSnapshots = (db: UsageDatabase) => db.prepare(`WITH ranked AS (
+  SELECT account_id AS accountId, account_name AS accountName, provider, host_id AS hostId,
+    window_key AS windowKey, label, used_percent AS usedPercent, resets_at AS resetsAt,
+    captured_at AS capturedAt,
+    ROW_NUMBER() OVER (PARTITION BY account_id, host_id, window_key ORDER BY captured_at DESC, id DESC) AS rank
+  FROM quota_snapshots
+) SELECT accountId, accountName, provider, hostId, windowKey, label, usedPercent, resetsAt, capturedAt
+  FROM ranked WHERE rank = 1 ORDER BY accountName, hostId, label`).all() as Array<{
+    accountId: string;
+    accountName: string;
+    provider: string;
+    hostId: string;
+    windowKey: string;
+    label: string;
+    usedPercent: number;
+    resetsAt: string | null;
+    capturedAt: number;
+  }>;
+
+export const upsertBankedResets = (db: UsageDatabase, input: {
+  accountId: string;
+  hostId: string;
+  balance: number;
+  expiresAt: string | null;
+  capturedAt: number;
+}) => {
+  db.prepare(`INSERT INTO quota_banked_resets (account_id, host_id, balance, expires_at, captured_at)
+    VALUES (@accountId, @hostId, @balance, @expiresAt, @capturedAt)
+    ON CONFLICT(account_id, host_id) DO UPDATE SET balance = excluded.balance,
+      expires_at = excluded.expires_at, captured_at = excluded.captured_at`).run({
+    ...input,
+    balance: Math.max(0, Math.floor(input.balance)),
+  });
+};
 
 export const decodeUsageTokenTotals = (value: unknown): UsageTokenTotals | null => {
   const parsed = tokenUsagePayloadSchema.safeParse(value);

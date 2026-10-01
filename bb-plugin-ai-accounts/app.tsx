@@ -699,7 +699,7 @@ const QuotaSparkline = ({ history, range }: { history: UsageSummary["quotaHistor
   for (const entry of ordered) {
     const current = segments.at(-1);
     const previous = current?.at(-1);
-    if (!current || !previous || entry.capturedAt - previous.capturedAt > gapLimit * 60 * 60 * 1000) segments.push([entry]);
+    if (!current || !previous || entry.resetsAt !== previous.resetsAt || entry.capturedAt - previous.capturedAt > gapLimit * 60 * 60 * 1000) segments.push([entry]);
     else current.push(entry);
   }
   const firstAt = ordered[0]?.capturedAt ?? Date.now();
@@ -720,6 +720,7 @@ const UsagePage = () => {
   const navigate = useBbNavigate();
   const [range, setRange] = useState<UsageRange>("7d");
   const [view, setView] = useState<"tokens" | "limits">("limits");
+  const [limitsLayout, setLimitsLayout] = useState<"accounts" | "comparison">("accounts");
   const [accountId, setAccountId] = useState("all");
   const [provider, setProvider] = useState<"all" | "codex" | "opencode-go">("all");
   const [hostId, setHostId] = useState("all");
@@ -793,19 +794,34 @@ const UsagePage = () => {
     {error ? <p className="aa-usage-message" role="alert">{error}</p> : null}
     {loading && !summary ? <p className="aa-usage-message">Loading usage history…</p> : null}
     {!loading && !error && summary && view === "limits" ? <>
-      <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Current plan windows</h2><p>Remaining is calculated as 100% minus the provider’s used percentage.</p></div></div>
-        {visibleQuota.length ? <div className="aa-quota-grid">{visibleQuota.map((entry) => <article className="aa-quota-card" key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.resetsAt ?? "none"}`}>
-          <div className="aa-quota-top"><div><strong>{entry.accountName}</strong><span>{hostName(entry.hostId)} · {entry.provider === "codex" ? "Codex" : "OpenCode Go"}</span></div><span className={`aa-quota-status ${entry.status === "ok" ? "is-ok" : "is-stale"}`}>{entry.status === "ok" ? "Current" : entry.status}</span></div>
-          <div className="aa-quota-main"><strong>{entry.remainingPercent.toFixed(0)}%</strong><span>left</span><small>{entry.usedPercent.toFixed(0)}% used</small></div>
-          <div className="aa-quota-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span style={{ width: `${entry.remainingPercent}%` }} /></div>
-          <div className="aa-quota-bottom"><strong>{entry.label}</strong><span>{formatReset(entry.resetsAt)}</span><small>Snapshot {new Date(entry.capturedAt).toLocaleTimeString()}</small></div>
-          <QuotaSparkline range={range} history={visibleHistory.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey && point.resetsAt === entry.resetsAt)} />
-          {entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}
-        </article>)}</div> : <p className="aa-usage-empty">No quota snapshots yet. Refresh to query connected account providers.</p>}
+      <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Current plan windows</h2><p>Remaining is calculated as 100% minus the provider’s reported usage.</p></div><div className="aa-layout-switch" role="group" aria-label="Limits layout"><button className={limitsLayout === "accounts" ? "is-active" : ""} aria-pressed={limitsLayout === "accounts"} type="button" onClick={() => setLimitsLayout("accounts")}>Accounts</button><button className={limitsLayout === "comparison" ? "is-active" : ""} aria-pressed={limitsLayout === "comparison"} type="button" onClick={() => setLimitsLayout("comparison")}>Compare</button></div></div>
+        {visibleQuota.length ? limitsLayout === "accounts" ? <div className="aa-provider-groups">{["codex", "opencode-go"].map((providerName) => {
+          const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
+          if (providerEntries.length === 0) return null;
+          const accountGroups = Array.from(new Map(providerEntries.map((entry) => [`${entry.accountId}:${entry.hostId}`, providerEntries.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId)])).entries());
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
+            const first = entries[0];
+            if (!first) return null;
+            const banked = summary.bankedResets.find((item) => item.accountId === first.accountId && item.hostId === first.hostId);
+            return <article className="aa-account-quota" key={groupKey}><header><div><strong>{first.accountName}</strong><span>{hostName(first.hostId)}</span></div>{banked && banked.balance > 0 ? <div className="aa-banked-reset">▣ {banked.balance} banked reset{banked.balance === 1 ? "" : "s"}{banked.expiresAt ? ` · earliest expires ${new Date(banked.expiresAt).toLocaleString()} (${formatReset(banked.expiresAt).replace("Resets in ", "")})` : ""}</div> : null}</header>
+              {entries.map((entry) => <div className="aa-account-window" key={entry.windowKey}><div className="aa-window-heading"><strong>{entry.label}</strong><span className={`aa-quota-status ${entry.status === "ok" ? "is-ok" : "is-stale"}`}>{entry.status === "ok" ? "Current" : entry.status}</span></div><div className="aa-window-value"><strong>{entry.remainingPercent.toFixed(0)}% <small>left</small></strong><span>{entry.usedPercent.toFixed(0)}% used</span></div><div className="aa-quota-track" role="progressbar" aria-label={`${first.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>Snapshot {new Date(entry.capturedAt).toLocaleTimeString()}</span></div><QuotaSparkline range={range} history={visibleHistory.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey)} />{entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}</div>)}
+            </article>;
+          })}</div></section>;
+        })}</div> : <div className="aa-provider-groups">{["codex", "opencode-go"].map((providerName) => {
+          const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
+          if (providerEntries.length === 0) return null;
+          const windows = Array.from(new Set(providerEntries.map((entry) => entry.windowKey)));
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3>{windows.map((windowKey) => {
+            const entries = providerEntries.filter((entry) => entry.windowKey === windowKey);
+            const first = entries[0];
+            if (!first) return null;
+            return <article className="aa-comparison-window" key={windowKey}><h4>{first.label}</h4>{entries.map((entry) => <div className="aa-comparison-row" key={`${entry.accountId}:${entry.hostId}`}><div className="aa-comparison-label"><strong>{entry.accountName}</strong><span>{hostName(entry.hostId)} · {entry.remainingPercent.toFixed(0)}% left · {formatReset(entry.resetsAt)}</span></div><div className="aa-comparison-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span style={{ width: `${entry.remainingPercent}%` }} /></div></div>)}</article>;
+          })}</section>;
+        })}</div> : <p className="aa-usage-empty">No quota snapshots yet. Refresh to query connected account providers.</p>}
       </section>
-      <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Limit history</h2><p>Each reset timestamp starts a separate quota cycle.</p></div></div>
-        {visibleHistory.length ? <div className="aa-usage-table-wrap"><table className="aa-usage-table"><thead><tr><th>Account</th><th>Window</th><th>Machine</th><th>Remaining</th><th>Reset</th><th>Captured</th></tr></thead><tbody>{visibleHistory.map((entry, index) => <tr key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}:${index}`}><td>{entry.accountName}</td><td>{entry.label}</td><td>{hostName(entry.hostId)}</td><td>{entry.remainingPercent.toFixed(0)}%</td><td>{formatReset(entry.resetsAt)}</td><td>{new Date(entry.capturedAt).toLocaleString()}</td></tr>)}</tbody></table></div> : <p className="aa-usage-empty">BB keeps new snapshots from the time the collector is enabled.</p>}
-      </section>
+      <details className="aa-usage-section aa-history-details"><summary><span><strong>Limit history</strong><small>Deduplicated snapshots by account, machine and plan window</small></span><span>{visibleHistory.length} points</span></summary>
+        {visibleHistory.length ? <div className="aa-usage-table-wrap"><table className="aa-usage-table"><thead><tr><th>Provider</th><th>Account</th><th>Window</th><th>Machine</th><th>Remaining</th><th>Reset</th><th>Captured</th></tr></thead><tbody>{visibleHistory.map((entry) => <tr key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`}><td>{entry.provider === "codex" ? "Codex" : "OpenCode Go"}</td><td>{entry.accountName}</td><td>{entry.label}</td><td>{hostName(entry.hostId)}</td><td>{entry.remainingPercent.toFixed(0)}%</td><td>{formatReset(entry.resetsAt)}</td><td>{new Date(entry.capturedAt).toLocaleString()}</td></tr>)}</tbody></table></div> : <p className="aa-usage-empty">BB keeps new snapshots from the time the collector is enabled.</p>}
+      </details>
     </> : null}
     {!loading && !error && summary && view === "tokens" ? <>
       <section className="aa-token-metrics"><article><span>Processed tokens</span><strong>{formatCount(visibleTotals.totalTokens)}</strong><small>{formatCount(visibleTotals.activeTokens)} in active turns</small></article><article><span>Input</span><strong>{formatCount(visibleTotals.inputTokens)}</strong><small>{formatCount(visibleTotals.cachedInputTokens)} cached input</small></article><article><span>Output</span><strong>{formatCount(visibleTotals.outputTokens)}</strong><small>{formatCount(visibleTotals.reasoningOutputTokens)} reasoning tokens</small></article><article><span>Cache detail</span><strong>{formatCount(visibleTotals.cacheReadInputTokens + visibleTotals.cacheWriteInputTokens)}</strong><small>{formatCount(visibleTotals.cacheReadInputTokens)} read · {formatCount(visibleTotals.cacheWriteInputTokens)} writes</small></article></section>
