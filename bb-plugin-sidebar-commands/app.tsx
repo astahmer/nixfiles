@@ -32,7 +32,18 @@ export default definePluginApp((app) => {
     app.commands.register({
       id: page.id,
       title: page.title,
-      run: () => window.location.assign(page.path),
+      run: () => {
+        const label = page.title.replace(/^Open /u, "");
+        const navigation = document.querySelector('nav[aria-label="Sidebar destinations"]');
+        const destination = Array.from(navigation?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+          .find((button) => button.getAttribute("aria-label") === label);
+        if (destination) {
+          destination.click();
+          return;
+        }
+
+        window.location.assign(page.path);
+      },
     });
   }
 });
