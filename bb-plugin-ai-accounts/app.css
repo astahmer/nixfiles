@@ -299,6 +299,7 @@
 .aa-footer-provider-tabs { min-width: 0; display: flex; gap: 2px; overflow: hidden; }
 .aa-footer-provider-tabs button { display: flex; width: 27px; flex: none; align-items: center; justify-content: center; border: 0; border-radius: 7px; padding: 4px; color: var(--aa-muted); background: transparent; cursor: pointer; }
 .aa-footer-provider-tabs button.is-active { color: var(--aa-ink); background: rgba(255,255,255,.1); }
+.aa-footer-provider-tabs button.is-all { width: auto; min-width: 30px; padding: 4px 7px; font-size: 8px; }
 .aa-footer-provider-mark { width: 18px; height: 18px; display: block; }
 .aa-footer-provider-mark.is-codex { color: #10a37f; }
 .aa-footer-provider-mark.is-opencode-go { color: #3b82f6; }

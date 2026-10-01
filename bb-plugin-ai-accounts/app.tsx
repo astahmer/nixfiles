@@ -856,7 +856,7 @@ const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
   const navigate = useBbNavigate();
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [providerTab, setProviderTab] = useState<"codex" | "opencode-go" | null>(null);
+  const [providerTab, setProviderTab] = useState<"all" | "codex" | "opencode-go">("all");
   const [hostFilter, setHostFilter] = useState("all");
   const refresh = async () => {
     setRefreshing(true);
@@ -867,11 +867,11 @@ const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
   const hostName = (id: string) => summary?.hosts.find((host) => host.id === id)?.name ?? id;
   const visibleQuota = summary?.quota.filter((entry) => hostFilter === "all" || entry.hostId === hostFilter) ?? [];
   const providers = Array.from(new Set(visibleQuota.map((entry) => entry.provider)));
-  const activeProvider = providerTab && providers.includes(providerTab) ? providerTab : providers[0] ?? null;
-  const providerQuota = activeProvider ? visibleQuota.filter((entry) => entry.provider === activeProvider) : [];
+  const activeProvider = providerTab !== "all" && !providers.includes(providerTab) ? "all" : providerTab;
+  const providerQuota = activeProvider === "all" ? visibleQuota : visibleQuota.filter((entry) => entry.provider === activeProvider);
   const accounts = Array.from(new Map(providerQuota.map((entry) => [`${entry.accountId}:${entry.hostId}`, providerQuota.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId)])).values());
   return <section className="aa-usage-footer" aria-label="AI account usage">
-    <header className="aa-footer-toolbar"><nav className="aa-footer-provider-tabs" role="tablist" aria-label="AI account provider">{providers.map((entry) => <button key={entry} role="tab" aria-label={entry === "codex" ? "Codex" : "OpenCode Go"} title={entry === "codex" ? "Codex" : "OpenCode Go"} aria-selected={activeProvider === entry} className={activeProvider === entry ? "is-active" : ""} type="button" onClick={() => setProviderTab(entry)}><FooterProviderMark provider={entry} /></button>)}</nav>
+    <header className="aa-footer-toolbar"><nav className="aa-footer-provider-tabs" role="tablist" aria-label="AI account provider"><button className={`is-all ${activeProvider === "all" ? "is-active" : ""}`} role="tab" aria-label="All accounts" title="All accounts" aria-selected={activeProvider === "all"} type="button" onClick={() => setProviderTab("all")}>All</button>{providers.map((entry) => <button key={entry} role="tab" aria-label={entry === "codex" ? "Codex" : "OpenCode Go"} title={entry === "codex" ? "Codex" : "OpenCode Go"} aria-selected={activeProvider === entry} className={activeProvider === entry ? "is-active" : ""} type="button" onClick={() => setProviderTab(entry)}><FooterProviderMark provider={entry} /></button>)}</nav>
       <select aria-label="Usage machine" value={hostFilter} onChange={(event) => setHostFilter(event.currentTarget.value)}><option value="all">All machines</option>{summary?.hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>
       <button className="aa-footer-icon-button" type="button" aria-label={refreshing ? "Refreshing usage" : "Refresh usage"} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "…" : "↻"}</button>
       <button className="aa-footer-icon-button" type="button" aria-label="Close AI account usage" onClick={dismiss}><span className="aa-footer-chevron" aria-hidden="true" /></button>
