@@ -31,14 +31,45 @@ machine-specific paths override it. Nix owns profile names, paths, tags,
 colors, and reasoning defaults. Model visibility, favorites, order, and custom
 models can be edited in the page.
 
-Codex usage limits are read directly from Codex app-server's
-`account/rateLimits/read` using that profile's `CODEX_HOME`. OpenCode Go limits
-come from OpenCode's authenticated `/zen/go/v1/usage` endpoint using the API key
-in that profile's own `auth.json`. Each profile reports its own live quota to
-BB's provider usage API, so BB can display separate account windows. This
-plugin does not use OpenCodex, its management API, or its account mapping. BB's
-token and cost history comes from sessions started in BB; the plugin API has no
-historical usage import surface.
+## Usage history
+
+Open **AI Accounts → Usage** to see each configured account's current quota
+windows, remaining percentages, reset times, token activity, and collection
+status. The page supports 24-hour, 7-day, 30-day, and 90-day ranges, account and
+machine filters, and an explicit refresh. The sidebar footer disclosure shows
+the two most constrained current windows and links to the full page.
+
+Quota values come from the existing Codex and OpenCode Go usage readers through
+BB's provider usage API. The plugin stores a snapshot every five minutes for
+connected machines and shows the provider's used percentage and the calculated
+`100 - usedPercent` remaining value separately. A failed poll preserves the
+last snapshot and marks it stale.
+
+Token history combines BB `thread/tokenUsage/updated` events with provider-local
+history where it can be tied to a configured profile. BB history is backfilled
+from the thread event store, including archived threads. On the primary local
+machine, Codex reads token-count fields from session JSONL files under the
+configured `CODEX_HOME`; OpenCode reads completed assistant token records from
+the configured OpenCode SQLite database. These sources retain model, timestamp,
+token totals, and provenance. They do not copy prompts, transcript text,
+credentials, or raw provider responses. Local history that cannot be read or
+recognized is reported as unavailable or partial; the page does not invent a
+profile attribution. The first refresh can need repeated bounded scans to
+catch up with large local histories.
+
+Usage history is stored in the plugin's local SQLite database. Quota snapshots
+are retained for 90 days and token events for one year. Token counts are
+provider-reported facts when the source includes them; they are not the user's
+subscription bill or a conversion from quota percentages. This release does
+not estimate API cost.
+
+The host-owned BB Usage page cannot currently be extended with plugin content
+through the public plugin API. This plugin's Usage page and footer disclosure
+are additive. If you want only the AI Accounts shortcut in the footer, hide BB's
+**Provider usage** shortcut in **Settings → Appearance → Sidebar footer → Show
+Provider usage in footer**. This remains a user preference; the plugin does not
+change it. The plugin does not use Tokitoki, OpenCodex, its management API, or
+its account mapping.
 
 ## Nix setup
 
@@ -61,8 +92,8 @@ bb ai-accounts remove <account-id>
 ## Develop
 
 ```sh
-npm ci
-npm exec -- tsc --noEmit
+pnpm install --frozen-lockfile
+pnpm exec tsc --noEmit
 bb plugin build
 bb plugin install .
 ```

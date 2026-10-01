@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
+import { toRemainingPercent, usageChartBucketMs, usageMigrations, usageRangeStart, storeThreadUsageEvents, upsertQuotaPollState, upsertQuotaWindow } from "./usage-history.ts";
+import { scanLocalUsageHistory } from "./usage-sources.ts";
 import { providerIconOptions } from "./provider-icons";
 
 const providerSchema = z.enum(["codex", "opencode-go"]);
@@ -56,6 +58,21 @@ type ProviderIcon = z.infer<typeof providerIconSchema>;
 const stateKey = "accounts-v2";
 const accountInputSchema = accountSchema.omit({ id: true }).extend({ id: accountSchema.shape.id.optional() });
 const accountIdSchema = accountSchema.shape.id;
+const usageRangeSchema = z.enum(["24h", "7d", "30d", "90d"]);
+const usageSummarySchema = z.object({
+  capturedAt: z.number(),
+  range: usageRangeSchema,
+  accounts: z.array(z.object({ id: z.string(), displayName: z.string(), provider: providerSchema, enabled: z.boolean() })),
+  hosts: z.array(z.object({ id: z.string(), name: z.string(), status: z.string() })),
+  quota: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number(), status: z.string(), message: z.string().nullable() })),
+  quotaHistory: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number() })),
+  tokenTotals: z.object({ totalTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number(), activeTokens: z.number() }),
+  tokenSeries: z.array(z.object({ bucketAt: z.number(), accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), model: z.string().nullable(), totalTokens: z.number(), activeTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number() })),
+  tokenBreakdown: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), threadId: z.string().nullable(), projectId: z.string().nullable(), model: z.string().nullable(), source: z.string(), totalTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number() })),
+  sources: z.array(z.object({ accountId: z.string(), source: z.string(), status: z.string(), message: z.string().nullable(), lastScannedAt: z.number().nullable() })),
+  refreshedAt: z.number().nullable(),
+});
+export type UsageSummary = z.infer<typeof usageSummarySchema>;
 export const rpcContract = defineRpcContract({
   defaults: {
     input: z.null(),
@@ -89,6 +106,8 @@ export const rpcContract = defineRpcContract({
     input: z.object({ id: accountIdSchema, path: accountSchema.shape.path.optional() }),
     output: z.object({ email: z.string().email().nullable() }),
   },
+  usageSummary: { input: z.object({ range: usageRangeSchema }), output: usageSummarySchema },
+  refreshUsage: { input: z.object({ range: usageRangeSchema }), output: usageSummarySchema },
 });
 
 const providerDisplayNames: Record<Provider, string> = {
@@ -164,6 +183,217 @@ export default async function plugin(bb: BbPluginApi) {
     if (!parsed.success) throw new Error("Stored account profiles are invalid; edit or remove the affected profiles.");
     return { accounts: assignProviderIcons(parsed.data.accounts) };
   };
+
+  const usageDb = bb.storage.database();
+  bb.storage.migrate(usageDb, usageMigrations);
+  let lastUsageRefreshAt: number | null = null;
+  let usageRefresh: Promise<void> | null = null;
+  const pruneUsageHistory = () => {
+    const now = Date.now();
+    const previous = usageDb.prepare("SELECT value FROM usage_meta WHERE key = 'retention-pruned-at'").get() as { value: string } | undefined;
+    if (previous && now - Number(previous.value) < 24 * 60 * 60 * 1000) return;
+    const prune = usageDb.transaction(() => {
+      usageDb.prepare("DELETE FROM quota_snapshots WHERE captured_at < ?").run(now - 90 * 24 * 60 * 60 * 1000);
+      usageDb.prepare("DELETE FROM token_usage WHERE occurred_at < ?").run(now - 365 * 24 * 60 * 60 * 1000);
+      usageDb.prepare("INSERT INTO usage_meta(key, value) VALUES ('retention-pruned-at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(String(now));
+    });
+    prune();
+  };
+  const accountIdentity = (account: Account) => ({
+    id: account.id,
+    name: account.displayName,
+    provider: account.provider,
+    providerId: `ai-account-${account.id}`,
+  });
+
+  const pollAccountUsage = async () => {
+    const { accounts } = await readState();
+    const hosts = await bb.sdk.hosts.list();
+    const connectedHosts = hosts.filter((host) => host.status === "connected");
+    for (const account of accounts.filter((profile) => profile.enabled)) {
+      for (const host of connectedHosts) {
+        const capturedAt = Date.now();
+        try {
+          const result = await bb.sdk.system.usageLimits({ hostId: host.id, providerId: `ai-account-${account.id}` });
+          const usage = result[`ai-account-${account.id}`];
+          if (!usage || usage.status !== "ok") {
+            upsertQuotaPollState(usageDb, { account: accountIdentity(account), hostId: host.id, status: usage?.status ?? "missing", message: usage?.status === "error" ? usage.message.slice(0, 240) : null, attemptedAt: capturedAt, succeeded: false });
+            continue;
+          }
+          const labels = new Map<string, number>();
+          for (const window of usage.windows) {
+            const labelKey = window.label.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-|-$/gu, "") || "window";
+            const occurrence = labels.get(labelKey) ?? 0;
+            labels.set(labelKey, occurrence + 1);
+            const remaining = toRemainingPercent(window.usedPercent);
+            if (remaining === null) continue;
+            const usedPercent = window.usedPercent;
+            const resetsAt = window.resetsAt && Number.isFinite(Date.parse(window.resetsAt)) ? new Date(window.resetsAt).toISOString() : null;
+            upsertQuotaWindow(usageDb, { account: accountIdentity(account), hostId: host.id, windowKey: `${labelKey}:${occurrence}`, label: window.label.slice(0, 80), usedPercent, resetsAt, windowDurationMinutes: null, capturedAt });
+          }
+          upsertQuotaPollState(usageDb, { account: accountIdentity(account), hostId: host.id, status: labels.size ? "ok" : "unavailable", message: labels.size ? null : "The provider returned no valid quota windows.", attemptedAt: capturedAt, succeeded: labels.size > 0 });
+        } catch (error) {
+          upsertQuotaPollState(usageDb, { account: accountIdentity(account), hostId: host.id, status: "error", message: error instanceof Error ? error.message.slice(0, 240) : "Usage request failed.", attemptedAt: capturedAt, succeeded: false });
+        }
+      }
+    }
+    lastUsageRefreshAt = Date.now();
+  };
+
+  const readUsageSummary = async (range: z.infer<typeof usageRangeSchema>) => {
+    const { accounts } = await readState();
+    const hosts = await bb.sdk.hosts.list();
+    const now = Date.now();
+    const rangeStart = usageRangeStart(range, now);
+    const bucketMs = usageChartBucketMs(range);
+    const quota = usageDb.prepare(`WITH latest AS (
+      SELECT account_id, host_id, window_key, resets_at, MAX(captured_at) AS captured_at
+      FROM quota_snapshots GROUP BY account_id, host_id, window_key, resets_at
+    ) SELECT q.account_id AS accountId, q.account_name AS accountName, q.provider, q.host_id AS hostId,
+      q.window_key AS windowKey, q.label, q.used_percent AS usedPercent, q.resets_at AS resetsAt, q.captured_at AS capturedAt,
+      COALESCE(p.status, 'unknown') AS status, p.message
+      FROM latest l JOIN quota_snapshots q ON q.account_id = l.account_id AND q.host_id = l.host_id
+        AND q.window_key = l.window_key AND q.captured_at = l.captured_at
+        AND (q.resets_at = l.resets_at OR (q.resets_at IS NULL AND l.resets_at IS NULL))
+      LEFT JOIN quota_poll_state p ON p.account_id = q.account_id AND p.host_id = q.host_id
+      ORDER BY q.account_name, q.host_id, q.label`).all() as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number; status: string; message: string | null }>;
+    const quotaHistory = usageDb.prepare(`WITH ranked AS (
+      SELECT account_id AS accountId, account_name AS accountName, provider, host_id AS hostId, window_key AS windowKey,
+        label, used_percent AS usedPercent, resets_at AS resetsAt, captured_at AS capturedAt,
+        ROW_NUMBER() OVER (PARTITION BY account_id, host_id, window_key, resets_at, CAST(captured_at / ? AS INTEGER) ORDER BY captured_at DESC) AS rank
+      FROM quota_snapshots WHERE captured_at >= ?
+    ) SELECT accountId, accountName, provider, hostId, windowKey, label, usedPercent, resetsAt, capturedAt
+      FROM ranked WHERE rank = 1 ORDER BY capturedAt LIMIT 5000`).all(bucketMs, rangeStart) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number }>;
+    const tokenTotals = usageDb.prepare(`SELECT
+      COALESCE(SUM(total_tokens), 0) AS totalTokens, COALESCE(SUM(input_tokens), 0) AS inputTokens,
+      COALESCE(SUM(cached_input_tokens), 0) AS cachedInputTokens, COALESCE(SUM(cache_read_input_tokens), 0) AS cacheReadInputTokens,
+      COALESCE(SUM(cache_write_input_tokens), 0) AS cacheWriteInputTokens, COALESCE(SUM(output_tokens), 0) AS outputTokens,
+      COALESCE(SUM(reasoning_output_tokens), 0) AS reasoningOutputTokens,
+      COALESCE(SUM(CASE WHEN status = 'active' THEN total_tokens ELSE 0 END), 0) AS activeTokens
+      FROM token_usage WHERE occurred_at >= ?`).get(rangeStart) as { totalTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number; activeTokens: number };
+    const tokenSeries = usageDb.prepare(`SELECT CAST(occurred_at / ? AS INTEGER) * ? AS bucketAt,
+      account_id AS accountId, account_name AS accountName, provider, host_id AS hostId, model, SUM(total_tokens) AS totalTokens,
+      SUM(input_tokens) AS inputTokens, SUM(cached_input_tokens) AS cachedInputTokens,
+      SUM(cache_read_input_tokens) AS cacheReadInputTokens, SUM(cache_write_input_tokens) AS cacheWriteInputTokens,
+      SUM(output_tokens) AS outputTokens, SUM(reasoning_output_tokens) AS reasoningOutputTokens,
+      SUM(CASE WHEN status = 'active' THEN total_tokens ELSE 0 END) AS activeTokens
+      FROM token_usage WHERE occurred_at >= ? GROUP BY bucketAt, account_id, host_id, model ORDER BY bucketAt LIMIT 5000`).all(bucketMs, bucketMs, rangeStart) as Array<{ bucketAt: number; accountId: string; accountName: string; provider: Provider; hostId: string; model: string | null; totalTokens: number; activeTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
+    const tokenBreakdown = usageDb.prepare(`SELECT account_id AS accountId, account_name AS accountName, provider, host_id AS hostId,
+      thread_id AS threadId, project_id AS projectId, model, source,
+      SUM(total_tokens) AS totalTokens, SUM(input_tokens) AS inputTokens, SUM(cached_input_tokens) AS cachedInputTokens,
+      SUM(cache_read_input_tokens) AS cacheReadInputTokens, SUM(cache_write_input_tokens) AS cacheWriteInputTokens,
+      SUM(output_tokens) AS outputTokens, SUM(reasoning_output_tokens) AS reasoningOutputTokens
+      FROM token_usage WHERE occurred_at >= ? GROUP BY account_id, host_id, thread_id, project_id, model, source ORDER BY totalTokens DESC LIMIT 1000`).all(rangeStart) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; threadId: string | null; projectId: string | null; model: string | null; source: string; totalTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
+    const sources = usageDb.prepare("SELECT account_id AS accountId, source, status, message, last_scanned_at AS lastScannedAt FROM usage_source_state ORDER BY account_id, source").all() as Array<{ accountId: string; source: string; status: string; message: string | null; lastScannedAt: number | null }>;
+    return usageSummarySchema.parse({
+      capturedAt: now,
+      range,
+      accounts: accounts.map(({ id, displayName, provider, enabled }) => ({ id, displayName, provider, enabled })),
+      hosts: hosts.map(({ id, name, status }) => ({ id, name, status })),
+      quota: quota.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
+      quotaHistory: quotaHistory.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
+      tokenTotals,
+      tokenSeries,
+      tokenBreakdown,
+      sources,
+      refreshedAt: lastUsageRefreshAt,
+    });
+  };
+
+  let primaryHostId: string | null = null;
+  const environmentHosts = new Map<string, string>();
+  const resolvingThreads = new Set<string>();
+  type UsageThreadResponse = Pick<Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[number], "id" | "providerId" | "environmentId" | "projectId">;
+  const syncThreadUsage = async (thread: UsageThreadResponse) => {
+    if (!thread.providerId.startsWith("ai-account-") || resolvingThreads.has(thread.id)) return;
+    const accountId = thread.providerId.slice("ai-account-".length);
+    const { accounts } = await readState();
+    const account = accounts.find((profile) => profile.id === accountId);
+    if (!account) return;
+    resolvingThreads.add(thread.id);
+    try {
+      let hostId = thread.environmentId ? environmentHosts.get(thread.environmentId) : undefined;
+      if (thread.environmentId && !hostId) {
+        try {
+          hostId = (await bb.sdk.environments.get({ environmentId: thread.environmentId })).hostId;
+          environmentHosts.set(thread.environmentId, hostId);
+        } catch {
+          hostId = primaryHostId ?? "unknown";
+        }
+      }
+      const resolvedHostId = hostId ?? primaryHostId ?? "unknown";
+      const cursor = usageDb.prepare("SELECT last_seq FROM thread_usage_cursor WHERE thread_id = ?").get(thread.id) as { last_seq: number } | undefined;
+      let afterSeq = cursor?.last_seq ?? 0;
+      while (true) {
+        const events = await bb.sdk.threads.events.list({ threadId: thread.id, afterSeq: String(afterSeq), limit: "1000", order: "asc", types: ["thread/tokenUsage/updated", "turn/completed"] });
+        if (events.length === 0) break;
+        afterSeq = storeThreadUsageEvents({ db: usageDb, thread: { id: thread.id, providerId: thread.providerId, hostId: resolvedHostId, projectId: thread.projectId }, account: accountIdentity(account), events });
+        if (events.length < 1000) break;
+      }
+    } catch (error) {
+      bb.log.warn(`Could not synchronize AI account thread usage for ${thread.id}.`);
+    } finally {
+      resolvingThreads.delete(thread.id);
+    }
+  };
+
+  const backfillThreadUsage = async (signal: AbortSignal) => {
+    for (const archived of [false, true]) {
+      let offset = 0;
+      while (!signal.aborted) {
+        const page = await bb.sdk.threads.list({ archived, includeHidden: true, limit: 100, offset, signal });
+        for (const thread of page) {
+          if (thread.providerId.startsWith("ai-account-")) await syncThreadUsage(thread);
+        }
+        offset += page.length;
+        if (page.length < 100) break;
+      }
+    }
+  };
+
+  const refreshUsage = async () => {
+    if (usageRefresh) return usageRefresh;
+    usageRefresh = (async () => {
+      pruneUsageHistory();
+      await pollAccountUsage();
+      const { accounts } = await readState();
+      const hosts = await bb.sdk.hosts.list();
+      const connectedHost = hosts.find((host) => host.id === primaryHostId && host.status === "connected");
+      if (connectedHost) {
+        const localAccounts = accounts.filter((account) => account.enabled).map((account) => ({
+          id: account.id,
+          displayName: account.displayName,
+          provider: account.provider,
+          path: accountPathFor(account, null, connectedHost.id),
+        }));
+        await scanLocalUsageHistory({ db: usageDb, accounts: localAccounts, hostId: connectedHost.id });
+      }
+    })().finally(() => { usageRefresh = null; });
+    return usageRefresh;
+  };
+
+  bb.events.on("experimental_thread.events", ({ thread }) => { void syncThreadUsage(thread); });
+  bb.background.service("ai-accounts-usage", {
+    async start(signal) {
+      const config = await bb.sdk.system.config();
+      primaryHostId = config.primaryHostId;
+      try { await refreshUsage(); } catch { bb.log.warn("AI account usage refresh failed."); }
+      try { await backfillThreadUsage(signal); } catch { bb.log.warn("AI account usage history scan failed."); }
+      while (!signal.aborted) {
+        await new Promise<void>((resolve) => {
+          const finish = () => {
+            clearTimeout(timer);
+            signal.removeEventListener("abort", finish);
+            resolve();
+          };
+          const timer = setTimeout(finish, 5 * 60 * 1000);
+          signal.addEventListener("abort", finish, { once: true });
+        });
+        if (signal.aborted) return;
+        try { await refreshUsage(); } catch { bb.log.warn("AI account usage refresh failed."); }
+      }
+    },
+  });
 
   const registrations = new Map<string, { dispose(): void }>();
   const environmentContributions = new Set<string>();
@@ -326,6 +556,13 @@ export default async function plugin(bb: BbPluginApi) {
       } catch {
         return { email: account.email ?? null };
       }
+    },
+    async usageSummary({ range }) {
+      return readUsageSummary(range);
+    },
+    async refreshUsage({ range }) {
+      await refreshUsage();
+      return readUsageSummary(range);
     },
   });
 

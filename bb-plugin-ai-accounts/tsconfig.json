@@ -4,6 +4,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "types": [
       "node"
@@ -11,5 +12,5 @@
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["server.ts", "host.ts", "app.tsx"]
+  "include": ["server.ts", "host.ts", "app.tsx", "usage-history.ts", "usage-sources.ts"]
 }

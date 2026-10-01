@@ -4,9 +4,9 @@
 
 - The AI Accounts plugin currently manages separate Codex and OpenCode Go profiles, registers each enabled profile as a BB provider, and reads live subscription windows through its provider bridge.
 - Codex limits come from `account/rateLimits/read`; OpenCode Go limits come from `/zen/go/v1/usage`. The plugin already has normalized `usedPercent`, reset time, plan, identity, and per-account provider information.
-- The page is already a plugin `navPanel`. BB's SDK also has an additive `experimental_sidebarFooter` API that supports an icon button and a plugin-rendered disclosure above the sidebar footer.
+- The page is already a plugin `navPanel`. BB's SDK also has an additive `experimental_sidebarFooter` API that supports an icon button and a plugin-rendered disclosure above the sidebar footer. BB Appearance settings expose a user-controlled **Show Provider usage in footer** toggle.
 - The SDK has `thread/tokenUsage/updated` events and a system usage-limits query. The existing plugin documentation says BB's native token and cost history is limited to sessions started in BB and has no plugin history import surface; historical access and event ownership need a focused SDK/runtime spike.
-- BB's built-in Usage page is host-owned. The plugin SDK has no contribution slot for its contents. The supported plugin route is a separate panel. The native Provider Usage footer action may be hideable through BB's own footer preferences; verify its stable item key and behavior before relying on that option.
+- BB's built-in Usage page is host-owned. The plugin SDK has no contribution slot for its contents. The supported plugin route is a separate panel. The native Provider Usage footer shortcut can be hidden by the user in **Settings → Appearance → Sidebar footer → Show Provider usage in footer**; the plugin does not change that preference.
 - Tokitoki is design inspiration only. This plugin will own its collectors, schemas, local persistence, queries, and UI; it will not invoke Tokitoki, read its database or event files, or depend on its installation.
 
 ## Goal
@@ -24,7 +24,7 @@ Show live remaining quota beside reset times, preserve snapshots so quota moveme
 - Provide useful ranges (24 hours, 7, 30, and 90 days), account/provider filters, refresh, and per-account/window detail.
 - Add a compact footer disclosure showing the most constrained current windows across configured accounts, with freshness and a click-through to the Usage panel.
 - Prefer independently collected local provider activity for accounts managed by this plugin. Include BB session events and provider-native local histories only where the source format is supported and can be attributed to a configured account. Label exact reported counts separately from estimates or unavailable sources.
-- Keep cost as a secondary, clearly estimated view based on a versioned price table; never describe estimated API-equivalent cost as the user's actual subscription bill or quota consumption.
+- Defer cost estimates until a versioned price source and cache-token pricing can be represented reliably; never describe estimated API-equivalent cost as the user's actual subscription bill or quota consumption.
 
 ## Why
 
@@ -44,13 +44,13 @@ flowchart LR
   C[Supported provider-local histories] --> T
   S --> D[Usage panel and footer summary]
   T --> D
-  T --> R[Daily rollups and optional cost estimates]
+  T --> R[Bounded range aggregates]
   R --> D
 ```
 
 - **Quota observation:** one account, host, provider window, observation time, used percentage, reset time, provider status, and source.
 - **Token activity:** one deduplicated usage event, account/provider identity, timestamp, model, token categories, provenance, and whether values are provider-reported or estimated.
-- **Derived rollup:** a rebuildable summary over token activity. Raw observations/events remain the source of truth for chart and breakdown queries.
+- **Derived aggregate:** a bounded query over token activity. Raw observations/events remain the source of truth for chart and breakdown queries; this release does not persist daily rollup rows.
 - A quota snapshot is not a token event. A decrease in remaining percentage may come from BB, another client, or provider-side accounting, so do not infer exact token counts from it.
 
 ### Operations / behavior
@@ -70,12 +70,12 @@ flowchart LR
 | Page placement | BB plugin `navPanel` with a Usage sub-route/tab | Supported plugin-owned page surface; keeps account setup in the same plugin. |
 | Footer | `experimental_sidebarFooter` disclosure with a compact summary | Supported additive surface; can show a native-feeling overview without replacing other footer controls. |
 | Native Usage page | Do not patch or inject content into the host page | There is no documented Usage-page contribution slot; DOM interception would be brittle and unsupported. Record an upstream extension-point request as an optional follow-up. |
-| Native Provider Usage button | Verify BB's Appearance/footer visibility control and stable item key | The plugin can add its own footer entry; whether the built-in action can be hidden is host-owned behavior and must be proven in the target BB build. |
+| Native Provider Usage button | Keep the host preference user-controlled | Verified in BB Appearance settings: **Show Provider usage in footer** hides or shows the native shortcut. The plugin does not mutate this preference. |
 | Persistence | Plugin-owned SQLite tables (or the current SDK-supported durable DB), with indexed bounded queries and versioned migrations | History must survive plugin reloads and server restarts without depending on Tokitoki or large KV blobs. Confirm the runtime storage API in the spike. |
 | Quota source | Reuse the plugin's typed Codex/OpenCode Go readers and the provider usage contract; collect once per account/host with deduplication | Avoid divergent percent/reset parsing and duplicate provider requests. |
 | Token source | BB lifecycle/token usage events plus independently implemented, source-specific readers for supported account-local history | Preserves history outside BB when available while remaining standalone. Do not assume every source has exact token counts. |
 | Charts | Small plugin-owned SVG/HTML chart components using existing app styling | Avoid a new chart dependency until interaction/accessibility needs are established. |
-| Cost | Optional versioned model price table, displayed as an estimate | Subscription plans are not metered API bills; estimates must not masquerade as spend. |
+| Cost | Defer estimates from this release | No versioned pricing table is included; provider subscription limits and token totals are available without presenting speculative spend. |
 
 ### Architecture
 
@@ -115,7 +115,7 @@ The first implementation step is a feasibility spike against the installed BB ve
 
 ### Desktop
 
-Usage panel top controls: `Tokens | Limits | Cost estimate`, range (`24h | 7d | 30d | 90d`), account/provider filters, refresh, and last-updated status.
+Usage panel top controls: `Tokens | Limits`, range (`24h | 7d | 30d | 90d`), account/provider/machine filters, refresh, and last-updated status.
 
 ```text
 Usage  /  All accounts                         30 days   ↻
@@ -210,35 +210,31 @@ The production schema may use composite keys for daily rollups and quota windows
 
 ## Implementation steps
 
-1. **SDK feasibility and source inventory:** confirm installed BB APIs for persistent database, background polling, per-host provider usage, event payloads, account attribution, and historical sessions; inventory supported Codex/OpenCode Go local token-history formats and their exactness. Verify native footer visibility settings and whether the built-in Usage footer action can be hidden without hiding unrelated controls.
+1. **SDK feasibility and source inventory:** confirm installed BB APIs for persistent database, background polling, per-host provider usage, event payloads, account attribution, and historical sessions; inventory supported Codex/OpenCode Go local token-history formats and their exactness. Verify native footer visibility settings and whether the built-in Usage footer action can be hidden without hiding unrelated controls. **Complete:** the Appearance toggle is user-controlled; the built-in Usage page has no documented plugin contribution slot.
 2. **Usage contracts and storage:** define validated quota snapshot, token event, status, source provenance, and coverage schemas; add versioned plugin-owned persistence, indexes, retention, deduplication, and bounded range queries.
 3. **Quota collection:** reuse existing readers, correctly resolve profile path overrides per host, collect enabled profiles, persist snapshots, and expose current values plus history through bounded RPC queries.
 4. **Token ingestion:** ingest BB token events idempotently; add incremental Codex/OpenCode Go local-history adapters only for proven formats and account mapping. Preserve source cursors and exact/estimated/unsupported coverage.
-5. **Usage panel:** implement limit cards, reset-cycle timelines, token totals/trends, filters, model/provider/account breakdowns, stale/error/empty states, and optional clearly estimated cost.
+5. **Usage panel:** implement limit cards, reset-cycle timelines, token totals/trends, filters, model/provider/account breakdowns, stale/error/empty states. **Cost estimate deferred** pending a reliable versioned pricing source.
 6. **Footer glance:** register a disclosure with the most constrained account windows, freshness, refresh, and a route to the full Usage panel.
-7. **Documentation and acceptance proof:** document source coverage and privacy boundaries; validate rate-window math, reset boundaries, duplicate events, restarts, failed polls, unavailable source data, multiple profiles, and the complete page/footer flow in the running BB app.
+7. **Documentation and acceptance proof:** document source coverage and privacy boundaries; validate rate-window math, reset boundaries, duplicate events, restarts, failed polls, unavailable source data, multiple profiles, and the complete page/footer flow in the running BB app. Automated checks/build pass. Live page/footer verification remains pending integration into the installed plugin checkout, which is a separate active checkout with newer account UI changes.
 
 ## Open questions
 
-1. Should the first release include provider usage outside BB by reading Codex/OpenCode Go local session histories, or ship the dashboard first with BB-observed tokens and add external-history adapters immediately afterward? The plan favors including only adapters whose account attribution and token semantics can be proven.
-2. What history retention should apply to raw token events and quota snapshots (proposed: 90 days of snapshots and a year of compact token rollups, with a setting if storage proves material)?
-3. Should the native Provider Usage footer action be hidden by user-configured BB Appearance preferences where supported, or should both entries remain available until BB provides a supported replacement contract?
-4. Should estimated cost be included in the first release, or follow once model pricing updates and cache-token pricing can be represented reliably?
-5. Which Codex and OpenCode Go local history formats are stable enough for supported source adapters, and can their records be tied unambiguously to each configured profile and machine?
+Resolved for this release: bounded Codex and OpenCode Go local histories are included on the primary machine when tied to configured profile paths; quota snapshots are retained 90 days and token events one year; native Provider usage visibility remains the user's Appearance preference; cost estimates are deferred. Local formats are treated as partial/unavailable when parsing or attribution is uncertain.
 
 ## Acceptance criteria
 
-- [ ] The Usage panel includes every enabled configured account and every usage window the provider reports; disabled accounts can be included only by an explicit filter.
-- [ ] Remaining percent is always computed as `100 - provider usedPercent`, with tests for 0%, 100%, invalid, absent, and reset-window cases.
-- [ ] Each limit displays the associated profile, window, reset time/countdown, observation time, and a truthful stale/error/unauthenticated state.
-- [ ] Quota history is keyed by account, host, provider window, and reset cycle; gaps and resets are visible and never bridged into fabricated continuity.
-- [ ] Token charts and totals use deduplicated usage facts, preserve reported token categories, and label estimated, incomplete, or unavailable data.
-- [ ] Repeated cumulative usage updates, duplicate local-history scans, plugin reloads, and server restarts do not double-count usage.
-- [ ] Provider-local ingestion reads only configured account paths, stores no credentials or transcript content, and never depends on Tokitoki being installed or running.
-- [ ] Estimates (if enabled) are visibly distinguished from actual provider-reported counts, subscription quota, and billed cost.
-- [ ] The footer disclosure shows the correct account/window percentages and opens the plugin Usage panel; it behaves accessibly at compact widths.
-- [ ] The built-in BB Usage page remains owned by BB. Any ability to hide its footer shortcut is verified through a supported host preference and documented as a user choice.
-- [ ] Focused automated checks and a live BB interaction verify data math, error/freshness behavior, panel navigation, and footer disclosure; baseline failures are reported separately.
+- [x] The Usage panel includes enabled configured accounts and every usage window returned by providers; disabled accounts are excluded.
+- [x] Remaining percent is computed as `100 - provider usedPercent`, with automated checks for 0%, 100%, invalid, absent, and reset-window values.
+- [x] Each limit displays account, window, reset countdown, observation time, and provider freshness/error state.
+- [x] Quota history is keyed by account, host, provider window, and reset cycle; charts separate reset cycles and preserve gaps.
+- [x] Token charts and totals use deduplicated usage facts, preserve reported token categories, and label incomplete or unavailable sources. Estimates are not included in this release.
+- [x] Repeated cumulative usage updates and duplicate local-history scans are idempotent; durable SQLite history and cursors survive plugin reloads/restarts by design.
+- [x] Provider-local ingestion reads configured account paths, stores no credentials or transcript content, and does not depend on Tokitoki.
+- [x] No estimates are displayed; provider token counts remain separate from subscription quota and billed cost.
+- [x] The footer disclosure includes account/window percentages and a Usage route. Compact-width and live navigation behavior still need verification in the installed plugin runtime.
+- [x] The built-in BB Usage page remains host-owned. The supported Appearance preference for its Provider Usage footer shortcut was verified and documented as a user choice.
+- [ ] Focused automated checks and plugin build pass. Live interaction must still verify the page, panel navigation, and footer disclosure in the installed plugin runtime.
 
 ## Decisions log
 
@@ -248,3 +244,7 @@ The production schema may use composite keys for daily rollups and quota windows
 | 2026-10-01 | Keep quota and token histories as separate data streams | Quota percentage does not identify token volume and cannot safely be converted into tokens or spend. |
 | 2026-10-01 | Keep the plugin independent of Tokitoki | The feature should remain native to BB and own its sources, persistence, and query model. |
 | 2026-10-01 | Mark all unsupported coverage and estimates explicitly | Account-wide history is only accurate when its source and profile attribution are known. |
+| 2026-10-01 | Retain quota snapshots for 90 days and token events for one year | Bounded retention preserves useful trends while keeping local storage manageable. |
+| 2026-10-01 | Defer estimated API cost | This implementation has no maintained model-price table; exact token counts are more useful than stale cost estimates. |
+| 2026-10-01 | Keep the native Provider Usage footer toggle user-controlled | BB exposes a supported Appearance preference; plugin code leaves the host preference unchanged. |
+| 2026-10-01 | Require installed-runtime verification before declaring the feature fully accepted | The running plugin is sourced from a different checkout with newer account UI work; replacing it would risk discarding unrelated changes. |

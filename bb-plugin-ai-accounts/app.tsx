@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, flip, offset, shift, size, useDismiss, useFloating, useInteractions } from "@floating-ui/react";
-import { definePluginApp, useBbContext, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
+import { definePluginApp, useBbContext, useBbNavigate, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import { providerIconOptions, type ProviderIcon } from "./provider-icons";
-import type { AccountProfile, rpcContract } from "./server";
+import type { AccountProfile, rpcContract, UsageSummary } from "./server";
 import "./app.css";
 
 const reasoningEffortValues = ["none", "low", "medium", "high", "xhigh", "ultracode", "max", "ultra"] as const;
@@ -677,6 +677,172 @@ const AccountPage = () => {
   );
 };
 
+type UsageRange = "24h" | "7d" | "30d" | "90d";
+const usageRanges: Array<{ value: UsageRange; label: string }> = [{ value: "24h", label: "Past 24 hours" }, { value: "7d", label: "7 days" }, { value: "30d", label: "30 days" }, { value: "90d", label: "90 days" }];
+
+const formatCount = (count: number) => new Intl.NumberFormat(undefined, { notation: count >= 1_000_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(count);
+const formatTimestamp = (timestamp: number | null) => timestamp === null ? "Not yet" : new Date(timestamp).toLocaleString();
+const formatReset = (timestamp: string | null) => {
+  if (!timestamp) return "Reset time unavailable";
+  const remaining = Date.parse(timestamp) - Date.now();
+  if (!Number.isFinite(remaining) || remaining <= 0) return "Resetting now";
+  const hours = Math.floor(remaining / 3_600_000);
+  const days = Math.floor(hours / 24);
+  return days > 0 ? `Resets in ${days}d ${hours % 24}h` : `Resets in ${hours}h ${Math.floor((remaining % 3_600_000) / 60_000)}m`;
+};
+
+const QuotaSparkline = ({ history, range }: { history: UsageSummary["quotaHistory"]; range: UsageRange }) => {
+  const ordered = history.slice().sort((left, right) => left.capturedAt - right.capturedAt);
+  if (ordered.length < 2) return <p className="aa-quota-history-empty">Quota trend starts with the next snapshot.</p>;
+  const gapLimit = range === "24h" ? 2 : range === "7d" ? 12 : 48;
+  const segments: typeof ordered[] = [];
+  for (const entry of ordered) {
+    const current = segments.at(-1);
+    const previous = current?.at(-1);
+    if (!current || !previous || entry.capturedAt - previous.capturedAt > gapLimit * 60 * 60 * 1000) segments.push([entry]);
+    else current.push(entry);
+  }
+  const firstAt = ordered[0]?.capturedAt ?? Date.now();
+  const lastAt = ordered.at(-1)?.capturedAt ?? firstAt;
+  return <svg className="aa-quota-sparkline" viewBox="0 0 100 28" role="img" aria-label={`Remaining quota history over ${range}`}>
+    <line x1="0" x2="100" y1="3" y2="3" stroke="currentColor" strokeOpacity=".12" />
+    <line x1="0" x2="100" y1="25" y2="25" stroke="currentColor" strokeOpacity=".12" />
+    {segments.filter((segment) => segment.length > 1).map((segment) => <polyline key={`${segment[0]?.capturedAt}`} points={segment.map((entry) => {
+      const x = lastAt === firstAt ? 50 : (entry.capturedAt - firstAt) / (lastAt - firstAt) * 100;
+      const y = 25 - entry.remainingPercent / 100 * 22;
+      return `${x},${y}`;
+    }).join(" ")} fill="none" stroke="#24a484" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />)}
+  </svg>;
+};
+
+const UsagePage = () => {
+  const rpc = useRpc<typeof rpcContract>();
+  const navigate = useBbNavigate();
+  const [range, setRange] = useState<UsageRange>("7d");
+  const [view, setView] = useState<"tokens" | "limits">("limits");
+  const [accountId, setAccountId] = useState("all");
+  const [provider, setProvider] = useState<"all" | "codex" | "opencode-go">("all");
+  const [hostId, setHostId] = useState("all");
+  const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = async (refresh: boolean) => {
+    if (refresh) setRefreshing(true);
+    else setLoading(true);
+    setError("");
+    try {
+      const result = refresh ? await rpc.call("refreshUsage", { range }) : await rpc.call("usageSummary", { range });
+      setSummary(result);
+    } catch {
+      setError("Usage data could not be loaded. Check that the provider machines are connected.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => { void load(false); }, [range]);
+  useEffect(() => {
+    const interval = setInterval(() => { void load(false); }, 60_000);
+    return () => clearInterval(interval);
+  }, [range]);
+
+  const visibleQuota = summary?.quota.filter((entry) => (accountId === "all" || entry.accountId === accountId) && (provider === "all" || entry.provider === provider) && (hostId === "all" || entry.hostId === hostId)) ?? [];
+  const visibleHistory = summary?.quotaHistory.filter((entry) => (accountId === "all" || entry.accountId === accountId) && (provider === "all" || entry.provider === provider) && (hostId === "all" || entry.hostId === hostId)) ?? [];
+  const visibleSeries = summary?.tokenSeries.filter((entry) => (accountId === "all" || entry.accountId === accountId) && (provider === "all" || entry.provider === provider) && (hostId === "all" || entry.hostId === hostId)) ?? [];
+  const visibleBreakdown = summary?.tokenBreakdown.filter((entry) => (accountId === "all" || entry.accountId === accountId) && (provider === "all" || entry.provider === provider) && (hostId === "all" || entry.hostId === hostId)) ?? [];
+  const visibleTotals = useMemo(() => visibleSeries.reduce((totals, entry) => ({
+    totalTokens: totals.totalTokens + entry.totalTokens,
+    activeTokens: totals.activeTokens + entry.activeTokens,
+    inputTokens: totals.inputTokens + entry.inputTokens,
+    cachedInputTokens: totals.cachedInputTokens + entry.cachedInputTokens,
+    cacheReadInputTokens: totals.cacheReadInputTokens + entry.cacheReadInputTokens,
+    cacheWriteInputTokens: totals.cacheWriteInputTokens + entry.cacheWriteInputTokens,
+    outputTokens: totals.outputTokens + entry.outputTokens,
+    reasoningOutputTokens: totals.reasoningOutputTokens + entry.reasoningOutputTokens,
+  }), { totalTokens: 0, activeTokens: 0, inputTokens: 0, cachedInputTokens: 0, cacheReadInputTokens: 0, cacheWriteInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 }), [visibleSeries]);
+  const timeline = useMemo(() => {
+    const points = new Map<number, number>();
+    for (const entry of visibleSeries) points.set(entry.bucketAt, (points.get(entry.bucketAt) ?? 0) + entry.totalTokens);
+    const ordered = Array.from(points, ([bucketAt, totalTokens]) => ({ bucketAt, totalTokens })).sort((left, right) => left.bucketAt - right.bucketAt);
+    const maxTokens = Math.max(1, ...ordered.map((entry) => entry.totalTokens));
+    const plotted = ordered.map((entry, index) => ({ x: ordered.length <= 1 ? 0 : index / (ordered.length - 1) * 100, y: 100 - entry.totalTokens / maxTokens * 92 }));
+    return { points: plotted.map((point) => `${point.x},${point.y}`).join(" "), maxTokens, count: ordered.length };
+  }, [visibleSeries]);
+
+  const hostName = (id: string) => summary?.hosts.find((host) => host.id === id)?.name ?? id;
+  return <main className="aa-usage-page">
+    <header className="aa-usage-header">
+      <div><p className="aa-kicker">AI ACCOUNTS</p><h1>Usage</h1><p className="aa-subtitle">Account limits and token history collected by BB.</p></div>
+      <div className="aa-usage-controls">
+        <button className="aa-quiet" type="button" onClick={() => navigate.toPluginPanel("accounts")}>Accounts</button>
+        <select aria-label="Usage range" value={range} onChange={(event) => setRange(usageRanges.find((option) => option.value === event.currentTarget.value)?.value ?? "7d")}>{usageRanges.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select>
+        <select aria-label="Filter by account" value={accountId} onChange={(event) => setAccountId(event.currentTarget.value)}><option value="all">All accounts</option>{summary?.accounts.map((account) => <option key={account.id} value={account.id}>{account.displayName}</option>)}</select>
+        <select aria-label="Filter by provider" value={provider} onChange={(event) => setProvider(event.currentTarget.value === "codex" || event.currentTarget.value === "opencode-go" ? event.currentTarget.value : "all")}><option value="all">All providers</option><option value="codex">Codex</option><option value="opencode-go">OpenCode Go</option></select>
+        <select aria-label="Filter by machine" value={hostId} onChange={(event) => setHostId(event.currentTarget.value)}><option value="all">All machines</option>{summary?.hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>
+        <button className="aa-quiet" type="button" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "Refreshing…" : "↻ Refresh"}</button>
+      </div>
+    </header>
+    <nav className="aa-usage-tabs" aria-label="Usage view">
+      <button className={view === "limits" ? "is-active" : ""} type="button" aria-pressed={view === "limits"} onClick={() => setView("limits")}>Limits</button>
+      <button className={view === "tokens" ? "is-active" : ""} type="button" aria-pressed={view === "tokens"} onClick={() => setView("tokens")}>Tokens</button>
+      <span>Updated {formatTimestamp(summary?.refreshedAt ?? null)}</span>
+    </nav>
+    {error ? <p className="aa-usage-message" role="alert">{error}</p> : null}
+    {loading && !summary ? <p className="aa-usage-message">Loading usage history…</p> : null}
+    {!loading && !error && summary && view === "limits" ? <>
+      <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Current plan windows</h2><p>Remaining is calculated as 100% minus the provider’s used percentage.</p></div></div>
+        {visibleQuota.length ? <div className="aa-quota-grid">{visibleQuota.map((entry) => <article className="aa-quota-card" key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.resetsAt ?? "none"}`}>
+          <div className="aa-quota-top"><div><strong>{entry.accountName}</strong><span>{hostName(entry.hostId)} · {entry.provider === "codex" ? "Codex" : "OpenCode Go"}</span></div><span className={`aa-quota-status ${entry.status === "ok" ? "is-ok" : "is-stale"}`}>{entry.status === "ok" ? "Current" : entry.status}</span></div>
+          <div className="aa-quota-main"><strong>{entry.remainingPercent.toFixed(0)}%</strong><span>left</span><small>{entry.usedPercent.toFixed(0)}% used</small></div>
+          <div className="aa-quota-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span style={{ width: `${entry.remainingPercent}%` }} /></div>
+          <div className="aa-quota-bottom"><strong>{entry.label}</strong><span>{formatReset(entry.resetsAt)}</span><small>Snapshot {new Date(entry.capturedAt).toLocaleTimeString()}</small></div>
+          <QuotaSparkline range={range} history={visibleHistory.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey && point.resetsAt === entry.resetsAt)} />
+          {entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}
+        </article>)}</div> : <p className="aa-usage-empty">No quota snapshots yet. Refresh to query connected account providers.</p>}
+      </section>
+      <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Limit history</h2><p>Each reset timestamp starts a separate quota cycle.</p></div></div>
+        {visibleHistory.length ? <div className="aa-usage-table-wrap"><table className="aa-usage-table"><thead><tr><th>Account</th><th>Window</th><th>Machine</th><th>Remaining</th><th>Reset</th><th>Captured</th></tr></thead><tbody>{visibleHistory.map((entry, index) => <tr key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}:${index}`}><td>{entry.accountName}</td><td>{entry.label}</td><td>{hostName(entry.hostId)}</td><td>{entry.remainingPercent.toFixed(0)}%</td><td>{formatReset(entry.resetsAt)}</td><td>{new Date(entry.capturedAt).toLocaleString()}</td></tr>)}</tbody></table></div> : <p className="aa-usage-empty">BB keeps new snapshots from the time the collector is enabled.</p>}
+      </section>
+    </> : null}
+    {!loading && !error && summary && view === "tokens" ? <>
+      <section className="aa-token-metrics"><article><span>Processed tokens</span><strong>{formatCount(visibleTotals.totalTokens)}</strong><small>{formatCount(visibleTotals.activeTokens)} in active turns</small></article><article><span>Input</span><strong>{formatCount(visibleTotals.inputTokens)}</strong><small>{formatCount(visibleTotals.cachedInputTokens)} cached input</small></article><article><span>Output</span><strong>{formatCount(visibleTotals.outputTokens)}</strong><small>{formatCount(visibleTotals.reasoningOutputTokens)} reasoning tokens</small></article><article><span>Cache detail</span><strong>{formatCount(visibleTotals.cacheReadInputTokens + visibleTotals.cacheWriteInputTokens)}</strong><small>{formatCount(visibleTotals.cacheReadInputTokens)} read · {formatCount(visibleTotals.cacheWriteInputTokens)} writes</small></article></section>
+      <section className="aa-usage-section aa-token-chart-section"><div className="aa-usage-section-heading"><div><h2>Token volume</h2><p>Grouped by time and account. Hover points for exact counts.</p></div><strong>Peak {formatCount(timeline.maxTokens)}</strong></div>
+        {timeline.count ? <div className="aa-token-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Token usage over ${range}; peak bucket ${formatCount(timeline.maxTokens)} tokens`}><defs><linearGradient id="aa-token-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2e9a80" stopOpacity=".28" /><stop offset="100%" stopColor="#2e9a80" stopOpacity="0" /></linearGradient></defs><polyline points={timeline.points} fill="none" stroke="#2e9a80" strokeWidth="1.4" vectorEffect="non-scaling-stroke" /><polygon points={`0,100 ${timeline.points} 100,100`} fill="url(#aa-token-fill)" /></svg><div className="aa-token-chart-axis"><span>{new Date(visibleSeries[0]?.bucketAt ?? Date.now()).toLocaleDateString()}</span><span>{new Date(visibleSeries.at(-1)?.bucketAt ?? Date.now()).toLocaleDateString()}</span></div></div> : <p className="aa-usage-empty">No token history in this range. BB imports local provider history and records BB sessions.</p>}
+      </section>
+      <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Breakdown</h2><p>Detailed token totals by account, model and source.</p></div></div>
+        {visibleBreakdown.length ? <div className="aa-usage-table-wrap"><table className="aa-usage-table"><thead><tr><th>Account</th><th>Model</th><th>Source</th><th>Project</th><th>Thread</th><th>Total</th><th>Input</th><th>Output</th><th>Reasoning</th></tr></thead><tbody>{visibleBreakdown.map((entry) => { const threadId = entry.threadId; return <tr key={`${entry.accountId}:${entry.hostId}:${threadId ?? "local"}:${entry.model ?? "unknown"}:${entry.source}`}><td>{entry.accountName}</td><td>{entry.model ?? "Model unavailable"}</td><td>{entry.source}</td><td>{entry.projectId ?? "—"}</td><td>{threadId ? <button className="aa-usage-table-link" type="button" onClick={() => navigate.toThread(threadId)}>Open BB thread</button> : "—"}</td><td>{formatCount(entry.totalTokens)}</td><td>{formatCount(entry.inputTokens)}</td><td>{formatCount(entry.outputTokens)}</td><td>{formatCount(entry.reasoningOutputTokens)}</td></tr>; })}</tbody></table></div> : <p className="aa-usage-empty">No token breakdown yet. Provider history does not include transcript content.</p>}
+      </section>
+      <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Collection coverage</h2><p>History stays in this plugin’s local database. Credential files and conversation text are never copied into it.</p></div></div><div className="aa-source-list">{summary.sources.map((source) => <article key={`${source.accountId}:${source.source}`}><strong>{summary.accounts.find((account) => account.id === source.accountId)?.displayName ?? source.accountId}</strong><span>{source.source}</span><span>{source.status}</span><small>{formatTimestamp(source.lastScannedAt)}{source.message ? ` · ${source.message}` : ""}</small></article>)}{summary.sources.length === 0 ? <p className="aa-usage-empty">Local history scans report here after the first refresh.</p> : null}</div></section>
+    </> : null}
+  </main>;
+};
+
+const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
+  const rpc = useRpc<typeof rpcContract>();
+  const navigate = useBbNavigate();
+  const [summary, setSummary] = useState<UsageSummary | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true);
+    try { setSummary(await rpc.call("refreshUsage", { range: "24h" })); } catch { setSummary(null); }
+    finally { setRefreshing(false); }
+  };
+  useEffect(() => { void rpc.call("usageSummary", { range: "24h" }).then(setSummary).catch(() => setSummary(null)); }, []);
+  const quota = summary?.quota.slice().sort((left, right) => left.remainingPercent - right.remainingPercent).slice(0, 2) ?? [];
+  return <section className="aa-usage-footer" aria-label="AI account usage"><header><strong>AI account usage</strong><button type="button" onClick={dismiss}>Close</button></header>{quota.map((entry) => <div key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}`}><span>{entry.accountName} · {entry.label}<small>{summary?.hosts.find((host) => host.id === entry.hostId)?.name ?? entry.hostId} · {new Date(entry.capturedAt).toLocaleTimeString()}</small></span><strong>{entry.remainingPercent.toFixed(0)}% left</strong></div>)}<button type="button" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Refreshing…" : "Refresh usage"}</button><button type="button" className="aa-usage-footer-open" onClick={() => { dismiss(); navigate.toPluginPanel("accounts", { subPath: "usage" }); }}>Open usage history</button></section>;
+};
+
+const AccountPanel = ({ subPath }: { subPath: string }) => {
+  const navigate = useBbNavigate();
+  return <div className="aa-account-panel"><nav className="aa-account-panel-tabs" aria-label="AI Accounts pages">
+    <button className={subPath === "usage" ? "" : "is-active"} type="button" aria-current={subPath === "usage" ? undefined : "page"} onClick={() => navigate.toPluginPanel("accounts")}>Accounts</button>
+    <button className={subPath === "usage" ? "is-active" : ""} type="button" aria-current={subPath === "usage" ? "page" : undefined} onClick={() => navigate.toPluginPanel("accounts", { subPath: "usage" })}>Usage</button>
+  </nav>{subPath === "usage" ? <UsagePage /> : <AccountPage />}</div>;
+};
+
 export default definePluginApp((app) => {
   app.composer.customize({
     id: "ai-accounts-model-search",
@@ -687,6 +853,13 @@ export default definePluginApp((app) => {
     title: "AI Accounts",
     icon: "Bot",
     path: "accounts",
-    component: AccountPage,
+    component: AccountPanel,
+  });
+  app.experimental_sidebarFooter.register({
+    kind: "disclosure",
+    id: "ai-accounts-usage",
+    label: "AI account usage",
+    icon: "BarChart3",
+    component: UsageFooter,
   });
 });
