@@ -289,6 +289,20 @@ const AccountPage = () => {
     }
   };
 
+  const updateAccountEnabled = async (account: AccountProfile, enabled: boolean) => {
+    setSaving(true);
+    setNotice("");
+    try {
+      const result = await rpc.call("save", { ...account, enabled });
+      setAccounts((current) => current.map((profile) => profile.id === result.account.id ? result.account : profile));
+      setNotice(`${account.displayName} ${enabled ? "enabled in" : "hidden from"} the model picker.`);
+    } catch {
+      setNotice(`Could not update ${account.displayName}.`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const addAccount = async (provider: "codex" | "opencode-go") => {
     const count = accounts.filter((account) => account.provider === provider).length + 1;
     setSaving(true);
@@ -536,7 +550,7 @@ const AccountPage = () => {
           <select className="aa-reasoning-default" aria-label={"Default reasoning effort for " + model.displayName} value={selected?.modelReasoningDefaults[model.id] ?? model.defaultReasoningEffort} onChange={(event) => { if (isReasoningEffort(event.currentTarget.value)) updateReasoningDefault(model.id, event.currentTarget.value); }}>
             {model.supportedReasoningEfforts.map((effort) => <option key={effort.reasoningEffort} value={effort.reasoningEffort}>{effort.description}</option>)}
           </select>
-          <button title="Move up" aria-label="Move up" disabled={groupIndex === 0} onClick={() => moveModel(model.id, -1, models)}>↑</button><button title="Move down" aria-label="Move down" disabled={groupIndex === models.length - 1} onClick={() => moveModel(model.id, 1, models)}>↓</button><label className="aa-model-enable"><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span>In picker</span></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}
+          <button title="Move up" aria-label="Move up" disabled={groupIndex === 0} onClick={() => moveModel(model.id, -1, models)}>↑</button><button title="Move down" aria-label="Move down" disabled={groupIndex === models.length - 1} onClick={() => moveModel(model.id, 1, models)}>↓</button><label className="aa-model-enable" title={!isHidden ? "In model picker" : "Hidden from model picker"}><input type="checkbox" checked={!isHidden} onChange={(event) => updateModelVisibility(model.id, event.currentTarget.checked)} /><span className="aa-switch" /><span className="aa-model-enable-copy">In picker</span></label>{isCustom ? <button title="Remove custom model" aria-label="Remove custom model" onClick={() => removeCustomModel(model.id)}>×</button> : null}
         </div>
       </div>
     );
@@ -579,11 +593,16 @@ const AccountPage = () => {
               <section className="aa-group" key={provider}>
                 <h2>{provider === "codex" ? "CODEX" : "OPENCODE GO"}</h2>
                 {providerAccounts.map((account) => (
-                  <button className={"aa-account-row " + (selectedId === account.id ? "is-selected" : "")} key={account.id} onClick={() => setSelectedId(account.id)}>
-                    <span className={"aa-mark " + (provider === "codex" ? "codex" : "opencode")} style={{ backgroundColor: account.accentColor ?? "#2563EB" }}>{account.badge ?? account.displayName.slice(0, 2).toUpperCase()}</span>
-                    <span className="aa-row-copy"><strong>{account.displayName}</strong><small>{account.email ?? "Email not detected"}</small></span>
-                    <i className={account.enabled ? "aa-dot" : "aa-dot is-off"} />
-                  </button>
+                  <div className={"aa-account-row " + (selectedId === account.id ? "is-selected" : "")} key={account.id}>
+                    <button className="aa-account-select" onClick={() => setSelectedId(account.id)} aria-current={selectedId === account.id ? "true" : undefined}>
+                      <span className={"aa-mark " + (provider === "codex" ? "codex" : "opencode")} style={{ backgroundColor: account.accentColor ?? "#2563EB" }}>{account.badge ?? account.displayName.slice(0, 2).toUpperCase()}</span>
+                      <span className="aa-row-copy"><strong>{account.displayName}</strong><small>{account.email ?? "Email not detected"}</small></span>
+                    </button>
+                    <label className="aa-account-toggle" title={account.enabled ? "Hide account from model picker" : "Show account in model picker"}>
+                      <input type="checkbox" aria-label={`${account.enabled ? "Hide" : "Show"} ${account.displayName} in model picker`} checked={account.enabled} disabled={saving} onChange={(event) => void updateAccountEnabled(account, event.currentTarget.checked)} />
+                      <span className="aa-switch" />
+                    </label>
+                  </div>
                 ))}
               </section>
             );
@@ -601,6 +620,7 @@ const AccountPage = () => {
               <label className="aa-switch-label"><span>{selected.enabled ? "Enabled in model picker" : "Hidden from model picker"}</span><input type="checkbox" checked={selected.enabled} onChange={(event) => void persist({ enabled: event.currentTarget.checked })} /><span className="aa-switch" /></label>
             </div>
 
+            <div className="aa-detail-content">
             <section className="aa-section">
               <div className="aa-section-heading"><div><span className="aa-index">01</span><h3>Account identity</h3></div><button className="aa-quiet" onClick={() => void refreshIdentity()} disabled={selected.provider !== "codex"}>↻ Refresh</button></div>
               <div className="aa-field-grid identity">
@@ -621,7 +641,7 @@ const AccountPage = () => {
 
             <section className="aa-section aa-model-section">
               <div className="aa-section-heading"><div><span className="aa-index">03</span><h3>Models</h3></div><button className="aa-quiet" disabled={refreshingCatalog || !selectedHostId} onClick={() => void refreshCatalog()}>{refreshingCatalog ? "Checking…" : "↻ Check now"}</button></div>
-              <p className="aa-help">Use the checkboxes to show models in the picker. Favorites and order are saved on this device; custom models are added to this account’s provider entry.</p>
+              <p className="aa-help">Use the switches to show models in the picker. Favorites and order are saved on this device; custom models are added to this account’s provider entry.</p>
               <div className="aa-model-card"><div className="aa-model-toolbar"><button className="aa-quiet" onClick={() => {
                 if (!selected) return;
                 const catalogModelIds = catalogModels.map((model) => model.id);
@@ -632,14 +652,15 @@ const AccountPage = () => {
                 setDraft((current) => ({ ...current, hiddenText: next.join("\n") }));
                 void persist({ hiddenModelIds: next });
               }}>{catalogModels.length > 0 && catalogModels.every((model) => hiddenModelIds.has(model.id)) ? "Enable all" : "Disable all"}</button><span>{catalogModels.length} models · {favoriteModels.length} favorites · {hiddenModels.length} hidden</span><button className="aa-quiet" onClick={() => setCustomModelFormOpen((open) => !open)}>{customModelFormOpen ? "Cancel" : "＋ Add custom model"}</button></div>
-              {catalogModels.length ? <>
+              <div className="aa-model-list">{catalogModels.length ? <>
                 {favoriteModels.length > 0 ? <section className="aa-model-group"><h4>Favorites</h4>{renderModelRows(favoriteModels)}</section> : null}
                 <section className="aa-model-group"><h4>All</h4>{renderModelRows(availableModels)}</section>
                 {hiddenModels.length > 0 ? <section className="aa-model-group"><h4>Hidden from picker</h4>{renderModelRows(hiddenModels)}</section> : null}
-              </> : <p className="aa-empty">{selectedHostId ? "No models returned yet. Sign in on this machine, then refresh the provider catalog." : "Choose a machine to read the provider’s model catalog."}</p>}
+              </> : <p className="aa-empty">{selectedHostId ? "No models returned yet. Sign in on this machine, then refresh the provider catalog." : "Choose a machine to read the provider’s model catalog."}</p>}</div>
               {customModelFormOpen ? <div className="aa-custom-model-form"><label>Model ID<input id="aa-custom-model-id" value={customDraft.id} onChange={(event) => setCustomDraft((current) => ({ ...current, id: event.currentTarget.value }))} placeholder="provider/model-id" /></label><label>Display name<input value={customDraft.displayName} onChange={(event) => setCustomDraft((current) => ({ ...current, displayName: event.currentTarget.value }))} placeholder="Custom model" /></label><button className="aa-quiet" onClick={addCustomModel}>Add model</button></div> : null}
               </div>
             </section>
+            </div>
 
             <footer className="aa-footer">
               <button className="aa-primary" onClick={() => void signIn()}>↗ Copy sign-in command</button>
