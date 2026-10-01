@@ -3,7 +3,6 @@ import {
   useBbContext,
   useSdk,
 } from "@get-bb/plugin-sdk/app";
-import type { ExperimentalSidebarFooterDisclosureProps } from "@get-bb/plugin-sdk/app";
 import { useEffect, useMemo, useState } from "react";
 
 type Thread = Awaited<ReturnType<ReturnType<typeof useSdk>["threads"]["list"]>>[number];
@@ -25,7 +24,7 @@ const isDescendant = (threads: readonly Thread[], threadId: string, ancestorId: 
   return false;
 };
 
-const LinkExistingThread = ({ dismiss }: ExperimentalSidebarFooterDisclosureProps) => {
+const LinkExistingThread = () => {
   const sdk = useSdk();
   const context = useBbContext();
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -107,26 +106,31 @@ const LinkExistingThread = ({ dismiss }: ExperimentalSidebarFooterDisclosureProp
         bottom: 56,
         color: "var(--foreground, #eee)",
         display: "grid",
-        gap: 10,
+        fontSize: 13,
+        gap: 6,
+        lineHeight: 1.25,
         left: 12,
         maxHeight: "min(70vh, 560px)",
         overflow: "auto",
-        padding: 16,
+        padding: 12,
         position: "fixed",
         width: "min(360px, calc(100vw - 24px))",
         zIndex: 1000,
       }}
     >
-      <header style={{ alignItems: "center", display: "flex", justifyContent: "space-between" }}>
-        <strong>Link existing thread</strong>
-        <button onClick={dismiss} type="button">Close</button>
-      </header>
-      <p style={{ margin: 0 }}>
-        Changes BB’s parent link only. It will not start or message either AI session.
-      </p>
+      <header><strong>Link existing thread</strong></header>
+      <p style={{ margin: 0 }}>BB links only. No AI turn.</p>
+      <button
+        disabled={invalidLink || isLoading || isSaving}
+        onClick={() => void linkThread()}
+        style={{ justifySelf: "start", margin: 0, padding: "4px 8px" }}
+        type="button"
+      >
+        {isSaving ? "Linking…" : "Link threads"}
+      </button>
       {isLoading ? <p>Loading threads…</p> : null}
       {threads.length === 0 && !isLoading && error === null ? <p>No threads found.</p> : null}
-      <label style={{ display: "grid", gap: 4 }}>
+      <label style={{ display: "grid", gap: 2 }}>
         Child thread
         <select onChange={(event) => setChildId(event.currentTarget.value)} value={childId}>
           <option value="">Choose a thread</option>
@@ -135,7 +139,7 @@ const LinkExistingThread = ({ dismiss }: ExperimentalSidebarFooterDisclosureProp
           ))}
         </select>
       </label>
-      <label style={{ display: "grid", gap: 4 }}>
+      <label style={{ display: "grid", gap: 2 }}>
         Parent thread
         <select onChange={(event) => setParentId(event.currentTarget.value)} value={parentId}>
           <option value="">Choose a parent</option>
@@ -152,12 +156,6 @@ const LinkExistingThread = ({ dismiss }: ExperimentalSidebarFooterDisclosureProp
       ) : null}
       {error === null ? null : <p role="alert">{error}</p>}
       {notice === null ? null : <p role="status">{notice}</p>}
-      <footer style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button onClick={dismiss} type="button">Cancel</button>
-        <button disabled={invalidLink || isLoading || isSaving} onClick={() => void linkThread()} type="button">
-          {isSaving ? "Linking…" : "Link threads"}
-        </button>
-      </footer>
     </section>
   );
 };
