@@ -16,7 +16,11 @@ import {
   useSdk,
 } from "@get-bb/plugin-sdk/app";
 import type { rpcContract } from "./server";
-import { layoutRevisionGraph, type RevisionGraphRow } from "./graph-layout";
+import {
+  layoutRevisionGraph,
+  orderRevisionsByRecency,
+  type RevisionGraphRow,
+} from "./graph-layout";
 
 type Revision = {
   commitId: string;
@@ -34,6 +38,7 @@ type Revision = {
 type FileChange = { path: string; status: string };
 type FileStat = { path: string; additions: number; deletions: number };
 type ProjectPath = { name: string; path: string; hostId: string };
+type WorkspaceCleanupCandidate = { name: string; path: string; revision: string };
 
 type Snapshot = {
   root: string;
@@ -138,6 +143,9 @@ const styles = `
 .jj-toolbar{display:flex;flex-direction:column;align-items:stretch;gap:8px}.jj-tabs{width:max-content;max-width:100%;margin:0}.jj-repository-controls{display:flex;min-width:0;align-items:center;gap:7px;flex-wrap:wrap}.jj-repository-controls .jj-host{flex:0 1 180px;width:auto}.jj-repository-controls .jj-path-picker{flex:1 1 180px}.jj-repository-controls .jj-path{width:100%;border-radius:6px}.jj-refresh{display:grid;width:34px;height:34px;flex:none;place-items:center;padding:0}.jj-revision-diff-file{border-bottom:1px solid var(--jj-line)}.jj-revision-diff-file h3{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;margin:0;padding:8px 12px;border-bottom:1px solid var(--jj-line);background:var(--card);font:600 12px var(--font-mono,monospace)}.jj-revision-diff-file h3 .jj-status{width:auto}.jj-revision-diff-renderer{padding:8px 10px}.jj-revision-diff-renderer>div{min-height:0}
 .jj-toolbar{gap:5px;padding:6px 9px}.jj-tab{padding:6px 9px}.jj-repository-controls{gap:5px}.jj-repository-controls .jj-input{padding:5px 8px}.jj-refresh{width:30px;height:30px}.jj-picker{width:min(580px,calc(100vw - 32px));max-height:min(480px,72vh);padding:6px 6px 0;border-radius:10px}.jj-picker-header{padding:0 6px 4px;gap:4px}.jj-picker-path input{height:32px;font-size:13px}.jj-picker-section{padding:5px 8px 3px;font-size:10px}.jj-picker-list{max-height:min(360px,58vh);min-height:0;padding:0 3px 4px}.jj-project-option{min-height:36px;gap:7px;padding:4px 6px;border-radius:5px}.jj-project-mark{width:18px;height:18px;border-radius:4px;font-size:8px}.jj-project-copy{gap:0;font-size:12px}.jj-project-copy small{font-size:9px}.jj-picker-entry{min-height:29px;padding:3px 7px;border-radius:5px}.jj-picker-footer{gap:8px;padding:5px 8px;font-size:9px}.jj-picker-footer kbd{padding:1px 3px}
 .jj-files-heading{display:flex;align-items:center;gap:6px}.jj-files-heading .jj-section-heading-toggle{flex:1;min-width:0}.jj-full-diff-action{flex:none;padding:4px 7px;font-size:10px}
+.jj-tab-row{display:flex;align-items:center;gap:8px}.jj-tab-row .jj-tabs{margin-right:auto}.jj-actions-menu{position:relative;margin-left:auto}.jj-actions-menu>summary{display:grid;width:30px;height:30px;place-items:center;border:1px solid var(--jj-line);border-radius:6px;color:var(--muted-foreground);list-style:none;cursor:pointer}.jj-actions-menu>summary::-webkit-details-marker{display:none}.jj-actions-menu>summary:hover,.jj-actions-menu[open]>summary{background:var(--accent);color:var(--foreground)}.jj-actions-menu-items{position:absolute;top:calc(100% + 5px);right:0;z-index:20;display:grid;min-width:220px;padding:4px;border:1px solid var(--jj-line);border-radius:7px;background:var(--popover,var(--card));box-shadow:0 8px 24px #0006}.jj-actions-menu-items button{padding:7px 9px;border:0;border-radius:4px;background:transparent;color:var(--foreground);font:inherit;text-align:left;white-space:nowrap;cursor:pointer}.jj-actions-menu-items button:hover,.jj-actions-menu-items button:focus-visible{background:var(--accent);outline:none}.jj-actions-menu-items button:disabled{opacity:.5;cursor:not-allowed}.jj-notice{padding:6px 10px;border-bottom:1px solid var(--jj-line);color:var(--muted-foreground);font-size:11px}
+.jj-working-group-fill{flex:none}.jj-working-content{max-height:min(42vh,320px);flex:0 1 auto}.jj-history-group{min-height:120px;flex:1 1 0}.jj-file-total-stats{flex:none;padding:0 3px}
+.jj-day-graph{position:relative;z-index:1;display:block;width:100%;height:23px;overflow:visible;pointer-events:none}.jj-day-graph svg{position:absolute;inset:0;display:block;width:100%;height:23px;overflow:visible}.jj-day-heading-content{position:relative;z-index:2}.jj-badge-workspace,.jj-badge-workspace-default{background:#0f766e;border-color:#0f766e;color:#fff;font-weight:700}
 `;
 
 const RevisionGraphCell = ({
@@ -159,6 +167,40 @@ const RevisionGraphCell = ({
 }) => {
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = 21;
+  const crossingHeight = (edge: RevisionGraphRow["edges"][number], lane: number) => {
+    const startX = center(edge.fromLane);
+    const endX = center(edge.toLane);
+    const targetX = center(lane);
+    const fraction = (targetX - startX) / (endX - startX);
+    let lower = 0;
+    let upper = 1;
+    for (let iteration = 0; iteration < 16; iteration += 1) {
+      const parameter = (lower + upper) / 2;
+      const xFraction = 3 * parameter ** 2 - 2 * parameter ** 3;
+      if (xFraction < fraction) lower = parameter;
+      else upper = parameter;
+    }
+    const parameter = (lower + upper) / 2;
+    const inverse = 1 - parameter;
+    return (
+      inverse ** 3 * middle +
+      3 * inverse ** 2 * parameter * (middle + 8) +
+      3 * inverse * parameter ** 2 * (middle + 8) +
+      parameter ** 3 * 42
+    );
+  };
+  const laneCrossings = new Map<number, number[]>();
+  row.edges
+    .filter((edge) => edge.kind === "merge")
+    .forEach((edge) => {
+      row.bottomLanes
+        .filter((lane) => lane > Math.min(edge.fromLane, edge.toLane) && lane < Math.max(edge.fromLane, edge.toLane))
+        .forEach((lane) => {
+          const heights = laneCrossings.get(lane) ?? [];
+          heights.push(crossingHeight(edge, lane));
+          laneCrossings.set(lane, heights);
+        });
+    });
   const nodeColor = preview
     ? previewColor
     : current
@@ -214,15 +256,35 @@ const RevisionGraphCell = ({
           />
         )}
         {row.bottomLanes.map((lane) => (
-          <line
-            key={`bottom-${lane}`}
-            x1={center(lane)}
-            y1={middle}
-            x2={center(lane)}
-            y2="42"
-            stroke={preview ? previewColor : laneColor(lane)}
-            strokeWidth="1.5"
-          />
+          laneCrossings.has(lane) ? (
+            <path
+              key={`bottom-${lane}`}
+              d={[
+                `M ${center(lane)} ${middle}`,
+                ...(laneCrossings.get(lane) ?? [])
+                  .sort((left, right) => left - right)
+                  .flatMap((height) => [
+                    `L ${center(lane)} ${height - 3.5}`,
+                    `C ${center(lane)} ${height - 1}, ${center(lane) + 3.5} ${height - 1}, ${center(lane) + 3.5} ${height}`,
+                    `C ${center(lane) + 3.5} ${height + 1}, ${center(lane)} ${height + 1}, ${center(lane)} ${height + 3.5}`,
+                  ]),
+                `L ${center(lane)} 42`,
+              ].join(" ")}
+              fill="none"
+              stroke={preview ? previewColor : laneColor(lane)}
+              strokeWidth="1.5"
+            />
+          ) : (
+            <line
+              key={`bottom-${lane}`}
+              x1={center(lane)}
+              y1={middle}
+              x2={center(lane)}
+              y2="42"
+              stroke={preview ? previewColor : laneColor(lane)}
+              strokeWidth="1.5"
+            />
+          )
         ))}
         {empty ? (
           <rect
@@ -329,17 +391,36 @@ const statusClass = (status: string) => {
   return "";
 };
 
+const threadHeaderActionStyles = `
+.jj-header-action {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--foreground);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.jj-header-action:hover {
+  background: var(--accent);
+}
+`;
+
 const ThreadHeaderAction = () => {
   const navigation = useBbNavigate();
   return (
-    <button
-      type="button"
-      className="jj-button"
-      aria-label="Open Jujutsu workbench"
-      onClick={() => navigation.openThreadPanel({ actionId: "thread-workbench", title: "Jujutsu" })}
-    >
-      JJ
-    </button>
+    <>
+      <style>{threadHeaderActionStyles}</style>
+      <button
+        type="button"
+        className="jj-button jj-header-action"
+        aria-label="Open Jujutsu workbench"
+        onClick={() =>
+          navigation.openThreadPanel({ actionId: "thread-workbench", title: "Jujutsu" })
+        }
+      >
+        JJ
+      </button>
+    </>
   );
 };
 
@@ -348,6 +429,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const sdk = useSdk();
   const context = useBbContext();
   const [tab, setTab] = useState<"graph" | "source">("graph");
+  const navigation = useBbNavigate();
   const [graphQuery, setGraphQuery] = useState("");
   const [path, setPath] = useState(() => localStorage.getItem("jj-plugin-path") ?? "");
   const [hostId, setHostId] = useState(() => localStorage.getItem("jj-plugin-host") ?? "");
@@ -395,9 +477,13 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [pendingRebase, setPendingRebase] = useState<PendingRebase | null>(null);
   const [rebasePreviewExpanded, setRebasePreviewExpanded] = useState(false);
   const [pendingAbandon, setPendingAbandon] = useState<Revision | null>(null);
+  const [pendingWorkspaceCleanup, setPendingWorkspaceCleanup] = useState<
+    WorkspaceCleanupCandidate[] | null
+  >(null);
   const [draggedRevisionId, setDraggedRevisionId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [revisionContextMenu, setRevisionContextMenu] = useState<RevisionContextMenu | null>(null);
+  const actionsMenuRef = useRef<HTMLDetailsElement>(null);
   const [moveSource, setMoveSource] = useState<Revision | null>(null);
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(() => new Set());
   const [directoryBrowser, setDirectoryBrowser] = useState<DirectoryResult | null>(null);
@@ -407,12 +493,14 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [projectIndex, setProjectIndex] = useState(0);
   const directoryRequest = useRef(0);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const inspectAt = useCallback(
     async (targetPath: string, targetHostId: string) => {
       if (!targetPath.trim() || !targetHostId.trim()) return;
       setBusy(true);
+      setNotice(null);
       try {
         const normalizedPath = targetPath.trim();
         const normalizedHostId = targetHostId.trim();
@@ -685,12 +773,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [snapshot]);
 
   useEffect(() => {
-    if (
-      !selectedRevision ||
-      !snapshot ||
-      !path ||
-      !hostId
-    ) {
+    if (!selectedRevision || !snapshot || !path || !hostId) {
       if (!selectedRevision || loadedRevisionFilesFor !== selectedRevision.commitId) {
         setRevisionFiles([]);
         setRevisionFileStats([]);
@@ -751,14 +834,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     return () => {
       active = false;
     };
-  }, [
-    hostId,
-    loadedRevisionFilesFor,
-    path,
-    rpc,
-    selectedRevision?.commitId,
-    snapshot,
-  ]);
+  }, [hostId, loadedRevisionFilesFor, path, rpc, selectedRevision?.commitId, snapshot]);
 
   useEffect(() => {
     if (!diffTarget || !path || !hostId) {
@@ -794,6 +870,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [diffTarget?.path, diffTarget?.revision, hostId, path, rpc]);
 
   const revisions = snapshot?.revisions ?? [];
+  const graphRevisions = useMemo(() => orderRevisionsByRecency(revisions), [revisions]);
   const evolvedChangeIds = useMemo(() => {
     const newestByChangeId = new Map<string, number>();
     revisions.forEach((revision) =>
@@ -812,7 +889,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     );
   }, [revisions]);
   const graphItems = useMemo(() => {
-    const originalItems: GraphItem[] = revisions.map((revision) => ({
+    const originalItems: GraphItem[] = graphRevisions.map((revision) => ({
       revision,
       isPreview: false,
     }));
@@ -834,12 +911,12 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       },
     }));
     const result: GraphItem[] = [];
-    revisions.forEach((revision) => {
+    graphRevisions.forEach((revision) => {
       if (revision.commitId === pendingRebase.destination.commitId) result.push(...projectedItems);
       result.push({ revision, isPreview: false });
     });
     return result;
-  }, [pendingRebase, revisions]);
+  }, [graphRevisions, pendingRebase]);
   const graphRows = useMemo(
     () => layoutRevisionGraph(graphItems.map((item) => item.revision)),
     [graphItems],
@@ -872,8 +949,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       return {
         ...group,
         activeLanes: [
-          ...firstRow.row.topLanes,
-          ...(firstRow.row.startsHere ? [] : [firstRow.row.commitLane]),
+          ...new Set([
+            ...(graphRows[firstRow.index - 1]?.bottomLanes ?? []),
+            ...firstRow.row.topLanes,
+            firstRow.row.commitLane,
+          ]),
         ].sort((left, right) => left - right),
         dayCount: dayCounts.get(group.day) ?? group.rows.length,
         showHeading,
@@ -885,8 +965,15 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     [revisions],
   );
   const maximumLaneCount = graphRows.reduce((maximum, row) => Math.max(maximum, row.laneCount), 1);
-  const graphWidth = Math.min(92, 20 + (maximumLaneCount - 1) * 12);
+  const graphWidth = Math.min(288, 20 + (maximumLaneCount - 1) * 36);
   const laneGap = maximumLaneCount <= 1 ? 0 : (graphWidth - 20) / (maximumLaneCount - 1);
+  const revisionFileTotals = revisionFileStats.reduce(
+    (totals, file) => ({
+      additions: totals.additions + file.additions,
+      deletions: totals.deletions + file.deletions,
+    }),
+    { additions: 0, deletions: 0 },
+  );
   const recentRevisions = useMemo(() => {
     if (!snapshot) return [];
     const revisionsById = new Map(revisions.map((revision) => [revision.commitId, revision]));
@@ -915,6 +1002,16 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    const closeActionsMenu = (event: PointerEvent) => {
+      if (!actionsMenuRef.current?.contains(event.target as Node)) {
+        actionsMenuRef.current?.removeAttribute("open");
+      }
+    };
+    document.addEventListener("pointerdown", closeActionsMenu);
+    return () => document.removeEventListener("pointerdown", closeActionsMenu);
+  }, []);
   const selectRevision = (revision: Revision) => {
     revisionDiffRequest.current += 1;
     setSelectedRevision((current) => (current?.commitId === revision.commitId ? null : revision));
@@ -1129,11 +1226,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           <span className="jj-chevron">›</span>
           Changed files
           <span className="jj-count">
-            {revisionFilesLoading
-              ? "…"
-              : revisionFilesError
-                ? "!"
-                : revisionFiles.length}
+            {revisionFilesLoading ? "…" : revisionFilesError ? "!" : revisionFiles.length}
           </span>
         </button>
         <button
@@ -1143,6 +1236,18 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         >
           Full diff
         </button>
+        <span className="jj-file-stats jj-file-total-stats" aria-label="Total line changes">
+          {revisionFileStatsLoading || loadedRevisionFilesFor !== revision.commitId ? (
+            <span>…</span>
+          ) : revisionFileStatsError ? (
+            <span title={revisionFileStatsError}>unavailable</span>
+          ) : (
+            <>
+              <span className="jj-file-additions">+{revisionFileTotals.additions}</span>
+              <span className="jj-file-deletions">−{revisionFileTotals.deletions}</span>
+            </>
+          )}
+        </span>
       </div>
       {filesExpandedRevisionId === revision.commitId && revisionFilesError && (
         <div className="jj-error-inline" role="alert">
@@ -1201,22 +1306,100 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     <div className="jj-page">
       <style>{styles}</style>
       <header className="jj-toolbar">
-        <nav className="jj-tabs" aria-label="Jujutsu views">
-          <button
-            className="jj-tab"
-            aria-selected={tab === "graph"}
-            onClick={() => setTab("graph")}
-          >
-            Revision graph
-          </button>
-          <button
-            className="jj-tab"
-            aria-selected={tab === "source"}
-            onClick={() => setTab("source")}
-          >
-            Source Control
-          </button>
-        </nav>
+        <div className="jj-tab-row">
+          <nav className="jj-tabs" aria-label="Jujutsu views">
+            <button
+              className="jj-tab"
+              aria-selected={tab === "graph"}
+              onClick={() => setTab("graph")}
+            >
+              Revision graph
+            </button>
+            <button
+              className="jj-tab"
+              aria-selected={tab === "source"}
+              onClick={() => setTab("source")}
+            >
+              Source Control
+            </button>
+          </nav>
+          <details className="jj-actions-menu" ref={actionsMenuRef}>
+            <summary aria-label="More Jujutsu actions" title="More actions">
+              <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+                <circle cx="8" cy="3" r="1.25" fill="currentColor" />
+                <circle cx="8" cy="8" r="1.25" fill="currentColor" />
+                <circle cx="8" cy="13" r="1.25" fill="currentColor" />
+              </svg>
+            </summary>
+            <div className="jj-actions-menu-items" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={busy || !path || !hostId}
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  let cleared = 0;
+                  void runAction(async () => {
+                    const result = await rpc.call("clearEmptyAncestors", { path, hostId });
+                    cleared = result.cleared;
+                  }).then((success) => {
+                    if (!success) return;
+                    setNotice(
+                      cleared === 0
+                        ? "No empty ancestor commits to clear."
+                        : `Cleared ${cleared} empty ancestor ${cleared === 1 ? "commit" : "commits"}.`,
+                    );
+                  });
+                }}
+              >
+                Clear empty ancestor commits
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={busy || !path || !hostId}
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  setBusy(true);
+                  setError(null);
+                  void rpc
+                    .call("outdatedWorkspaces", { path, hostId })
+                    .then((candidates) => {
+                      if (candidates.length === 0) {
+                        setNotice("No clean integrated workspaces are ready to remove.");
+                        return;
+                      }
+                      setPendingWorkspaceCleanup(candidates);
+                    })
+                    .catch((cause) => {
+                      setError(cause instanceof Error ? cause.message : String(cause));
+                    })
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Clear outdated workspaces
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!snapshot}
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  if (!snapshot) return;
+                  navigation.toCompose({
+                    focusPrompt: true,
+                    initialPrompt: [
+                      "Use the $jj-merge-workspaces skill to coordinate the workspace merge, and follow ~/.agents/skills/jj/SKILL.md for safe history surgery.",
+                      `In ${snapshot.root}, inspect recent relevant branches and all workspace heads. Unify every recent relevant branch that is not already part of the current branch into the current branch. Preserve unrelated work owned by other active workspaces. Follow the skill's duplicate-first procedure for heads owned by other workspaces, resolve conflicts from oldest to newest, inspect the resulting history, and leave the default workspace working copy above the unified tip.`,
+                    ].join("\n\n"),
+                  });
+                }}
+              >
+                Unify recent branches in a new thread
+              </button>
+            </div>
+          </details>
+        </div>
         <div className="jj-repository-controls">
           {hosts.length > 1 && (
             <select
@@ -1273,6 +1456,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
           {error}
         </div>
       )}
+      {notice && (
+        <div role="status" className="jj-notice">
+          {notice}
+        </div>
+      )}
       {!snapshot ? (
         <div className="jj-empty">
           Choose a BB project path or paste a path inside a Jujutsu workspace.
@@ -1280,10 +1468,6 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       ) : (
         <>
           <div className="jj-context">
-            <span className="jj-context-path" title={snapshot.root}>
-              {snapshot.root}
-            </span>
-            <span>·</span>
             <span>{snapshot.revisions.length} revisions</span>
             <span>·</span>
             <span>{snapshot.workspaces.length} workspaces</span>
@@ -1334,15 +1518,19 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                           })
                         }
                       >
-                        <span className="jj-day-graph" aria-hidden="true">
-                          <svg width={graphWidth} height="22" viewBox={`0 0 ${graphWidth} 22`}>
+                        <span
+                          className="jj-day-graph jj-graph-cell"
+                          style={{ width: graphWidth }}
+                          aria-hidden="true"
+                        >
+                          <svg width={graphWidth} height="23" viewBox={`0 0 ${graphWidth} 23`}>
                             {group.activeLanes.map((lane) => (
                               <line
                                 key={lane}
                                 x1={10 + lane * laneGap}
                                 y1="0"
                                 x2={10 + lane * laneGap}
-                                y2="22"
+                                y2="23"
                                 stroke={laneColor(lane)}
                                 strokeWidth="1.5"
                               />
@@ -1647,7 +1835,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
               <div className="jj-scm-layout">
                 <div className="jj-scm-list" ref={sourceListRef}>
                   <section
-                    className={`jj-group jj-working-group${diffTarget ? "" : " jj-working-group-fill"}`}
+                    className="jj-group jj-working-group"
                     style={diffTarget ? { flexBasis: `${changesPanePercent}%` } : undefined}
                   >
                     <button
@@ -1791,227 +1979,223 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                     />
                   )}
                   <section className="jj-group jj-history-group">
-                      <button
-                        className="jj-group-header"
-                        aria-expanded={historyExpanded}
-                        onClick={() => setHistoryExpanded((expanded) => !expanded)}
-                      >
-                        <span className="jj-chevron">›</span>
-                        <span>Recent revisions</span>
-                      </button>
-                      {historyExpanded && (
-                        <div className="jj-group-content">
-                          <label className="jj-history-depth">
-                            Show @ through @-
-                            <input
-                              className="jj-input"
-                              type="number"
-                              min={1}
-                              max={80}
-                              value={recentDepth}
-                              onChange={(event) => {
-                                const next = Math.max(1, Math.min(80, Number(event.target.value)));
-                                setRecentDepth(next);
-                                localStorage.setItem("jj-plugin-recent", String(next));
-                              }}
-                            />
-                          </label>
-                          {recentRevisions.slice(1).map((revision, index) => {
-                            const isExpanded = expandedSourceRevisionId === revision.commitId;
-                            return (
-                              <section className="jj-ancestor-group" key={revision.commitId}>
-                                <div className="jj-history-item">
-                                  <button
-                                    className="jj-ancestor-header"
-                                    aria-expanded={isExpanded}
-                                    onClick={() => toggleSourceRevision(revision)}
+                    <button
+                      className="jj-group-header"
+                      aria-expanded={historyExpanded}
+                      onClick={() => setHistoryExpanded((expanded) => !expanded)}
+                    >
+                      <span className="jj-chevron">›</span>
+                      <span>Recent revisions</span>
+                    </button>
+                    {historyExpanded && (
+                      <div className="jj-group-content">
+                        <label className="jj-history-depth">
+                          Show @ through @-
+                          <input
+                            className="jj-input"
+                            type="number"
+                            min={1}
+                            max={80}
+                            value={recentDepth}
+                            onChange={(event) => {
+                              const next = Math.max(1, Math.min(80, Number(event.target.value)));
+                              setRecentDepth(next);
+                              localStorage.setItem("jj-plugin-recent", String(next));
+                            }}
+                          />
+                        </label>
+                        {recentRevisions.slice(1).map((revision, index) => {
+                          const isExpanded = expandedSourceRevisionId === revision.commitId;
+                          return (
+                            <section className="jj-ancestor-group" key={revision.commitId}>
+                              <div className="jj-history-item">
+                                <button
+                                  className="jj-ancestor-header"
+                                  aria-expanded={isExpanded}
+                                  onClick={() => toggleSourceRevision(revision)}
+                                >
+                                  <span className="jj-chevron">›</span>
+                                  <code className="jj-ancestor-label">@-{index + 1}</code>
+                                  <span className="jj-ancestor-subject" title={label(revision)}>
+                                    {label(revision)}
+                                  </span>
+                                  <span
+                                    className="jj-ancestor-meta"
+                                    title={new Date(revision.timestamp * 1000).toLocaleString()}
                                   >
-                                    <span className="jj-chevron">›</span>
-                                    <code className="jj-ancestor-label">@-{index + 1}</code>
-                                    <span className="jj-ancestor-subject" title={label(revision)}>
-                                      {label(revision)}
-                                    </span>
-                                    <span
-                                      className="jj-ancestor-meta"
-                                      title={new Date(revision.timestamp * 1000).toLocaleString()}
-                                    >
-                                      {relativeTime(revision.timestamp)}
-                                    </span>
+                                    {relativeTime(revision.timestamp)}
+                                  </span>
+                                </button>
+                                {revision.parents[0] && (
+                                  <button
+                                    className="jj-mini-action"
+                                    disabled={busy}
+                                    title={`Squash ${label(revision)} into its parent`}
+                                    onClick={() =>
+                                      void runAction(() =>
+                                        rpc.call("squash", {
+                                          path,
+                                          hostId,
+                                          revision: revision.commitId,
+                                          destination: revision.parents[0] ?? "@-",
+                                        }),
+                                      )
+                                    }
+                                  >
+                                    Squash
                                   </button>
-                                  {revision.parents[0] && (
+                                )}
+                              </div>
+                              {isExpanded && selectedRevision?.commitId === revision.commitId && (
+                                <div className="jj-ancestor-files">
+                                  <div className="jj-files-heading">
                                     <button
-                                      className="jj-mini-action"
-                                      disabled={busy}
-                                      title={`Squash ${label(revision)} into its parent`}
+                                      className="jj-section-heading jj-section-heading-toggle"
+                                      aria-expanded={filesExpandedRevisionId === revision.commitId}
                                       onClick={() =>
-                                        void runAction(() =>
-                                          rpc.call("squash", {
-                                            path,
-                                            hostId,
-                                            revision: revision.commitId,
-                                            destination: revision.parents[0] ?? "@-",
-                                          }),
+                                        setFilesExpandedRevisionId((current) =>
+                                          current === revision.commitId ? null : revision.commitId,
                                         )
                                       }
                                     >
-                                      Squash
+                                      <span className="jj-chevron">›</span>
+                                      Changed files
+                                      <span className="jj-count">
+                                        {revisionFilesLoading
+                                          ? "…"
+                                          : revisionFilesError
+                                            ? "!"
+                                            : revisionFiles.length}
+                                      </span>
                                     </button>
+                                    <button
+                                      className="jj-button jj-full-diff-action"
+                                      title={`View the full diff for ${label(revision)}`}
+                                      onClick={() => void showRevisionDiff(revision)}
+                                    >
+                                      Full diff
+                                    </button>
+                                  </div>
+                                  {filesExpandedRevisionId === revision.commitId &&
+                                    revisionFilesError && (
+                                      <div className="jj-error-inline" role="alert">
+                                        {revisionFilesError}
+                                      </div>
+                                    )}
+                                  {filesExpandedRevisionId === revision.commitId && (
+                                    <>
+                                      {revisionFilesLoading ? (
+                                        <div className="jj-selection-hint">Loading files…</div>
+                                      ) : (
+                                        <>
+                                          {revisionFiles.map((file) => (
+                                            <div className="jj-file-entry" key={file.path}>
+                                              <input
+                                                className="jj-checkbox"
+                                                type="checkbox"
+                                                aria-label={`Select ${file.path} for split`}
+                                                checked={selectedRevisionFiles.includes(file.path)}
+                                                onChange={(event) =>
+                                                  setSelectedRevisionFiles((current) =>
+                                                    event.target.checked
+                                                      ? [...current, file.path]
+                                                      : current.filter(
+                                                          (selectedPath) =>
+                                                            selectedPath !== file.path,
+                                                        ),
+                                                  )
+                                                }
+                                              />
+                                              <button
+                                                className="jj-file-button"
+                                                onClick={() =>
+                                                  openFullDiff(file.path, revision.commitId)
+                                                }
+                                              >
+                                                <span
+                                                  className={`jj-status ${statusClass(file.status)}`}
+                                                >
+                                                  {file.status}
+                                                </span>
+                                                <FilePath path={file.path} />
+                                              </button>
+                                            </div>
+                                          ))}
+                                          {revisionFiles.length === 0 && (
+                                            <div className="jj-selection-hint">
+                                              No file changes in this revision.
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
+                                    </>
                                   )}
-                                </div>
-                                {isExpanded && selectedRevision?.commitId === revision.commitId && (
-                                  <div className="jj-ancestor-files">
-                                    <div className="jj-files-heading">
+                                  <div className="jj-ancestor-ops">
+                                    <DescriptionTextarea
+                                      value={description}
+                                      label="Revision description"
+                                      onChange={setDescription}
+                                    />
+                                    <div className="jj-ancestor-actions">
                                       <button
-                                        className="jj-section-heading jj-section-heading-toggle"
-                                        aria-expanded={filesExpandedRevisionId === revision.commitId}
+                                        className="jj-button"
+                                        disabled={busy || description === revision.description}
+                                        onClick={() => void saveRevisionDescription(revision)}
+                                      >
+                                        Describe
+                                      </button>
+                                      <button
+                                        className="jj-button"
+                                        disabled={busy || selectedRevisionFiles.length === 0}
                                         onClick={() =>
-                                          setFilesExpandedRevisionId((current) =>
-                                            current === revision.commitId
-                                              ? null
-                                              : revision.commitId,
+                                          void runAction(() =>
+                                            rpc.call("split", {
+                                              path,
+                                              hostId,
+                                              revision: revision.commitId,
+                                              files: selectedRevisionFiles,
+                                              message: splitMessage,
+                                            }),
                                           )
                                         }
                                       >
-                                        <span className="jj-chevron">›</span>
-                                        Changed files
-                                        <span className="jj-count">
-                                          {revisionFilesLoading
-                                            ? "…"
-                                            : revisionFilesError
-                                              ? "!"
-                                              : revisionFiles.length}
-                                        </span>
+                                        Split selected
                                       </button>
-                                      <button
-                                          className="jj-button jj-full-diff-action"
-                                        title={`View the full diff for ${label(revision)}`}
-                                        onClick={() => void showRevisionDiff(revision)}
-                                      >
-                                        Full diff
-                                      </button>
-                                    </div>
-                                    {filesExpandedRevisionId === revision.commitId &&
-                                      revisionFilesError && (
-                                        <div className="jj-error-inline" role="alert">
-                                          {revisionFilesError}
-                                        </div>
-                                      )}
-                                    {filesExpandedRevisionId === revision.commitId && (
-                                      <>
-                                        {revisionFilesLoading ? (
-                                          <div className="jj-selection-hint">Loading files…</div>
-                                        ) : (
-                                          <>
-                                            {revisionFiles.map((file) => (
-                                              <div className="jj-file-entry" key={file.path}>
-                                                <input
-                                                  className="jj-checkbox"
-                                                  type="checkbox"
-                                                  aria-label={`Select ${file.path} for split`}
-                                                  checked={selectedRevisionFiles.includes(
-                                                    file.path,
-                                                  )}
-                                                  onChange={(event) =>
-                                                    setSelectedRevisionFiles((current) =>
-                                                      event.target.checked
-                                                        ? [...current, file.path]
-                                                        : current.filter(
-                                                            (selectedPath) =>
-                                                              selectedPath !== file.path,
-                                                          ),
-                                                    )
-                                                  }
-                                                />
-                                                <button
-                                                  className="jj-file-button"
-                                                  onClick={() =>
-                                                    openFullDiff(file.path, revision.commitId)
-                                                  }
-                                                >
-                                                  <span
-                                                    className={`jj-status ${statusClass(file.status)}`}
-                                                  >
-                                                    {file.status}
-                                                  </span>
-                                                  <FilePath path={file.path} />
-                                                </button>
-                                              </div>
-                                            ))}
-                                            {revisionFiles.length === 0 && (
-                                              <div className="jj-selection-hint">
-                                                No file changes in this revision.
-                                              </div>
-                                            )}
-                                          </>
-                                        )}
-                                      </>
-                                    )}
-                                    <div className="jj-ancestor-ops">
-                                      <DescriptionTextarea
-                                        value={description}
-                                        label="Revision description"
-                                        onChange={setDescription}
-                                      />
-                                      <div className="jj-ancestor-actions">
+                                      {revision.parents[0] && (
                                         <button
                                           className="jj-button"
-                                          disabled={busy || description === revision.description}
-                                          onClick={() => void saveRevisionDescription(revision)}
-                                        >
-                                          Describe
-                                        </button>
-                                        <button
-                                          className="jj-button"
-                                          disabled={busy || selectedRevisionFiles.length === 0}
+                                          disabled={busy}
                                           onClick={() =>
                                             void runAction(() =>
-                                              rpc.call("split", {
+                                              rpc.call("squash", {
                                                 path,
                                                 hostId,
                                                 revision: revision.commitId,
-                                                files: selectedRevisionFiles,
-                                                message: splitMessage,
+                                                destination: revision.parents[0] ?? "@-",
                                               }),
                                             )
                                           }
                                         >
-                                          Split selected
+                                          Squash into parent
                                         </button>
-                                        {revision.parents[0] && (
-                                          <button
-                                            className="jj-button"
-                                            disabled={busy}
-                                            onClick={() =>
-                                              void runAction(() =>
-                                                rpc.call("squash", {
-                                                  path,
-                                                  hostId,
-                                                  revision: revision.commitId,
-                                                  destination: revision.parents[0] ?? "@-",
-                                                }),
-                                              )
-                                            }
-                                          >
-                                            Squash into parent
-                                          </button>
-                                        )}
-                                      </div>
-                                      {selectedRevisionFiles.length > 0 && (
-                                        <input
-                                          className="jj-input"
-                                          aria-label="New revision description"
-                                          value={splitMessage}
-                                          onChange={(event) => setSplitMessage(event.target.value)}
-                                        />
                                       )}
                                     </div>
+                                    {selectedRevisionFiles.length > 0 && (
+                                      <input
+                                        className="jj-input"
+                                        aria-label="New revision description"
+                                        value={splitMessage}
+                                        onChange={(event) => setSplitMessage(event.target.value)}
+                                      />
+                                    )}
                                   </div>
-                                )}
-                              </section>
-                            );
-                          })}
-                        </div>
-                      )}
+                                </div>
+                              )}
+                            </section>
+                          );
+                        })}
+                      </div>
+                    )}
                   </section>
                 </div>
                 {diffTarget && (
@@ -2505,6 +2689,74 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                 }}
               >
                 {busy ? "Abandoning…" : "Abandon change"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {pendingWorkspaceCleanup && (
+        <div className="jj-confirm-backdrop" role="presentation">
+          <section
+            className="jj-confirm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="jj-workspace-cleanup-title"
+          >
+            <h2 id="jj-workspace-cleanup-title">Remove integrated workspaces?</h2>
+            <p>
+              These clean workspaces point to revisions already in the current branch. Confirming
+              forgets each workspace and permanently deletes its directory. JJ status checks may
+              record normal working-copy snapshots before removal.
+            </p>
+            <div className="jj-file-list">
+              {pendingWorkspaceCleanup.map((workspace) => (
+                <code className="jj-confirm-code" key={workspace.name}>
+                  {workspace.name} · {workspace.revision}
+                  <br />
+                  {workspace.path}
+                </code>
+              ))}
+            </div>
+            <div className="jj-confirm-actions">
+              <button
+                className="jj-button"
+                disabled={busy}
+                onClick={() => setPendingWorkspaceCleanup(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="jj-button jj-button-primary"
+                disabled={busy}
+                onClick={() => {
+                  const candidates = pendingWorkspaceCleanup;
+                  let result: { removed: string[]; skipped: number } | undefined;
+                  void runAction(async () => {
+                    result = await rpc.call("clearOutdatedWorkspaces", {
+                      path,
+                      hostId,
+                      workspaces: candidates.map(({ name, path: workspacePath }) => ({
+                        name,
+                        path: workspacePath,
+                      })),
+                    });
+                  }).then((success) => {
+                    if (!success) return;
+                    setPendingWorkspaceCleanup(null);
+                    if (!result) return;
+                    const removedText =
+                      result.removed.length === 0
+                        ? "No workspaces were removed."
+                        : `Removed ${result.removed.length} ${result.removed.length === 1 ? "workspace" : "workspaces"}: ${result.removed.join(", ")}.`;
+                    setNotice(
+                      result.skipped > 0
+                        ? `${removedText} Skipped ${result.skipped} workspace${result.skipped === 1 ? "" : "s"} that changed or could not be removed.`
+                        : removedText,
+                    );
+                  });
+                }}
+              >
+                {busy ? "Removing…" : "Forget and delete workspaces"}
               </button>
             </div>
           </section>

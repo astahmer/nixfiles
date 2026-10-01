@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { access, realpath } from "node:fs/promises";
+import { access, realpath, rm, stat } from "node:fs/promises";
 import { constants } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { experimental_defineHostEntry } from "@get-bb/plugin-sdk";
 import { hostContract, revisionSchema } from "./contract";
 import { z } from "zod";
@@ -154,7 +154,7 @@ const changes = async (root: string) =>
   parseFileChanges(await run(root, ["diff", "--summary"], 64_000));
 
 const workspaces = async (root: string) => {
-  const template = String.raw`json(self.name()) ++ "\t" ++ json(self.root()) ++ "\t" ++ self.target().commit_id().short() ++ "\n"`;
+  const template = String.raw`json(self.name()) ++ "\t" ++ json(self.root()) ++ "\t" ++ self.target().commit_id().short(40) ++ "\n"`;
   const raw = await run(root, ["workspace", "list", "-T", template]);
   return raw
     .split("\n")
@@ -167,6 +167,51 @@ const workspaces = async (root: string) => {
         revision,
       };
     });
+};
+
+const outdatedWorkspaces = async (root: string) => {
+  const [workspaceList, ancestry] = await Promise.all([
+    workspaces(root),
+    run(root, [
+      "log",
+      "--no-graph",
+      "-r",
+      "::@",
+      "-T",
+      String.raw`commit_id.short(40) ++ "\n"`,
+    ]),
+  ]);
+  const integratedRevisions = new Set(ancestry.split("\n").filter(Boolean));
+  const workspaceParent = dirname(root);
+  const candidates: { name: string; path: string; revision: string }[] = [];
+
+  for (const workspace of workspaceList) {
+    if (!workspace.path) continue;
+    const workspacePath = resolve(workspace.path);
+    if (
+      workspace.name === "default" ||
+      workspacePath === root ||
+      dirname(workspacePath) !== workspaceParent ||
+      !integratedRevisions.has(workspace.revision)
+    ) {
+      continue;
+    }
+    try {
+      const actualPath = await realpath(workspacePath);
+      if (actualPath !== workspacePath || dirname(actualPath) !== workspaceParent) continue;
+      if (!(await stat(actualPath)).isDirectory()) continue;
+      const status = await run(actualPath, ["status"]);
+      if (!status.includes("The working copy has no changes.")) continue;
+      candidates.push({
+        name: workspace.name,
+        path: actualPath,
+        revision: workspace.revision.slice(0, 8),
+      });
+    } catch {
+      // Missing, dirty, or unreadable workspaces are protected from cleanup.
+    }
+  }
+  return candidates;
 };
 
 export default experimental_defineHostEntry({
@@ -270,6 +315,46 @@ export default experimental_defineHostEntry({
         ...filesets,
       ]);
       return { ok: true };
+    },
+    clearEmptyAncestors: async ({ path }) => {
+      const root = await repositoryRoot(path);
+      const revset = "empty() & ::@ & mutable()";
+      const matches = await run(root, [
+        "log",
+        "--no-graph",
+        "-r",
+        revset,
+        "-T",
+        String.raw`commit_id.short(40) ++ "\n"`,
+      ]);
+      const cleared = matches.split("\n").filter(Boolean).length;
+      if (cleared > 0) await run(root, ["abandon", revset]);
+      return { cleared };
+    },
+    outdatedWorkspaces: async ({ path }) => outdatedWorkspaces(await repositoryRoot(path)),
+    clearOutdatedWorkspaces: async ({ path, workspaces: requestedWorkspaces }) => {
+      const root = await repositoryRoot(path);
+      const candidates = await outdatedWorkspaces(root);
+      const removed: string[] = [];
+      let skipped = 0;
+      for (const requested of requestedWorkspaces) {
+        const candidate = candidates.find(
+          (workspace) => workspace.name === requested.name && workspace.path === requested.path,
+        );
+        if (!candidate) {
+          skipped += 1;
+          continue;
+        }
+        try {
+          await run(root, ["workspace", "forget", candidate.name]);
+          await rm(candidate.path, { recursive: true });
+          removed.push(candidate.name);
+        } catch {
+          // A failed or newly unsafe workspace is left for manual inspection.
+          skipped += 1;
+        }
+      }
+      return { removed, skipped };
     },
   },
 });

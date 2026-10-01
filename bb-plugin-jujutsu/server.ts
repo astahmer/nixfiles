@@ -1,6 +1,12 @@
 import { defineRpcContract, type BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { hostContract, revisionSchema, fileChangeSchema, fileStatSchema } from "./contract";
+import {
+  hostContract,
+  revisionSchema,
+  fileChangeSchema,
+  fileStatSchema,
+  workspaceCleanupCandidateSchema,
+} from "./contract";
 
 const target = z.object({ hostId: z.string().min(1), path: z.string().trim().min(1).max(4096) });
 const revisionTarget = target.extend({ revision: z.string().min(1).max(128) });
@@ -56,6 +62,17 @@ export const rpcContract = defineRpcContract({
     }),
     output: z.object({ ok: z.boolean() }),
   },
+  clearEmptyAncestors: {
+    input: target,
+    output: z.object({ cleared: z.number().int().nonnegative() }),
+  },
+  outdatedWorkspaces: { input: target, output: z.array(workspaceCleanupCandidateSchema) },
+  clearOutdatedWorkspaces: {
+    input: target.extend({
+      workspaces: z.array(z.object({ name: z.string(), path: z.string() })).min(1).max(50),
+    }),
+    output: z.object({ removed: z.array(z.string()), skipped: z.number().int().nonnegative() }),
+  },
 });
 
 export default async function plugin(bb: BbPluginApi) {
@@ -92,5 +109,15 @@ export default async function plugin(bb: BbPluginApi) {
     rebase: async (input) => host.call("rebase", input, { hostId: input.hostId }),
     squash: async (input) => host.call("squash", input, { hostId: input.hostId }),
     split: async (input) => host.call("split", input, { hostId: input.hostId }),
+    clearEmptyAncestors: async (input) =>
+      host.call("clearEmptyAncestors", { path: input.path }, { hostId: input.hostId }),
+    outdatedWorkspaces: async (input) =>
+      host.call("outdatedWorkspaces", { path: input.path }, { hostId: input.hostId }),
+    clearOutdatedWorkspaces: async (input) =>
+      host.call(
+        "clearOutdatedWorkspaces",
+        { path: input.path, workspaces: input.workspaces },
+        { hostId: input.hostId },
+      ),
   });
 }

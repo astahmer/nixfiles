@@ -5,7 +5,9 @@ Two JJ work surfaces live in one BB sidebar page:
 - **Revision graph** lays out parent links on separate lanes, groups rows by
   day, and shows relative time, bookmarks, tags, workspace labels, and a clear
   working-copy marker. Change IDs use JJ's shortest unique prefix. Older
-  versions of an evolved change are marked, and the most recent recorded JJ
+  versions of an evolved change are marked. Ready branches are ordered by
+  commit time while preserving child-before-parent history, keeping older
+  evolved lines below newer independent branches. The most recent recorded JJ
   Git push is shown above the graph. Filter by description, then expand a
   revision to edit its description and inspect changed files. The file list
   starts collapsed; opening it shows per-file addition and deletion counts.
@@ -48,6 +50,14 @@ together. Squash calls `jj squash --from REV --into DEST`
 and keeps the destination description. Split uses JJ's fileset form
 (`jj split -r REV FILE...`) with the description entered in the panel. These
 operations apply directly to the workspace.
+
+The graph overflow menu can clear mutable empty ancestors of the current
+working copy (using the repository's `jjc` revset), and remove clean non-default
+workspaces whose working-copy revisions are already ancestors of the current
+revision. Workspace cleanup previews candidates and asks before forgetting the
+workspace and deleting its sibling directory; JJ status checks can record
+working-copy snapshots. The menu can also open a prefilled thread that follows
+the `jj` skill to unify recent relevant branches.
 
 ## Development
 

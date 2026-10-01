@@ -22,6 +22,11 @@ export const revisionSchema = z.object({
 });
 
 export const fileChangeSchema = z.object({ path: z.string(), status: z.string() });
+export const workspaceCleanupCandidateSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  revision: z.string(),
+});
 export const fileStatSchema = z.object({
   path: z.string(),
   additions: z.number().int().nonnegative(),
@@ -83,5 +88,19 @@ export const hostContract = defineRpcContract({
       message: z.string().max(10000),
     }),
     output: z.object({ ok: z.boolean() }),
+  },
+  clearEmptyAncestors: {
+    input: repositoryInput,
+    output: z.object({ cleared: z.number().int().nonnegative() }),
+  },
+  outdatedWorkspaces: {
+    input: repositoryInput,
+    output: z.array(workspaceCleanupCandidateSchema),
+  },
+  clearOutdatedWorkspaces: {
+    input: repositoryInput.extend({
+      workspaces: z.array(z.object({ name: z.string(), path: z.string() })).min(1).max(50),
+    }),
+    output: z.object({ removed: z.array(z.string()), skipped: z.number().int().nonnegative() }),
   },
 });

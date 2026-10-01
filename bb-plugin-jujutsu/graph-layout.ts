@@ -3,6 +3,55 @@ export type RevisionGraphInput = {
   parents: readonly string[];
 };
 
+export type RevisionGraphOrderInput = RevisionGraphInput & { timestamp: number };
+
+export const orderRevisionsByRecency = <T extends RevisionGraphOrderInput>(
+  revisions: readonly T[],
+): T[] => {
+  const byId = new Map(revisions.map((revision, index) => [revision.commitId, { revision, index }]));
+  const childCounts = new Map(revisions.map((revision) => [revision.commitId, 0]));
+
+  revisions.forEach((revision) => {
+    for (const parentId of new Set(revision.parents)) {
+      if (!byId.has(parentId)) continue;
+      childCounts.set(parentId, (childCounts.get(parentId) ?? 0) + 1);
+    }
+  });
+
+  const ready = revisions
+    .filter((revision) => childCounts.get(revision.commitId) === 0)
+    .map((revision) => revision.commitId);
+  const ordered: T[] = [];
+  const emitted = new Set<string>();
+
+  while (ready.length > 0) {
+    ready.sort((leftId, rightId) => {
+      const left = byId.get(leftId);
+      const right = byId.get(rightId);
+      if (!left || !right) return 0;
+      return right.revision.timestamp - left.revision.timestamp || left.index - right.index;
+    });
+    const commitId = ready.shift();
+    if (!commitId) continue;
+    const item = byId.get(commitId);
+    if (!item) continue;
+    ordered.push(item.revision);
+    emitted.add(commitId);
+
+    for (const parentId of new Set(item.revision.parents)) {
+      if (!byId.has(parentId)) continue;
+      const remaining = (childCounts.get(parentId) ?? 0) - 1;
+      childCounts.set(parentId, remaining);
+      if (remaining === 0) ready.push(parentId);
+    }
+  }
+
+  if (ordered.length !== revisions.length) {
+    return [...ordered, ...revisions.filter((revision) => !emitted.has(revision.commitId))];
+  }
+  return ordered;
+};
+
 export type RevisionGraphEdge = {
   fromLane: number;
   toLane: number;
