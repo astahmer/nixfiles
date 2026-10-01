@@ -348,6 +348,23 @@ const AccountPage = () => {
     }
   };
 
+  const copyLaunchCommand = async () => {
+    if (!selected || selected.provider !== "codex") return;
+    const path = draft.path.trim();
+    if (!path) {
+      setNotice("Set a runtime path before copying the launch command.");
+      return;
+    }
+    const quotedPath = "'" + path.replaceAll("'", "'\\''") + "'";
+    const command = "CODEX_HOME=" + quotedPath + " codex";
+    try {
+      await navigator.clipboard.writeText(command);
+      setNotice("Launch command copied. Paste it into a terminal on the provider machine to open interactive Codex for this account.");
+    } catch {
+      setNotice("Copy this command into a terminal on the provider machine: " + command);
+    }
+  };
+
   const refreshIdentity = async () => {
     if (!selected) return;
     try {
@@ -635,7 +652,7 @@ const AccountPage = () => {
 
             <section className="aa-section">
               <div className="aa-section-heading"><div><span className="aa-index">02</span><h3>Runtime paths</h3></div><span className="aa-muted">Absolute path on the provider machine</span></div>
-              <label className="aa-path-field"><span>{selected.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"}<small>{selected.provider === "codex" ? "Private Codex home and local state." : "OpenCode auth and local data root."}</small></span><input value={draft.path} onChange={(event) => setDraft((current) => ({ ...current, path: event.currentTarget.value }))} spellCheck={false} /></label>
+              <div className="aa-path-field"><span>{selected.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"}<small>{selected.provider === "codex" ? "Private Codex home and local state." : "OpenCode auth and local data root."}</small></span><div className="aa-runtime-path-control"><input aria-label={selected.provider === "codex" ? "CODEX_HOME" : "XDG_DATA_HOME"} value={draft.path} onChange={(event) => setDraft((current) => ({ ...current, path: event.currentTarget.value }))} spellCheck={false} />{selected.provider === "codex" && <button className="aa-quiet" type="button" onClick={() => void copyLaunchCommand()} disabled={!draft.path.trim()} title="Copy a command to start interactive Codex with this account">Copy launch command</button>}</div></div>
               <p className="aa-help">Specific project and machine paths override the inherited account path.</p>
             </section>
 
