@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { autoUpdate, flip, offset, shift, size, useDismiss, useFloating, useInteractions } from "@floating-ui/react";
 import { definePluginApp, useBbContext, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
 import { providerIconOptions, type ProviderIcon } from "./provider-icons";
 import type { AccountProfile, rpcContract } from "./server";
@@ -13,16 +14,33 @@ const GlobalModelPicker = () => {
   const composer = useComposer();
   const sdk = useSdk();
   const rpc = useRpc<typeof rpcContract>();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeProviderId, setActiveProviderId] = useState("all");
   const [accountProviders, setAccountProviders] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string }>>([]);
-  const [models, setModels] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string; model: string; displayName: string; reasoningEffort: ReasoningEffort; isFavorite: boolean }>>([]);
+  const [models, setModels] = useState<Array<{ providerId: string; providerName: string; badge: string; color: string; id: string; model: string; displayName: string; reasoningEffort: ReasoningEffort; isFavorite: boolean }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [popoverPosition, setPopoverPosition] = useState({ left: 12, top: 12, maxHeight: 480 });
+  const { refs, floatingStyles, context: floatingContext } = useFloating({
+    open,
+    onOpenChange: setOpen,
+    placement: "top-start",
+    strategy: "fixed",
+    middleware: [
+      offset(8),
+      flip({ padding: 12 }),
+      shift({ padding: 12 }),
+      size({
+        padding: 12,
+        apply({ availableHeight, elements }) {
+          elements.floating.style.maxHeight = `${Math.max(0, availableHeight)}px`;
+        },
+      }),
+    ],
+    whileElementsMounted: autoUpdate,
+  });
+  const dismiss = useDismiss(floatingContext);
+  const { getReferenceProps, getFloatingProps } = useInteractions([dismiss]);
   const visibleModels = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     const providerModels = activeProviderId === "all"
@@ -39,15 +57,8 @@ const GlobalModelPicker = () => {
   }, [activeProviderId, models, query]);
 
   useEffect(() => {
-    if (!open) return;
-    const handleOutsidePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node)) return;
-      if (triggerRef.current?.contains(event.target) || popoverRef.current?.contains(event.target)) return;
-      setOpen(false);
-      setQuery("");
-    };
-    document.addEventListener("pointerdown", handleOutsidePointerDown);
-    return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
+    if (open) return;
+    setQuery("");
   }, [open]);
 
   useEffect(() => {
@@ -71,6 +82,7 @@ const GlobalModelPicker = () => {
             provider: providerDetails,
             models: result.models.map((model) => ({
               ...providerDetails,
+              id: model.id,
               model: model.model,
               displayName: model.displayName.endsWith(" · " + providerDetails.badge)
                 ? model.displayName.slice(0, -providerDetails.badge.length - 3)
@@ -112,12 +124,12 @@ const GlobalModelPicker = () => {
       const result = await rpc.call("list", null);
       const account = result.accounts.find((profile) => "ai-account-" + profile.id === entry.providerId);
       if (!account) throw new Error("Account profile unavailable.");
-      const favoriteModelIds = account.favoriteModelIds.includes(entry.model)
-        ? account.favoriteModelIds.filter((modelId) => modelId !== entry.model)
-        : [...account.favoriteModelIds, entry.model];
+      const favoriteModelIds = account.favoriteModelIds.includes(entry.id)
+        ? account.favoriteModelIds.filter((modelId) => modelId !== entry.id)
+        : [...account.favoriteModelIds, entry.id];
       await rpc.call("save", { ...account, favoriteModelIds });
-      setModels((current) => current.map((model) => model.providerId === entry.providerId && model.model === entry.model
-        ? { ...model, isFavorite: favoriteModelIds.includes(model.model) }
+      setModels((current) => current.map((model) => model.providerId === entry.providerId && model.id === entry.id
+        ? { ...model, isFavorite: favoriteModelIds.includes(model.id) }
         : model));
     } catch {
       setError("Could not update this model’s favorite status.");
@@ -125,20 +137,8 @@ const GlobalModelPicker = () => {
   };
 
   return <div className="aa-global-picker">
-    <button ref={triggerRef} className="aa-global-picker-trigger" type="button" aria-expanded={open} onClick={(event) => {
-      const bounds = event.currentTarget.getBoundingClientRect();
-      const roomBelow = window.innerHeight - bounds.bottom - 12;
-      const roomAbove = bounds.top - 12;
-      const placeBelow = roomBelow >= roomAbove;
-      const maxHeight = Math.max(120, Math.min(480, placeBelow ? roomBelow : roomAbove - 8));
-      setPopoverPosition({
-        left: Math.max(12, Math.min(bounds.left, window.innerWidth - 568)),
-        top: placeBelow ? bounds.bottom + 8 : Math.max(12, bounds.top - maxHeight - 8),
-        maxHeight,
-      });
-      setOpen((current) => !current);
-    }}>All models <svg className="aa-global-picker-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg></button>
-    {open ? createPortal(<section ref={popoverRef} className="aa-global-picker-popover" style={{ left: `${popoverPosition.left}px`, top: `${popoverPosition.top}px`, maxHeight: `${popoverPosition.maxHeight}px` }} aria-label="Search all account models">
+    <button ref={refs.setReference} className="aa-global-picker-trigger" type="button" aria-expanded={open} {...getReferenceProps({ onClick: () => setOpen((current) => !current) })}>All models <svg className="aa-global-picker-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" /></svg></button>
+    {open ? createPortal(<section ref={refs.setFloating} className="aa-global-picker-popover" style={floatingStyles} aria-label="Search all account models" {...getFloatingProps()}>
       <nav className="aa-global-picker-sidebar" aria-label="Filter by provider">
         <button className={activeProviderId === "all" ? "is-active" : ""} type="button" title="All models" aria-label="All models" aria-pressed={activeProviderId === "all"} onClick={() => setActiveProviderId("all")}><svg className="aa-global-picker-all-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="1" width="5" height="5" rx="1" fill="currentColor" /><rect x="1" y="10" width="5" height="5" rx="1" fill="currentColor" /><rect x="10" y="10" width="5" height="5" rx="1" fill="currentColor" /></svg></button>
         <button className={activeProviderId === "favorites" ? "is-active" : ""} type="button" title="Favorites" aria-label="Favorites" aria-pressed={activeProviderId === "favorites"} onClick={() => setActiveProviderId("favorites")}><svg className="aa-global-picker-favorites-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.2 2.05 4.16 4.59.67-3.32 3.23.78 4.57L8 11.67l-4.1 2.16.78-4.57L1.36 6.03l4.59-.67L8 1.2Z" fill="currentColor" /></svg></button>
