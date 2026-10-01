@@ -109,7 +109,7 @@ const styles = `
 .jj-picker{width:min(1000px,86vw);max-height:min(780px,84vh);padding:16px 10px 0;overflow:hidden}.jj-picker-header{padding:0 10px 12px;border-bottom:1px solid var(--jj-line)}.jj-picker-path input{height:44px;padding:0 8px;font:16px/1.4 var(--font-sans,system-ui)}.jj-picker-section{padding:16px 16px 8px;font-size:12px}.jj-picker-list{max-height:min(620px,65vh);min-height:160px;padding:0 7px 8px;overflow:auto}.jj-project-option{display:flex;width:100%;min-height:70px;align-items:center;gap:12px;padding:9px 12px;border:0;border-radius:8px;background:transparent;color:var(--foreground);text-align:left;font:inherit;cursor:pointer}.jj-project-option[data-active=true],.jj-project-option:hover{background:var(--accent)}.jj-project-option:focus-visible{outline:2px solid var(--ring,var(--primary))}.jj-project-option kbd{margin-left:auto;color:var(--muted-foreground)}.jj-project-mark{display:grid;width:28px;height:28px;flex:none;place-items:center;border-radius:7px;background:color-mix(in srgb,var(--primary) 18%,transparent);color:var(--primary);font-size:10px;font-weight:700}.jj-project-option:nth-child(6n + 2) .jj-project-mark{background:#ff910022;color:#ff9100}.jj-project-option:nth-child(6n + 3) .jj-project-mark{background:#00bcd422;color:#00bcd4}.jj-project-option:nth-child(6n + 4) .jj-project-mark{background:#8b5cf622;color:#a78bfa}.jj-project-option:nth-child(6n + 5) .jj-project-mark{background:#10b98122;color:#10b981}.jj-project-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:2px;font-size:15px}.jj-project-copy small{overflow:hidden;color:var(--muted-foreground);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.jj-picker-footer{justify-content:flex-start;gap:18px;padding:12px 16px;background:var(--background)}.jj-picker-entry{min-height:42px;padding:8px 12px;border-radius:8px}.jj-picker-error{padding:10px 16px;color:var(--destructive)}
 .jj-context{flex-wrap:wrap}.jj-filter{width:180px;margin-left:auto;padding:4px 7px;font:11px var(--font-sans,system-ui)}.jj-push-marker{display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid var(--jj-line);background:color-mix(in srgb,var(--muted) 10%,var(--background));color:var(--muted-foreground);font-size:10px}.jj-push-marker strong{font-weight:600;letter-spacing:.04em;text-transform:uppercase}.jj-push-marker time{margin-left:auto;font:10px var(--font-mono,monospace)}.jj-revision[data-moved=true]{opacity:.28;filter:saturate(.25)}.jj-revision[data-preview=true]{background:color-mix(in srgb,#a5df6f 10%,var(--background));box-shadow:inset 3px 0 #a5df6f}.jj-revision[data-preview=true] .jj-revision-subject,.jj-revision[data-preview=true] .jj-change-id{color:#a5df6f}.jj-revision[data-preview=true] .jj-badge{border-color:#a5df6f;color:#a5df6f}.jj-revision-title{gap:0}.jj-revision-meta{justify-content:flex-end;gap:8px}.jj-revision-age{color:var(--muted-foreground);font:10px var(--font-mono,monospace)}.jj-change-id{font:10px var(--font-mono,monospace);font-weight:650;letter-spacing:.02em}.jj-change-id-prefix{color:#4fc1ff}.jj-badge-evolved{background:color-mix(in srgb,#b982ff 18%,var(--background));border-color:color-mix(in srgb,#b982ff 55%,var(--jj-line));color:#b982ff}
 .jj-revision-button{min-height:29px;padding-block:0}.jj-graph-cell,.jj-graph-cell svg{height:29px}.jj-revision-main{min-width:0;flex-direction:row;align-items:center;gap:7px}.jj-revision-title{flex:1;min-width:0}.jj-revision-subject{font-size:12px}.jj-labels{min-width:0;max-width:42%;min-height:0;max-height:17px;flex:none;flex-wrap:nowrap}.jj-revision-meta{gap:6px}.jj-change-id{min-width:2ch;text-align:right}.jj-revision[data-empty=true] .jj-revision-subject{color:var(--muted-foreground);font-style:italic}.jj-badge-empty{background:color-mix(in srgb,#8b8b8b 14%,var(--background));border-color:#777;color:#aaa;font-size:9px}.jj-rebase-preview-branch[hidden]{display:none}.jj-preview-toggle{padding:3px 6px;border:1px solid var(--jj-line);border-radius:5px;background:var(--background);color:var(--foreground);font:inherit;cursor:pointer}.jj-context-menu{max-height:min(80vh,520px);overflow-y:auto;overscroll-behavior:contain}.jj-push-marker{min-height:26px;padding:4px 10px;border-block:1px solid color-mix(in srgb,var(--muted-foreground) 28%,var(--jj-line));background:color-mix(in srgb,var(--muted) 13%,var(--background));box-shadow:inset 3px 0 color-mix(in srgb,var(--muted-foreground) 38%,transparent)}
-.jj-day-heading{position:sticky;top:0;z-index:2;width:100%;height:23px;min-height:23px;display:grid;align-items:center;gap:4px;padding:0 8px 0 0;border:0;border-bottom:1px solid var(--jj-line);background:var(--background);color:var(--muted-foreground);font-size:10px;font-weight:700;letter-spacing:.07em;text-align:left;text-transform:uppercase;cursor:pointer}
+.jj-history .jj-day-heading{position:sticky!important;top:0!important;z-index:10;width:100%;height:23px;min-height:23px;display:grid;align-items:center;gap:4px;padding:0 8px 0 0;border:0;border-bottom:1px solid var(--jj-line);background:var(--background);color:var(--muted-foreground);font-size:10px;font-weight:700;letter-spacing:.07em;text-align:left;text-transform:uppercase;cursor:pointer}
 .jj-day-heading:hover{background:var(--accent);color:var(--foreground)}
 .jj-day-graph{position:relative;display:block;height:22px}
 .jj-day-graph svg{position:absolute;inset:0}
@@ -145,7 +145,7 @@ const styles = `
 .jj-files-heading{display:flex;align-items:center;gap:6px}.jj-files-heading .jj-section-heading-toggle{flex:1;min-width:0}.jj-full-diff-action{flex:none;padding:4px 7px;font-size:10px}
 .jj-tab-row{display:flex;align-items:center;gap:8px}.jj-tab-row .jj-tabs{margin-right:auto}.jj-actions-menu{position:relative;margin-left:auto}.jj-actions-menu>summary{display:grid;width:30px;height:30px;place-items:center;border:1px solid var(--jj-line);border-radius:6px;color:var(--muted-foreground);list-style:none;cursor:pointer}.jj-actions-menu>summary::-webkit-details-marker{display:none}.jj-actions-menu>summary:hover,.jj-actions-menu[open]>summary{background:var(--accent);color:var(--foreground)}.jj-actions-menu-items{position:absolute;top:calc(100% + 5px);right:0;z-index:20;display:grid;min-width:220px;padding:4px;border:1px solid var(--jj-line);border-radius:7px;background:var(--popover,var(--card));box-shadow:0 8px 24px #0006}.jj-actions-menu-items button{padding:7px 9px;border:0;border-radius:4px;background:transparent;color:var(--foreground);font:inherit;text-align:left;white-space:nowrap;cursor:pointer}.jj-actions-menu-items button:hover,.jj-actions-menu-items button:focus-visible{background:var(--accent);outline:none}.jj-actions-menu-items button:disabled{opacity:.5;cursor:not-allowed}.jj-notice{padding:6px 10px;border-bottom:1px solid var(--jj-line);color:var(--muted-foreground);font-size:11px}
 .jj-working-group-fill{flex:none}.jj-working-content{max-height:min(42vh,320px);flex:0 1 auto}.jj-history-group{min-height:120px;flex:1 1 0}.jj-file-total-stats{flex:none;padding:0 3px}
-.jj-day-graph{position:relative;z-index:1;display:block;width:100%;height:23px;overflow:visible;pointer-events:none}.jj-day-graph svg{position:absolute;inset:0 auto auto 0;display:block;width:auto;height:23px;overflow:visible}.jj-day-heading-content{position:relative;z-index:2}.jj-badge-workspace,.jj-badge-workspace-default{background:#0f766e;border-color:#0f766e;color:#fff;font-weight:700}
+.jj-day-graph{position:relative;z-index:1;display:block;width:100%;height:23px;overflow:hidden;pointer-events:none}.jj-day-graph svg{position:absolute;inset:0;display:block;width:100%;height:100%;overflow:hidden}.jj-day-heading-content{position:relative;z-index:2}.jj-badge-workspace,.jj-badge-workspace-default{background:#0f766e;border-color:#0f766e;color:#fff;font-weight:700}
 `;
 
 const RevisionGraphCell = ({
@@ -212,7 +212,7 @@ const RevisionGraphCell = ({
 
   return (
     <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
-      <svg width={width} height="42" viewBox={`0 0 ${width} 42`}>
+      <svg width={width} height="42" viewBox={`0 0 ${width} 42`} preserveAspectRatio="none">
         {row.edges.map((edge, index) =>
           edge.kind === "straight" ? (
             <line
@@ -393,12 +393,25 @@ const statusClass = (status: string) => {
 
 const threadHeaderActionStyles = `
 .jj-header-action {
+  box-sizing: border-box;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--card);
   color: var(--foreground);
-  padding: 6px 10px;
+  padding: 0;
+  font: 600 12px/1 var(--font-sans, system-ui, sans-serif);
   cursor: pointer;
+}
+.jj-header-action:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 .jj-header-action:hover {
   background: var(--accent);
@@ -412,7 +425,7 @@ const ThreadHeaderAction = () => {
       <style>{threadHeaderActionStyles}</style>
       <button
         type="button"
-        className="jj-button jj-header-action"
+        className="jj-header-action"
         aria-label="Open Jujutsu workbench"
         onClick={() =>
           navigation.openThreadPanel({ actionId: "thread-workbench", title: "Jujutsu" })
@@ -937,26 +950,26 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
       }
       group.rows.push({ revision, row, index, isPreview });
     });
-    const dayCounts = new Map<string, number>();
-    groups.forEach((group) =>
-      dayCounts.set(group.day, (dayCounts.get(group.day) ?? 0) + group.rows.length),
-    );
-    const seenDays = new Set<string>();
     return groups.map((group) => {
       const firstRow = group.rows[0];
-      const showHeading = !seenDays.has(group.day);
-      seenDays.add(group.day);
+      const previousRow = firstRow ? graphRows[firstRow.index - 1] : undefined;
+      const activeLanes = previousRow
+        ? [
+            ...new Set([
+              ...previousRow.bottomLanes,
+              ...previousRow.edges.map((edge) => edge.toLane),
+            ]),
+          ].sort((left, right) => left - right)
+        : firstRow
+          ? [...new Set([...firstRow.row.topLanes, firstRow.row.commitLane])].sort(
+              (left, right) => left - right,
+            )
+          : [];
       return {
         ...group,
-        activeLanes: [
-          ...new Set([
-            ...(graphRows[firstRow.index - 1]?.bottomLanes ?? []),
-            ...firstRow.row.topLanes,
-            firstRow.row.commitLane,
-          ]),
-        ].sort((left, right) => left - right),
-        dayCount: dayCounts.get(group.day) ?? group.rows.length,
-        showHeading,
+        activeLanes,
+        dayCount: group.rows.length,
+        showHeading: true,
       };
     });
   }, [graphItems, graphRows]);
@@ -1539,7 +1552,6 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                         </span>
                         <span
                           className="jj-day-heading-content"
-                          style={{ paddingLeft: (group.rows[0]?.row.commitLane ?? 0) * laneGap }}
                         >
                           <span>{group.day}</span>
                           <span className="jj-chevron">›</span>
