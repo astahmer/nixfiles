@@ -16,18 +16,6 @@
         "type": "github"
       }
     },
-    "bb-plugins": {
-      "flake": false,
-      "locked": {
-        "path": "../bb-plugins",
-        "type": "path"
-      },
-      "original": {
-        "path": "../bb-plugins",
-        "type": "path"
-      },
-      "parent": []
-    },
     "bun2nix": {
       "inputs": {
         "flake-parts": [
@@ -623,7 +611,6 @@
     "root": {
       "inputs": {
         "agents": "agents",
-        "bb-plugins": "bb-plugins",
         "devenv": "devenv",
         "emilint": "emilint",
         "flake-parts": "flake-parts_2",

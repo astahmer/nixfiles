@@ -81,12 +81,6 @@
       flake = false;
     };
 
-    # BB plugin source lives in its own repository next to this checkout.
-    "bb-plugins" = {
-      url = "path:../bb-plugins";
-      flake = false;
-    };
-
     # Executable Oxlint and ast-grep rules. This is a plain source repository;
     # the agents module overlays its rule assets into the deployed skill tree.
     emilint = {
