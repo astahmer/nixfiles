@@ -165,8 +165,9 @@ const RevisionGraphCell = ({
   empty: boolean;
   evolved: boolean;
 }) => {
+  const rowHeight = 29;
   const center = (lane: number) => 10 + lane * laneGap;
-  const middle = 21;
+  const middle = rowHeight / 2;
   const crossingHeight = (edge: RevisionGraphRow["edges"][number], lane: number) => {
     const startX = center(edge.fromLane);
     const endX = center(edge.toLane);
@@ -184,9 +185,9 @@ const RevisionGraphCell = ({
     const inverse = 1 - parameter;
     return (
       inverse ** 3 * middle +
-      3 * inverse ** 2 * parameter * (middle + 8) +
-      3 * inverse * parameter ** 2 * (middle + 8) +
-      parameter ** 3 * 42
+      3 * inverse ** 2 * parameter * (middle + 5.5) +
+      3 * inverse * parameter ** 2 * (middle + 5.5) +
+      parameter ** 3 * rowHeight
     );
   };
   const laneCrossings = new Map<number, number[]>();
@@ -208,11 +209,11 @@ const RevisionGraphCell = ({
       : evolved
         ? "var(--jj-evolved)"
         : laneColor(row.commitLane);
-  const fill = preview ? previewColor : current ? "var(--primary)" : "var(--background)";
+  const fill = nodeColor;
 
   return (
     <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
-      <svg width={width} height="42" viewBox={`0 0 ${width} 42`} preserveAspectRatio="none">
+      <svg width={width} height={rowHeight} viewBox={`0 0 ${width} ${rowHeight}`}>
         {row.edges.map((edge, index) =>
           edge.kind === "straight" ? (
             <line
@@ -220,14 +221,14 @@ const RevisionGraphCell = ({
               x1={center(edge.fromLane)}
               y1={middle}
               x2={center(edge.toLane)}
-              y2="42"
+              y2={rowHeight}
               stroke={preview ? previewColor : laneColor(edge.fromLane)}
               strokeWidth="1.5"
             />
           ) : (
             <path
               key={`edge-${index}`}
-              d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 8}, ${center(edge.toLane)} ${middle + 8}, ${center(edge.toLane)} 42`}
+              d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 5.5}, ${center(edge.toLane)} ${middle + 5.5}, ${center(edge.toLane)} ${rowHeight}`}
               fill="none"
               stroke={preview ? previewColor : laneColor(edge.fromLane)}
               strokeWidth="1.5"
@@ -268,7 +269,7 @@ const RevisionGraphCell = ({
                     `C ${center(lane)} ${height - 1}, ${center(lane) + 3.5} ${height - 1}, ${center(lane) + 3.5} ${height}`,
                     `C ${center(lane) + 3.5} ${height + 1}, ${center(lane)} ${height + 1}, ${center(lane)} ${height + 3.5}`,
                   ]),
-                `L ${center(lane)} 42`,
+                `L ${center(lane)} ${rowHeight}`,
               ].join(" ")}
               fill="none"
               stroke={preview ? previewColor : laneColor(lane)}
@@ -280,7 +281,7 @@ const RevisionGraphCell = ({
               x1={center(lane)}
               y1={middle}
               x2={center(lane)}
-              y2="42"
+              y2={rowHeight}
               stroke={preview ? previewColor : laneColor(lane)}
               strokeWidth="1.5"
             />
