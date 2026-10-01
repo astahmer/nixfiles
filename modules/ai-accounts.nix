@@ -206,6 +206,7 @@
             exit 1
           fi
           export PATH="${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:${pkgs.coreutils}/bin:$PATH"
+          export PATH="$(dirname "$bb_cli"):$PATH"
           plugin_dir="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin"
           mkdir -p "$plugin_dir"
           rsync -a --delete --exclude node_modules --exclude dist "${pluginSource}/" "$plugin_dir/"
