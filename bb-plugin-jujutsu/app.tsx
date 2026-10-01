@@ -168,6 +168,7 @@ const RevisionGraphCell = ({
   const rowHeight = 29;
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = rowHeight / 2;
+  const curveControlY = Math.max(-8, middle - 20);
   const crossingHeight = (edge: RevisionGraphRow["edges"][number], lane: number) => {
     const startX = center(edge.fromLane);
     const endX = center(edge.toLane);
@@ -185,8 +186,8 @@ const RevisionGraphCell = ({
     const inverse = 1 - parameter;
     return (
       inverse ** 3 * middle +
-      3 * inverse ** 2 * parameter * (middle + 5.5) +
-      3 * inverse * parameter ** 2 * (middle + 5.5) +
+      3 * inverse ** 2 * parameter * curveControlY +
+      3 * inverse * parameter ** 2 * curveControlY +
       parameter ** 3 * rowHeight
     );
   };
@@ -228,7 +229,7 @@ const RevisionGraphCell = ({
           ) : (
             <path
               key={`edge-${index}`}
-              d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${middle + 5.5}, ${center(edge.toLane)} ${middle + 5.5}, ${center(edge.toLane)} ${rowHeight}`}
+              d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${curveControlY}, ${center(edge.toLane)} ${curveControlY}, ${center(edge.toLane)} ${rowHeight}`}
               fill="none"
               stroke={preview ? previewColor : laneColor(edge.fromLane)}
               strokeWidth="1.5"
