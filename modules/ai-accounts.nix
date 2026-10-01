@@ -200,12 +200,12 @@
         home.file.".config/bb-plugin-ai-accounts/secrets.json".text = builtins.toJSON secretsDocument;
 
         home.activation.installBbAiAccounts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          export PATH="${pkgs.nodejs_24}/bin:${pkgs.rsync}/bin:${pkgs.coreutils}/bin:$PATH"
+          export PATH="${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:${pkgs.coreutils}/bin:$PATH"
           plugin_dir="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin"
           mkdir -p "$plugin_dir"
           rsync -a --delete --exclude node_modules --exclude dist "${pluginSource}/" "$plugin_dir/"
           cd "$plugin_dir"
-          npm ci --no-audit --no-fund --silent
+          pnpm install --frozen-lockfile --silent
           bb plugin build
           bb plugin install . --yes
           AI_ACCOUNTS_CONFIG="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/accounts.json" \
