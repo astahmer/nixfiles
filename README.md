@@ -22,7 +22,7 @@ sudo nixos-rebuild switch --flake .#workstation
 
 `NH_FLAKE` is always `~/.config/nixfiles` (same on every machine). After the first apply, `nixapply` works from any cwd. Use `nixfiles-here` from the clone root to (re)create the symlink.
 
-On a fresh machine, run `nixbootstrap` once to install the optional external tools and seed Executor/Skepsis. Run `nixcheck` from the checkout root before applying changes.
+On a fresh machine, run `nixbootstrap` once to install the optional external tools and seed Skepsis. Executor is disabled by default; set `nixfiles.executor.enable = true` in a flake-parts module to install and seed its integrations. Run `nixcheck` from the checkout root before applying changes.
 
 If Home Manager stops on an existing `*.backup` file from an older manual run, rerun the switch with `-b hm-backup`. That keeps the old files in `*.hm-backup` instead of trying to reuse the same backup suffix.
 
@@ -36,7 +36,7 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 - The pinned `agents` flake input is the base (user-global `AGENTS.md` contract + portable skills); `assets/.agents/` overlays machine-specific skills and preferences. Home Manager combines both and deploys the contract to `~/.agents/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`, and `~/.copilot/instructions/` on every machine.
 - The source split and migration procedure are documented in [`docs/agent-sources.md`](docs/agent-sources.md).
 - `assets/tokitoki/` contains the value-free Tokitoki configuration template; secret-backed runtime projection and macOS startup are documented in [`docs/tokitoki.md`](docs/tokitoki.md).
-- `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. `assets/executor/executor.jsonc` documents the catalog (GitHub Copilot, Context7, Chrome DevTools, nixos); `assets/executor/setup.ts` seeds them idempotently after `nixbootstrap` or when the activation hash changes.
+- `assets/executor/` keeps the local [Executor](https://executor.sh) integration config and seeder. The `nixfiles.executor.enable` option defaults to `false`; when enabled, Home Manager deploys the client MCP entries and seeds Executor after `nixbootstrap` or when activation inputs change.
 - `.references/` contains cloned reference repositories used for comparison and pattern mining.
 
 ## macOS setup
@@ -90,7 +90,7 @@ The global `secret` command, project-local `.secret.json` files, Bitwarden, and 
 Tokitoki's secret-backed configuration and automatic macOS menu-bar startup are
 documented in [`docs/tokitoki.md`](docs/tokitoki.md).
 
-The global MCP configs under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` point at the local Executor instance (`executor mcp`).
+The global MCP config templates under `assets/.config/opencode/opencode.json`, `assets/.cursor/mcp.json`, and `assets/vscode/mcp.json` retain the Executor entries. Home Manager filters those entries out while `nixfiles.executor.enable` is false.
 
 ## NixOS setup
 

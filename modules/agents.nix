@@ -1,4 +1,7 @@
-{ inputs, ... }:
+{ config, inputs, ... }:
+let
+  executorEnabled = config.nixfiles.executor.enable;
+in
 {
   config.flake.modules.homeManager.agents =
     {
@@ -51,41 +54,53 @@
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);
       cursorMcp = cursorMcpBase // {
-        mcpServers = lib.mapAttrs (
-          _: server:
-          server
-          // {
-            env = (server.env or { }) // {
-              EXECUTOR_SCOPE_DIR = executorScopeDir;
-            };
-          }
-        ) cursorMcpBase.mcpServers;
+        mcpServers =
+          if executorEnabled then
+            lib.mapAttrs (
+              _: server:
+              server
+              // {
+                env = (server.env or { }) // {
+                  EXECUTOR_SCOPE_DIR = executorScopeDir;
+                };
+              }
+            ) cursorMcpBase.mcpServers
+          else
+            builtins.removeAttrs cursorMcpBase.mcpServers [ "executor" ];
       };
 
       vscodeMcpBase = builtins.fromJSON (builtins.readFile ../assets/vscode/mcp.json);
       vscodeMcp = vscodeMcpBase // {
-        servers = lib.mapAttrs (
-          _: server:
-          server
-          // {
-            env = (server.env or { }) // {
-              EXECUTOR_SCOPE_DIR = executorScopeDir;
-            };
-          }
-        ) vscodeMcpBase.servers;
+        servers =
+          if executorEnabled then
+            lib.mapAttrs (
+              _: server:
+              server
+              // {
+                env = (server.env or { }) // {
+                  EXECUTOR_SCOPE_DIR = executorScopeDir;
+                };
+              }
+            ) vscodeMcpBase.servers
+          else
+            builtins.removeAttrs vscodeMcpBase.servers [ "executor" ];
       };
 
       opencodeBase = builtins.fromJSON (builtins.readFile ../assets/.config/opencode/opencode.json);
       opencodeConfig = opencodeBase // {
-        mcp = lib.mapAttrs (
-          _: server:
-          server
-          // {
-            env = (server.env or { }) // {
-              EXECUTOR_SCOPE_DIR = executorScopeDir;
-            };
-          }
-        ) opencodeBase.mcp;
+        mcp =
+          if executorEnabled then
+            lib.mapAttrs (
+              _: server:
+              server
+              // {
+                env = (server.env or { }) // {
+                  EXECUTOR_SCOPE_DIR = executorScopeDir;
+                };
+              }
+            ) opencodeBase.mcp
+          else
+            builtins.removeAttrs opencodeBase.mcp [ "executor" ];
       };
       opencodeConfigJson = builtins.toJSON opencodeConfig;
       # Ensure .ts scripts are stored with executable bit so home-manager

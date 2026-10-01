@@ -1,6 +1,7 @@
 { config, inputs, ... }:
 let
   shellInteractive = config.flake.modules.homeManager.shellInteractive;
+  executorEnabled = config.nixfiles.executor.enable;
 in
 {
   config.flake.modules.homeManager.shell =
@@ -24,6 +25,11 @@ in
       '';
 
       nixfilesFlakePath = "${config.xdg.configHome}/nixfiles";
+      bootstrapTools = [
+        "pi"
+        "ast-outline"
+      ]
+      ++ lib.optional executorEnabled "executor";
 
       jjPackage =
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
@@ -34,6 +40,21 @@ in
         skepsisRevision = "cf699d2593e270fb8767daffcd9c46c8ce539f15";
         skepsisUrl = "https://github.com/oxidecomputer/skepsis.git";
       };
+
+      executorBootstrap = lib.optionalString executorEnabled ''
+        if ! command -v executor >/dev/null 2>&1 || [ "$(executor --version 2>/dev/null || true)" != "v${bootstrap.executorVersion}" ]; then
+          pnpm remove -g executor >/dev/null 2>&1 || true
+          pnpm add -g "executor@${bootstrap.executorVersion}"
+        fi
+      '';
+
+      executorSeedBootstrap = lib.optionalString executorEnabled ''
+        setup_file="$HOME/.executor/setup.ts"
+        if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1; then
+          "$setup_file"
+          executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
+        fi
+      '';
 
       jjPrompt = pkgs.writeShellApplication {
         name = "jj-prompt";
@@ -175,10 +196,7 @@ in
 
           mkdir -p "$PNPM_HOME/bin" "$PNPM_STORE_DIR"
 
-          if ! command -v executor >/dev/null 2>&1 || [ "$(executor --version 2>/dev/null || true)" != "v${bootstrap.executorVersion}" ]; then
-            pnpm remove -g executor >/dev/null 2>&1 || true
-            pnpm add -g "executor@${bootstrap.executorVersion}"
-          fi
+          ${executorBootstrap}
 
           ast_outline_version="$(ast-outline --version 2>/dev/null | head -n 1 || true)"
           if [ "$ast_outline_version" != "ast-outline ${bootstrap.astOutlineVersion}" ]; then
@@ -213,11 +231,7 @@ in
             fi
           fi
 
-          setup_file="$HOME/.executor/setup.ts"
-          if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1; then
-            "$setup_file"
-            executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
-          fi
+          ${executorSeedBootstrap}
 
           echo "nixfiles bootstrap complete"
         '';
@@ -442,7 +456,7 @@ in
         export PNPM_HOME="${pnpmHome}"
         export PATH="${pnpmBin}:$PATH"
         missing_tools=""
-        for tool in executor pi ast-outline; do
+        for tool in ${lib.concatStringsSep " " bootstrapTools}; do
           if ! command -v "$tool" >/dev/null 2>&1; then
             missing_tools="''${missing_tools:+$missing_tools }$tool"
           fi
@@ -453,36 +467,38 @@ in
       '';
 
       home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
+        ${lib.optionalString executorEnabled ''
+            export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
 
-          setup_file="${config.home.homeDirectory}/.executor/setup.ts"
-          executor_config="${config.home.homeDirectory}/.executor/executor.jsonc"
-          github_token_file="${config.home.homeDirectory}/.config/opencode/github-token"
-          setup_hash_file="${config.home.homeDirectory}/.executor/.setup-inputs.sha256"
-          setup_hash="$(
-            for input in "$setup_file" "$executor_config" "$github_token_file"; do
-              if [ -f "$input" ]; then
-                ${pkgs.coreutils}/bin/sha256sum "$input"
-              fi
-            done | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1
-          )"
-        previous_setup_hash="$(${pkgs.coreutils}/bin/cat "$setup_hash_file" 2>/dev/null || true)"
-          setup_changed=0
+            setup_file="${config.home.homeDirectory}/.executor/setup.ts"
+            executor_config="${config.home.homeDirectory}/.executor/executor.jsonc"
+            github_token_file="${config.home.homeDirectory}/.config/opencode/github-token"
+            setup_hash_file="${config.home.homeDirectory}/.executor/.setup-inputs.sha256"
+            setup_hash="$(
+              for input in "$setup_file" "$executor_config" "$github_token_file"; do
+                if [ -f "$input" ]; then
+                  ${pkgs.coreutils}/bin/sha256sum "$input"
+                fi
+              done | ${pkgs.coreutils}/bin/sha256sum | ${pkgs.coreutils}/bin/cut -d ' ' -f1
+            )"
+          previous_setup_hash="$(${pkgs.coreutils}/bin/cat "$setup_hash_file" 2>/dev/null || true)"
+            setup_changed=0
 
-          if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1 && [ "$setup_hash" != "$previous_setup_hash" ]; then
-            if $DRY_RUN_CMD "$setup_file"; then
-              setup_changed=1
-              if [ -z "$DRY_RUN_CMD" ]; then
-                printf '%s\n' "$setup_hash" > "$setup_hash_file"
+            if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1 && [ "$setup_hash" != "$previous_setup_hash" ]; then
+              if $DRY_RUN_CMD "$setup_file"; then
+                setup_changed=1
+                if [ -z "$DRY_RUN_CMD" ]; then
+                  printf '%s\n' "$setup_hash" > "$setup_hash_file"
+                fi
+              else
+                echo "warning: Executor seeding failed; it will be retried on the next activation" >&2
               fi
-            else
-              echo "warning: Executor seeding failed; it will be retried on the next activation" >&2
             fi
-          fi
 
-          if [ "$setup_changed" -eq 1 ] && command -v executor >/dev/null 2>&1; then
-            $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
-          fi
+            if [ "$setup_changed" -eq 1 ] && command -v executor >/dev/null 2>&1; then
+              $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
+            fi
+        ''}
       '';
 
       home.file.".config/pnpm/config.yaml".text = ''
