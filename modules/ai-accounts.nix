@@ -199,7 +199,7 @@
         home.file.".config/bb-plugin-ai-accounts/accounts.json".text = builtins.toJSON accountsDocument;
         home.file.".config/bb-plugin-ai-accounts/secrets.json".text = builtins.toJSON secretsDocument;
 
-        home.activation.installBbAiAccounts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        home.activation.installBbAiAccounts = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
           bb_cli="''${BB_CLI:-$(command -v bb || true)}"
           if [ -z "$bb_cli" ]; then
             echo "error: BB CLI not found; set BB_CLI or add bb to PATH" >&2
