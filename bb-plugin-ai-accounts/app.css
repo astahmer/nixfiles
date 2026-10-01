@@ -207,6 +207,10 @@
 .aa-usage-header h1 { margin: 4px 0; font-size: 24px; font-weight: 650; letter-spacing: -.035em; }
 .aa-usage-controls { display: flex; align-items: center; flex-wrap: wrap; justify-content: end; gap: 7px; }
 .aa-usage-controls select { max-width: 190px; border: 1px solid var(--aa-border); border-radius: 7px; padding: 7px 9px; background: var(--aa-panel); color: var(--aa-ink); font: inherit; font-size: 10px; }
+.aa-usage-refresh-setting { display: inline-flex; align-items: center; gap: 6px; color: var(--aa-muted); font-size: 9px; white-space: nowrap; }
+.aa-usage-refresh-setting select { max-width: 110px; }
+.aa-usage-refresh-setting select:disabled { opacity: .65; }
+.aa-usage-refresh-error { color: #ff8092; font-size: 9px; }
 .aa-date-range-picker { position: relative; }
 .aa-date-range-trigger, .aa-date-range-apply { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--aa-border); border-radius: 7px; padding: 7px 10px; color: var(--aa-ink); background: var(--aa-panel); font: inherit; font-size: 10px; cursor: pointer; }
 .aa-date-range-popover { position: absolute; z-index: 20; top: calc(100% + 7px); right: 0; width: min(570px, calc(100vw - 36px)); display: grid; grid-template-columns: 175px minmax(0, 1fr); overflow: hidden; border: 1px solid var(--aa-border); border-radius: 11px; background: #242424; box-shadow: 0 14px 40px rgba(0,0,0,.42); }

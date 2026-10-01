@@ -40,8 +40,12 @@ machine filters, and an explicit refresh. The sidebar footer disclosure shows
 the two most constrained current windows and links to the full page.
 
 Quota values come from the existing Codex and OpenCode Go usage readers through
-BB's provider usage API. The plugin stores a snapshot every five minutes for
-connected machines and shows the provider's used percentage and the calculated
+BB's provider usage API. The plugin stores a snapshot on connected machines at
+the configured provider refresh interval, which defaults to five minutes and
+can be changed from the Usage page to any whole-minute interval from one to 60.
+The selection is saved in plugin storage and changing it reschedules the
+background poll. The Usage page rereads stored history every minute; this is
+separate from provider polling. It shows the provider's used percentage and the calculated
 `100 - usedPercent` remaining value separately. A failed poll preserves the
 last snapshot and marks it stale.
 

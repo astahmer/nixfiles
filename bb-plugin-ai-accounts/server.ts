@@ -57,6 +57,9 @@ type Provider = z.infer<typeof providerSchema>;
 type ProviderIcon = z.infer<typeof providerIconSchema>;
 
 const stateKey = "accounts-v2";
+const usageSettingsKey = "usage-settings-v1";
+const defaultUsageRefreshIntervalMinutes = 5;
+const usageRefreshIntervalMinutesSchema = z.number().int().min(1).max(60);
 const accountInputSchema = accountSchema.omit({ id: true }).extend({ id: accountSchema.shape.id.optional() });
 const accountIdSchema = accountSchema.shape.id;
 const usageRangeSchema = z.object({ startAt: z.number().int().nonnegative(), endAt: z.number().int().positive() })
@@ -109,6 +112,14 @@ export const rpcContract = defineRpcContract({
   identity: {
     input: z.object({ id: accountIdSchema, path: accountSchema.shape.path.optional() }),
     output: z.object({ email: z.string().email().nullable() }),
+  },
+  usageSettings: {
+    input: z.null(),
+    output: z.object({ refreshIntervalMinutes: usageRefreshIntervalMinutesSchema }),
+  },
+  setUsageRefreshInterval: {
+    input: z.object({ refreshIntervalMinutes: usageRefreshIntervalMinutesSchema }),
+    output: z.object({ refreshIntervalMinutes: usageRefreshIntervalMinutesSchema }),
   },
   usageSummary: { input: z.object({ range: usageRangeSchema }), output: usageSummarySchema },
   refreshUsage: { input: z.object({ range: usageRangeSchema }), output: usageSummarySchema },
@@ -192,6 +203,14 @@ export default async function plugin(bb: BbPluginApi) {
   bb.storage.migrate(usageDb, usageMigrations);
   let lastUsageRefreshAt: number | null = null;
   let usageRefresh: Promise<void> | null = null;
+  let usageRefreshIntervalMinutes = defaultUsageRefreshIntervalMinutes;
+  let wakeUsageScheduler: (() => void) | null = null;
+  const readUsageRefreshInterval = async () => {
+    const stored = await bb.storage.kv.get<unknown>(usageSettingsKey);
+    if (stored === undefined) return defaultUsageRefreshIntervalMinutes;
+    const parsed = z.object({ refreshIntervalMinutes: usageRefreshIntervalMinutesSchema }).safeParse(stored);
+    return parsed.success ? parsed.data.refreshIntervalMinutes : defaultUsageRefreshIntervalMinutes;
+  };
   const pruneUsageHistory = () => {
     const now = Date.now();
     const previous = usageDb.prepare("SELECT value FROM usage_meta WHERE key = 'retention-pruned-at'").get() as { value: string } | undefined;
@@ -389,19 +408,27 @@ export default async function plugin(bb: BbPluginApi) {
     async start(signal) {
       const config = await bb.sdk.system.config();
       primaryHostId = config.primaryHostId;
+      usageRefreshIntervalMinutes = await readUsageRefreshInterval();
       try { await refreshUsage(); } catch { bb.log.warn("AI account usage refresh failed."); }
       try { await backfillThreadUsage(signal); } catch { bb.log.warn("AI account usage history scan failed."); }
       while (!signal.aborted) {
-        await new Promise<void>((resolve) => {
-          const finish = () => {
+        const waitResult = await new Promise<"elapsed" | "rescheduled" | "aborted">((resolve) => {
+          let timer: ReturnType<typeof setTimeout>;
+          const finish = (result: "elapsed" | "rescheduled" | "aborted") => {
             clearTimeout(timer);
-            signal.removeEventListener("abort", finish);
-            resolve();
+            signal.removeEventListener("abort", abort);
+            if (wakeUsageScheduler === reschedule) wakeUsageScheduler = null;
+            resolve(result);
           };
-          const timer = setTimeout(finish, 5 * 60 * 1000);
-          signal.addEventListener("abort", finish, { once: true });
+          const abort = () => finish("aborted");
+          const reschedule = () => finish("rescheduled");
+          timer = setTimeout(() => finish("elapsed"), usageRefreshIntervalMinutes * 60 * 1000);
+          wakeUsageScheduler = reschedule;
+          signal.addEventListener("abort", abort, { once: true });
+          if (signal.aborted) abort();
         });
-        if (signal.aborted) return;
+        if (waitResult === "aborted" || signal.aborted) return;
+        if (waitResult === "rescheduled") continue;
         try { await refreshUsage(); } catch { bb.log.warn("AI account usage refresh failed."); }
       }
     },
@@ -568,6 +595,15 @@ export default async function plugin(bb: BbPluginApi) {
       } catch {
         return { email: account.email ?? null };
       }
+    },
+    async usageSettings() {
+      return { refreshIntervalMinutes: await readUsageRefreshInterval() };
+    },
+    async setUsageRefreshInterval({ refreshIntervalMinutes }) {
+      await bb.storage.kv.set(usageSettingsKey, { refreshIntervalMinutes });
+      usageRefreshIntervalMinutes = refreshIntervalMinutes;
+      wakeUsageScheduler?.();
+      return { refreshIntervalMinutes };
     },
     async usageSummary({ range }) {
       return readUsageSummary(range);

@@ -799,7 +799,38 @@ const UsagePage = () => {
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshIntervalMinutes, setRefreshIntervalMinutes] = useState(5);
+  const [savingRefreshInterval, setSavingRefreshInterval] = useState(false);
+  const [refreshIntervalError, setRefreshIntervalError] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void rpc.call("usageSettings", null).then((settings) => {
+      if (active) setRefreshIntervalMinutes(settings.refreshIntervalMinutes);
+    }).catch(() => {
+      if (active) setRefreshIntervalError("Could not load refresh settings.");
+    });
+    return () => { active = false; };
+  }, []);
+
+  const saveRefreshInterval = async (value: string) => {
+    const nextInterval = Number(value);
+    if (!Number.isInteger(nextInterval) || nextInterval < 1 || nextInterval > 60) return;
+    const previousInterval = refreshIntervalMinutes;
+    setRefreshIntervalMinutes(nextInterval);
+    setSavingRefreshInterval(true);
+    setRefreshIntervalError("");
+    try {
+      const settings = await rpc.call("setUsageRefreshInterval", { refreshIntervalMinutes: nextInterval });
+      setRefreshIntervalMinutes(settings.refreshIntervalMinutes);
+    } catch {
+      setRefreshIntervalMinutes(previousInterval);
+      setRefreshIntervalError("Could not save refresh interval.");
+    } finally {
+      setSavingRefreshInterval(false);
+    }
+  };
 
   const applyRangeDraft = () => {
     if (!rangeDraft.from || !rangeDraft.to || rangeDraft.from > rangeDraft.to) {
@@ -886,6 +917,8 @@ const UsagePage = () => {
         <select aria-label="Filter by account" value={accountId} onChange={(event) => setAccountId(event.currentTarget.value)}><option value="all">All accounts</option>{summary?.accounts.map((account) => <option key={account.id} value={account.id}>{account.displayName}</option>)}</select>
         <select aria-label="Filter by provider" value={provider} onChange={(event) => setProvider(event.currentTarget.value === "codex" || event.currentTarget.value === "opencode-go" ? event.currentTarget.value : "all")}><option value="all">All providers</option><option value="codex">Codex</option><option value="opencode-go">OpenCode Go</option></select>
         <select aria-label="Filter by machine" value={hostId} onChange={(event) => setHostId(event.currentTarget.value)}><option value="all">All machines</option>{summary?.hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>
+        <label className="aa-usage-refresh-setting"><span>Provider refresh</span><select aria-label="Provider usage refresh interval" value={refreshIntervalMinutes} disabled={savingRefreshInterval} onChange={(event) => void saveRefreshInterval(event.currentTarget.value)}>{[1, 2, 5, 10, 15, 30, 60].map((minutes) => <option key={minutes} value={minutes}>Every {minutes} min</option>)}</select></label>
+        {refreshIntervalError ? <span className="aa-usage-refresh-error" role="alert">{refreshIntervalError}</span> : null}
         <button className="aa-quiet" type="button" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "Refreshing…" : "↻ Refresh"}</button>
       </div>
     </header>
