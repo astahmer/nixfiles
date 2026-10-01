@@ -8,10 +8,8 @@
       ...
     }:
     let
-      system = pkgs.stdenv.hostPlatform.system;
-      pluginSource = ../bb-plugin-tokitoki;
+      pluginSource = "${inputs."bb-plugins"}/plugins/tokitoki-usage";
       pluginDirectory = "${config.home.homeDirectory}/.config/bb-plugins/tokitoki-usage";
-      tokitokiBin = "${inputs.self.packages.${system}.tokitoki}/bin/tokitoki";
     in
     {
       home.activation.installTokitokiBbPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -28,7 +26,6 @@
         ${pkgs.pnpm}/bin/pnpm install --frozen-lockfile --silent
         "$bb_cli" plugin build
         "$bb_cli" plugin install . --yes
-        "$bb_cli" plugin config tokitoki-usage set binaryPath "${tokitokiBin}"
         "$bb_cli" plugin enable tokitoki-usage
       '';
     };

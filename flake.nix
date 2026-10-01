@@ -81,8 +81,9 @@
       flake = false;
     };
 
-    bbPlugins = {
-      url = "github:astahmer/bb-plugins";
+    # BB plugin source lives in its own repository next to this checkout.
+    "bb-plugins" = {
+      url = "path:../bb-plugins";
       flake = false;
     };
 
