@@ -1,0 +1,79 @@
+# Owned DSH profile additions. Run with:
+#   fnm exec --using=v22.23.3 -- dsh --profile bb-migration --patch <this-file>
+- insert:
+    - id: mcp-tokitoki
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: tokitoki
+        transport: stdio
+        command: tokitoki
+        args: [mcp]
+        toolCallTimeoutMs: 60000
+        reconnect:
+          enabled: true
+          maxAttempts: 5
+    - id: subagent-acp-codex-personal
+      name: '@deepseek-ai/dsh-subagent-acp'
+      config:
+        providerName: codex-personal
+        command: /bin/sh
+        args:
+          - -c
+          - >-
+            CODEX_HOME="$HOME/.codex" CODEX_CONFIG='{"model":"gpt-6-luna"}'
+            exec "$HOME/.dsh/profiles/bb-migration/node_modules/.bin/codex-acp"
+        permission: reject
+    - id: subagent-acp-codex-work
+      name: '@deepseek-ai/dsh-subagent-acp'
+      config:
+        providerName: codex-work
+        command: /bin/sh
+        args:
+          - -c
+          - >-
+            CODEX_HOME="$HOME/.local/share/bb-ai-accounts/codex/work"
+            CODEX_CONFIG='{"model":"gpt-6-luna"}'
+            exec "$HOME/.dsh/profiles/bb-migration/node_modules/.bin/codex-acp"
+        permission: reject
+    - id: subagent-acp-codex-alex2
+      name: '@deepseek-ai/dsh-subagent-acp'
+      config:
+        providerName: codex-alex2
+        command: /bin/sh
+        args:
+          - -c
+          - >-
+            CODEX_HOME="$HOME/.local/share/bb-ai-accounts/codex/alex2"
+            CODEX_CONFIG='{"model":"gpt-6-luna"}'
+            exec "$HOME/.dsh/profiles/bb-migration/node_modules/.bin/codex-acp"
+        permission: reject
+    - id: tool-subagent-codex-personal
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: codex-personal
+        toolName: subagent_codex_personal
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+    - id: tool-subagent-codex-work
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: codex-work
+        toolName: subagent_codex_work
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+    - id: tool-subagent-codex-alex2
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: codex-alex2
+        toolName: subagent_codex_alex2
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+- id: llm-pi-ai
+  config:
+    providers:
+      openai-codex:
+        displayName: Codex subscription
+- id: agent-default-model
+  config:
+    provider: openai-codex
+    model: gpt-6-luna
