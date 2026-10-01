@@ -999,6 +999,7 @@ const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
   return <section className="aa-usage-footer" aria-label="AI account usage">
     <header className="aa-footer-toolbar"><nav className="aa-footer-provider-tabs" role="tablist" aria-label="AI account provider"><button className={`is-all ${activeProvider === "all" ? "is-active" : ""}`} role="tab" aria-label="All accounts" title="All accounts" aria-selected={activeProvider === "all"} type="button" onClick={() => setProviderTab("all")}>All</button>{providers.map((entry) => <button key={entry} role="tab" aria-label={entry === "codex" ? "Codex" : "OpenCode Go"} title={entry === "codex" ? "Codex" : "OpenCode Go"} aria-selected={activeProvider === entry} className={activeProvider === entry ? "is-active" : ""} type="button" onClick={() => setProviderTab(entry)}><FooterProviderMark provider={entry} /></button>)}</nav>
       <select aria-label="Usage machine" value={hostFilter} onChange={(event) => setHostFilter(event.currentTarget.value)}><option value="all">All machines</option>{summary?.hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>
+      <button className="aa-footer-history" type="button" aria-label="Open usage history" onClick={() => { dismiss(); navigate.toPluginPanel("accounts", { subPath: "usage" }); }}>Open usage history</button>
       <button className="aa-footer-icon-button" type="button" aria-label={refreshing ? "Refreshing usage" : "Refresh usage"} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "…" : "↻"}</button>
       <button className="aa-footer-icon-button" type="button" aria-label="Close AI account usage" onClick={dismiss}><span className="aa-footer-chevron" aria-hidden="true" /></button>
     </header>
@@ -1011,7 +1012,6 @@ const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
         {banked && banked.balance > 0 ? <BankedResetDetails entry={banked} compact /> : null}
       </article>;
     })}{accounts.length === 0 ? <p className="aa-footer-empty">No current usage windows for this provider.</p> : null}</div>
-    <button className="aa-usage-footer-open" type="button" onClick={() => { dismiss(); navigate.toPluginPanel("accounts", { subPath: "usage" }); }}>Open usage history</button>
   </section>;
 };
 
