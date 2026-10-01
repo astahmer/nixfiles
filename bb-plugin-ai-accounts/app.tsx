@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { autoUpdate, flip, offset, shift, size, useDismiss, useFloating, useInteractions } from "@floating-ui/react";
 import { definePluginApp, useBbContext, useBbNavigate, useComposer, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
@@ -761,46 +761,66 @@ const FooterProviderMark = ({ provider }: { provider: "codex" | "opencode-go" })
   : <svg className="aa-footer-provider-mark is-opencode-go" viewBox="-72 -42 384 384" aria-hidden="true"><path fill="currentColor" fillOpacity=".45" d="M180 240H60V120H180V240Z" /><path fill="currentColor" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" /></svg>;
 
 const QuotaHistoryChart = ({ history, modelUsage, hostName, selectedWindow }: { history: UsageSummary["quotaHistory"]; modelUsage: UsageSummary["quotaModelUsage"]; hostName(id: string): string; selectedWindow: "session" | "weekly" | "monthly" }) => {
+  const [selectedModels, setSelectedModels] = useState<string[] | null>(null);
+  const [modelFilterOpen, setModelFilterOpen] = useState(false);
+  const [hoveredPoint, setHoveredPoint] = useState<{ seriesKey: string; point: { capturedAt: number; remainingPercent: number; intervalStartAt: number; totalTokens: number; reasoningOutputTokens: number } } | null>(null);
   const selectedHistory = history.filter((entry) => quotaWindowRank(entry.label) === ({ session: 0, weekly: 1, monthly: 2 }[selectedWindow]));
   const quotaBySnapshot = new Map(selectedHistory.map((entry) => [`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`, entry]));
-  const groups = new Map<string, { accountName: string; hostId: string; model: string; points: Array<{ capturedAt: number; remainingPercent: number; intervalStartAt: number; totalTokens: number }> }>();
+  const groups = new Map<string, { accountName: string; hostId: string; model: string; points: Array<{ capturedAt: number; remainingPercent: number; intervalStartAt: number; totalTokens: number; reasoningOutputTokens: number }> }>();
   for (const activity of modelUsage) {
     const quota = quotaBySnapshot.get(`${activity.accountId}:${activity.hostId}:${activity.windowKey}:${activity.capturedAt}`);
     if (!quota) continue;
     const model = activity.model ?? "Unknown model";
     const key = `${activity.accountId}:${activity.hostId}:${model}`;
     const series = groups.get(key) ?? { accountName: quota.accountName, hostId: activity.hostId, model, points: [] };
-    series.points.push({ capturedAt: activity.capturedAt, remainingPercent: quota.remainingPercent, intervalStartAt: activity.intervalStartAt, totalTokens: activity.totalTokens });
+    series.points.push({ capturedAt: activity.capturedAt, remainingPercent: quota.remainingPercent, intervalStartAt: activity.intervalStartAt, totalTokens: activity.totalTokens, reasoningOutputTokens: activity.reasoningOutputTokens });
     groups.set(key, series);
   }
-  const series = Array.from(groups, ([key, entry], index) => ({ key, ...entry, hostName: hostName(entry.hostId), color: `hsl(${index * 137.508 % 360} 72% 64%)`, points: entry.points.sort((left, right) => left.capturedAt - right.capturedAt) })).sort((left, right) => left.accountName.localeCompare(right.accountName) || left.model.localeCompare(right.model) || left.hostName.localeCompare(right.hostName));
-  if (series.length === 0) return <div className="aa-quota-history-chart"><div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>One line per account and model for the selected rate limit.</p></div></div><p className="aa-quota-history-empty">No model activity was recorded for this rate limit in the selected date range.</p></div>;
+  const allSeries = Array.from(groups, ([key, entry], index) => ({ key, ...entry, hostName: hostName(entry.hostId), color: `hsl(${index * 137.508 % 360} 72% 64%)`, points: entry.points.sort((left, right) => left.capturedAt - right.capturedAt) })).sort((left, right) => left.accountName.localeCompare(right.accountName) || left.model.localeCompare(right.model) || left.hostName.localeCompare(right.hostName));
+  const series = allSeries.filter((entry) => selectedModels === null || selectedModels.includes(entry.key));
+  const setModelSelected = (key: string, checked: boolean) => {
+    const current = new Set(selectedModels ?? allSeries.map((entry) => entry.key));
+    if (checked) current.add(key);
+    else current.delete(key);
+    setSelectedModels(current.size === allSeries.length ? null : Array.from(current));
+    setHoveredPoint(null);
+  };
+  const chartHeader = <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each chain is one account and model. Model activity gives context; providers do not attribute quota changes to models.</p></div><div className="aa-quota-model-picker"><button type="button" aria-expanded={modelFilterOpen} onClick={() => setModelFilterOpen((open) => !open)}>Models · {series.length} of {allSeries.length} <span aria-hidden="true">⌄</span></button>{modelFilterOpen ? <div className="aa-quota-model-menu" role="group" aria-label="Select models"><div><button type="button" onClick={() => { setSelectedModels(null); setHoveredPoint(null); }}>All</button><button type="button" onClick={() => { setSelectedModels([]); setHoveredPoint(null); }}>None</button></div>{allSeries.map((entry) => <label key={entry.key}><input type="checkbox" checked={selectedModels === null || selectedModels.includes(entry.key)} onChange={(event) => setModelSelected(entry.key, event.currentTarget.checked)} /><span style={{ background: entry.color }} /><span>{entry.accountName} · {entry.model}{entry.hostName ? ` · ${entry.hostName}` : ""}</span></label>)}</div> : null}</div></div>;
+  const hoverLatestPoint = (entry: (typeof allSeries)[number]) => {
+    const point = entry.points.at(-1);
+    if (point) setHoveredPoint({ seriesKey: entry.key, point });
+  };
+  if (allSeries.length === 0) return <div className="aa-quota-history-chart">{chartHeader}<p className="aa-quota-history-empty">No model activity was recorded for this rate limit in the selected date range.</p></div>;
+  if (series.length === 0) return <div className="aa-quota-history-chart">{chartHeader}<p className="aa-quota-history-empty">Select at least one model to show its quota history.</p></div>;
 
-  const plot = { left: 54, right: 990, top: 16, bottom: 244 };
+  const plot = { left: 0, right: 1000, top: 16, bottom: 220 };
   const recordedTimes = series.flatMap((entry) => entry.points.map((point) => point.capturedAt));
   const dataStartAt = Math.min(...recordedTimes);
   const dataEndAt = Math.max(...recordedTimes);
   const dataDuration = dataEndAt - dataStartAt;
   const xPosition = (capturedAt: number) => dataDuration === 0 ? (plot.left + plot.right) / 2 : plot.left + (capturedAt - dataStartAt) / dataDuration * (plot.right - plot.left);
   const yPosition = (remainingPercent: number) => plot.bottom - remainingPercent / 100 * (plot.bottom - plot.top);
-  const axisDates = dataDuration === 0 ? [dataStartAt] : [dataStartAt, dataStartAt + dataDuration / 2, dataEndAt];
   const axisDateOptions: Intl.DateTimeFormatOptions = dataDuration <= 24 * 60 * 60 * 1000 ? { hour: "2-digit", minute: "2-digit" } : { month: "2-digit", day: "2-digit" };
   const windowLabel = selectedWindow === "weekly" ? "weekly" : selectedWindow === "monthly" ? "monthly" : "session";
+  const activeSeries = hoveredPoint ? allSeries.find((entry) => entry.key === hoveredPoint.seriesKey) : null;
 
   return <div className="aa-quota-history-chart">
-    <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each chain is one account and model. Dots show account quota when that model had recorded token activity; providers do not attribute quota changes to models.</p></div><span>{series.length} account · model series</span></div>
-    <svg className="aa-quota-history-plot" viewBox="0 0 1000 276" preserveAspectRatio="none" role="img" aria-label={`Remaining ${windowLabel} quota for ${series.length} account and model series from ${new Date(dataStartAt).toLocaleString()} to ${new Date(dataEndAt).toLocaleString()}`}>
+    {chartHeader}
+    <div className="aa-quota-chart-frame">
+    <div className="aa-quota-history-y-axis" aria-hidden="true">{[100, 75, 50, 25, 0].map((percent) => <span key={percent}>{percent}%</span>)}</div>
+    <div className="aa-quota-chart-main"><svg className="aa-quota-history-plot" viewBox="0 0 1000 228" preserveAspectRatio="none" role="img" aria-label={`Remaining ${windowLabel} quota for ${series.length} account and model series from ${new Date(dataStartAt).toLocaleString()} to ${new Date(dataEndAt).toLocaleString()}`}>
       {[0, 25, 50, 75, 100].map((percent) => {
         const y = yPosition(percent);
-        return <g key={percent}><line x1={plot.left} x2={plot.right} y1={y} y2={y} stroke="currentColor" strokeOpacity={percent === 0 ? ".24" : ".1"} /><text x={plot.left - 9} y={y + 4} textAnchor="end" style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{percent}%</text></g>;
+        return <line key={percent} x1={plot.left} x2={plot.right} y1={y} y2={y} stroke="currentColor" strokeOpacity={percent === 0 ? ".24" : ".1"} />;
       })}
-      {axisDates.map((date, index) => <text key={date} x={dataDuration === 0 ? (plot.left + plot.right) / 2 : xPosition(date)} y="268" textAnchor={dataDuration === 0 || index === 1 ? "middle" : index === 0 ? "start" : "end"} style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{new Date(date).toLocaleString(undefined, axisDateOptions)}</text>)}
-      {series.map((entry) => <g key={entry.key}>
-        {entry.points.length > 1 ? <polyline points={entry.points.map((point) => `${xPosition(point.capturedAt)},${yPosition(point.remainingPercent)}`).join(" ")} fill="none" stroke={entry.color} strokeWidth="2" vectorEffect="non-scaling-stroke" /> : null}
-        {entry.points.map((point) => <circle key={point.capturedAt} cx={xPosition(point.capturedAt)} cy={yPosition(point.remainingPercent)} r="3.5" fill={entry.color} stroke="#202020" strokeWidth="1.2" vectorEffect="non-scaling-stroke"><title>{`${entry.accountName} · ${entry.model}${entry.hostName ? ` · ${entry.hostName}` : ""}\n${point.remainingPercent.toFixed(0)}% ${windowLabel} quota remaining\n${formatTimestamp(point.intervalStartAt)} → ${formatTimestamp(point.capturedAt)}\n${formatCount(point.totalTokens)} model tokens in this interval\nModel activity is context; providers do not attribute quota changes to models.`}</title></circle>)}
+      {series.map((entry) => <g key={entry.key} className={hoveredPoint && hoveredPoint.seriesKey !== entry.key ? "is-dimmed" : ""} onMouseEnter={() => hoverLatestPoint(entry)} onMouseLeave={() => setHoveredPoint(null)}>
+        {entry.points.length > 1 ? <polyline points={entry.points.map((point) => `${xPosition(point.capturedAt)},${yPosition(point.remainingPercent)}`).join(" ")} fill="none" stroke={entry.color} strokeWidth={hoveredPoint?.seriesKey === entry.key ? "3" : "2"} vectorEffect="non-scaling-stroke" /> : null}
+        {entry.points.map((point) => <circle key={point.capturedAt} className={hoveredPoint?.seriesKey === entry.key && hoveredPoint.point.capturedAt === point.capturedAt ? "is-active" : ""} tabIndex={0} role="button" aria-label={`${entry.accountName}, ${entry.model}, ${point.remainingPercent.toFixed(0)} percent remaining at ${formatTimestamp(point.capturedAt)}`} onMouseEnter={(event) => { event.stopPropagation(); setHoveredPoint({ seriesKey: entry.key, point }); }} onFocus={() => setHoveredPoint({ seriesKey: entry.key, point })} cx={xPosition(point.capturedAt)} cy={yPosition(point.remainingPercent)} r={hoveredPoint?.seriesKey === entry.key && hoveredPoint.point.capturedAt === point.capturedAt ? "5" : "3.5"} fill={entry.color} stroke="#202020" strokeWidth="1.2" vectorEffect="non-scaling-stroke"><title>{`${entry.accountName} · ${entry.model}${entry.hostName ? ` · ${entry.hostName}` : ""}\n${point.remainingPercent.toFixed(0)}% ${windowLabel} quota remaining\n${formatTimestamp(point.intervalStartAt)} → ${formatTimestamp(point.capturedAt)}\n${formatCount(point.totalTokens)} model tokens in this interval`}</title></circle>)}
       </g>)}
-    </svg>
-    <div className="aa-quota-history-legend">{series.map((entry) => <div key={entry.key}><span style={{ background: entry.color }} /><strong>{entry.accountName} · {entry.model}</strong><small>{entry.points.length} observations{entry.hostName ? ` · ${entry.hostName}` : ""}</small></div>)}</div>
+    </svg><div className="aa-quota-history-x-axis"><span>{new Date(dataStartAt).toLocaleString(undefined, axisDateOptions)}</span><span>{new Date(dataStartAt + dataDuration / 2).toLocaleString(undefined, axisDateOptions)}</span><span>{new Date(dataEndAt).toLocaleString(undefined, axisDateOptions)}</span></div></div>
+    {activeSeries && hoveredPoint ? <aside className="aa-quota-hover-card"><strong>{activeSeries.accountName} · {activeSeries.model}</strong><span>{hoveredPoint.point.remainingPercent.toFixed(0)}% {windowLabel} quota remaining</span><span>{formatTimestamp(hoveredPoint.point.capturedAt)} · {formatCount(hoveredPoint.point.totalTokens)} tokens since {formatTimestamp(hoveredPoint.point.intervalStartAt)}</span><span>{formatCount(hoveredPoint.point.reasoningOutputTokens)} reasoning tokens</span><small>Reasoning effort is not recorded in usage history.</small></aside> : null}
+    </div>
+    <div className="aa-quota-history-legend">{allSeries.map((entry) => <button key={entry.key} type="button" aria-pressed={series.some((selected) => selected.key === entry.key)} className={`${series.some((selected) => selected.key === entry.key) ? "" : "is-unselected"} ${hoveredPoint && hoveredPoint.seriesKey !== entry.key ? "is-dimmed" : ""}`} onMouseEnter={() => hoverLatestPoint(entry)} onMouseLeave={() => setHoveredPoint(null)} onFocus={() => hoverLatestPoint(entry)} onBlur={() => setHoveredPoint(null)} onClick={() => setModelSelected(entry.key, !series.some((selected) => selected.key === entry.key))}><span style={{ background: entry.color }} /><strong>{entry.accountName} · {entry.model}</strong><small>{entry.points.length} observations{entry.hostName ? ` · ${entry.hostName}` : ""}</small></button>)}</div>
   </div>;
 };
 
@@ -811,6 +831,8 @@ const UsagePage = () => {
   const [rangePreset, setRangePreset] = useState<UsageRangePreset>("7d");
   const [rangeDraft, setRangeDraft] = useState(() => dateInputsFromRange(dateRangeForPreset("7d")));
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
+  const [rangePopoverPosition, setRangePopoverPosition] = useState<{ left: number; top: number } | null>(null);
+  const rangeTriggerRef = useRef<HTMLButtonElement>(null);
   const [rangeError, setRangeError] = useState("");
   const [view, setView] = useState<"tokens" | "limits">("limits");
   const [quotaChartWindow, setQuotaChartWindow] = useState<"session" | "weekly" | "monthly">("weekly");
@@ -868,6 +890,7 @@ const UsagePage = () => {
     setRangePreset("custom");
     setRangeError("");
     setRangePickerOpen(false);
+    setRangePopoverPosition(null);
   };
 
   const selectRangePreset = (preset: Exclude<UsageRangePreset, "custom">) => {
@@ -877,6 +900,7 @@ const UsagePage = () => {
     setRangePreset(preset);
     setRangeError("");
     setRangePickerOpen(false);
+    setRangePopoverPosition(null);
   };
 
   const load = async (refresh: boolean) => {
@@ -926,6 +950,18 @@ const UsagePage = () => {
   }, [visibleSeries]);
 
   const hostName = (id: string) => showHostNames ? summary?.hosts.find((host) => host.id === id)?.name ?? id : "";
+  useEffect(() => {
+    if (!rangePickerOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && rangeTriggerRef.current?.contains(event.target)) return;
+      if (event.target instanceof HTMLElement && event.target.closest(".aa-date-range-popover")) return;
+      setRangePickerOpen(false);
+      setRangePopoverPosition(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [rangePickerOpen]);
+
   return <main className="aa-usage-page">
     <header className="aa-usage-header">
       <nav className="aa-usage-tabs" aria-label="Usage view">
@@ -933,14 +969,14 @@ const UsagePage = () => {
         <button className={view === "tokens" ? "is-active" : ""} type="button" aria-pressed={view === "tokens"} onClick={() => setView("tokens")}>Tokens</button>
       </nav>
       <div className="aa-usage-controls">
-        <div className="aa-date-range-picker" onKeyDown={(event) => { if (event.key === "Escape") setRangePickerOpen(false); }}>
-          <button className="aa-date-range-trigger" type="button" aria-haspopup="dialog" aria-expanded={rangePickerOpen} onClick={() => { setRangeDraft(dateInputsFromRange(range)); setRangeError(""); setRangePickerOpen((open) => !open); }}>
+        <div className="aa-date-range-picker" onKeyDown={(event) => { if (event.key === "Escape") { setRangePickerOpen(false); setRangePopoverPosition(null); } }}>
+          <button ref={rangeTriggerRef} className="aa-date-range-trigger" type="button" aria-haspopup="dialog" aria-expanded={rangePickerOpen} onClick={(event) => { setRangeDraft(dateInputsFromRange(range)); setRangeError(""); if (rangePickerOpen) { setRangePickerOpen(false); setRangePopoverPosition(null); return; } const bounds = event.currentTarget.getBoundingClientRect(); const width = Math.min(570, window.innerWidth - 24); setRangePopoverPosition({ left: Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12)), top: Math.max(12, Math.min(bounds.bottom + 8, window.innerHeight - 430)) }); setRangePickerOpen(true); }}>
             {rangePreset === "custom" ? formatDateRange(range) : usageRangePresets.find((preset) => preset.value === rangePreset)?.label ?? formatDateRange(range)} <span aria-hidden="true">⌄</span>
           </button>
-          {rangePickerOpen ? <div className="aa-date-range-popover" role="dialog" aria-label="Choose usage date range">
-            <div className="aa-date-range-presets"><span>Presets</span>{usageRangePresets.map((preset) => <button key={preset.value} type="button" onClick={() => selectRangePreset(preset.value)}>{preset.label}</button>)}</div>
+          {rangePickerOpen && rangePopoverPosition ? createPortal(<div className="aa-date-range-popover" style={{ position: "fixed", left: rangePopoverPosition.left, top: rangePopoverPosition.top }} role="dialog" aria-label="Choose usage date range">
+            <div className="aa-date-range-presets"><span>Presets</span>{usageRangePresets.map((preset) => <button key={preset.value} type="button" aria-pressed={rangePreset === preset.value} onClick={() => selectRangePreset(preset.value)}>{preset.label}</button>)}</div>
             <div className="aa-date-range-custom"><strong>Custom range</strong><label>From<input aria-label="Usage start date" type="date" max={localDateInput(new Date())} value={rangeDraft.from} onChange={(event) => { const from = event.currentTarget.value; setRangeDraft((draft) => ({ ...draft, from })); setRangePreset("custom"); setRangeError(""); }} /></label><label>To<input aria-label="Usage end date" type="date" min={rangeDraft.from} max={localDateInput(new Date())} value={rangeDraft.to} onChange={(event) => { const to = event.currentTarget.value; setRangeDraft((draft) => ({ ...draft, to })); setRangePreset("custom"); setRangeError(""); }} /></label>{rangeError ? <p role="alert">{rangeError}</p> : null}<button className="aa-date-range-apply" type="button" onClick={applyRangeDraft}>Apply range</button></div>
-          </div> : null}
+          </div>, document.body) : null}
         </div>
         {view === "limits" ? <label className="aa-usage-chart-filter"><span>Chart rate limit</span><select aria-label="Quota chart rate limit" value={quotaChartWindow} onChange={(event) => { const value = event.currentTarget.value; if (value === "session" || value === "weekly" || value === "monthly") setQuotaChartWindow(value); }}><option value="weekly">Weekly</option><option value="session">Current session</option><option value="monthly">Monthly</option></select></label> : null}
         <select aria-label="Filter by account" value={accountId} onChange={(event) => setAccountId(event.currentTarget.value)}><option value="all">All accounts</option>{summary?.accounts.map((account) => <option key={account.id} value={account.id}>{account.displayName}</option>)}</select>
