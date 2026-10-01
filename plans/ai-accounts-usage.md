@@ -151,7 +151,8 @@ The same information collapses into a single-column panel. Keep account identity
 | Change range | Query the same persisted event/snapshot history at the selected range. |
 | Refresh | Request supported current quota values; keep prior successful values and show a stale/error state if refresh fails. |
 | Open a quota window | Show provider-reported used/remaining percent, reset time, last observations, and gaps within this reset cycle. |
-| Open a chart point | Show date, exact token categories, account/model, source, and estimate status when applicable. |
+| Open a quota chart point | Show remaining-percent change, snapshot interval, and recorded tokens by model for that account/window. Model activity is context only; providers do not attribute quota changes to models. |
+| Open a token chart point | Show date, token categories, account/model, source, and estimate status when applicable. |
 | Open the footer disclosure | Show compact constrained windows; **Open Usage** navigates to the full plugin panel. |
 
 ## Data model
@@ -228,6 +229,7 @@ Resolved for this release: bounded Codex and OpenCode Go local histories are inc
 - [x] Remaining percent is computed as `100 - provider usedPercent`, with automated checks for 0%, 100%, invalid, absent, and reset-window values.
 - [x] Limits are grouped by provider and account, with account cards and a comparison-bar layout; each window displays remaining/used percent, reset countdown, observation time, and provider freshness/error state.
 - [x] The active quota overview keeps the latest snapshot per account, host, and provider window even as reset timestamps move; the stored history remains intact, is bucket-deduplicated, and sparklines separate reset cycles and preserve gaps.
+- [x] Quota trend charts start at their first recorded observation, expose banked reset expiries, and show model-token activity for each snapshot interval without claiming provider-confirmed causation. A single used host is omitted from account labels.
 - [x] Codex banked reset counts and earliest expiry are collected server-side when locally configured credentials and the provider reset-credit endpoint are available; failures leave this optional detail unavailable without breaking quota refresh.
 - [x] Token charts and totals use deduplicated usage facts, preserve reported token categories, and label incomplete or unavailable sources. Estimates are not included in this release.
 - [x] Repeated cumulative usage updates and duplicate local-history scans are idempotent; durable SQLite history and cursors survive plugin reloads/restarts by design.

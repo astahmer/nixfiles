@@ -783,7 +783,14 @@ const QuotaSparkline = ({ history, range }: { history: UsageSummary["quotaHistor
   </svg>;
 };
 
-const QuotaHistoryChart = ({ history, range, hostName }: { history: UsageSummary["quotaHistory"]; range: UsageRange; hostName(id: string): string }) => {
+const QuotaHistoryChart = ({ history, modelUsage, bankedResets, range, hostName }: { history: UsageSummary["quotaHistory"]; modelUsage: UsageSummary["quotaModelUsage"]; bankedResets: UsageSummary["bankedResets"]; range: UsageRange; hostName(id: string): string }) => {
+  const modelUsageBySnapshot = new Map<string, UsageSummary["quotaModelUsage"]>();
+  for (const entry of modelUsage) {
+    const key = `${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`;
+    const rows = modelUsageBySnapshot.get(key) ?? [];
+    rows.push(entry);
+    modelUsageBySnapshot.set(key, rows);
+  }
   const groups = new Map<string, UsageSummary["quotaHistory"]>();
   for (const entry of history) {
     const key = `${entry.accountId}:${entry.hostId}:${entry.windowKey}`;
@@ -808,27 +815,51 @@ const QuotaHistoryChart = ({ history, range, hostName }: { history: UsageSummary
   if (series.length === 0) return <p className="aa-quota-history-empty">Quota history will appear after the first provider snapshots in this range.</p>;
 
   const plot = { left: 54, right: 990, top: 16, bottom: 244 };
-  const xPosition = (capturedAt: number) => plot.left + (capturedAt - range.startAt) / (range.endAt - range.startAt) * (plot.right - plot.left);
+  const recordedTimes = history.map((entry) => entry.capturedAt);
+  const dataStartAt = Math.min(...recordedTimes);
+  const dataEndAt = Math.max(...recordedTimes);
+  const dataDuration = dataEndAt - dataStartAt;
+  const xPosition = (capturedAt: number) => dataDuration === 0 ? (plot.left + plot.right) / 2 : plot.left + (capturedAt - dataStartAt) / dataDuration * (plot.right - plot.left);
   const yPosition = (remainingPercent: number) => plot.bottom - remainingPercent / 100 * (plot.bottom - plot.top);
-  const axisDates = [range.startAt, range.startAt + (range.endAt - range.startAt) / 2, range.endAt - 1];
+  const axisDates = dataDuration === 0 ? [dataStartAt] : [dataStartAt, dataStartAt + dataDuration / 2, dataEndAt];
+  const axisDateOptions: Intl.DateTimeFormatOptions = dataDuration <= 24 * 60 * 60 * 1000 ? { hour: "2-digit", minute: "2-digit" } : { month: "2-digit", day: "2-digit" };
+  const resetEntries = bankedResets.filter((entry) => entry.balance > 0 && series.some((line) => line.points[0]?.accountId === entry.accountId && line.points[0]?.hostId === entry.hostId));
 
   return <div className="aa-quota-history-chart">
-    <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each line is one account and plan window. History starts with the first snapshot; hover a dot for its value.</p></div><span>{series.length} series</span></div>
-    <svg className="aa-quota-history-plot" viewBox="0 0 1000 276" preserveAspectRatio="none" role="img" aria-label={`Remaining quota history for ${series.length} account and plan window series from ${formatDateRange(range)}`}>
+    <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each line is one account and plan window. The timeline starts at the first recorded snapshot; hover a dot for the change and model activity since the prior snapshot.</p></div><span>{series.length} series</span></div>
+    {resetEntries.length ? <div className="aa-quota-history-resets"><strong>Banked resets</strong>{resetEntries.map((entry) => {
+      const matchingSeries = series.find((line) => line.points[0]?.accountId === entry.accountId && line.points[0]?.hostId === entry.hostId);
+      return <div key={`${entry.accountId}:${entry.hostId}`}><span>{matchingSeries?.accountName ?? entry.accountId}{hostName(entry.hostId) ? ` · ${hostName(entry.hostId)}` : ""}</span><BankedResetDetails entry={entry} compact /></div>;
+    })}</div> : null}
+    <svg className="aa-quota-history-plot" viewBox="0 0 1000 276" preserveAspectRatio="none" role="img" aria-label={`Remaining quota history for ${series.length} account and plan window series from ${new Date(dataStartAt).toLocaleString()} to ${new Date(dataEndAt).toLocaleString()}`}>
       {[0, 25, 50, 75, 100].map((percent) => {
         const y = yPosition(percent);
         return <g key={percent}><line x1={plot.left} x2={plot.right} y1={y} y2={y} stroke="currentColor" strokeOpacity={percent === 0 ? ".24" : ".1"} /><text x={plot.left - 9} y={y + 4} textAnchor="end" style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{percent}%</text></g>;
       })}
-      {axisDates.map((date, index) => <text key={date} x={xPosition(date)} y="268" textAnchor={index === 0 ? "start" : index === axisDates.length - 1 ? "end" : "middle"} style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{new Date(date).toLocaleDateString()}</text>)}
+      {axisDates.map((date, index) => <text key={date} x={dataDuration === 0 ? (plot.left + plot.right) / 2 : xPosition(date)} y="268" textAnchor={dataDuration === 0 || index === 1 ? "middle" : index === 0 ? "start" : "end"} style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{new Date(date).toLocaleString(undefined, axisDateOptions)}</text>)}
       {series.map((entry) => {
-        const points = entry.points.map((point) => ({ x: xPosition(point.capturedAt), y: yPosition(Math.min(100, Math.max(0, 100 - point.usedPercent))), point }));
+        const points = entry.points.map((point, index) => {
+          const previous = entry.points[index - 1];
+          const remainingPercent = Math.min(100, Math.max(0, 100 - point.usedPercent));
+          const change = previous ? remainingPercent - Math.min(100, Math.max(0, 100 - previous.usedPercent)) : null;
+          const activity = modelUsageBySnapshot.get(`${point.accountId}:${point.hostId}:${point.windowKey}:${point.capturedAt}`) ?? [];
+          const modelLines = activity.sort((left, right) => right.totalTokens - left.totalTokens).map((item) => `${item.model ?? "Unknown model"}: ${formatCount(item.totalTokens)} tokens`);
+          const pointTitle = [
+            `${entry.accountName} · ${entry.label}${entry.hostName ? ` · ${entry.hostName}` : ""}`,
+            `${remainingPercent.toFixed(0)}% left${change === null ? "" : ` · ${change >= 0 ? "+" : ""}${change.toFixed(0)} points since prior snapshot`}`,
+            `Interval ${formatTimestamp(activity[0]?.intervalStartAt ?? previous?.capturedAt ?? range.startAt)} to ${formatTimestamp(point.capturedAt)}`,
+            ...(modelLines.length ? modelLines : ["No recorded model token activity in this interval"]),
+            "Model activity is context; the provider does not attribute quota changes by model.",
+          ].join("\n");
+          return { x: xPosition(point.capturedAt), y: yPosition(remainingPercent), point, pointTitle };
+        });
         return <g key={entry.key}>
           {points.length > 1 ? <polyline points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={entry.color} strokeWidth="2" vectorEffect="non-scaling-stroke" /> : null}
-          {points.map(({ x, y, point }) => <circle key={point.capturedAt} cx={x} cy={y} r="3.5" fill={entry.color} stroke="#202020" strokeWidth="1.2" vectorEffect="non-scaling-stroke"><title>{`${entry.accountName} · ${entry.label} · ${entry.hostName} · ${Math.round(100 - point.usedPercent)}% left · ${new Date(point.capturedAt).toLocaleString()}`}</title></circle>)}
+          {points.map(({ x, y, point, pointTitle }) => <circle key={point.capturedAt} cx={x} cy={y} r="3.5" fill={entry.color} stroke="#202020" strokeWidth="1.2" vectorEffect="non-scaling-stroke"><title>{pointTitle}</title></circle>)}
         </g>;
       })}
     </svg>
-    <div className="aa-quota-history-legend">{series.map((entry) => <div key={entry.key}><span style={{ background: entry.color }} /><strong>{entry.accountName}</strong><small>{entry.label} · {entry.hostName}</small></div>)}</div>
+    <div className="aa-quota-history-legend">{series.map((entry) => <div key={entry.key}><span style={{ background: entry.color }} /><strong>{entry.accountName}</strong><small>{entry.label}{entry.hostName ? ` · ${entry.hostName}` : ""}</small></div>)}</div>
   </div>;
 };
 
@@ -931,6 +962,8 @@ const UsagePage = () => {
   const visibleHistory = summary?.quotaHistory.filter((entry) => (accountId === "all" || entry.accountId === accountId) && (provider === "all" || entry.provider === provider) && (hostId === "all" || entry.hostId === hostId)) ?? [];
   const visibleSeries = summary?.tokenSeries.filter((entry) => (accountId === "all" || entry.accountId === accountId) && (provider === "all" || entry.provider === provider) && (hostId === "all" || entry.hostId === hostId)) ?? [];
   const visibleBreakdown = summary?.tokenBreakdown.filter((entry) => (accountId === "all" || entry.accountId === accountId) && (provider === "all" || entry.provider === provider) && (hostId === "all" || entry.hostId === hostId)) ?? [];
+  const visibleHostIds = new Set([...visibleQuota, ...visibleHistory, ...visibleSeries].map((entry) => entry.hostId));
+  const showHostNames = visibleHostIds.size > 1;
   const visibleTotals = useMemo(() => visibleSeries.reduce((totals, entry) => ({
     totalTokens: totals.totalTokens + entry.totalTokens,
     activeTokens: totals.activeTokens + entry.activeTokens,
@@ -950,9 +983,13 @@ const UsagePage = () => {
     return { points: plotted.map((point) => `${point.x},${point.y}`).join(" "), maxTokens, count: ordered.length };
   }, [visibleSeries]);
 
-  const hostName = (id: string) => summary?.hosts.find((host) => host.id === id)?.name ?? id;
+  const hostName = (id: string) => showHostNames ? summary?.hosts.find((host) => host.id === id)?.name ?? id : "";
   return <main className="aa-usage-page">
     <header className="aa-usage-header">
+      <nav className="aa-usage-tabs" aria-label="Usage view">
+        <button className={view === "limits" ? "is-active" : ""} type="button" aria-pressed={view === "limits"} onClick={() => setView("limits")}>Limits</button>
+        <button className={view === "tokens" ? "is-active" : ""} type="button" aria-pressed={view === "tokens"} onClick={() => setView("tokens")}>Tokens</button>
+      </nav>
       <div className="aa-usage-controls">
         <div className="aa-date-range-picker" onKeyDown={(event) => { if (event.key === "Escape") setRangePickerOpen(false); }}>
           <button className="aa-date-range-trigger" type="button" aria-haspopup="dialog" aria-expanded={rangePickerOpen} onClick={() => { setRangeDraft(dateInputsFromRange(range)); setRangeError(""); setRangePickerOpen((open) => !open); }}>
@@ -969,13 +1006,9 @@ const UsagePage = () => {
         <label className="aa-usage-refresh-setting"><span>Provider refresh</span><select aria-label="Provider usage refresh interval" value={refreshIntervalMinutes} disabled={savingRefreshInterval} onChange={(event) => void saveRefreshInterval(event.currentTarget.value)}>{Array.from({ length: 60 }, (_, index) => index + 1).map((minutes) => <option key={minutes} value={minutes}>Every {minutes} min</option>)}</select></label>
         {refreshIntervalError ? <span className="aa-usage-refresh-error" role="alert">{refreshIntervalError}</span> : null}
         <button className="aa-quiet" type="button" disabled={refreshing} onClick={() => void load(true)}>{refreshing ? "Refreshing…" : "↻ Refresh"}</button>
+        <span className="aa-usage-updated">Updated {formatTimestamp(summary?.refreshedAt ?? null)}</span>
       </div>
     </header>
-    <nav className="aa-usage-tabs" aria-label="Usage view">
-      <button className={view === "limits" ? "is-active" : ""} type="button" aria-pressed={view === "limits"} onClick={() => setView("limits")}>Limits</button>
-      <button className={view === "tokens" ? "is-active" : ""} type="button" aria-pressed={view === "tokens"} onClick={() => setView("tokens")}>Tokens</button>
-      <span>Updated {formatTimestamp(summary?.refreshedAt ?? null)}</span>
-    </nav>
     {error ? <p className="aa-usage-message" role="alert">{error}</p> : null}
     {loading && !summary ? <p className="aa-usage-message">Loading usage history…</p> : null}
     {!loading && !error && summary && view === "limits" ? <>
@@ -984,11 +1017,12 @@ const UsagePage = () => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const accountGroups = Array.from(new Map(providerEntries.map((entry) => [`${entry.accountId}:${entry.hostId}`, providerEntries.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId)])).entries());
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} range={range} hostName={hostName} /><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} bankedResets={summary.bankedResets.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
             const first = entries[0];
             if (!first) return null;
             const banked = summary.bankedResets.find((item) => item.accountId === first.accountId && item.hostId === first.hostId);
-            return <article className={`aa-account-quota is-${first.provider}`} key={groupKey}><header><div className="aa-account-identity"><FooterProviderMark provider={first.provider} /><div><strong>{first.accountName}</strong><span>{hostName(first.hostId)}</span></div></div>{banked && banked.balance > 0 ? <BankedResetDetails entry={banked} /> : null}</header>
+            const hasVisibleHistory = visibleHistory.some((point) => point.accountId === first.accountId && point.hostId === first.hostId);
+            return <article className={`aa-account-quota is-${first.provider}`} key={groupKey}><header><div className="aa-account-identity"><FooterProviderMark provider={first.provider} /><div><strong>{first.accountName}</strong>{hostName(first.hostId) ? <span>{hostName(first.hostId)}</span> : null}</div></div>{banked && banked.balance > 0 && !hasVisibleHistory ? <BankedResetDetails entry={banked} /> : null}</header>
               {sortQuotaWindows(entries).map((entry) => <div className="aa-account-window" key={entry.windowKey}><div className="aa-window-heading"><strong>{entry.label}</strong><span className={`aa-quota-status ${entry.status === "ok" ? "is-ok" : "is-stale"}`}>{entry.status === "ok" ? "Current" : entry.status}</span></div><div className="aa-window-value"><strong>{entry.remainingPercent.toFixed(0)}% <small>left</small></strong><span>{entry.usedPercent.toFixed(0)}% used</span></div><div className="aa-quota-track" role="progressbar" aria-label={`${first.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>Updated {new Date(entry.capturedAt).toLocaleTimeString()}</span></div><QuotaSparkline range={range} history={visibleHistory.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey)} />{entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}</div>)}
             </article>;
           })}</div></section>;
@@ -996,19 +1030,19 @@ const UsagePage = () => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const windows = Array.from(new Set(providerEntries.map((entry) => entry.windowKey))).sort((left, right) => quotaWindowRank(providerEntries.find((entry) => entry.windowKey === left)?.label ?? "") - quotaWindowRank(providerEntries.find((entry) => entry.windowKey === right)?.label ?? ""));
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} range={range} hostName={hostName} /><div className="aa-comparison-windows">{windows.map((windowKey) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} bankedResets={summary.bankedResets.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-comparison-windows">{windows.map((windowKey) => {
             const entries = providerEntries.filter((entry) => entry.windowKey === windowKey);
             const first = entries[0];
             if (!first) return null;
             const averageRemaining = Math.round(entries.reduce((total, entry) => total + entry.remainingPercent, 0) / entries.length);
             const changes = entries.map((entry) => quotaHistoryChange(entry, visibleHistory)).filter((change) => change !== null);
             const averageChange = changes.length ? Math.round(changes.reduce((total, change) => total + change, 0) / changes.length) : null;
-            return <article className="aa-comparison-window" key={windowKey}><header className="aa-comparison-summary"><div><h4>{first.label}</h4><span>{entries.length} {entries.length === 1 ? "account" : "accounts"}</span></div><strong className={quotaTone(averageRemaining)}>{averageRemaining}% <small>left</small></strong><span className={`aa-comparison-trend ${averageChange === null ? "is-empty" : averageChange >= 0 ? "is-rising" : "is-falling"}`}>{averageChange === null ? "Trend starts with next snapshot" : `${averageChange >= 0 ? "↗ +" : "↘ "}${averageChange}%`}</span></header><div className="aa-comparison-accounts">{entries.map((entry) => <div className="aa-comparison-account" key={`${entry.accountId}:${entry.hostId}`}><div className="aa-comparison-label"><strong>{entry.accountName}</strong><span>{hostName(entry.hostId)} · {entry.remainingPercent.toFixed(0)}% left · {formatReset(entry.resetsAt)}</span></div><div className="aa-comparison-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div></div>)}</div></article>;
+            return <article className="aa-comparison-window" key={windowKey}><header className="aa-comparison-summary"><div><h4>{first.label}</h4><span>{entries.length} {entries.length === 1 ? "account" : "accounts"}</span></div><strong className={quotaTone(averageRemaining)}>{averageRemaining}% <small>left</small></strong><span className={`aa-comparison-trend ${averageChange === null ? "is-empty" : averageChange >= 0 ? "is-rising" : "is-falling"}`}>{averageChange === null ? "Trend starts with next snapshot" : `${averageChange >= 0 ? "↗ +" : "↘ "}${averageChange}%`}</span></header><div className="aa-comparison-accounts">{entries.map((entry) => <div className="aa-comparison-account" key={`${entry.accountId}:${entry.hostId}`}><div className="aa-comparison-label"><strong>{entry.accountName}</strong><span>{hostName(entry.hostId) ? `${hostName(entry.hostId)} · ` : ""}{entry.remainingPercent.toFixed(0)}% left · {formatReset(entry.resetsAt)}</span></div><div className="aa-comparison-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div></div>)}</div></article>;
           })}</div></section>;
         })}</div> : <p className="aa-usage-empty">No quota snapshots yet. Refresh to query connected account providers.</p>}
       </section>
-      <details className="aa-usage-section aa-history-details"><summary><span><strong>Limit history</strong><small>Deduplicated snapshots by account, machine and plan window</small></span><span>{visibleHistory.length} points</span></summary>
-        {visibleHistory.length ? <div className="aa-usage-table-wrap"><table className="aa-usage-table"><thead><tr><th>Provider</th><th>Account</th><th>Window</th><th>Machine</th><th>Remaining</th><th>Reset</th><th>Captured</th></tr></thead><tbody>{visibleHistory.map((entry) => <tr key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`}><td>{entry.provider === "codex" ? "Codex" : "OpenCode Go"}</td><td>{entry.accountName}</td><td>{entry.label}</td><td>{hostName(entry.hostId)}</td><td>{entry.remainingPercent.toFixed(0)}%</td><td>{formatReset(entry.resetsAt)}</td><td>{new Date(entry.capturedAt).toLocaleString()}</td></tr>)}</tbody></table></div> : <p className="aa-usage-empty">BB keeps new snapshots from the time the collector is enabled.</p>}
+      <details className="aa-usage-section aa-history-details"><summary><span><strong>Limit history</strong><small>Deduplicated snapshots by account{showHostNames ? ", machine" : ""} and plan window</small></span><span>{visibleHistory.length} points</span></summary>
+        {visibleHistory.length ? <div className="aa-usage-table-wrap"><table className="aa-usage-table"><thead><tr><th>Provider</th><th>Account</th><th>Window</th>{showHostNames ? <th>Machine</th> : null}<th>Remaining</th><th>Reset</th><th>Captured</th></tr></thead><tbody>{visibleHistory.map((entry) => <tr key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`}><td>{entry.provider === "codex" ? "Codex" : "OpenCode Go"}</td><td>{entry.accountName}</td><td>{entry.label}</td>{showHostNames ? <td>{hostName(entry.hostId)}</td> : null}<td>{entry.remainingPercent.toFixed(0)}%</td><td>{formatReset(entry.resetsAt)}</td><td>{new Date(entry.capturedAt).toLocaleString()}</td></tr>)}</tbody></table></div> : <p className="aa-usage-empty">BB keeps new snapshots from the time the collector is enabled.</p>}
       </details>
     </> : null}
     {!loading && !error && summary && view === "tokens" ? <>

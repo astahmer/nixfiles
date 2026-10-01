@@ -72,6 +72,7 @@ const usageSummarySchema = z.object({
   hosts: z.array(z.object({ id: z.string(), name: z.string(), status: z.string() })),
   quota: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number(), status: z.string(), message: z.string().nullable() })),
   quotaHistory: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number() })),
+  quotaModelUsage: z.array(z.object({ accountId: z.string(), hostId: z.string(), windowKey: z.string(), intervalStartAt: z.number(), capturedAt: z.number(), model: z.string().nullable(), totalTokens: z.number() })),
   bankedResets: z.array(z.object({ accountId: z.string(), hostId: z.string(), balance: z.number(), expiresAt: z.string().nullable(), resets: z.array(z.object({ expiresAt: z.string().nullable() })), capturedAt: z.number() })),
   tokenTotals: z.object({ totalTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number(), activeTokens: z.number() }),
   tokenSeries: z.array(z.object({ bucketAt: z.number(), accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), model: z.string().nullable(), totalTokens: z.number(), activeTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number() })),
@@ -287,6 +288,20 @@ export default async function plugin(bb: BbPluginApi) {
       FROM quota_snapshots WHERE captured_at >= ? AND captured_at < ?
     ) SELECT accountId, accountName, provider, hostId, windowKey, label, usedPercent, resetsAt, capturedAt
       FROM ranked WHERE rank = 1 ORDER BY capturedAt LIMIT 5000`).all(quotaBucketMs, rangeStart, rangeEnd) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number }>;
+    const quotaModelUsage = usageDb.prepare(`WITH sampled AS (
+      SELECT account_id AS accountId, host_id AS hostId, window_key AS windowKey, captured_at AS capturedAt,
+        ROW_NUMBER() OVER (PARTITION BY account_id, host_id, window_key, CAST(captured_at / ? AS INTEGER) ORDER BY captured_at DESC, id DESC) AS rank
+      FROM quota_snapshots WHERE captured_at >= ? AND captured_at < ?
+    ), points AS (
+      SELECT accountId, hostId, windowKey, capturedAt,
+        COALESCE(LAG(capturedAt) OVER (PARTITION BY accountId, hostId, windowKey ORDER BY capturedAt), ?) AS intervalStartAt
+      FROM sampled WHERE rank = 1
+    ) SELECT points.accountId, points.hostId, points.windowKey, points.intervalStartAt, points.capturedAt,
+        token_usage.model AS model, SUM(token_usage.total_tokens) AS totalTokens
+      FROM points JOIN token_usage ON token_usage.account_id = points.accountId AND token_usage.host_id = points.hostId
+        AND token_usage.occurred_at > points.intervalStartAt AND token_usage.occurred_at <= points.capturedAt
+      GROUP BY points.accountId, points.hostId, points.windowKey, points.intervalStartAt, points.capturedAt, token_usage.model
+      ORDER BY points.capturedAt DESC, totalTokens DESC LIMIT 10000`).all(quotaBucketMs, rangeStart, rangeEnd, rangeStart) as Array<{ accountId: string; hostId: string; windowKey: string; intervalStartAt: number; capturedAt: number; model: string | null; totalTokens: number }>;
     const bankedResets = usageDb.prepare(`SELECT account_id AS accountId, host_id AS hostId, balance,
       expires_at AS expiresAt, captured_at AS capturedAt FROM quota_banked_resets ORDER BY account_id, host_id`)
       .all() as Array<{ accountId: string; hostId: string; balance: number; expiresAt: string | null; capturedAt: number }>;
@@ -320,6 +335,7 @@ export default async function plugin(bb: BbPluginApi) {
       hosts: hosts.map(({ id, name, status }) => ({ id, name, status })),
       quota: quota.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
       quotaHistory: quotaHistory.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
+      quotaModelUsage,
       bankedResets: bankedResets.map((entry) => ({ ...entry, resets: bankedResetDates.filter((reset) => reset.accountId === entry.accountId && reset.hostId === entry.hostId).map(({ expiresAt }) => ({ expiresAt })) })),
       tokenTotals,
       tokenSeries,
