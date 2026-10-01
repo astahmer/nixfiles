@@ -204,6 +204,7 @@
           plugin_dir="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin"
           mkdir -p "$plugin_dir"
           rsync -a --delete --exclude node_modules --exclude dist "${pluginSource}/" "$plugin_dir/"
+          ${pkgs.coreutils}/bin/chmod -R u+w "$plugin_dir"
           cd "$plugin_dir"
           pnpm install --frozen-lockfile --silent
           bb plugin build
