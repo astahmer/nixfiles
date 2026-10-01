@@ -257,6 +257,18 @@
 .aa-quota-error { margin: 8px 0 0; color: #f4c078; font-size: 9px; line-height: 1.4; }
 .aa-quota-sparkline { width: 100%; height: 34px; margin-top: 6px; color: var(--aa-muted); overflow: visible; }
 .aa-quota-history-empty { margin: 8px 0 0; color: var(--aa-muted); font-size: 8px; }
+.aa-quota-history-chart { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--aa-border); border-radius: 10px; background: rgba(0,0,0,.12); }
+.aa-quota-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.aa-quota-history-heading h4 { margin: 0; font-size: 11px; font-weight: 600; }
+.aa-quota-history-heading p, .aa-quota-history-heading > span { margin: 4px 0 0; color: var(--aa-muted); font-size: 9px; }
+.aa-quota-history-heading > span { flex: none; }
+.aa-quota-history-plot { display: block; width: 100%; height: 220px; overflow: visible; }
+.aa-quota-history-plot text { fill: #a7a7a7; font-family: inherit; font-size: 10px; }
+.aa-quota-history-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 7px 12px; }
+.aa-quota-history-legend > div { min-width: 0; display: grid; grid-template-columns: 12px minmax(0, 1fr); align-items: center; column-gap: 7px; }
+.aa-quota-history-legend > div > span { width: 10px; height: 10px; grid-row: span 2; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; }
+.aa-quota-history-legend strong { overflow: hidden; font-size: 9px; font-weight: 580; text-overflow: ellipsis; white-space: nowrap; }
+.aa-quota-history-legend small { overflow: hidden; color: var(--aa-muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .aa-layout-switch { display: flex; flex: none; gap: 3px; padding: 3px; border: 1px solid var(--aa-border); border-radius: 8px; }
 .aa-layout-switch button { border: 0; border-radius: 6px; padding: 6px 9px; color: var(--aa-muted); background: transparent; font: inherit; font-size: 9px; cursor: pointer; }
 .aa-layout-switch button.is-active { color: var(--aa-ink); background: rgba(255,255,255,.1); }

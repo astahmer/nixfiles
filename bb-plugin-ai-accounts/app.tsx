@@ -783,6 +783,55 @@ const QuotaSparkline = ({ history, range }: { history: UsageSummary["quotaHistor
   </svg>;
 };
 
+const QuotaHistoryChart = ({ history, range, hostName }: { history: UsageSummary["quotaHistory"]; range: UsageRange; hostName(id: string): string }) => {
+  const groups = new Map<string, UsageSummary["quotaHistory"]>();
+  for (const entry of history) {
+    const key = `${entry.accountId}:${entry.hostId}:${entry.windowKey}`;
+    const points = groups.get(key) ?? [];
+    points.push(entry);
+    groups.set(key, points);
+  }
+  const orderedGroups = Array.from(groups, ([key, points]) => ({ key, points })).sort((left, right) => {
+    const leftFirst = left.points[0];
+    const rightFirst = right.points[0];
+    if (!leftFirst || !rightFirst) return left.key.localeCompare(right.key);
+    return leftFirst.accountName.localeCompare(rightFirst.accountName)
+      || hostName(leftFirst.hostId).localeCompare(hostName(rightFirst.hostId))
+      || quotaWindowRank(leftFirst.label) - quotaWindowRank(rightFirst.label);
+  });
+  const series = orderedGroups.flatMap(({ key, points }, index) => {
+    const first = points[0];
+    if (!first) return [];
+    const hue = index * 137.508 % 360;
+    return [{ key, accountName: first.accountName, hostName: hostName(first.hostId), label: first.label, color: `hsl(${hue} 72% 64%)`, points: points.slice().sort((left, right) => left.capturedAt - right.capturedAt) }];
+  });
+  if (series.length === 0) return <p className="aa-quota-history-empty">Quota history will appear after the first provider snapshots in this range.</p>;
+
+  const plot = { left: 54, right: 990, top: 16, bottom: 244 };
+  const xPosition = (capturedAt: number) => plot.left + (capturedAt - range.startAt) / (range.endAt - range.startAt) * (plot.right - plot.left);
+  const yPosition = (remainingPercent: number) => plot.bottom - remainingPercent / 100 * (plot.bottom - plot.top);
+  const axisDates = [range.startAt, range.startAt + (range.endAt - range.startAt) / 2, range.endAt - 1];
+
+  return <div className="aa-quota-history-chart">
+    <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each line is one account and plan window. History starts with the first snapshot; hover a dot for its value.</p></div><span>{series.length} series</span></div>
+    <svg className="aa-quota-history-plot" viewBox="0 0 1000 276" preserveAspectRatio="none" role="img" aria-label={`Remaining quota history for ${series.length} account and plan window series from ${formatDateRange(range)}`}>
+      {[0, 25, 50, 75, 100].map((percent) => {
+        const y = yPosition(percent);
+        return <g key={percent}><line x1={plot.left} x2={plot.right} y1={y} y2={y} stroke="currentColor" strokeOpacity={percent === 0 ? ".24" : ".1"} /><text x={plot.left - 9} y={y + 4} textAnchor="end" style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{percent}%</text></g>;
+      })}
+      {axisDates.map((date, index) => <text key={date} x={xPosition(date)} y="268" textAnchor={index === 0 ? "start" : index === axisDates.length - 1 ? "end" : "middle"} style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{new Date(date).toLocaleDateString()}</text>)}
+      {series.map((entry) => {
+        const points = entry.points.map((point) => ({ x: xPosition(point.capturedAt), y: yPosition(Math.min(100, Math.max(0, 100 - point.usedPercent))), point }));
+        return <g key={entry.key}>
+          {points.length > 1 ? <polyline points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={entry.color} strokeWidth="2" vectorEffect="non-scaling-stroke" /> : null}
+          {points.map(({ x, y, point }) => <circle key={point.capturedAt} cx={x} cy={y} r="3.5" fill={entry.color} stroke="#202020" strokeWidth="1.2" vectorEffect="non-scaling-stroke"><title>{`${entry.accountName} · ${entry.label} · ${entry.hostName} · ${Math.round(100 - point.usedPercent)}% left · ${new Date(point.capturedAt).toLocaleString()}`}</title></circle>)}
+        </g>;
+      })}
+    </svg>
+    <div className="aa-quota-history-legend">{series.map((entry) => <div key={entry.key}><span style={{ background: entry.color }} /><strong>{entry.accountName}</strong><small>{entry.label} · {entry.hostName}</small></div>)}</div>
+  </div>;
+};
+
 const UsagePage = () => {
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
@@ -935,7 +984,7 @@ const UsagePage = () => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const accountGroups = Array.from(new Map(providerEntries.map((entry) => [`${entry.accountId}:${entry.hostId}`, providerEntries.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId)])).entries());
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} range={range} hostName={hostName} /><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
             const first = entries[0];
             if (!first) return null;
             const banked = summary.bankedResets.find((item) => item.accountId === first.accountId && item.hostId === first.hostId);
@@ -947,7 +996,7 @@ const UsagePage = () => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const windows = Array.from(new Set(providerEntries.map((entry) => entry.windowKey))).sort((left, right) => quotaWindowRank(providerEntries.find((entry) => entry.windowKey === left)?.label ?? "") - quotaWindowRank(providerEntries.find((entry) => entry.windowKey === right)?.label ?? ""));
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><div className="aa-comparison-windows">{windows.map((windowKey) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} range={range} hostName={hostName} /><div className="aa-comparison-windows">{windows.map((windowKey) => {
             const entries = providerEntries.filter((entry) => entry.windowKey === windowKey);
             const first = entries[0];
             if (!first) return null;

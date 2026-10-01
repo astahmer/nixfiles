@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
-import { toRemainingPercent, usageChartBucketMs, usageMigrations, storeThreadUsageEvents, upsertBankedResets, upsertQuotaPollState, upsertQuotaWindow, readLatestQuotaSnapshots } from "./usage-history.ts";
+import { toRemainingPercent, quotaChartBucketMs, usageChartBucketMs, usageMigrations, storeThreadUsageEvents, upsertBankedResets, upsertQuotaPollState, upsertQuotaWindow, readLatestQuotaSnapshots } from "./usage-history.ts";
 import { scanLocalUsageHistory } from "./usage-sources.ts";
 import { fetchCodexResetCredits } from "./codex-reset-credits.ts";
 import { providerIconOptions } from "./provider-icons";
@@ -269,7 +269,12 @@ export default async function plugin(bb: BbPluginApi) {
     const now = Date.now();
     const rangeStart = range.startAt;
     const rangeEnd = range.endAt;
-    const bucketMs = usageChartBucketMs(rangeEnd - rangeStart);
+    const durationMs = rangeEnd - rangeStart;
+    const tokenBucketMs = usageChartBucketMs(durationMs);
+    const quotaSeriesCount = (usageDb.prepare(`SELECT COUNT(*) AS count FROM (
+      SELECT DISTINCT account_id, host_id, window_key FROM quota_snapshots WHERE captured_at >= ? AND captured_at < ?
+    )`).get(rangeStart, rangeEnd) as { count: number }).count;
+    const quotaBucketMs = quotaChartBucketMs(durationMs, quotaSeriesCount);
     const quota = readLatestQuotaSnapshots(usageDb).map((entry) => {
       const poll = usageDb.prepare("SELECT status, message FROM quota_poll_state WHERE account_id = ? AND host_id = ?")
         .get(entry.accountId, entry.hostId) as { status: string; message: string | null } | undefined;
@@ -281,7 +286,7 @@ export default async function plugin(bb: BbPluginApi) {
         ROW_NUMBER() OVER (PARTITION BY account_id, host_id, window_key, CAST(captured_at / ? AS INTEGER) ORDER BY captured_at DESC, id DESC) AS rank
       FROM quota_snapshots WHERE captured_at >= ? AND captured_at < ?
     ) SELECT accountId, accountName, provider, hostId, windowKey, label, usedPercent, resetsAt, capturedAt
-      FROM ranked WHERE rank = 1 ORDER BY capturedAt LIMIT 5000`).all(bucketMs, rangeStart, rangeEnd) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number }>;
+      FROM ranked WHERE rank = 1 ORDER BY capturedAt LIMIT 5000`).all(quotaBucketMs, rangeStart, rangeEnd) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number }>;
     const bankedResets = usageDb.prepare(`SELECT account_id AS accountId, host_id AS hostId, balance,
       expires_at AS expiresAt, captured_at AS capturedAt FROM quota_banked_resets ORDER BY account_id, host_id`)
       .all() as Array<{ accountId: string; hostId: string; balance: number; expiresAt: string | null; capturedAt: number }>;
@@ -300,7 +305,7 @@ export default async function plugin(bb: BbPluginApi) {
       SUM(cache_read_input_tokens) AS cacheReadInputTokens, SUM(cache_write_input_tokens) AS cacheWriteInputTokens,
       SUM(output_tokens) AS outputTokens, SUM(reasoning_output_tokens) AS reasoningOutputTokens,
       SUM(CASE WHEN status = 'active' THEN total_tokens ELSE 0 END) AS activeTokens
-      FROM token_usage WHERE occurred_at >= ? AND occurred_at < ? GROUP BY bucketAt, account_id, host_id, model ORDER BY bucketAt LIMIT 5000`).all(bucketMs, bucketMs, rangeStart, rangeEnd) as Array<{ bucketAt: number; accountId: string; accountName: string; provider: Provider; hostId: string; model: string | null; totalTokens: number; activeTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
+      FROM token_usage WHERE occurred_at >= ? AND occurred_at < ? GROUP BY bucketAt, account_id, host_id, model ORDER BY bucketAt LIMIT 5000`).all(tokenBucketMs, tokenBucketMs, rangeStart, rangeEnd) as Array<{ bucketAt: number; accountId: string; accountName: string; provider: Provider; hostId: string; model: string | null; totalTokens: number; activeTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
     const tokenBreakdown = usageDb.prepare(`SELECT account_id AS accountId, account_name AS accountName, provider, host_id AS hostId,
       thread_id AS threadId, project_id AS projectId, model, source,
       SUM(total_tokens) AS totalTokens, SUM(input_tokens) AS inputTokens, SUM(cached_input_tokens) AS cachedInputTokens,

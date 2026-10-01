@@ -417,5 +417,15 @@ export type { UsageDatabase };
 export const usageChartBucketMs = (durationMs: number) =>
   durationMs <= 24 * 60 * 60 * 1000 ? 60 * 60 * 1000 : durationMs <= 7 * 24 * 60 * 60 * 1000 ? 6 * 60 * 60 * 1000 : durationMs <= 90 * 24 * 60 * 60 * 1000 ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 
+export const quotaChartBucketMs = (durationMs: number, seriesCount: number) => {
+  const preferredBucketMs = durationMs <= 24 * 60 * 60 * 1000 ? 5 * 60 * 1000
+    : durationMs <= 7 * 24 * 60 * 60 * 1000 ? 15 * 60 * 1000
+      : durationMs <= 30 * 24 * 60 * 60 * 1000 ? 60 * 60 * 1000
+        : durationMs <= 90 * 24 * 60 * 60 * 1000 ? 6 * 60 * 60 * 1000
+          : 24 * 60 * 60 * 1000;
+  const bucketForPointLimitMs = Math.ceil(durationMs * Math.max(1, seriesCount) / 5000);
+  return Math.max(preferredBucketMs, bucketForPointLimitMs);
+};
+
 export const toRemainingPercent = (usedPercent: number) =>
   Number.isFinite(usedPercent) && usedPercent >= 0 && usedPercent <= 100 ? 100 - usedPercent : null;

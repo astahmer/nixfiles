@@ -35,8 +35,11 @@ models can be edited in the page.
 
 Open **AI Accounts → Usage** to see each configured account's current quota
 windows, remaining percentages, reset times, token activity, and collection
-status. The page supports 24-hour, 7-day, 30-day, and 90-day ranges, account and
-machine filters, and an explicit refresh. The sidebar footer disclosure shows
+status. The Limits view plots remaining quota over time for each account and
+plan window, grouped into one chart per provider. Hover a snapshot dot for its
+timestamp and exact percentage. Charts use the selected date range and account,
+provider, and machine filters. The page supports date-range presets and custom
+dates, plus an explicit refresh. The sidebar footer disclosure shows
 the two most constrained current windows and links to the full page.
 
 Quota values come from the existing Codex and OpenCode Go usage readers through
