@@ -47,6 +47,25 @@ export const rpcContract = defineRpcContract({
     input: revisionTarget.extend({ name: z.string().trim().min(1).max(128) }),
     output: z.object({ ok: z.boolean() }),
   },
+  moveBookmark: {
+    input: target.extend({ name: z.string().trim().min(1).max(128), destination: z.string().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  deleteBookmark: {
+    input: target.extend({ name: z.string().trim().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  pushBookmark: {
+    input: target.extend({ name: z.string().trim().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  untrackBookmark: {
+    input: target.extend({
+      name: z.string().trim().min(1).max(128),
+      remote: z.string().trim().min(1).max(128),
+    }),
+    output: z.object({ ok: z.boolean() }),
+  },
   rebase: {
     input: revisionTarget.extend({ destination: z.string() }),
     output: z.object({ ok: z.boolean() }),
@@ -106,6 +125,10 @@ export default async function plugin(bb: BbPluginApi) {
     abandon: async (input) => host.call("abandon", input, { hostId: input.hostId }),
     revert: async (input) => host.call("revert", input, { hostId: input.hostId }),
     setBookmark: async (input) => host.call("setBookmark", input, { hostId: input.hostId }),
+    moveBookmark: async (input) => host.call("moveBookmark", input, { hostId: input.hostId }),
+    deleteBookmark: async (input) => host.call("deleteBookmark", input, { hostId: input.hostId }),
+    pushBookmark: async (input) => host.call("pushBookmark", input, { hostId: input.hostId }),
+    untrackBookmark: async (input) => host.call("untrackBookmark", input, { hostId: input.hostId }),
     rebase: async (input) => host.call("rebase", input, { hostId: input.hostId }),
     squash: async (input) => host.call("squash", input, { hostId: input.hostId }),
     split: async (input) => host.call("split", input, { hostId: input.hostId }),

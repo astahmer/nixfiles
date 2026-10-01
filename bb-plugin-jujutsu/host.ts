@@ -42,7 +42,7 @@ const repositoryRoot = async (inputPath: string): Promise<string> => {
   return realpath(root);
 };
 
-const revisionTemplate = String.raw`"{\"commitId\": " ++ json(commit_id.short(40)) ++ ", \"changeId\": " ++ json(change_id.short(40)) ++ ", \"changeIdPrefix\": " ++ json(change_id.shortest().prefix()) ++ ", \"empty\": " ++ self.empty() ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short(40))) ++ ", \"bookmarks\": " ++ json(bookmarks.map(|b| b.name())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
+const revisionTemplate = String.raw`"{\"commitId\": " ++ json(commit_id.short(40)) ++ ", \"changeId\": " ++ json(change_id.short(40)) ++ ", \"changeIdPrefix\": \"" ++ change_id.shortest().prefix() ++ change_id.shortest().rest() ++ "\", \"empty\": " ++ self.empty() ++ ", \"immutable\": " ++ self.immutable() ++ ", \"description\": " ++ json(description) ++ ", \"timestamp\": " ++ committer.timestamp().format("%s") ++ ", \"parents\": " ++ json(parents.map(|c| c.commit_id().short(40))) ++ ", \"bookmarks\": " ++ json(local_bookmarks.map(|b| b.name())) ++ ", \"remoteBookmarkNames\": " ++ json(remote_bookmarks.filter(|b| !b.synced()).map(|b| b.name())) ++ ", \"remoteBookmarkRemotes\": " ++ json(remote_bookmarks.filter(|b| !b.synced()).map(|b| b.remote())) ++ ", \"tags\": " ++ json(tags.map(|t| t.name())) ++ ", \"workspaces\": " ++ json(working_copies.map(|w| w.name())) ++ "}\n"`;
 
 const parseRevisions = (raw: string) =>
   z.array(revisionSchema).parse(
@@ -287,6 +287,22 @@ export default experimental_defineHostEntry({
     },
     setBookmark: async ({ path, revision, name }) => {
       await run(await repositoryRoot(path), ["bookmark", "set", name, "--revision", revision]);
+      return { ok: true };
+    },
+    moveBookmark: async ({ path, name, destination }) => {
+      await run(await repositoryRoot(path), ["bookmark", "move", name, "--allow-backwards", "--to", destination]);
+      return { ok: true };
+    },
+    deleteBookmark: async ({ path, name }) => {
+      await run(await repositoryRoot(path), ["bookmark", "delete", name]);
+      return { ok: true };
+    },
+    pushBookmark: async ({ path, name }) => {
+      await run(await repositoryRoot(path), ["git", "push", "--bookmark", name]);
+      return { ok: true };
+    },
+    untrackBookmark: async ({ path, name, remote }) => {
+      await run(await repositoryRoot(path), ["bookmark", "untrack", `${name}@${remote}`]);
       return { ok: true };
     },
     rebase: async ({ path, revision, destination }) => {

@@ -8,8 +8,14 @@ Two JJ work surfaces live in one BB sidebar page:
   versions of an evolved change are marked. Ready branches are ordered by
   commit time while preserving child-before-parent history, keeping older
   evolved lines below newer independent branches. The most recent recorded JJ
-  Git push is shown above the graph. Filter by description, then expand a
-  revision to edit its description and inspect changed files. The file list
+  Git push is shown above the graph. Compact rows show immutable commits as
+  diamonds and empty commits as hollow circles. The graph can hide immutable
+  history on demand, keeping skipped ancestry visible with dashed rails. Search
+  matches descriptions, change IDs, commit IDs, bookmarks, and tags. Workspace
+  rails rise into their labels. Local bookmarks can be dragged onto a revision
+  to preview and confirm a move; right-click a bookmark to push or remove it.
+  Differing remote bookmarks appear as name@remote. Expand a revision to edit
+  its description and inspect changed files. The file list
   starts collapsed; opening it shows per-file addition and deletion counts.
   The description field grows with its text up to five lines. Day groups
   collapse. Dragging a revision onto another

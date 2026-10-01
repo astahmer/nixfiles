@@ -13,10 +13,13 @@ export const revisionSchema = z.object({
   changeId: z.string(),
   changeIdPrefix: z.string(),
   empty: z.boolean(),
+  immutable: z.boolean(),
   description: z.string(),
   timestamp: z.number(),
   parents: z.array(z.string()),
   bookmarks: z.array(z.string()),
+  remoteBookmarkNames: z.array(z.string()),
+  remoteBookmarkRemotes: z.array(z.string()),
   tags: z.array(z.string()),
   workspaces: z.array(z.string()),
 });
@@ -72,6 +75,25 @@ export const hostContract = defineRpcContract({
   },
   setBookmark: {
     input: revisionInput.extend({ name: z.string().trim().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  moveBookmark: {
+    input: repositoryInput.extend({ name: z.string().trim().min(1).max(128), destination: z.string().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  deleteBookmark: {
+    input: repositoryInput.extend({ name: z.string().trim().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  pushBookmark: {
+    input: repositoryInput.extend({ name: z.string().trim().min(1).max(128) }),
+    output: z.object({ ok: z.boolean() }),
+  },
+  untrackBookmark: {
+    input: repositoryInput.extend({
+      name: z.string().trim().min(1).max(128),
+      remote: z.string().trim().min(1).max(128),
+    }),
     output: z.object({ ok: z.boolean() }),
   },
   rebase: {

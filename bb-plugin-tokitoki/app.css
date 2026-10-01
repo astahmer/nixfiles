@@ -1,0 +1,43 @@
+.tu-edge-root { position: fixed; z-index: 10000; top: 42%; right: 0; display: flex; align-items: center; font-family: var(--font-sans, system-ui, sans-serif); color: var(--foreground, #eee); }
+.tu-edge-trigger { width: 36px; min-height: 62px; display: grid; justify-items: center; align-content: center; gap: 3px; padding: 7px 4px; border: 1px solid var(--border, rgba(255,255,255,.15)); border-right: 0; border-radius: 10px 0 0 10px; background: color-mix(in srgb, var(--background, #171717) 90%, transparent); box-shadow: 0 4px 18px rgba(0,0,0,.28); cursor: pointer; backdrop-filter: blur(14px); }
+.tu-edge-trigger:hover, .tu-edge-trigger.is-open { background: var(--secondary, #282828); }
+.tu-edge-trigger svg { width: 19px; height: 19px; }
+.tu-edge-value { color: var(--muted-foreground, #aaa); font-size: 10px; font-variant-numeric: tabular-nums; font-weight: 700; }
+.tu-edge-value.is-healthy { color: #31c48d; }
+.tu-edge-value.is-low { color: #f0ae4f; }
+.tu-edge-value.is-critical { color: #ef6077; }
+.tu-mark { display: inline-flex; align-items: center; justify-content: center; color: var(--foreground, #eee); font-size: 14px; font-weight: 750; line-height: 1; }
+.tu-mark-pi { font-family: Georgia, serif; font-size: 19px; }
+.tu-mark-t3 { font-size: 10px; letter-spacing: -.08em; }
+.tu-popover { position: absolute; right: 44px; top: 50%; width: min(340px, calc(100vw - 80px)); max-height: min(72vh, 560px); display: flex; flex-direction: column; overflow: hidden; transform: translateY(-50%); border: 1px solid var(--border, rgba(255,255,255,.14)); border-radius: 12px; background: var(--background, #191919); color: var(--foreground, #eee); box-shadow: 0 16px 42px rgba(0,0,0,.4); }
+.tu-popover-header { display: flex; align-items: center; gap: 5px; padding: 10px 11px; border-bottom: 1px solid var(--border, rgba(255,255,255,.1)); }
+.tu-popover-header > div { display: grid; gap: 2px; flex: 1; }
+.tu-popover-header strong { font-size: 12px; }
+.tu-popover-header span, .tu-popover footer { color: var(--muted-foreground, #999); font-size: 9px; }
+.tu-icon-button { width: 26px; height: 26px; border: 0; border-radius: 6px; color: inherit; background: transparent; font: inherit; font-size: 15px; cursor: pointer; }
+.tu-icon-button:hover { background: var(--secondary, #282828); }
+.tu-icon-button:disabled { opacity: .55; cursor: wait; }
+.tu-account-list { display: grid; gap: 7px; overflow: auto; padding: 8px; }
+.tu-account { padding: 9px; border: 1px solid var(--border, rgba(255,255,255,.1)); border-radius: 9px; background: color-mix(in srgb, var(--secondary, #282828) 40%, transparent); }
+.tu-account > header { display: flex; align-items: center; gap: 8px; }
+.tu-provider-icon { width: 24px; height: 24px; flex: none; display: grid; place-items: center; }
+.tu-provider-icon svg { width: 21px; height: 21px; }
+.tu-account-name { min-width: 0; display: grid; gap: 2px; }
+.tu-account-name strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.tu-account-name small, .tu-window-detail { color: var(--muted-foreground, #999); font-size: 8px; }
+.tu-windows { display: grid; gap: 7px; margin-top: 8px; }
+.tu-window { display: grid; gap: 4px; }
+.tu-window-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--muted-foreground, #aaa); font-size: 9px; text-transform: capitalize; }
+.tu-window-heading strong { color: var(--foreground, #eee); font-size: 10px; font-variant-numeric: tabular-nums; }
+.tu-window-heading strong.is-healthy { color: #31c48d; }
+.tu-window-heading strong.is-low { color: #f0ae4f; }
+.tu-window-heading strong.is-critical { color: #ef6077; }
+.tu-track { height: 5px; overflow: hidden; border-radius: 4px; background: rgba(255,255,255,.1); }
+.tu-track span { display: block; height: 100%; border-radius: inherit; }
+.tu-track span.is-healthy { background: #31c48d; }
+.tu-track span.is-low { background: #f0ae4f; }
+.tu-track span.is-critical { background: #ef6077; }
+.tu-window-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tu-state { margin: 0; padding: 12px; color: var(--muted-foreground, #aaa); font-size: 10px; line-height: 1.5; }
+.tu-state.tu-error { color: #f0ae4f; }
+.tu-popover footer { flex: none; padding: 8px 10px; border-top: 1px solid var(--border, rgba(255,255,255,.1)); }

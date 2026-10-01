@@ -27,10 +27,13 @@ type Revision = {
   changeId: string;
   changeIdPrefix: string;
   empty: boolean;
+  immutable: boolean;
   description: string;
   timestamp: number;
   parents: string[];
   bookmarks: string[];
+  remoteBookmarkNames: string[];
+  remoteBookmarkRemotes: string[];
   tags: string[];
   workspaces: string[];
 };
@@ -54,6 +57,15 @@ type DiffTarget = { revision: string | null; path: string };
 type RevisionDiffFile = { path: string; status: string; patch: string };
 type PendingRebase = { source: Revision; destination: Revision; branch: Revision[] };
 type RevisionContextMenu = { x: number; y: number; revision: Revision };
+type BookmarkContextMenu = {
+  x: number;
+  y: number;
+  revision: Revision;
+  bookmark: string;
+  displayName: string;
+  remote: string | null;
+};
+type PendingBookmarkMove = { bookmark: string; source: Revision; destination: Revision };
 type DirectoryResult = {
   directory: string;
   parent: string | null;
@@ -146,6 +158,7 @@ const styles = `
 .jj-tab-row{display:flex;align-items:center;gap:8px}.jj-tab-row .jj-tabs{margin-right:auto}.jj-actions-menu{position:relative;margin-left:auto}.jj-actions-menu>summary{display:grid;width:30px;height:30px;place-items:center;border:1px solid var(--jj-line);border-radius:6px;color:var(--muted-foreground);list-style:none;cursor:pointer}.jj-actions-menu>summary::-webkit-details-marker{display:none}.jj-actions-menu>summary:hover,.jj-actions-menu[open]>summary{background:var(--accent);color:var(--foreground)}.jj-actions-menu-items{position:absolute;top:calc(100% + 5px);right:0;z-index:20;display:grid;min-width:220px;padding:4px;border:1px solid var(--jj-line);border-radius:7px;background:var(--popover,var(--card));box-shadow:0 8px 24px #0006}.jj-actions-menu-items button{padding:7px 9px;border:0;border-radius:4px;background:transparent;color:var(--foreground);font:inherit;text-align:left;white-space:nowrap;cursor:pointer}.jj-actions-menu-items button:hover,.jj-actions-menu-items button:focus-visible{background:var(--accent);outline:none}.jj-actions-menu-items button:disabled{opacity:.5;cursor:not-allowed}.jj-notice{padding:6px 10px;border-bottom:1px solid var(--jj-line);color:var(--muted-foreground);font-size:11px}
 .jj-working-group-fill{flex:none}.jj-working-content{max-height:min(42vh,320px);flex:0 1 auto}.jj-history-group{min-height:120px;flex:1 1 0}.jj-file-total-stats{flex:none;padding:0 3px}
 .jj-day-graph{position:relative;z-index:1;display:block;width:100%;height:23px;overflow:hidden;pointer-events:none}.jj-day-graph svg{position:absolute;inset:0;display:block;width:100%;height:100%;overflow:hidden}.jj-day-heading-content{position:relative;z-index:2}.jj-badge-workspace,.jj-badge-workspace-default{background:#0f766e;border-color:#0f766e;color:#fff;font-weight:700}
+.jj-page{--jj-immutable:#77c9bc}.jj-revision-button{min-height:26px;padding-block:0}.jj-graph-cell,.jj-graph-cell svg{height:26px}.jj-badge-current{height:16px}.jj-badge-bookmark,.jj-badge-tag{height:16px;padding:0 6px;border-radius:4px;background:#38372f;border-color:#595747;color:#d9d6bd;font:600 9px var(--font-mono,monospace)}.jj-badge-bookmark[data-remote=true]{background:#33313d;border-color:#565064;color:#c5b4ed}.jj-badge-workspace{background:#0f766e;border-color:#0f766e;color:#fff;font-weight:700}.jj-badge-empty{background:transparent;border-color:#737373;color:#b2b2b2;font-style:italic}.jj-badge-describe{background:#363636;border-color:#484848;color:#aaa;font-style:italic}.jj-revision[data-immutable=true] .jj-revision-subject{color:color-mix(in srgb,var(--foreground) 72%,var(--muted-foreground))}.jj-revision[data-no-description=true] .jj-revision-subject{color:var(--muted-foreground);font-style:italic}.jj-revision[data-evolved=true] .jj-revision-subject{color:color-mix(in srgb,var(--jj-evolved) 42%,var(--foreground))}.jj-badge-evolved{background:color-mix(in srgb,var(--jj-evolved) 16%,var(--background));border-color:color-mix(in srgb,var(--jj-evolved) 48%,var(--jj-line));color:var(--jj-evolved)}.jj-badge-bookmark[draggable=true]{cursor:grab}.jj-badge-bookmark[draggable=true]:active{cursor:grabbing}.jj-graph-toolbar{display:flex;align-items:center;gap:8px}.jj-immutable-toggle{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font:10px var(--font-mono,monospace);cursor:pointer}.jj-immutable-toggle input{width:13px;height:13px;margin:0;accent-color:var(--primary)}.jj-bookmark-preview{margin:4px 12px 8px 24px;padding:8px 10px;border:1px solid #c7b982;border-radius:7px;background:color-mix(in srgb,#dcdcaa 8%,var(--card));font-size:11px}.jj-bookmark-preview-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:7px}.jj-bookmark-context-title{padding:6px 9px;color:var(--muted-foreground);font:10px var(--font-mono,monospace)}
 `;
 
 const RevisionGraphCell = ({
@@ -155,7 +168,10 @@ const RevisionGraphCell = ({
   current,
   preview,
   empty,
+  immutable,
   evolved,
+  workspace,
+  workspaceBranch,
 }: {
   row: RevisionGraphRow;
   width: number;
@@ -163,33 +179,22 @@ const RevisionGraphCell = ({
   current: boolean;
   preview: boolean;
   empty: boolean;
+  immutable: boolean;
   evolved: boolean;
+  workspace: boolean;
+  workspaceBranch: boolean;
 }) => {
-  const rowHeight = 29;
+  const rowHeight = workspace || row.edges.some((edge) => edge.kind === "merge") ? 36 : 26;
   const center = (lane: number) => 10 + lane * laneGap;
   const middle = rowHeight / 2;
-  const curveControlY = Math.max(-8, middle - 20);
-  const crossingHeight = (edge: RevisionGraphRow["edges"][number], lane: number) => {
-    const startX = center(edge.fromLane);
-    const endX = center(edge.toLane);
-    const targetX = center(lane);
-    const fraction = (targetX - startX) / (endX - startX);
-    let lower = 0;
-    let upper = 1;
-    for (let iteration = 0; iteration < 16; iteration += 1) {
-      const parameter = (lower + upper) / 2;
-      const xFraction = 3 * parameter ** 2 - 2 * parameter ** 3;
-      if (xFraction < fraction) lower = parameter;
-      else upper = parameter;
-    }
-    const parameter = (lower + upper) / 2;
-    const inverse = 1 - parameter;
-    return (
-      inverse ** 3 * middle +
-      3 * inverse ** 2 * parameter * curveControlY +
-      3 * inverse * parameter ** 2 * curveControlY +
-      parameter ** 3 * rowHeight
-    );
+  const branchY = rowHeight - 3.5;
+  const crossingHeight = () => branchY;
+  const mergePath = (edge: RevisionGraphRow["edges"][number]) => {
+    const childX = center(edge.fromLane);
+    const parentX = center(edge.toLane);
+    const direction = childX >= parentX ? 1 : -1;
+    const turnX = childX - direction * 6;
+    return `M ${parentX} ${rowHeight} V ${branchY} H ${turnX} Q ${childX} ${branchY} ${childX} ${branchY - 6} V ${middle}`;
   };
   const laneCrossings = new Map<number, number[]>();
   row.edges
@@ -199,23 +204,33 @@ const RevisionGraphCell = ({
         .filter((lane) => lane > Math.min(edge.fromLane, edge.toLane) && lane < Math.max(edge.fromLane, edge.toLane))
         .forEach((lane) => {
           const heights = laneCrossings.get(lane) ?? [];
-          heights.push(crossingHeight(edge, lane));
+          heights.push(crossingHeight());
           laneCrossings.set(lane, heights);
         });
     });
   const nodeColor = preview
     ? previewColor
-    : current
-      ? "var(--primary)"
-      : evolved
-        ? "var(--jj-evolved)"
-        : laneColor(row.commitLane);
+    : workspace
+      ? "var(--jj-workspace)"
+      : current
+        ? "var(--primary)"
+        : evolved
+          ? "var(--jj-evolved)"
+          : laneColor(row.commitLane);
+  const workspaceRailX = center(0);
+  const workspaceNodeX = workspaceRailX + 20;
   const fill = nodeColor;
 
   return (
-    <span className="jj-graph-cell" style={{ width }} aria-hidden="true">
-      <svg width={width} height={rowHeight} viewBox={`0 0 ${width} ${rowHeight}`}>
+    <span className="jj-graph-cell" style={{ width, height: rowHeight }} aria-hidden="true">
+      <svg
+        width={width}
+        height={rowHeight}
+        style={{ height: rowHeight }}
+        viewBox={`0 0 ${width} ${rowHeight}`}
+      >
         {row.edges.map((edge, index) =>
+          workspaceBranch && index === 0 ? null :
           edge.kind === "straight" ? (
             <line
               key={`edge-${index}`}
@@ -225,14 +240,16 @@ const RevisionGraphCell = ({
               y2={rowHeight}
               stroke={preview ? previewColor : laneColor(edge.fromLane)}
               strokeWidth="1.5"
+              strokeDasharray={edge.dashed ? "2 3" : undefined}
             />
           ) : (
             <path
               key={`edge-${index}`}
-              d={`M ${center(edge.fromLane)} ${middle} C ${center(edge.fromLane)} ${curveControlY}, ${center(edge.toLane)} ${curveControlY}, ${center(edge.toLane)} ${rowHeight}`}
+              d={mergePath(edge)}
               fill="none"
               stroke={preview ? previewColor : laneColor(edge.fromLane)}
               strokeWidth="1.5"
+              strokeDasharray={edge.dashed ? "2 3" : undefined}
             />
           ),
         )}
@@ -288,17 +305,54 @@ const RevisionGraphCell = ({
             />
           )
         ))}
-        {empty ? (
+        {workspaceBranch && (
+          <>
+            <line
+              x1={workspaceRailX}
+              y1={middle}
+              x2={workspaceRailX}
+              y2={rowHeight}
+              stroke={laneColor(0)}
+              strokeWidth="1.5"
+            />
+            <path
+              d={`M ${workspaceRailX} ${rowHeight} H ${workspaceNodeX - 6} Q ${workspaceNodeX} ${rowHeight} ${workspaceNodeX} ${rowHeight - 6} V 10.5`}
+              fill="none"
+              stroke="var(--jj-workspace)"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        )}
+        {workspaceBranch ? (
+          <circle
+            cx={workspaceNodeX}
+            cy="6"
+            r="4.5"
+            fill="var(--jj-workspace)"
+            stroke="var(--jj-workspace)"
+            strokeWidth="1.5"
+          />
+        ) : empty ? (
+          <circle
+            cx={center(row.commitLane)}
+            cy={middle}
+            r="5"
+            fill="var(--background)"
+            stroke={nodeColor}
+            strokeWidth="2"
+          />
+        ) : immutable ? (
           <rect
             x={center(row.commitLane) - 4.5}
             y={middle - 4.5}
             width="9"
             height="9"
             transform={`rotate(45 ${center(row.commitLane)} ${middle})`}
-            fill={fill}
-            stroke={nodeColor}
-            strokeWidth="2"
-            strokeDasharray="2 1"
+            fill="var(--jj-immutable)"
+            stroke="var(--jj-immutable)"
+            strokeWidth="1.5"
           />
         ) : (
           <circle
@@ -446,6 +500,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [tab, setTab] = useState<"graph" | "source">("graph");
   const navigation = useBbNavigate();
   const [graphQuery, setGraphQuery] = useState("");
+  const [hideImmutable, setHideImmutable] = useState(false);
   const [path, setPath] = useState(() => localStorage.getItem("jj-plugin-path") ?? "");
   const [hostId, setHostId] = useState(() => localStorage.getItem("jj-plugin-host") ?? "");
   const [hosts, setHosts] = useState<{ id: string; name: string; status: string }[]>([]);
@@ -498,6 +553,9 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   const [draggedRevisionId, setDraggedRevisionId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [revisionContextMenu, setRevisionContextMenu] = useState<RevisionContextMenu | null>(null);
+  const [bookmarkContextMenu, setBookmarkContextMenu] = useState<BookmarkContextMenu | null>(null);
+  const [pendingBookmarkMove, setPendingBookmarkMove] = useState<PendingBookmarkMove | null>(null);
+  const [bookmarkDropTargetId, setBookmarkDropTargetId] = useState<string | null>(null);
   const actionsMenuRef = useRef<HTMLDetailsElement>(null);
   const [moveSource, setMoveSource] = useState<Revision | null>(null);
   const [collapsedDays, setCollapsedDays] = useState<Set<string>>(() => new Set());
@@ -526,8 +584,10 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
         setSnapshot(result);
         revisionDiffRequest.current += 1;
         setPendingRebase(null);
+        setPendingBookmarkMove(null);
         setMoveSource(null);
         setRevisionContextMenu(null);
+        setBookmarkContextMenu(null);
         setSelectedRevision(null);
         setRevisionFiles([]);
         setDiffTarget(null);
@@ -885,7 +945,57 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   }, [diffTarget?.path, diffTarget?.revision, hostId, path, rpc]);
 
   const revisions = snapshot?.revisions ?? [];
-  const graphRevisions = useMemo(() => orderRevisionsByRecency(revisions), [revisions]);
+  const matchesGraphQuery = (revision: Revision) => {
+    const query = graphQuery.trim().toLocaleLowerCase();
+    return (
+      !query ||
+      [
+        label(revision),
+        revision.changeId,
+        revision.changeIdPrefix,
+        revision.commitId,
+        ...revision.bookmarks,
+        ...revision.remoteBookmarkNames.map((name, index) => `${name}@${revision.remoteBookmarkRemotes[index] ?? ""}`),
+        ...revision.tags,
+        ...revision.workspaces,
+      ].some((value) => value.toLocaleLowerCase().includes(query))
+    );
+  };
+  const graphRevisions = useMemo(() => {
+    const ordered = orderRevisionsByRecency(revisions);
+    if (!hideImmutable) return ordered;
+    const visible = ordered.filter((revision) => !revision.immutable);
+    const visibleIds = new Set(visible.map((revision) => revision.commitId));
+    const byId = new Map(ordered.map((revision) => [revision.commitId, revision]));
+    return visible.map((revision) => {
+      const dashedParents: string[] = [];
+      const parents = revision.parents.flatMap((parentId) => {
+        const pending = [{ id: parentId, crossedImmutable: false }];
+        const visited = new Set<string>();
+        const found: string[] = [];
+        while (pending.length > 0) {
+          const current = pending.pop();
+          if (!current || visited.has(current.id)) continue;
+          visited.add(current.id);
+          if (visibleIds.has(current.id)) {
+            found.push(current.id);
+            if (current.crossedImmutable) dashedParents.push(current.id);
+            continue;
+          }
+          const parent = byId.get(current.id);
+          if (!parent) continue;
+          pending.push(
+            ...parent.parents.map((ancestorId) => ({
+              id: ancestorId,
+              crossedImmutable: current.crossedImmutable || parent.immutable,
+            })),
+          );
+        }
+        return found;
+      });
+      return { ...revision, parents: [...new Set(parents)], dashedParents: [...new Set(dashedParents)] };
+    });
+  }, [hideImmutable, revisions]);
   const evolvedChangeIds = useMemo(() => {
     const newestByChangeId = new Map<string, number>();
     revisions.forEach((revision) =>
@@ -980,8 +1090,10 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
     [revisions],
   );
   const maximumLaneCount = graphRows.reduce((maximum, row) => Math.max(maximum, row.laneCount), 1);
-  const graphWidth = Math.min(288, 20 + (maximumLaneCount - 1) * 36);
-  const laneGap = maximumLaneCount <= 1 ? 0 : (graphWidth - 20) / (maximumLaneCount - 1);
+  const baseGraphWidth = Math.min(288, 20 + (maximumLaneCount - 1) * 36);
+  const hasWorkspaceRows = revisions.some((revision) => revision.workspaces.length > 0);
+  const graphWidth = Math.min(308, baseGraphWidth + (hasWorkspaceRows ? 20 : 0));
+  const laneGap = maximumLaneCount <= 1 ? 0 : (baseGraphWidth - 20) / (maximumLaneCount - 1);
   const revisionFileTotals = revisionFileStats.reduce(
     (totals, file) => ({
       additions: totals.additions + file.additions,
@@ -1112,6 +1224,16 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
   };
   const dropOnRevision = (destination: Revision, event: React.DragEvent) => {
     event.preventDefault();
+    const bookmarkName = event.dataTransfer.getData("text/jj-bookmark");
+    if (bookmarkName) {
+      const sourceId = event.dataTransfer.getData("text/jj-bookmark-source");
+      const source = revisionById.get(sourceId);
+      if (source && source.commitId !== destination.commitId) {
+        setPendingBookmarkMove({ bookmark: bookmarkName, source, destination });
+      }
+      setBookmarkDropTargetId(null);
+      return;
+    }
     const sourceId = event.dataTransfer.getData("text/jj-revision");
     const source = revisionById.get(sourceId);
     if (source && source.commitId !== destination.commitId) beginRebasePreview(source, destination);
@@ -1486,13 +1608,23 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
             <span>{snapshot.revisions.length} revisions</span>
             <span>·</span>
             <span>{snapshot.workspaces.length} workspaces</span>
-            <input
-              className="jj-input jj-filter"
-              aria-label="Filter revisions by description"
-              placeholder="Filter descriptions…"
-              value={graphQuery}
-              onChange={(event) => setGraphQuery(event.target.value)}
-            />
+            <div className="jj-graph-toolbar">
+              <label className="jj-immutable-toggle" title="Hide immutable revisions">
+                <input
+                  type="checkbox"
+                  checked={hideImmutable}
+                  onChange={(event) => setHideImmutable(event.target.checked)}
+                />
+                Hide immutable
+              </label>
+              <input
+                className="jj-input jj-filter"
+                aria-label="Filter revisions by description, IDs, bookmarks, or tags"
+                placeholder="Filter descriptions, IDs, bookmarks, tags…"
+                value={graphQuery}
+                onChange={(event) => setGraphQuery(event.target.value)}
+              />
+            </div>
           </div>
           {tab === "graph" ? (
             <main className="jj-history" aria-label="Jujutsu revision graph">
@@ -1507,13 +1639,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                 </div>
               )}
               {graphGroups
-                .filter((group) =>
-                  group.rows.some(
-                    ({ revision }) =>
-                      !graphQuery.trim() ||
-                      label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase()),
-                  ),
-                )
+                .filter((group) => group.rows.some(({ revision }) => matchesGraphQuery(revision)))
                 .map((group) => (
                   <section
                     className="jj-day-group"
@@ -1563,11 +1689,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                     )}
                     {!collapsedDays.has(group.day) &&
                       group.rows
-                        .filter(
-                          ({ revision }) =>
-                            !graphQuery.trim() ||
-                            label(revision).toLowerCase().includes(graphQuery.trim().toLowerCase()),
-                        )
+                        .filter(({ revision }) => matchesGraphQuery(revision))
                         .map(({ revision, row: graphRow, isPreview }) => {
                           const isCurrent = revision.commitId === snapshot.currentRevision;
                           const isSelected = selectedRevision?.commitId === revision.commitId;
@@ -1605,17 +1727,22 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                 data-moved={isDragged && !isPreview}
                                 data-preview={isPreview}
                                 data-empty={revision.empty}
-                                data-drop-target={dropTargetId === revision.commitId}
+                                data-immutable={revision.immutable}
+                                data-evolved={isEvolved}
+                                data-no-description={!revision.description.trim()}
+                                data-drop-target={dropTargetId === revision.commitId || bookmarkDropTargetId === revision.commitId}
                                 onDragEnter={(event) => {
                                   if (!isPreview) {
                                     event.preventDefault();
-                                    setDropTargetId(revision.commitId);
+                                    if (event.dataTransfer.types.includes("text/jj-bookmark")) setBookmarkDropTargetId(revision.commitId);
+                                    else setDropTargetId(revision.commitId);
                                   }
                                 }}
                                 onDragOver={(event) => {
                                   if (!isPreview) {
                                     event.preventDefault();
-                                    setDropTargetId(revision.commitId);
+                                    if (event.dataTransfer.types.includes("text/jj-bookmark")) setBookmarkDropTargetId(revision.commitId);
+                                    else setDropTargetId(revision.commitId);
                                   }
                                 }}
                                 onDragLeave={(event) => {
@@ -1624,6 +1751,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                     !event.currentTarget.contains(event.relatedTarget)
                                   )
                                     setDropTargetId(null);
+                                  setBookmarkDropTargetId(null);
                                 }}
                                 onDrop={(event) => {
                                   if (!isPreview) dropOnRevision(revision, event);
@@ -1712,7 +1840,14 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                     current={isCurrent}
                                     preview={isPreview}
                                     empty={revision.empty}
+                                    immutable={revision.immutable}
                                     evolved={isEvolved}
+                                    workspace={revision.workspaces.length > 0}
+                                    workspaceBranch={
+                                      revision.workspaces.some((name) => name !== "default") &&
+                                      revision.empty &&
+                                      revision.description.trim().length === 0
+                                    }
                                   />
                                   <span
                                     className="jj-revision-main"
@@ -1720,7 +1855,7 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                   >
                                     <span className="jj-revision-title">
                                       {isCurrent && (
-                                        <span className="jj-badge jj-badge-current">@</span>
+                                        <span className="jj-badge jj-badge-current">@Editing</span>
                                       )}
                                       {revision.workspaces.map((workspace) => (
                                         <span
@@ -1730,11 +1865,45 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                           {workspace}
                                         </span>
                                       ))}
-                                      {revision.bookmarks.map((bookmark) => (
-                                        <span className="jj-badge jj-badge-bookmark" key={bookmark}>
-                                          {bookmark}
-                                        </span>
-                                      ))}
+                                      {[
+                                        ...revision.bookmarks.map((name) => ({ name, remote: null as string | null, localName: name })),
+                                        ...revision.remoteBookmarkNames.map((name, index) => {
+                                          const remote = revision.remoteBookmarkRemotes[index] ?? "";
+                                          return { name: `${name}@${remote}`, remote, localName: name };
+                                        }),
+                                      ].map(({ name: bookmark, remote, localName }) => {
+                                        return (
+                                          <span
+                                            className="jj-badge jj-badge-bookmark"
+                                            data-remote={Boolean(remote)}
+                                            draggable={!remote && !isPreview}
+                                            key={bookmark}
+                                            title={remote ? `Remote bookmark on ${remote}` : `Drag to move ${bookmark}`}
+                                            onDragStart={(event) => {
+                                              if (remote || isPreview) return;
+                                              event.stopPropagation();
+                                              event.dataTransfer.effectAllowed = "move";
+                                              event.dataTransfer.setData("text/jj-bookmark", localName);
+                                              event.dataTransfer.setData("text/jj-bookmark-source", revision.commitId);
+                                            }}
+                                            onContextMenu={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                              setRevisionContextMenu(null);
+                                              setBookmarkContextMenu({
+                                                x: event.clientX,
+                                                y: event.clientY,
+                                                revision,
+                                                bookmark: localName,
+                                                displayName: bookmark,
+                                                remote,
+                                              });
+                                            }}
+                                          >
+                                            {bookmark}
+                                          </span>
+                                        );
+                                      })}
                                       {revision.tags.map((tag) => (
                                         <span className="jj-badge jj-badge-tag" key={tag}>
                                           {tag}
@@ -1743,8 +1912,11 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                       {isEvolved && (
                                         <span className="jj-badge jj-badge-evolved">Evolved</span>
                                       )}
-                                      {revision.empty && (
+                                      {(revision.empty || !revision.description.trim()) && (
                                         <span className="jj-badge jj-badge-empty">Empty</span>
+                                      )}
+                                      {!revision.description.trim() && (
+                                        <span className="jj-badge jj-badge-describe">Describe</span>
                                       )}
                                       <span className="jj-revision-subject">{label(revision)}</span>
                                     </span>
@@ -1830,6 +2002,26 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
                                         onClick={() => void confirmRebase()}
                                       >
                                         {busy ? "Moving…" : "Rebase branch"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                                {pendingBookmarkMove?.destination.commitId === revision.commitId && (
+                                  <div className="jj-bookmark-preview" role="group" aria-label="Preview bookmark move">
+                                    <strong>Move bookmark “{pendingBookmarkMove.bookmark}” here?</strong>
+                                    <div className="jj-bookmark-preview-actions">
+                                      <button className="jj-button" disabled={busy} onClick={() => setPendingBookmarkMove(null)}>Cancel</button>
+                                      <button
+                                        className="jj-button jj-button-primary"
+                                        disabled={busy}
+                                        onClick={() => {
+                                          const move = pendingBookmarkMove;
+                                          if (!move) return;
+                                          void runAction(() => rpc.call("moveBookmark", { path, hostId, name: move.bookmark, destination: move.destination.commitId }))
+                                            .then((success) => { if (success) setPendingBookmarkMove(null); });
+                                        }}
+                                      >
+                                        {busy ? "Moving…" : "Move bookmark"}
                                       </button>
                                     </div>
                                   </div>
@@ -2669,6 +2861,49 @@ const Page = ({ threadId: panelThreadId }: { threadId?: string } = {}) => {
               }}
             >
               Rebase branch onto…
+            </button>
+          </div>
+        </>
+      )}
+      {bookmarkContextMenu && (
+        <>
+          <div className="jj-context-backdrop" onClick={() => setBookmarkContextMenu(null)} />
+          <div
+            className="jj-context-menu"
+            role="menu"
+              aria-label={`Actions for bookmark ${bookmarkContextMenu.displayName}`}
+            style={{
+              left: Math.max(8, Math.min(bookmarkContextMenu.x, window.innerWidth - 245)),
+              top: Math.max(8, Math.min(bookmarkContextMenu.y, window.innerHeight - 160)),
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="jj-bookmark-context-title">{bookmarkContextMenu.displayName}</div>
+            <button
+              role="menuitem"
+              disabled={busy || !revisions.some((revision) => revision.bookmarks.includes(bookmarkContextMenu.bookmark))}
+              onClick={() => {
+                const { bookmark } = bookmarkContextMenu;
+                setBookmarkContextMenu(null);
+                void runAction(() => rpc.call("pushBookmark", { path, hostId, name: bookmark }));
+              }}
+            >
+              Push Bookmark
+            </button>
+            <button
+              role="menuitem"
+              disabled={busy || (!bookmarkContextMenu.remote && !revisions.some((revision) => revision.bookmarks.includes(bookmarkContextMenu.bookmark)))}
+              onClick={() => {
+                const { bookmark, remote } = bookmarkContextMenu;
+                setBookmarkContextMenu(null);
+                void runAction(() =>
+                  remote
+                    ? rpc.call("untrackBookmark", { path, hostId, name: bookmark, remote })
+                    : rpc.call("deleteBookmark", { path, hostId, name: bookmark }),
+                );
+              }}
+            >
+              {bookmarkContextMenu.remote ? "Forget Remote Bookmark" : "Remove Bookmark"}
             </button>
           </div>
         </>

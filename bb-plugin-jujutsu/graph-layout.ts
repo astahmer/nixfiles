@@ -1,6 +1,7 @@
 export type RevisionGraphInput = {
   commitId: string;
   parents: readonly string[];
+  dashedParents?: readonly string[];
 };
 
 export type RevisionGraphOrderInput = RevisionGraphInput & { timestamp: number };
@@ -56,6 +57,7 @@ export type RevisionGraphEdge = {
   fromLane: number;
   toLane: number;
   kind: "straight" | "merge";
+  dashed: boolean;
 };
 
 export type RevisionGraphRow = {
@@ -106,6 +108,7 @@ export const layoutRevisionGraph = (
         fromLane: commitLane,
         toLane: targetLane,
         kind: targetLane === commitLane ? ("straight" as const) : ("merge" as const),
+        dashed: revision.dashedParents?.includes(parentId) ?? false,
       };
     });
 

@@ -34,6 +34,7 @@ in
           hm.opencodex
           hm.codexConfig
           hm.tokitoki
+          hm.tokitokiBbPlugin
           hm.t3code
           hm.aiAccounts
           hm.coding
