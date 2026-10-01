@@ -36,6 +36,7 @@ in
           hm.tokitoki
           hm.tokitokiBbPlugin
           hm.t3code
+          hm.bbPlugins
           hm.aiAccounts
           hm.coding
           hm.zed

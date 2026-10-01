@@ -16,6 +16,22 @@
         "type": "github"
       }
     },
+    "bbPlugins": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790888065,
+        "narHash": "sha256-CAbQH1r9TBHNdPPQBJZi/4JgKz4yEug/6hQ9qSCekI8=",
+        "owner": "astahmer",
+        "repo": "bb-plugins",
+        "rev": "7142ebe1594282c8228f1e5415270bf59eca3724",
+        "type": "github"
+      },
+      "original": {
+        "owner": "astahmer",
+        "repo": "bb-plugins",
+        "type": "github"
+      }
+    },
     "bun2nix": {
       "inputs": {
         "flake-parts": [
@@ -611,6 +627,7 @@
     "root": {
       "inputs": {
         "agents": "agents",
+        "bbPlugins": "bbPlugins",
         "devenv": "devenv",
         "emilint": "emilint",
         "flake-parts": "flake-parts_2",
