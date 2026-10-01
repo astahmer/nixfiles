@@ -510,6 +510,7 @@ const SidebarNavigation = () => {
             ref={searchInputRef}
             className="sidebar-resize-navigation-search"
             type="search"
+            autoFocus
             aria-label="Filter sidebar destinations"
             placeholder="Filter destinations…"
             value={menuSearch}
