@@ -759,31 +759,7 @@ const FooterProviderMark = ({ provider }: { provider: "codex" | "opencode-go" })
   ? <svg className="aa-footer-provider-mark is-codex" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.8956zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" /></svg>
   : <svg className="aa-footer-provider-mark is-opencode-go" viewBox="-72 -42 384 384" aria-hidden="true"><path fill="currentColor" fillOpacity=".45" d="M180 240H60V120H180V240Z" /><path fill="currentColor" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" /></svg>;
 
-const QuotaSparkline = ({ history, range }: { history: UsageSummary["quotaHistory"]; range: UsageRange }) => {
-  const ordered = history.slice().sort((left, right) => left.capturedAt - right.capturedAt);
-  if (ordered.length < 2) return null;
-  const gapLimitMs = Math.max(2 * 60 * 60 * 1000, (range.endAt - range.startAt) / 15);
-  const segments: typeof ordered[] = [];
-  for (const entry of ordered) {
-    const current = segments.at(-1);
-    const previous = current?.at(-1);
-    if (!current || !previous || entry.resetsAt !== previous.resetsAt || entry.capturedAt - previous.capturedAt > gapLimitMs) segments.push([entry]);
-    else current.push(entry);
-  }
-  const firstAt = ordered[0]?.capturedAt ?? Date.now();
-  const lastAt = ordered.at(-1)?.capturedAt ?? firstAt;
-  return <svg className="aa-quota-sparkline" viewBox="0 0 100 28" role="img" aria-label={`Remaining quota history from ${formatDateRange(range)}`}>
-    <line x1="0" x2="100" y1="3" y2="3" stroke="currentColor" strokeOpacity=".12" />
-    <line x1="0" x2="100" y1="25" y2="25" stroke="currentColor" strokeOpacity=".12" />
-    {segments.filter((segment) => segment.length > 1).map((segment) => <polyline key={`${segment[0]?.capturedAt}`} points={segment.map((entry) => {
-      const x = lastAt === firstAt ? 50 : (entry.capturedAt - firstAt) / (lastAt - firstAt) * 100;
-      const y = 25 - entry.remainingPercent / 100 * 22;
-      return `${x},${y}`;
-    }).join(" ")} fill="none" stroke="#24a484" strokeWidth="1.25" vectorEffect="non-scaling-stroke" />)}
-  </svg>;
-};
-
-const QuotaHistoryChart = ({ history, modelUsage, bankedResets, range, hostName }: { history: UsageSummary["quotaHistory"]; modelUsage: UsageSummary["quotaModelUsage"]; bankedResets: UsageSummary["bankedResets"]; range: UsageRange; hostName(id: string): string }) => {
+const QuotaHistoryChart = ({ history, modelUsage, range, hostName }: { history: UsageSummary["quotaHistory"]; modelUsage: UsageSummary["quotaModelUsage"]; range: UsageRange; hostName(id: string): string }) => {
   const modelUsageBySnapshot = new Map<string, UsageSummary["quotaModelUsage"]>();
   for (const entry of modelUsage) {
     const key = `${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`;
@@ -823,14 +799,21 @@ const QuotaHistoryChart = ({ history, modelUsage, bankedResets, range, hostName 
   const yPosition = (remainingPercent: number) => plot.bottom - remainingPercent / 100 * (plot.bottom - plot.top);
   const axisDates = dataDuration === 0 ? [dataStartAt] : [dataStartAt, dataStartAt + dataDuration / 2, dataEndAt];
   const axisDateOptions: Intl.DateTimeFormatOptions = dataDuration <= 24 * 60 * 60 * 1000 ? { hour: "2-digit", minute: "2-digit" } : { month: "2-digit", day: "2-digit" };
-  const resetEntries = bankedResets.filter((entry) => entry.balance > 0 && series.some((line) => line.points[0]?.accountId === entry.accountId && line.points[0]?.hostId === entry.hostId));
+  const quotaDrops = series.flatMap((entry) => entry.points.slice(1).flatMap((point, index) => {
+    const previous = entry.points[index];
+    if (!previous) return [];
+    const before = Math.min(100, Math.max(0, 100 - previous.usedPercent));
+    const after = Math.min(100, Math.max(0, 100 - point.usedPercent));
+    const lost = before - after;
+    if (lost <= 0) return [];
+    const activity = modelUsageBySnapshot.get(`${point.accountId}:${point.hostId}:${point.windowKey}:${point.capturedAt}`) ?? [];
+    const models = new Map<string, number>();
+    for (const item of activity) models.set(item.model ?? "Unknown model", (models.get(item.model ?? "Unknown model") ?? 0) + item.totalTokens);
+    return [{ key: `${entry.key}:${point.capturedAt}`, accountName: entry.accountName, label: entry.label, hostName: entry.hostName, lost, before, after, startAt: activity[0]?.intervalStartAt ?? previous.capturedAt, endAt: point.capturedAt, models: Array.from(models, ([model, totalTokens]) => ({ model, totalTokens })).sort((left, right) => right.totalTokens - left.totalTokens) }];
+  })).sort((left, right) => right.lost - left.lost || right.endAt - left.endAt).slice(0, 6);
 
   return <div className="aa-quota-history-chart">
     <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each line is one account and plan window. The timeline starts at the first recorded snapshot; hover a dot for the change and model activity since the prior snapshot.</p></div><span>{series.length} series</span></div>
-    {resetEntries.length ? <div className="aa-quota-history-resets"><strong>Banked resets</strong>{resetEntries.map((entry) => {
-      const matchingSeries = series.find((line) => line.points[0]?.accountId === entry.accountId && line.points[0]?.hostId === entry.hostId);
-      return <div key={`${entry.accountId}:${entry.hostId}`}><span>{matchingSeries?.accountName ?? entry.accountId}{hostName(entry.hostId) ? ` · ${hostName(entry.hostId)}` : ""}</span><BankedResetDetails entry={entry} compact /></div>;
-    })}</div> : null}
     <svg className="aa-quota-history-plot" viewBox="0 0 1000 276" preserveAspectRatio="none" role="img" aria-label={`Remaining quota history for ${series.length} account and plan window series from ${new Date(dataStartAt).toLocaleString()} to ${new Date(dataEndAt).toLocaleString()}`}>
       {[0, 25, 50, 75, 100].map((percent) => {
         const y = yPosition(percent);
@@ -860,6 +843,7 @@ const QuotaHistoryChart = ({ history, modelUsage, bankedResets, range, hostName 
       })}
     </svg>
     <div className="aa-quota-history-legend">{series.map((entry) => <div key={entry.key}><span style={{ background: entry.color }} /><strong>{entry.accountName}</strong><small>{entry.label}{entry.hostName ? ` · ${entry.hostName}` : ""}</small></div>)}</div>
+    <section className="aa-quota-drops" aria-label="Largest quota drops"><header><strong>Largest quota drops</strong><span>Model token activity for the same account and interval; providers do not attribute quota changes to models.</span></header>{quotaDrops.length ? <div className="aa-quota-drop-list">{quotaDrops.map((drop) => <article key={drop.key}><div className="aa-quota-drop-heading"><strong>{drop.accountName} · {drop.label}</strong><b>−{drop.lost.toFixed(0)} points <span>({drop.before.toFixed(0)}% → {drop.after.toFixed(0)}%)</span></b></div><time>{formatTimestamp(drop.startAt)} → {formatTimestamp(drop.endAt)}{drop.hostName ? ` · ${drop.hostName}` : ""}</time><p>{drop.models.length ? drop.models.slice(0, 3).map((item) => `${item.model} · ${formatCount(item.totalTokens)} tokens`).join("  |  ") : "No recorded model token activity in this interval."}</p></article>)}</div> : <p className="aa-quota-drop-empty">No quota decreases recorded in this range.</p>}</section>
   </div>;
 };
 
@@ -1017,27 +1001,25 @@ const UsagePage = () => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const accountGroups = Array.from(new Map(providerEntries.map((entry) => [`${entry.accountId}:${entry.hostId}`, providerEntries.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId)])).entries());
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} bankedResets={summary.bankedResets.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
             const first = entries[0];
             if (!first) return null;
-            const banked = summary.bankedResets.find((item) => item.accountId === first.accountId && item.hostId === first.hostId);
-            const hasVisibleHistory = visibleHistory.some((point) => point.accountId === first.accountId && point.hostId === first.hostId);
-            return <article className={`aa-account-quota is-${first.provider}`} key={groupKey}><header><div className="aa-account-identity"><FooterProviderMark provider={first.provider} /><div><strong>{first.accountName}</strong>{hostName(first.hostId) ? <span>{hostName(first.hostId)}</span> : null}</div></div>{banked && banked.balance > 0 && !hasVisibleHistory ? <BankedResetDetails entry={banked} /> : null}</header>
-              {sortQuotaWindows(entries).map((entry) => <div className="aa-account-window" key={entry.windowKey}><div className="aa-window-heading"><strong>{entry.label}</strong><span className={`aa-quota-status ${entry.status === "ok" ? "is-ok" : "is-stale"}`}>{entry.status === "ok" ? "Current" : entry.status}</span></div><div className="aa-window-value"><strong>{entry.remainingPercent.toFixed(0)}% <small>left</small></strong><span>{entry.usedPercent.toFixed(0)}% used</span></div><div className="aa-quota-track" role="progressbar" aria-label={`${first.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>Updated {new Date(entry.capturedAt).toLocaleTimeString()}</span></div><QuotaSparkline range={range} history={visibleHistory.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey)} />{entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}</div>)}
+            return <article className="aa-footer-account aa-page-account" key={groupKey}><header><strong>{first.accountName}</strong>{hostName(first.hostId) ? <span>{hostName(first.hostId)}</span> : null}</header>
+              {sortQuotaWindows(entries).map((entry) => <div className="aa-footer-window" key={entry.windowKey}><div className="aa-footer-window-heading"><span>{entry.label}</span><strong>{entry.remainingPercent.toFixed(0)}% left</strong></div><div className="aa-footer-track" role="progressbar" aria-label={`${first.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-footer-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>{new Date(entry.capturedAt).toLocaleTimeString()}</span></div>{entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}</div>)}
             </article>;
           })}</div></section>;
         })}</div> : <div className="aa-provider-groups">{["codex", "opencode-go"].map((providerName) => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const windows = Array.from(new Set(providerEntries.map((entry) => entry.windowKey))).sort((left, right) => quotaWindowRank(providerEntries.find((entry) => entry.windowKey === left)?.label ?? "") - quotaWindowRank(providerEntries.find((entry) => entry.windowKey === right)?.label ?? ""));
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} bankedResets={summary.bankedResets.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-comparison-windows">{windows.map((windowKey) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-comparison-windows">{windows.map((windowKey) => {
             const entries = providerEntries.filter((entry) => entry.windowKey === windowKey);
             const first = entries[0];
             if (!first) return null;
             const averageRemaining = Math.round(entries.reduce((total, entry) => total + entry.remainingPercent, 0) / entries.length);
             const changes = entries.map((entry) => quotaHistoryChange(entry, visibleHistory)).filter((change) => change !== null);
             const averageChange = changes.length ? Math.round(changes.reduce((total, change) => total + change, 0) / changes.length) : null;
-            return <article className="aa-comparison-window" key={windowKey}><header className="aa-comparison-summary"><div><h4>{first.label}</h4><span>{entries.length} {entries.length === 1 ? "account" : "accounts"}</span></div><strong className={quotaTone(averageRemaining)}>{averageRemaining}% <small>left</small></strong><span className={`aa-comparison-trend ${averageChange === null ? "is-empty" : averageChange >= 0 ? "is-rising" : "is-falling"}`}>{averageChange === null ? "Trend starts with next snapshot" : `${averageChange >= 0 ? "↗ +" : "↘ "}${averageChange}%`}</span></header><div className="aa-comparison-accounts">{entries.map((entry) => <div className="aa-comparison-account" key={`${entry.accountId}:${entry.hostId}`}><div className="aa-comparison-label"><strong>{entry.accountName}</strong><span>{hostName(entry.hostId) ? `${hostName(entry.hostId)} · ` : ""}{entry.remainingPercent.toFixed(0)}% left · {formatReset(entry.resetsAt)}</span></div><div className="aa-comparison-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div></div>)}</div></article>;
+            return <article className="aa-comparison-window" key={windowKey}><header className="aa-comparison-summary"><div><h4>{first.label}</h4><span>{entries.length} {entries.length === 1 ? "account" : "accounts"}</span></div><strong className={quotaTone(averageRemaining)}>{averageRemaining}% <small>left</small></strong><span className={`aa-comparison-trend ${averageChange === null ? "is-empty" : averageChange >= 0 ? "is-rising" : "is-falling"}`}>{averageChange === null ? "Trend starts with next snapshot" : `${averageChange >= 0 ? "↗ +" : "↘ "}${averageChange}%`}</span></header><div className="aa-comparison-accounts">{entries.map((entry) => { const banked = summary.bankedResets.find((item) => item.accountId === entry.accountId && item.hostId === entry.hostId); const firstWindow = sortQuotaWindows(providerEntries.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId))[0]?.windowKey; return <div className="aa-comparison-account" key={`${entry.accountId}:${entry.hostId}`}><div className="aa-comparison-label"><strong>{entry.accountName}</strong><span>{hostName(entry.hostId) ? `${hostName(entry.hostId)} · ` : ""}{entry.remainingPercent.toFixed(0)}% left · {formatReset(entry.resetsAt)}</span></div><div className="aa-comparison-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div>{banked && banked.balance > 0 && windowKey === firstWindow ? <BankedResetDetails entry={banked} compact /> : null}</div>; })}</div></article>;
           })}</div></section>;
         })}</div> : <p className="aa-usage-empty">No quota snapshots yet. Refresh to query connected account providers.</p>}
       </section>
