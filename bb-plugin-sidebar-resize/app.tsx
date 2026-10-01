@@ -280,7 +280,8 @@ const SidebarNavigation = () => {
     };
     const dismissOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (document.activeElement === searchInputRef.current && searchInputRef.current.value) {
+      const searchInput = searchInputRef.current;
+      if (searchInput && document.activeElement === searchInput && searchInput.value) {
         event.preventDefault();
         setMenuSearch("");
         return;
