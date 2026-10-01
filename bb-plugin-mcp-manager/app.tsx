@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { definePluginApp, useBbNavigate, useRealtime, useRpc } from "@get-bb/plugin-sdk/app";
-import type { rpcContract, ServerView } from "./server";
+import type { RegistrySuggestion, rpcContract, ServerView } from "./server";
 import { catalogServers } from "./catalog";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -61,6 +61,16 @@ const statusLabel: Record<ServerView["status"], string> = {
   error: "Connection error",
 };
 
+const endpointKey = (value: string) => {
+  try {
+    const url = new URL(value);
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    return `${url.protocol}//${url.host}${path}${url.search}`;
+  } catch {
+    return value;
+  }
+};
+
 function McpComposerPicker() {
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
@@ -78,6 +88,9 @@ function McpComposerPicker() {
   const [isBrowseOpen, setIsBrowseOpen] = useState(false);
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [browseSearch, setBrowseSearch] = useState("");
+  const [registryServers, setRegistryServers] = useState<RegistrySuggestion[]>([]);
+  const [isRegistryLoading, setIsRegistryLoading] = useState(false);
+  const [registrySearchError, setRegistrySearchError] = useState<string | null>(null);
   const [customDraft, setCustomDraft] = useState(emptyCustomServerDraft);
   const [position, setPosition] = useState({ left: 12, top: 12 });
   const pickerAnchor = useRef<PickerAnchor | null>(null);
@@ -144,6 +157,39 @@ function McpComposerPicker() {
   useRealtime("mcp-manager-changed", () => {
     if (isOpen) void refresh();
   });
+
+  useEffect(() => {
+    const query = browseSearch.trim();
+    if (!isBrowseOpen || query.length < 2) {
+      setRegistryServers([]);
+      setIsRegistryLoading(false);
+      setRegistrySearchError(null);
+      return;
+    }
+
+    let isCurrent = true;
+    setRegistryServers([]);
+    setIsRegistryLoading(true);
+    setRegistrySearchError(null);
+    const timeout = window.setTimeout(() => {
+      void rpc
+        .call("searchRegistry", { query })
+        .then((result) => {
+          if (isCurrent) setRegistryServers(result.servers);
+        })
+        .catch(() => {
+          if (isCurrent) setRegistrySearchError("The public MCP Registry search is unavailable.");
+        })
+        .finally(() => {
+          if (isCurrent) setIsRegistryLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      isCurrent = false;
+      window.clearTimeout(timeout);
+    };
+  }, [browseSearch, isBrowseOpen, rpc]);
 
   useLayoutEffect(() => {
     if (!isOpen) return;
@@ -220,8 +266,9 @@ function McpComposerPicker() {
       }
       await refresh();
     } catch (cause) {
-      setPickerError(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : String(cause);
       await refresh();
+      setPickerError(message);
     } finally {
       setPendingServerId(null);
       setPendingAction(null);
@@ -236,11 +283,18 @@ function McpComposerPicker() {
       .toLowerCase()
       .includes(browseSearch.trim().toLowerCase()),
   );
+  const filteredRegistryServers = registryServers.filter(
+    (server) =>
+      !filteredCatalog.some(
+        (catalogServer) => endpointKey(catalogServer.url) === endpointKey(server.url),
+      ),
+  );
 
   const addCatalogServer = async (catalogServer: (typeof catalogServers)[number]) => {
     if (pendingServerId) return;
     const existingServer = servers.find(
-      (server) => server.transport !== "stdio" && server.url === catalogServer.url,
+      (server) =>
+        server.transport !== "stdio" && endpointKey(server.url) === endpointKey(catalogServer.url),
     );
     if (existingServer) {
       setPickerError(`${catalogServer.name} is already registered.`);
@@ -258,8 +312,39 @@ function McpComposerPicker() {
       setIsBrowseOpen(false);
       await refresh();
     } catch (cause) {
-      setPickerError(cause instanceof Error ? cause.message : String(cause));
+      const message = cause instanceof Error ? cause.message : String(cause);
       await refresh();
+      setPickerError(message);
+    } finally {
+      setPendingServerId(null);
+    }
+  };
+
+  const addRegistryServer = async (registryServer: RegistrySuggestion) => {
+    if (pendingServerId) return;
+    const existingServer = servers.find(
+      (server) =>
+        server.transport !== "stdio" && endpointKey(server.url) === endpointKey(registryServer.url),
+    );
+    if (existingServer) {
+      setPickerError(`${registryServer.name} is already registered.`);
+      return;
+    }
+    setPendingServerId(registryServer.url);
+    try {
+      const result = await rpc.call("addRemote", {
+        name: registryServer.name,
+        url: registryServer.url,
+        transport: registryServer.transport,
+      });
+      setAuthorizationUrl(result.authorizationUrl);
+      setPickerError(null);
+      setIsBrowseOpen(false);
+      await refresh();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      await refresh();
+      setPickerError(message);
     } finally {
       setPendingServerId(null);
     }
@@ -314,146 +399,153 @@ function McpComposerPicker() {
             aria-labelledby="mcp-picker-title"
             className="flex max-h-[min(75vh,36rem)] w-full flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
           >
-            <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div>
-                <h2 id="mcp-picker-title" className="text-sm font-semibold">
-                  MCP servers
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  {servers.filter((server) => server.enabled).length} enabled globally
-                </p>
+            <div className="sticky top-0 z-10 shrink-0 bg-popover">
+              <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <h2 id="mcp-picker-title" className="shrink-0 text-sm font-semibold">
+                    MCP servers
+                  </h2>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {servers.filter((server) => server.enabled).length} enabled globally
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Close MCP server picker"
+                  onClick={() => {
+                    setIsOpen(false);
+                    setIsBrowseOpen(false);
+                    setIsCustomOpen(false);
+                  }}
+                >
+                  <Icon name="X" className="size-4" />
+                </Button>
+              </header>
+              <div className="shrink-0 border-b border-border bg-popover p-2">
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search MCP servers…"
+                  aria-label="Search MCP servers"
+                />
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                aria-label="Close MCP server picker"
-                onClick={() => {
-                  setIsOpen(false);
-                  setIsBrowseOpen(false);
-                  setIsCustomOpen(false);
-                }}
-              >
-                <Icon name="X" className="size-4" />
-              </Button>
-            </header>
-            <div className="shrink-0 border-b border-border bg-popover p-2">
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search MCP servers…"
-                aria-label="Search MCP servers"
-              />
             </div>
-            {pickerError ? (
-              <p
-                role="alert"
-                className="mx-3 mb-3 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
-              >
-                {pickerError}
-              </p>
-            ) : null}
-            {authorizationUrl ? (
-              <a
-                href={authorizationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mx-3 mb-3 block rounded-md border border-border px-3 py-2 text-sm underline underline-offset-4"
-              >
-                Continue MCP sign-in
-              </a>
-            ) : null}
-            <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto px-3">
-              {isLoading && servers.length === 0 ? (
-                <li
-                  className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground"
-                  aria-live="polite"
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {pickerError ? (
+                <p
+                  role="alert"
+                  className="mx-3 mb-3 mt-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
                 >
-                  <RefreshGlyph className="size-4 animate-spin" /> Loading MCP servers…
-                </li>
+                  {pickerError}
+                </p>
               ) : null}
-              {filteredServers.map((server) => (
-                <li
-                  key={server.id}
-                  className="flex items-center gap-3 py-3"
-                  aria-busy={pendingServerId === server.id}
+              {authorizationUrl ? (
+                <a
+                  href={authorizationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mx-3 mb-3 mt-2 block rounded-md border border-border px-3 py-2 text-sm underline underline-offset-4"
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <Icon
-                      name={server.transport === "stdio" ? "Terminal" : "Globe"}
-                      className="size-4"
-                    />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{server.name}</p>
-                    <p
-                      className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground"
-                      aria-live="polite"
-                    >
-                      {pendingServerId === server.id ? (
-                        <RefreshGlyph className="size-3 shrink-0 animate-spin" />
-                      ) : null}
-                      <span className="truncate">
-                        {pendingServerId === server.id
-                          ? pendingAction === "connect"
-                            ? "Connecting…"
-                            : pendingAction === "disconnect"
-                              ? "Disconnecting…"
-                              : "Updating…"
-                          : server.error || statusLabel[server.status]}
-                      </span>
-                    </p>
-                  </div>
-                  {server.enabled && server.status !== "ready" ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={pendingServerId !== null}
-                      onClick={() => void runServerAction(server, "connect")}
-                    >
-                      {server.status === "needs-auth" ? "Login" : "Connect"}
-                    </Button>
-                  ) : null}
-                  {server.enabled && server.status === "ready" ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      disabled={pendingServerId !== null}
-                      onClick={() => void runServerAction(server, "disconnect")}
-                    >
-                      Disconnect
-                    </Button>
-                  ) : null}
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={server.enabled}
-                    disabled={pendingServerId !== null}
-                    aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
-                    className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 ${server.enabled ? "bg-emerald-600" : "bg-muted-foreground/40"}`}
-                    onClick={() => void runServerAction(server, "toggle")}
+                  Continue MCP sign-in
+                </a>
+              ) : null}
+              <ul className="divide-y divide-border px-3">
+                {isLoading && servers.length === 0 ? (
+                  <li
+                    className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground"
+                    aria-live="polite"
                   >
-                    <span
-                      className={`absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform ${server.enabled ? "translate-x-4" : "translate-x-0"}`}
-                    />
-                  </button>
-                </li>
-              ))}
-              {!isLoading && filteredServers.length === 0 ? (
-                <li className="py-6 text-center text-sm text-muted-foreground">
-                  {servers.length === 0 ? "No MCP servers registered yet." : "No matching servers."}
-                </li>
-              ) : null}
-            </ul>
+                    <RefreshGlyph className="size-4 animate-spin" /> Loading MCP servers…
+                  </li>
+                ) : null}
+                {filteredServers.map((server) => (
+                  <li
+                    key={server.id}
+                    className="flex items-center gap-3 py-2.5"
+                    aria-busy={pendingServerId === server.id}
+                  >
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <Icon
+                        name={server.transport === "stdio" ? "Terminal" : "Globe"}
+                        className="size-4"
+                      />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{server.name}</p>
+                      <p
+                        className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground"
+                        aria-live="polite"
+                      >
+                        {pendingServerId === server.id ? (
+                          <RefreshGlyph className="size-3 shrink-0 animate-spin" />
+                        ) : null}
+                        <span className="truncate">
+                          {pendingServerId === server.id
+                            ? pendingAction === "connect"
+                              ? "Connecting…"
+                              : pendingAction === "disconnect"
+                                ? "Disconnecting…"
+                                : "Updating…"
+                            : server.error || statusLabel[server.status]}
+                        </span>
+                      </p>
+                    </div>
+                    {server.enabled && server.status !== "ready" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={pendingServerId !== null}
+                        onClick={() => void runServerAction(server, "connect")}
+                      >
+                        {server.status === "needs-auth" ? "Login" : "Connect"}
+                      </Button>
+                    ) : null}
+                    {server.enabled && server.status === "ready" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={pendingServerId !== null}
+                        onClick={() => void runServerAction(server, "disconnect")}
+                      >
+                        Disconnect
+                      </Button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={server.enabled}
+                      disabled={pendingServerId !== null}
+                      aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 ${server.enabled ? "bg-emerald-600" : "bg-muted-foreground/40"}`}
+                      onClick={() => void runServerAction(server, "toggle")}
+                    >
+                      <span
+                        className={`absolute left-0.5 top-1/2 size-4 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform ${server.enabled ? "translate-x-4" : "translate-x-0"}`}
+                      />
+                    </button>
+                  </li>
+                ))}
+                {!isLoading && filteredServers.length === 0 ? (
+                  <li className="py-6 text-center text-sm text-muted-foreground">
+                    {servers.length === 0
+                      ? "No MCP servers registered yet."
+                      : "No matching servers."}
+                  </li>
+                ) : null}
+              </ul>
+            </div>
             <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-border p-3">
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon"
                 disabled={isRefreshing}
                 aria-busy={isRefreshing}
+                aria-label="Refresh MCP servers"
                 onClick={async () => {
                   setIsRefreshing(true);
                   await refresh();
@@ -461,7 +553,6 @@ function McpComposerPicker() {
                 }}
               >
                 <RefreshGlyph className={`size-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                Refresh
               </Button>
               <div className="flex items-center gap-1">
                 <Button
@@ -473,6 +564,7 @@ function McpComposerPicker() {
                     navigate.toPluginPanel("servers");
                   }}
                 >
+                  <Icon name="Settings" className="size-4" />
                   Manage
                 </Button>
                 <Button
@@ -480,6 +572,7 @@ function McpComposerPicker() {
                   size="sm"
                   onClick={() => {
                     setBrowseSearch("");
+                    setPickerError(null);
                     setIsOpen(false);
                     setIsBrowseOpen(true);
                   }}
@@ -498,24 +591,36 @@ function McpComposerPicker() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="mcp-browse-title"
-            className="absolute left-1/2 top-1/2 flex max-h-[76vh] w-[calc(100vw_-_2rem)] flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl sm:left-[calc(50%_+_10rem)] sm:w-[min(46rem,_calc(100vw_-_20rem))]"
+            className="absolute left-1/2 top-1/2 flex max-h-[58vh] w-[calc(100vw_-_2rem)] flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl sm:max-w-[64rem]"
             style={{
-              left: "calc(50% + 10rem)",
-              maxHeight: "min(58vh, 34rem)",
-              top: "calc(50% - 5rem)",
+              left: "50%",
+              maxHeight: "min(58vh, 32rem)",
+              top: "50%",
               transform: "translate(-50%, -50%)",
-              width: "min(46rem, calc(100vw - 20rem))",
+              width: "min(64rem, calc(100vw - 2rem))",
             }}
           >
-            <header className="flex shrink-0 items-center justify-between gap-3 px-5 pb-3 pt-4">
-              <div>
-                <h2 id="mcp-browse-title" className="text-lg font-semibold">
+            <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border px-4 py-3">
+              <div className="flex min-w-0 flex-[1_1_24rem] items-baseline gap-3">
+                <h2 id="mcp-browse-title" className="shrink-0 text-base font-semibold">
                   Browse MCPs
                 </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="truncate text-sm text-muted-foreground">
                   Official hosted servers from their providers.
                 </p>
               </div>
+              <Input
+                value={browseSearch}
+                onChange={(event) => {
+                  setBrowseSearch(event.target.value);
+                  setPickerError(null);
+                }}
+                placeholder="Search providers and Registry…"
+                aria-label="Search provider servers and the public MCP Registry"
+                maxLength={80}
+                autoFocus
+                className="h-9 w-56 shrink-0"
+              />
               <Button
                 type="button"
                 variant="ghost"
@@ -526,34 +631,25 @@ function McpComposerPicker() {
                 <Icon name="X" className="size-5" />
               </Button>
             </header>
-            <div className="shrink-0 border-b border-border bg-popover px-5 pb-3">
-              <Input
-                value={browseSearch}
-                onChange={(event) => setBrowseSearch(event.target.value)}
-                placeholder="Search MCPs"
-                aria-label="Search available MCP servers"
-                autoFocus
-              />
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <div className="grid gap-2 sm:grid-cols-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {!browseSearch.trim() ||
                 "custom mcp add your own".includes(browseSearch.toLowerCase()) ? (
                   <button
                     type="button"
-                    className="flex min-h-24 items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-state-hover"
+                    className="flex min-h-20 items-center gap-3 rounded-lg border border-border bg-card p-2.5 text-left transition-colors hover:bg-state-hover"
                     onClick={() => {
                       setCustomDraft(emptyCustomServerDraft);
                       setIsBrowseOpen(false);
                       setIsCustomOpen(true);
                     }}
                   >
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      <Icon name="Plus" className="size-6" />
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Icon name="Plus" className="size-5" />
                     </span>
-                    <span>
-                      <span className="block font-medium">Custom MCP</span>
-                      <span className="mt-1 block text-sm text-muted-foreground">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">Custom MCP</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
                         Add your own MCP server
                       </span>
                     </span>
@@ -561,15 +657,17 @@ function McpComposerPicker() {
                 ) : null}
                 {filteredCatalog.map((catalogServer) => {
                   const alreadyAdded = servers.some(
-                    (server) => server.transport !== "stdio" && server.url === catalogServer.url,
+                    (server) =>
+                      server.transport !== "stdio" &&
+                      endpointKey(server.url) === endpointKey(catalogServer.url),
                   );
                   return (
                     <article
                       key={catalogServer.url}
-                      className="flex min-h-24 items-center gap-3 rounded-lg border border-border bg-card p-3"
+                      className="flex min-h-24 items-center gap-2.5 rounded-lg border border-border bg-card p-2.5"
                     >
                       <span
-                        className="flex size-11 shrink-0 items-center justify-center rounded-lg p-1.5"
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg p-1"
                         style={{
                           backgroundColor:
                             catalogServer.iconBackground === "light" ? "#ffffff" : "#232323",
@@ -578,25 +676,25 @@ function McpComposerPicker() {
                         <img
                           src={`data:image/svg+xml,${encodeURIComponent(catalogServer.icon)}`}
                           alt=""
-                          className="size-7 object-contain"
+                          className="size-6 object-contain"
                         />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="truncate font-medium">{catalogServer.name}</h3>
-                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                          <h3 className="truncate text-sm font-medium">{catalogServer.name}</h3>
+                          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                             {catalogServer.category}
                           </span>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-muted-foreground">
                           {catalogServer.description}
                         </p>
-                        <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="mt-2 flex items-center justify-between gap-2">
                           <a
                             href={catalogServer.docsUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                            className="truncate text-[11px] text-muted-foreground underline underline-offset-4 hover:text-foreground"
                           >
                             Provider docs
                           </a>
@@ -617,14 +715,96 @@ function McpComposerPicker() {
                     </article>
                   );
                 })}
-                {filteredCatalog.length === 0 && browseSearch.trim() ? (
-                  <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-                    No matching MCPs in the curated list.
+                {filteredRegistryServers.map((registryServer) => {
+                  const alreadyAdded = servers.some(
+                    (server) =>
+                      server.transport !== "stdio" &&
+                      endpointKey(server.url) === endpointKey(registryServer.url),
+                  );
+                  return (
+                    <article
+                      key={registryServer.registryName}
+                      className="flex min-h-24 items-center gap-2.5 rounded-lg border border-border bg-card p-2.5"
+                    >
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        <Icon name="Globe" className="size-5" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <h3 className="truncate text-sm font-medium">{registryServer.name}</h3>
+                          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            Registry
+                          </span>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-muted-foreground">
+                          {registryServer.description}
+                        </p>
+                        <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+                          <span
+                            className="truncate text-[11px] text-muted-foreground"
+                            title={`${registryServer.registryName} · ${registryServer.endpointHost}`}
+                          >
+                            {registryServer.endpointHost}
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={alreadyAdded || pendingServerId !== null}
+                            onClick={() => void addRegistryServer(registryServer)}
+                          >
+                            {alreadyAdded
+                              ? "Added"
+                              : pendingServerId === registryServer.url
+                                ? "Adding…"
+                                : "Add"}
+                          </Button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+                {isRegistryLoading ? (
+                  <p
+                    className="col-span-full flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground"
+                    aria-live="polite"
+                  >
+                    <RefreshGlyph className="size-3 animate-spin" /> Searching the public MCP
+                    Registry…
+                  </p>
+                ) : null}
+                {pickerError ? (
+                  <p
+                    role="alert"
+                    className="col-span-full rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive"
+                  >
+                    {pickerError}
+                  </p>
+                ) : null}
+                {registrySearchError ? (
+                  <p
+                    role="status"
+                    className="col-span-full rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground"
+                  >
+                    {registrySearchError}
+                  </p>
+                ) : null}
+                {browseSearch.trim().length === 1 && filteredCatalog.length === 0 ? (
+                  <p className="col-span-full py-4 text-center text-xs text-muted-foreground">
+                    Type one more character to search the public Registry.
+                  </p>
+                ) : null}
+                {browseSearch.trim().length >= 2 &&
+                filteredCatalog.length === 0 &&
+                filteredRegistryServers.length === 0 &&
+                !isRegistryLoading &&
+                !registrySearchError ? (
+                  <p className="col-span-full py-4 text-center text-xs text-muted-foreground">
+                    No directly connectable servers matched this search.
                   </p>
                 ) : null}
               </div>
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-foreground">
-                <p>These listings link to provider-hosted endpoints and their documentation.</p>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
+                <p>Registry listings are not endorsements. Check each endpoint before adding.</p>
                 <a
                   href="https://registry.modelcontextprotocol.io/"
                   target="_blank"

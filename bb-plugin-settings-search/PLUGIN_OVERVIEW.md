@@ -7,6 +7,7 @@ BB Settings has many categories and controls, while only one category is mounted
 ## Behavior
 
 - Adds one small search field above the Settings navigation.
+- Focuses the search field when Settings opens.
 - Searches an index of settings across categories, including labels, help text, and options.
 - Displays clickable results with setting and category context.
 - Opens the result's category and scrolls to the setting when selected.

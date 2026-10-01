@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
+import { isIP } from "node:net";
 import {
   Client,
   SSEClientTransport,
@@ -136,8 +137,69 @@ const toolSchema = z
   })
   .strict();
 
+const registryRemoteSchema = z.object({
+  type: z.enum(["streamable-http", "sse"]),
+  url: z.string().max(2048),
+  headers: z
+    .array(z.object({ name: z.string().min(1).max(256) }))
+    .max(50)
+    .optional(),
+});
+const registryServerListSchema = z.object({
+  servers: z
+    .array(
+      z.object({
+        server: z.object({
+          name: z.string().trim().min(3).max(200),
+          title: z.string().trim().min(1).max(100).nullish(),
+          description: z.string().trim().min(1).max(100),
+          remotes: z.array(registryRemoteSchema).max(50).optional(),
+        }),
+      }),
+    )
+    .max(100),
+});
+const registrySuggestionSchema = z
+  .object({
+    registryName: z.string().min(3).max(200),
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().min(1).max(100),
+    url: z.string().url().max(2048),
+    transport: z.enum(["streamable-http", "sse"]),
+    endpointHost: z.string().min(1).max(300),
+  })
+  .strict();
+export type RegistrySuggestion = z.infer<typeof registrySuggestionSchema>;
+
+const publicRegistryEndpoint = (rawUrl: string) => {
+  if (rawUrl.includes("{") || rawUrl.includes("}")) return null;
+  try {
+    const url = new URL(rawUrl);
+    const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      isIP(hostname) !== 0 ||
+      !hostname.includes(".") ||
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local")
+    ) {
+      return null;
+    }
+    return { url: url.toString(), host: url.host };
+  } catch {
+    return null;
+  }
+};
+
 export const rpcContract = defineRpcContract({
   list: { input: z.null(), output: z.object({ servers: z.array(serverSchema) }).strict() },
+  searchRegistry: {
+    input: z.object({ query: z.string().trim().min(2).max(80) }).strict(),
+    output: z.object({ servers: z.array(registrySuggestionSchema).max(24) }).strict(),
+  },
   addRemote: {
     input: z
       .object({
@@ -829,6 +891,72 @@ export default async function plugin(bb: BbPluginApi) {
 
   bb.rpc.register(rpcContract, {
     list: async () => ({ servers: (await readServers()).map(publicServer) }),
+    searchRegistry: async ({ query }) => {
+      try {
+        const registryUrl = new URL("https://registry.modelcontextprotocol.io/v0.1/servers");
+        registryUrl.searchParams.set("search", query);
+        registryUrl.searchParams.set("version", "latest");
+        registryUrl.searchParams.set("limit", "24");
+        const response = await fetch(registryUrl, {
+          headers: { Accept: "application/json" },
+          redirect: "error",
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (!response.ok) throw new Error("Registry request failed");
+
+        const result = registryServerListSchema.parse(await response.json());
+        const servers: RegistrySuggestion[] = [];
+        for (const { server } of result.servers) {
+          const remotes = [...(server.remotes ?? [])].sort(
+            (left, right) =>
+              Number(right.type === "streamable-http") - Number(left.type === "streamable-http"),
+          );
+          const remote = remotes
+            .filter((item) => !item.headers?.length)
+            .map((item) => ({ item, endpoint: publicRegistryEndpoint(item.url) }))
+            .find((item) => item.endpoint !== null);
+          if (!remote?.endpoint) continue;
+
+          const displayName = (server.title || server.name.split("/").at(-1) || server.name).slice(
+            0,
+            80,
+          );
+          servers.push(
+            registrySuggestionSchema.parse({
+              registryName: server.name,
+              name: displayName,
+              description: server.description,
+              url: remote.endpoint.url,
+              transport: remote.item.type,
+              endpointHost: remote.endpoint.host,
+            }),
+          );
+        }
+        return { servers };
+      } catch (error) {
+        const cause = error instanceof Error ? error.cause : undefined;
+        const causeCode =
+          typeof cause === "object" &&
+          cause !== null &&
+          "code" in cause &&
+          typeof cause.code === "string" &&
+          /^[A-Z0-9_]{1,40}$/.test(cause.code)
+            ? `, ${cause.code}`
+            : "";
+        const reason =
+          error instanceof Error && error.name === "TimeoutError"
+            ? "timeout"
+            : error instanceof Error && error.name === "AbortError"
+              ? "aborted"
+              : error instanceof Error && error.name === "TypeError"
+                ? "network"
+                : error instanceof Error && error.name === "ZodError"
+                  ? "invalid-response"
+                  : "unexpected";
+        bb.log.warn(`MCP Registry search failed (${reason}${causeCode}).`);
+        throw new Error("Could not search the public MCP Registry.");
+      }
+    },
     addRemote: async (input) => {
       const url = new URL(input.url);
       if (!new Set(["http:", "https:"]).has(url.protocol))

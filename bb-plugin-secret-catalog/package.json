@@ -27,7 +27,10 @@
     "name": "Secret Catalog",
     "description": "Browse configured secret aliases and retrieve values through the secret CLI.",
     "branding": {
-      "icon": "KeyRound"
+      "icon": "./icons/lock.svg",
+      "experimental_icons": {
+        "lock": "./icons/lock.svg"
+      }
     },
     "server": "./server.ts",
     "app": "./app.tsx",

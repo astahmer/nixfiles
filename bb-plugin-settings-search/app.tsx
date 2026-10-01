@@ -89,6 +89,7 @@ export default definePluginApp((app) => {
       let query = "";
       let pendingTitle: string | null = null;
       let pendingPath: string | null = null;
+      let focusOnNextSettingsOpen = true;
       let searchField: HTMLInputElement | null = null;
       let searchStatus: HTMLSpanElement | null = null;
       let searchContainer: HTMLDivElement | null = null;
@@ -237,6 +238,7 @@ export default definePluginApp((app) => {
 
       const update = () => {
         if (!isSettingsPage()) {
+          focusOnNextSettingsOpen = true;
           clearDecorations();
           searchContainer?.remove();
           searchContainer = null;
@@ -250,6 +252,10 @@ export default definePluginApp((app) => {
         const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]"))
           .filter((link) => isSettingsLink(link) && !main?.contains(link));
         ensureSearchField(links);
+        if (focusOnNextSettingsOpen && searchField?.isConnected) {
+          searchField.focus({ preventScroll: true });
+          focusOnNextSettingsOpen = false;
+        }
         clearDecorations();
 
         const normalizedQuery = normalize(query.trim());

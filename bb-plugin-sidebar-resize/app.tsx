@@ -45,10 +45,12 @@ const clearRatio = () => {
 const mountResizer = () => {
   let attachedNavigation: HTMLElement | null = null;
   let attachedHandle: HTMLDivElement | null = null;
+  let customizeObserver: MutationObserver | null = null;
   let originalStyles: { flex: string; height: string; minHeight: string; overflowY: string } | null = null;
   let originalUserSelect = "";
 
   const detach = () => {
+    customizeObserver?.disconnect();
     attachedHandle?.remove();
     if (attachedNavigation && originalStyles) {
       attachedNavigation.style.flex = originalStyles.flex;
@@ -59,6 +61,7 @@ const mountResizer = () => {
     document.body.style.userSelect = originalUserSelect;
     attachedNavigation = null;
     attachedHandle = null;
+    customizeObserver = null;
     originalStyles = null;
   };
 
@@ -132,6 +135,31 @@ const mountResizer = () => {
     const ratio = readRatio();
     if (ratio !== null) applyHeight(parent.clientHeight * ratio);
     else applyHeight(Math.min(navigation.scrollHeight, parent.clientHeight - minimumThreadListHeight));
+
+    let heightBeforeCustomize: number | null = null;
+    const syncCustomizeHeight = () => {
+      const customizeIsOpen = Array.from(navigation.querySelectorAll<HTMLButtonElement>("button")).some((button) =>
+        [button.getAttribute("aria-label"), button.textContent]
+          .some((label) => label?.trim().toLocaleLowerCase() === "done"),
+      );
+
+      if (customizeIsOpen && heightBeforeCustomize === null) {
+        heightBeforeCustomize = navigation.getBoundingClientRect().height;
+        applyHeight(parent.clientHeight - minimumThreadListHeight - handle.offsetHeight);
+      } else if (!customizeIsOpen && heightBeforeCustomize !== null) {
+        applyHeight(heightBeforeCustomize);
+        heightBeforeCustomize = null;
+      }
+    };
+    customizeObserver = new MutationObserver(syncCustomizeHeight);
+    customizeObserver.observe(navigation, {
+      attributeFilter: ["aria-label"],
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    syncCustomizeHeight();
 
     let startY: number | null = null;
     let startHeight = currentHeight;

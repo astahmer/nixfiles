@@ -6,7 +6,7 @@ The plugin runs `secret print --all --json`, `secret get`, and `secret get --cop
 
 ## Use
 
-Open **Secret Catalog**, enter a BB host ID and a project directory on that host, then load aliases. Listing is value-free. **Copy with secret CLI** uses the selected host's clipboard; **Reveal value** sends the value to the BB window until hidden or another alias is selected.
+Open **Secret Catalog**, enter a BB host ID and a project directory on that host, then load aliases. Listing is value-free. **Copy with secret CLI** uses the selected host's clipboard. The value control cycles from hidden dots to a preview showing the first and last four characters, then to the full value. Select it again to hide the value.
 
 Agent tools `secret_list` and `secret_get` are bound to the thread's active execution environment, so they need no host or path parameters. `secret_get` returns plaintext into the agent context, so use it only when the current task needs that value.
 

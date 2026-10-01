@@ -4,6 +4,8 @@ Adds a horizontal drag handle between BB's sidebar navigation and its project/th
 
 The selected split is saved in browser local storage and scales with the sidebar height. When expanded, navigation keeps its full content height and scrolls instead of hiding links. When collapsed, each destination remains available by its icon and tooltip.
 
+Opening **Customize sidebar** while the navigation is collapsed temporarily expands the navigation pane. Clicking **Done** restores its previous height.
+
 Set **Navigation density** to **Compact** or **Comfortable** under Settings → Installed plugins → Sidebar Resize.
 
 Set **Collapsed navigation overflow** to **Scroll**, **Overflow menu**, or **Scroll + menu**. The default keeps a fixed menu button at the right while the icons scroll horizontally; its menu lists every visible destination. **Overflow menu** keeps only the items that fit and puts the rest in the menu.
