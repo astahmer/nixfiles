@@ -732,9 +732,10 @@ const formatReset = (timestamp: string | null) => {
 };
 
 const quotaWindowRank = (label: string) => {
-  if (label === "Current session") return 0;
-  if (label === "Weekly limit") return 1;
-  if (label === "Monthly limit") return 2;
+  const normalized = label.toLowerCase();
+  if (normalized.includes("session") || normalized.includes("5h")) return 0;
+  if (normalized.includes("week") || normalized.includes("7d")) return 1;
+  if (normalized.includes("month") || normalized.includes("30d")) return 2;
   return 3;
 };
 
@@ -759,39 +760,24 @@ const FooterProviderMark = ({ provider }: { provider: "codex" | "opencode-go" })
   ? <svg className="aa-footer-provider-mark is-codex" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.8956zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" /></svg>
   : <svg className="aa-footer-provider-mark is-opencode-go" viewBox="-72 -42 384 384" aria-hidden="true"><path fill="currentColor" fillOpacity=".45" d="M180 240H60V120H180V240Z" /><path fill="currentColor" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" /></svg>;
 
-const QuotaHistoryChart = ({ history, modelUsage, range, hostName }: { history: UsageSummary["quotaHistory"]; modelUsage: UsageSummary["quotaModelUsage"]; range: UsageRange; hostName(id: string): string }) => {
-  const modelUsageBySnapshot = new Map<string, UsageSummary["quotaModelUsage"]>();
-  for (const entry of modelUsage) {
-    const key = `${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`;
-    const rows = modelUsageBySnapshot.get(key) ?? [];
-    rows.push(entry);
-    modelUsageBySnapshot.set(key, rows);
+const QuotaHistoryChart = ({ history, modelUsage, hostName, selectedWindow }: { history: UsageSummary["quotaHistory"]; modelUsage: UsageSummary["quotaModelUsage"]; hostName(id: string): string; selectedWindow: "session" | "weekly" | "monthly" }) => {
+  const selectedHistory = history.filter((entry) => quotaWindowRank(entry.label) === ({ session: 0, weekly: 1, monthly: 2 }[selectedWindow]));
+  const quotaBySnapshot = new Map(selectedHistory.map((entry) => [`${entry.accountId}:${entry.hostId}:${entry.windowKey}:${entry.capturedAt}`, entry]));
+  const groups = new Map<string, { accountName: string; hostId: string; model: string; points: Array<{ capturedAt: number; remainingPercent: number; intervalStartAt: number; totalTokens: number }> }>();
+  for (const activity of modelUsage) {
+    const quota = quotaBySnapshot.get(`${activity.accountId}:${activity.hostId}:${activity.windowKey}:${activity.capturedAt}`);
+    if (!quota) continue;
+    const model = activity.model ?? "Unknown model";
+    const key = `${activity.accountId}:${activity.hostId}:${model}`;
+    const series = groups.get(key) ?? { accountName: quota.accountName, hostId: activity.hostId, model, points: [] };
+    series.points.push({ capturedAt: activity.capturedAt, remainingPercent: quota.remainingPercent, intervalStartAt: activity.intervalStartAt, totalTokens: activity.totalTokens });
+    groups.set(key, series);
   }
-  const groups = new Map<string, UsageSummary["quotaHistory"]>();
-  for (const entry of history) {
-    const key = `${entry.accountId}:${entry.hostId}:${entry.windowKey}`;
-    const points = groups.get(key) ?? [];
-    points.push(entry);
-    groups.set(key, points);
-  }
-  const orderedGroups = Array.from(groups, ([key, points]) => ({ key, points })).sort((left, right) => {
-    const leftFirst = left.points[0];
-    const rightFirst = right.points[0];
-    if (!leftFirst || !rightFirst) return left.key.localeCompare(right.key);
-    return leftFirst.accountName.localeCompare(rightFirst.accountName)
-      || hostName(leftFirst.hostId).localeCompare(hostName(rightFirst.hostId))
-      || quotaWindowRank(leftFirst.label) - quotaWindowRank(rightFirst.label);
-  });
-  const series = orderedGroups.flatMap(({ key, points }, index) => {
-    const first = points[0];
-    if (!first) return [];
-    const hue = index * 137.508 % 360;
-    return [{ key, accountName: first.accountName, hostName: hostName(first.hostId), label: first.label, color: `hsl(${hue} 72% 64%)`, points: points.slice().sort((left, right) => left.capturedAt - right.capturedAt) }];
-  });
-  if (series.length === 0) return <p className="aa-quota-history-empty">Quota history will appear after the first provider snapshots in this range.</p>;
+  const series = Array.from(groups, ([key, entry], index) => ({ key, ...entry, hostName: hostName(entry.hostId), color: `hsl(${index * 137.508 % 360} 72% 64%)`, points: entry.points.sort((left, right) => left.capturedAt - right.capturedAt) })).sort((left, right) => left.accountName.localeCompare(right.accountName) || left.model.localeCompare(right.model) || left.hostName.localeCompare(right.hostName));
+  if (series.length === 0) return <div className="aa-quota-history-chart"><div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>One line per account and model for the selected rate limit.</p></div></div><p className="aa-quota-history-empty">No model activity was recorded for this rate limit in the selected date range.</p></div>;
 
   const plot = { left: 54, right: 990, top: 16, bottom: 244 };
-  const recordedTimes = history.map((entry) => entry.capturedAt);
+  const recordedTimes = series.flatMap((entry) => entry.points.map((point) => point.capturedAt));
   const dataStartAt = Math.min(...recordedTimes);
   const dataEndAt = Math.max(...recordedTimes);
   const dataDuration = dataEndAt - dataStartAt;
@@ -799,51 +785,22 @@ const QuotaHistoryChart = ({ history, modelUsage, range, hostName }: { history: 
   const yPosition = (remainingPercent: number) => plot.bottom - remainingPercent / 100 * (plot.bottom - plot.top);
   const axisDates = dataDuration === 0 ? [dataStartAt] : [dataStartAt, dataStartAt + dataDuration / 2, dataEndAt];
   const axisDateOptions: Intl.DateTimeFormatOptions = dataDuration <= 24 * 60 * 60 * 1000 ? { hour: "2-digit", minute: "2-digit" } : { month: "2-digit", day: "2-digit" };
-  const quotaDrops = series.flatMap((entry) => entry.points.slice(1).flatMap((point, index) => {
-    const previous = entry.points[index];
-    if (!previous) return [];
-    const before = Math.min(100, Math.max(0, 100 - previous.usedPercent));
-    const after = Math.min(100, Math.max(0, 100 - point.usedPercent));
-    const lost = before - after;
-    if (lost <= 0) return [];
-    const activity = modelUsageBySnapshot.get(`${point.accountId}:${point.hostId}:${point.windowKey}:${point.capturedAt}`) ?? [];
-    const models = new Map<string, number>();
-    for (const item of activity) models.set(item.model ?? "Unknown model", (models.get(item.model ?? "Unknown model") ?? 0) + item.totalTokens);
-    return [{ key: `${entry.key}:${point.capturedAt}`, accountName: entry.accountName, label: entry.label, hostName: entry.hostName, lost, before, after, startAt: activity[0]?.intervalStartAt ?? previous.capturedAt, endAt: point.capturedAt, models: Array.from(models, ([model, totalTokens]) => ({ model, totalTokens })).sort((left, right) => right.totalTokens - left.totalTokens) }];
-  })).sort((left, right) => right.lost - left.lost || right.endAt - left.endAt).slice(0, 6);
+  const windowLabel = selectedWindow === "weekly" ? "weekly" : selectedWindow === "monthly" ? "monthly" : "session";
 
   return <div className="aa-quota-history-chart">
-    <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each line is one account and plan window. The timeline starts at the first recorded snapshot; hover a dot for the change and model activity since the prior snapshot.</p></div><span>{series.length} series</span></div>
-    <svg className="aa-quota-history-plot" viewBox="0 0 1000 276" preserveAspectRatio="none" role="img" aria-label={`Remaining quota history for ${series.length} account and plan window series from ${new Date(dataStartAt).toLocaleString()} to ${new Date(dataEndAt).toLocaleString()}`}>
+    <div className="aa-quota-history-heading"><div><h4>Remaining quota over time</h4><p>Each chain is one account and model. Dots show account quota when that model had recorded token activity; providers do not attribute quota changes to models.</p></div><span>{series.length} account · model series</span></div>
+    <svg className="aa-quota-history-plot" viewBox="0 0 1000 276" preserveAspectRatio="none" role="img" aria-label={`Remaining ${windowLabel} quota for ${series.length} account and model series from ${new Date(dataStartAt).toLocaleString()} to ${new Date(dataEndAt).toLocaleString()}`}>
       {[0, 25, 50, 75, 100].map((percent) => {
         const y = yPosition(percent);
         return <g key={percent}><line x1={plot.left} x2={plot.right} y1={y} y2={y} stroke="currentColor" strokeOpacity={percent === 0 ? ".24" : ".1"} /><text x={plot.left - 9} y={y + 4} textAnchor="end" style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{percent}%</text></g>;
       })}
       {axisDates.map((date, index) => <text key={date} x={dataDuration === 0 ? (plot.left + plot.right) / 2 : xPosition(date)} y="268" textAnchor={dataDuration === 0 || index === 1 ? "middle" : index === 0 ? "start" : "end"} style={{ fill: "#b8b8b8", fontSize: 12, fontFamily: "inherit" }}>{new Date(date).toLocaleString(undefined, axisDateOptions)}</text>)}
-      {series.map((entry) => {
-        const points = entry.points.map((point, index) => {
-          const previous = entry.points[index - 1];
-          const remainingPercent = Math.min(100, Math.max(0, 100 - point.usedPercent));
-          const change = previous ? remainingPercent - Math.min(100, Math.max(0, 100 - previous.usedPercent)) : null;
-          const activity = modelUsageBySnapshot.get(`${point.accountId}:${point.hostId}:${point.windowKey}:${point.capturedAt}`) ?? [];
-          const modelLines = activity.sort((left, right) => right.totalTokens - left.totalTokens).map((item) => `${item.model ?? "Unknown model"}: ${formatCount(item.totalTokens)} tokens`);
-          const pointTitle = [
-            `${entry.accountName} · ${entry.label}${entry.hostName ? ` · ${entry.hostName}` : ""}`,
-            `${remainingPercent.toFixed(0)}% left${change === null ? "" : ` · ${change >= 0 ? "+" : ""}${change.toFixed(0)} points since prior snapshot`}`,
-            `Interval ${formatTimestamp(activity[0]?.intervalStartAt ?? previous?.capturedAt ?? range.startAt)} to ${formatTimestamp(point.capturedAt)}`,
-            ...(modelLines.length ? modelLines : ["No recorded model token activity in this interval"]),
-            "Model activity is context; the provider does not attribute quota changes by model.",
-          ].join("\n");
-          return { x: xPosition(point.capturedAt), y: yPosition(remainingPercent), point, pointTitle };
-        });
-        return <g key={entry.key}>
-          {points.length > 1 ? <polyline points={points.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={entry.color} strokeWidth="2" vectorEffect="non-scaling-stroke" /> : null}
-          {points.map(({ x, y, point, pointTitle }) => <circle key={point.capturedAt} cx={x} cy={y} r="3.5" fill={entry.color} stroke="#202020" strokeWidth="1.2" vectorEffect="non-scaling-stroke"><title>{pointTitle}</title></circle>)}
-        </g>;
-      })}
+      {series.map((entry) => <g key={entry.key}>
+        {entry.points.length > 1 ? <polyline points={entry.points.map((point) => `${xPosition(point.capturedAt)},${yPosition(point.remainingPercent)}`).join(" ")} fill="none" stroke={entry.color} strokeWidth="2" vectorEffect="non-scaling-stroke" /> : null}
+        {entry.points.map((point) => <circle key={point.capturedAt} cx={xPosition(point.capturedAt)} cy={yPosition(point.remainingPercent)} r="3.5" fill={entry.color} stroke="#202020" strokeWidth="1.2" vectorEffect="non-scaling-stroke"><title>{`${entry.accountName} · ${entry.model}${entry.hostName ? ` · ${entry.hostName}` : ""}\n${point.remainingPercent.toFixed(0)}% ${windowLabel} quota remaining\n${formatTimestamp(point.intervalStartAt)} → ${formatTimestamp(point.capturedAt)}\n${formatCount(point.totalTokens)} model tokens in this interval\nModel activity is context; providers do not attribute quota changes to models.`}</title></circle>)}
+      </g>)}
     </svg>
-    <div className="aa-quota-history-legend">{series.map((entry) => <div key={entry.key}><span style={{ background: entry.color }} /><strong>{entry.accountName}</strong><small>{entry.label}{entry.hostName ? ` · ${entry.hostName}` : ""}</small></div>)}</div>
-    <section className="aa-quota-drops" aria-label="Largest quota drops"><header><strong>Largest quota drops</strong><span>Model token activity for the same account and interval; providers do not attribute quota changes to models.</span></header>{quotaDrops.length ? <div className="aa-quota-drop-list">{quotaDrops.map((drop) => <article key={drop.key}><div className="aa-quota-drop-heading"><strong>{drop.accountName} · {drop.label}</strong><b>−{drop.lost.toFixed(0)} points <span>({drop.before.toFixed(0)}% → {drop.after.toFixed(0)}%)</span></b></div><time>{formatTimestamp(drop.startAt)} → {formatTimestamp(drop.endAt)}{drop.hostName ? ` · ${drop.hostName}` : ""}</time><p>{drop.models.length ? drop.models.slice(0, 3).map((item) => `${item.model} · ${formatCount(item.totalTokens)} tokens`).join("  |  ") : "No recorded model token activity in this interval."}</p></article>)}</div> : <p className="aa-quota-drop-empty">No quota decreases recorded in this range.</p>}</section>
+    <div className="aa-quota-history-legend">{series.map((entry) => <div key={entry.key}><span style={{ background: entry.color }} /><strong>{entry.accountName} · {entry.model}</strong><small>{entry.points.length} observations{entry.hostName ? ` · ${entry.hostName}` : ""}</small></div>)}</div>
   </div>;
 };
 
@@ -856,6 +813,7 @@ const UsagePage = () => {
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [rangeError, setRangeError] = useState("");
   const [view, setView] = useState<"tokens" | "limits">("limits");
+  const [quotaChartWindow, setQuotaChartWindow] = useState<"session" | "weekly" | "monthly">("weekly");
   const [limitsLayout, setLimitsLayout] = useState<"accounts" | "comparison">("accounts");
   const [accountId, setAccountId] = useState("all");
   const [provider, setProvider] = useState<"all" | "codex" | "opencode-go">("all");
@@ -984,6 +942,7 @@ const UsagePage = () => {
             <div className="aa-date-range-custom"><strong>Custom range</strong><label>From<input aria-label="Usage start date" type="date" max={localDateInput(new Date())} value={rangeDraft.from} onChange={(event) => { const from = event.currentTarget.value; setRangeDraft((draft) => ({ ...draft, from })); setRangePreset("custom"); setRangeError(""); }} /></label><label>To<input aria-label="Usage end date" type="date" min={rangeDraft.from} max={localDateInput(new Date())} value={rangeDraft.to} onChange={(event) => { const to = event.currentTarget.value; setRangeDraft((draft) => ({ ...draft, to })); setRangePreset("custom"); setRangeError(""); }} /></label>{rangeError ? <p role="alert">{rangeError}</p> : null}<button className="aa-date-range-apply" type="button" onClick={applyRangeDraft}>Apply range</button></div>
           </div> : null}
         </div>
+        {view === "limits" ? <label className="aa-usage-chart-filter"><span>Chart rate limit</span><select aria-label="Quota chart rate limit" value={quotaChartWindow} onChange={(event) => { const value = event.currentTarget.value; if (value === "session" || value === "weekly" || value === "monthly") setQuotaChartWindow(value); }}><option value="weekly">Weekly</option><option value="session">Current session</option><option value="monthly">Monthly</option></select></label> : null}
         <select aria-label="Filter by account" value={accountId} onChange={(event) => setAccountId(event.currentTarget.value)}><option value="all">All accounts</option>{summary?.accounts.map((account) => <option key={account.id} value={account.id}>{account.displayName}</option>)}</select>
         <select aria-label="Filter by provider" value={provider} onChange={(event) => setProvider(event.currentTarget.value === "codex" || event.currentTarget.value === "opencode-go" ? event.currentTarget.value : "all")}><option value="all">All providers</option><option value="codex">Codex</option><option value="opencode-go">OpenCode Go</option></select>
         <select aria-label="Filter by machine" value={hostId} onChange={(event) => setHostId(event.currentTarget.value)}><option value="all">All machines</option>{summary?.hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>
@@ -1001,7 +960,7 @@ const UsagePage = () => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const accountGroups = Array.from(new Map(providerEntries.map((entry) => [`${entry.accountId}:${entry.hostId}`, providerEntries.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId)])).entries());
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} hostName={hostName} selectedWindow={quotaChartWindow} /><div className="aa-account-groups">{accountGroups.map(([groupKey, entries]) => {
             const first = entries[0];
             if (!first) return null;
             return <article className="aa-footer-account aa-page-account" key={groupKey}><header><strong>{first.accountName}</strong>{hostName(first.hostId) ? <span>{hostName(first.hostId)}</span> : null}</header>
@@ -1012,7 +971,7 @@ const UsagePage = () => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const windows = Array.from(new Set(providerEntries.map((entry) => entry.windowKey))).sort((left, right) => quotaWindowRank(providerEntries.find((entry) => entry.windowKey === left)?.label ?? "") - quotaWindowRank(providerEntries.find((entry) => entry.windowKey === right)?.label ?? ""));
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} range={range} hostName={hostName} /><div className="aa-comparison-windows">{windows.map((windowKey) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><QuotaHistoryChart history={visibleHistory.filter((entry) => entry.provider === providerName)} modelUsage={summary.quotaModelUsage.filter((entry) => providerEntries.some((quotaEntry) => quotaEntry.accountId === entry.accountId && quotaEntry.hostId === entry.hostId))} hostName={hostName} selectedWindow={quotaChartWindow} /><div className="aa-comparison-windows">{windows.map((windowKey) => {
             const entries = providerEntries.filter((entry) => entry.windowKey === windowKey);
             const first = entries[0];
             if (!first) return null;
