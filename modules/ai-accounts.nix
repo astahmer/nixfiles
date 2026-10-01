@@ -200,6 +200,11 @@
         home.file.".config/bb-plugin-ai-accounts/secrets.json".text = builtins.toJSON secretsDocument;
 
         home.activation.installBbAiAccounts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          bb_cli="''${BB_CLI:-$(command -v bb || true)}"
+          if [ -z "$bb_cli" ]; then
+            echo "error: BB CLI not found; set BB_CLI or add bb to PATH" >&2
+            exit 1
+          fi
           export PATH="${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:${pkgs.coreutils}/bin:$PATH"
           plugin_dir="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin"
           mkdir -p "$plugin_dir"
@@ -207,8 +212,8 @@
           ${pkgs.coreutils}/bin/chmod -R u+w "$plugin_dir"
           cd "$plugin_dir"
           pnpm install --frozen-lockfile --silent
-          bb plugin build
-          bb plugin install . --yes
+          "$bb_cli" plugin build
+          "$bb_cli" plugin install . --yes
           AI_ACCOUNTS_CONFIG="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/accounts.json" \
           AI_ACCOUNTS_SECRETS="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/secrets.json" \
           SECRET_BIN="${secretPackage}/bin/secret" \
