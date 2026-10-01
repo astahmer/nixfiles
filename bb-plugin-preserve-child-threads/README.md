@@ -8,6 +8,11 @@ parent remains archived.
 Archiving a child separately remains effective because its archive timestamp
 does not match an older archived parent.
 
+Use **Link existing thread** in the sidebar footer to organize threads without
+starting an agent turn. It updates only the child's BB `parentThreadId`; it
+does not send a prompt, call spawn, or affect either AI session. Both threads
+must belong to the same project.
+
 Install from the repository root with:
 
 ```sh
