@@ -232,9 +232,10 @@ Resolved for this release: bounded Codex and OpenCode Go local histories are inc
 - [x] Repeated cumulative usage updates and duplicate local-history scans are idempotent; durable SQLite history and cursors survive plugin reloads/restarts by design.
 - [x] Provider-local ingestion reads configured account paths, stores no credentials or transcript content, and does not depend on Tokitoki.
 - [x] No estimates are displayed; provider token counts remain separate from subscription quota and billed cost.
-- [x] The footer disclosure includes account/window percentages and a Usage route. Compact-width and live navigation behavior still need verification in the installed plugin runtime.
+- [ ] Verify the footer disclosure's account/window percentages, compact-width behavior, and Usage navigation in the installed plugin runtime.
 - [x] The built-in BB Usage page remains host-owned. The supported Appearance preference for its Provider Usage footer shortcut was verified and documented as a user choice.
-- [ ] Focused automated checks and plugin build pass. Live interaction must still verify the page, panel navigation, and footer disclosure in the installed plugin runtime.
+- [x] Focused automated checks and plugin build pass.
+- [ ] Live interaction verifies the page, panel navigation, and footer disclosure in the installed plugin runtime.
 
 ## Decisions log
 
