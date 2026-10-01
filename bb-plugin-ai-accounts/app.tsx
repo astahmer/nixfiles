@@ -841,14 +841,37 @@ const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
   const navigate = useBbNavigate();
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [providerTab, setProviderTab] = useState<"codex" | "opencode-go" | null>(null);
+  const [hostFilter, setHostFilter] = useState("all");
   const refresh = async () => {
     setRefreshing(true);
     try { setSummary(await rpc.call("refreshUsage", { range: "24h" })); } catch { setSummary(null); }
     finally { setRefreshing(false); }
   };
   useEffect(() => { void rpc.call("usageSummary", { range: "24h" }).then(setSummary).catch(() => setSummary(null)); }, []);
-  const quota = summary?.quota.slice().sort((left, right) => left.remainingPercent - right.remainingPercent).slice(0, 2) ?? [];
-  return <section className="aa-usage-footer" aria-label="AI account usage"><header><strong>AI account usage</strong><button type="button" onClick={dismiss}>Close</button></header>{quota.map((entry) => <div key={`${entry.accountId}:${entry.hostId}:${entry.windowKey}`}><span>{entry.accountName} · {entry.label}<small>{summary?.hosts.find((host) => host.id === entry.hostId)?.name ?? entry.hostId} · {new Date(entry.capturedAt).toLocaleTimeString()}</small></span><strong>{entry.remainingPercent.toFixed(0)}% left</strong></div>)}<button type="button" disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Refreshing…" : "Refresh usage"}</button><button type="button" className="aa-usage-footer-open" onClick={() => { dismiss(); navigate.toPluginPanel("accounts", { subPath: "usage" }); }}>Open usage history</button></section>;
+  const hostName = (id: string) => summary?.hosts.find((host) => host.id === id)?.name ?? id;
+  const visibleQuota = summary?.quota.filter((entry) => hostFilter === "all" || entry.hostId === hostFilter) ?? [];
+  const providers = Array.from(new Set(visibleQuota.map((entry) => entry.provider)));
+  const activeProvider = providerTab && providers.includes(providerTab) ? providerTab : providers[0] ?? null;
+  const providerQuota = activeProvider ? visibleQuota.filter((entry) => entry.provider === activeProvider) : [];
+  const accounts = Array.from(new Map(providerQuota.map((entry) => [`${entry.accountId}:${entry.hostId}`, providerQuota.filter((candidate) => candidate.accountId === entry.accountId && candidate.hostId === entry.hostId)])).values());
+  return <section className="aa-usage-footer" aria-label="AI account usage">
+    <header className="aa-footer-toolbar"><nav className="aa-footer-provider-tabs" role="tablist" aria-label="AI account provider">{providers.map((entry) => <button key={entry} role="tab" aria-label={entry === "codex" ? "Codex" : "OpenCode Go"} title={entry === "codex" ? "Codex" : "OpenCode Go"} aria-selected={activeProvider === entry} className={activeProvider === entry ? "is-active" : ""} type="button" onClick={() => setProviderTab(entry)}><span className={`aa-footer-provider-mark is-${entry}`} aria-hidden="true">{entry === "codex" ? "✳" : "◇"}</span></button>)}</nav>
+      <select aria-label="Usage machine" value={hostFilter} onChange={(event) => setHostFilter(event.currentTarget.value)}><option value="all">All machines</option>{summary?.hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>
+      <button className="aa-footer-icon-button" type="button" aria-label={refreshing ? "Refreshing usage" : "Refresh usage"} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "…" : "↻"}</button>
+      <button className="aa-footer-icon-button" type="button" aria-label="Close AI account usage" onClick={dismiss}>⌄</button>
+    </header>
+    <div className="aa-footer-accounts">{accounts.map((entries) => {
+      const first = entries[0];
+      if (!first) return null;
+      const banked = summary?.bankedResets.find((item) => item.accountId === first.accountId && item.hostId === first.hostId);
+      return <article className="aa-footer-account" key={`${first.accountId}:${first.hostId}`}><header><strong>{first.accountName}</strong><span>{hostName(first.hostId)}</span></header>
+        {entries.map((entry) => <div className="aa-footer-window" key={entry.windowKey}><div className="aa-footer-window-heading"><span>{entry.label}</span><strong>{entry.remainingPercent.toFixed(0)}% left</strong></div><div className="aa-footer-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-footer-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>{new Date(entry.capturedAt).toLocaleTimeString()}</span></div></div>)}
+        {banked && banked.balance > 0 ? <p className="aa-footer-banked">▣ {banked.balance} banked reset{banked.balance === 1 ? "" : "s"}{banked.expiresAt ? ` · expires ${new Date(banked.expiresAt).toLocaleString()}` : ""}</p> : null}
+      </article>;
+    })}{accounts.length === 0 ? <p className="aa-footer-empty">No current usage windows for this provider.</p> : null}</div>
+    <button className="aa-usage-footer-open" type="button" onClick={() => { dismiss(); navigate.toPluginPanel("accounts", { subPath: "usage" }); }}>Open usage history</button>
+  </section>;
 };
 
 const AccountPanel = ({ subPath }: { subPath: string }) => {
@@ -875,7 +898,7 @@ export default definePluginApp((app) => {
     kind: "disclosure",
     id: "ai-accounts-usage",
     label: "AI account usage",
-    icon: "BarChart3",
+    icon: "ChartColumn",
     component: UsageFooter,
   });
 });
