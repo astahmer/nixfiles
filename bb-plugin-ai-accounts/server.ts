@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
-import { toRemainingPercent, usageChartBucketMs, usageMigrations, usageRangeStart, storeThreadUsageEvents, upsertBankedResets, upsertQuotaPollState, upsertQuotaWindow, readLatestQuotaSnapshots } from "./usage-history.ts";
+import { toRemainingPercent, usageChartBucketMs, usageMigrations, storeThreadUsageEvents, upsertBankedResets, upsertQuotaPollState, upsertQuotaWindow, readLatestQuotaSnapshots } from "./usage-history.ts";
 import { scanLocalUsageHistory } from "./usage-sources.ts";
 import { fetchCodexResetCredits } from "./codex-reset-credits.ts";
 import { providerIconOptions } from "./provider-icons";
@@ -59,7 +59,9 @@ type ProviderIcon = z.infer<typeof providerIconSchema>;
 const stateKey = "accounts-v2";
 const accountInputSchema = accountSchema.omit({ id: true }).extend({ id: accountSchema.shape.id.optional() });
 const accountIdSchema = accountSchema.shape.id;
-const usageRangeSchema = z.enum(["24h", "7d", "30d", "90d"]);
+const usageRangeSchema = z.object({ startAt: z.number().int().nonnegative(), endAt: z.number().int().positive() })
+  .refine((range) => range.endAt > range.startAt, "Usage range end must be after its start.")
+  .refine((range) => range.endAt - range.startAt <= 366 * 24 * 60 * 60 * 1000, "Usage range cannot exceed one year.");
 const usageSummarySchema = z.object({
   capturedAt: z.number(),
   range: usageRangeSchema,
@@ -67,7 +69,7 @@ const usageSummarySchema = z.object({
   hosts: z.array(z.object({ id: z.string(), name: z.string(), status: z.string() })),
   quota: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number(), status: z.string(), message: z.string().nullable() })),
   quotaHistory: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), windowKey: z.string(), label: z.string(), usedPercent: z.number(), remainingPercent: z.number(), resetsAt: z.string().nullable(), capturedAt: z.number() })),
-  bankedResets: z.array(z.object({ accountId: z.string(), hostId: z.string(), balance: z.number(), expiresAt: z.string().nullable(), capturedAt: z.number() })),
+  bankedResets: z.array(z.object({ accountId: z.string(), hostId: z.string(), balance: z.number(), expiresAt: z.string().nullable(), resets: z.array(z.object({ expiresAt: z.string().nullable() })), capturedAt: z.number() })),
   tokenTotals: z.object({ totalTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number(), activeTokens: z.number() }),
   tokenSeries: z.array(z.object({ bucketAt: z.number(), accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), model: z.string().nullable(), totalTokens: z.number(), activeTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number() })),
   tokenBreakdown: z.array(z.object({ accountId: z.string(), accountName: z.string(), provider: providerSchema, hostId: z.string(), threadId: z.string().nullable(), projectId: z.string().nullable(), model: z.string().nullable(), source: z.string(), totalTokens: z.number(), inputTokens: z.number(), cachedInputTokens: z.number(), cacheReadInputTokens: z.number(), cacheWriteInputTokens: z.number(), outputTokens: z.number(), reasoningOutputTokens: z.number() })),
@@ -246,8 +248,9 @@ export default async function plugin(bb: BbPluginApi) {
     const { accounts } = await readState();
     const hosts = await bb.sdk.hosts.list();
     const now = Date.now();
-    const rangeStart = usageRangeStart(range, now);
-    const bucketMs = usageChartBucketMs(range);
+    const rangeStart = range.startAt;
+    const rangeEnd = range.endAt;
+    const bucketMs = usageChartBucketMs(rangeEnd - rangeStart);
     const quota = readLatestQuotaSnapshots(usageDb).map((entry) => {
       const poll = usageDb.prepare("SELECT status, message FROM quota_poll_state WHERE account_id = ? AND host_id = ?")
         .get(entry.accountId, entry.hostId) as { status: string; message: string | null } | undefined;
@@ -257,32 +260,34 @@ export default async function plugin(bb: BbPluginApi) {
       SELECT account_id AS accountId, account_name AS accountName, provider, host_id AS hostId, window_key AS windowKey,
         label, used_percent AS usedPercent, resets_at AS resetsAt, captured_at AS capturedAt,
         ROW_NUMBER() OVER (PARTITION BY account_id, host_id, window_key, CAST(captured_at / ? AS INTEGER) ORDER BY captured_at DESC, id DESC) AS rank
-      FROM quota_snapshots WHERE captured_at >= ?
+      FROM quota_snapshots WHERE captured_at >= ? AND captured_at < ?
     ) SELECT accountId, accountName, provider, hostId, windowKey, label, usedPercent, resetsAt, capturedAt
-      FROM ranked WHERE rank = 1 ORDER BY capturedAt LIMIT 5000`).all(bucketMs, rangeStart) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number }>;
+      FROM ranked WHERE rank = 1 ORDER BY capturedAt LIMIT 5000`).all(bucketMs, rangeStart, rangeEnd) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; windowKey: string; label: string; usedPercent: number; resetsAt: string | null; capturedAt: number }>;
     const bankedResets = usageDb.prepare(`SELECT account_id AS accountId, host_id AS hostId, balance,
       expires_at AS expiresAt, captured_at AS capturedAt FROM quota_banked_resets ORDER BY account_id, host_id`)
       .all() as Array<{ accountId: string; hostId: string; balance: number; expiresAt: string | null; capturedAt: number }>;
+    const bankedResetDates = usageDb.prepare(`SELECT account_id AS accountId, host_id AS hostId, expires_at AS expiresAt
+      FROM quota_banked_reset_dates ORDER BY account_id, host_id, reset_index`).all() as Array<{ accountId: string; hostId: string; expiresAt: string | null }>;
     const tokenTotals = usageDb.prepare(`SELECT
       COALESCE(SUM(total_tokens), 0) AS totalTokens, COALESCE(SUM(input_tokens), 0) AS inputTokens,
       COALESCE(SUM(cached_input_tokens), 0) AS cachedInputTokens, COALESCE(SUM(cache_read_input_tokens), 0) AS cacheReadInputTokens,
       COALESCE(SUM(cache_write_input_tokens), 0) AS cacheWriteInputTokens, COALESCE(SUM(output_tokens), 0) AS outputTokens,
       COALESCE(SUM(reasoning_output_tokens), 0) AS reasoningOutputTokens,
       COALESCE(SUM(CASE WHEN status = 'active' THEN total_tokens ELSE 0 END), 0) AS activeTokens
-      FROM token_usage WHERE occurred_at >= ?`).get(rangeStart) as { totalTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number; activeTokens: number };
+      FROM token_usage WHERE occurred_at >= ? AND occurred_at < ?`).get(rangeStart, rangeEnd) as { totalTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number; activeTokens: number };
     const tokenSeries = usageDb.prepare(`SELECT CAST(occurred_at / ? AS INTEGER) * ? AS bucketAt,
       account_id AS accountId, account_name AS accountName, provider, host_id AS hostId, model, SUM(total_tokens) AS totalTokens,
       SUM(input_tokens) AS inputTokens, SUM(cached_input_tokens) AS cachedInputTokens,
       SUM(cache_read_input_tokens) AS cacheReadInputTokens, SUM(cache_write_input_tokens) AS cacheWriteInputTokens,
       SUM(output_tokens) AS outputTokens, SUM(reasoning_output_tokens) AS reasoningOutputTokens,
       SUM(CASE WHEN status = 'active' THEN total_tokens ELSE 0 END) AS activeTokens
-      FROM token_usage WHERE occurred_at >= ? GROUP BY bucketAt, account_id, host_id, model ORDER BY bucketAt LIMIT 5000`).all(bucketMs, bucketMs, rangeStart) as Array<{ bucketAt: number; accountId: string; accountName: string; provider: Provider; hostId: string; model: string | null; totalTokens: number; activeTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
+      FROM token_usage WHERE occurred_at >= ? AND occurred_at < ? GROUP BY bucketAt, account_id, host_id, model ORDER BY bucketAt LIMIT 5000`).all(bucketMs, bucketMs, rangeStart, rangeEnd) as Array<{ bucketAt: number; accountId: string; accountName: string; provider: Provider; hostId: string; model: string | null; totalTokens: number; activeTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
     const tokenBreakdown = usageDb.prepare(`SELECT account_id AS accountId, account_name AS accountName, provider, host_id AS hostId,
       thread_id AS threadId, project_id AS projectId, model, source,
       SUM(total_tokens) AS totalTokens, SUM(input_tokens) AS inputTokens, SUM(cached_input_tokens) AS cachedInputTokens,
       SUM(cache_read_input_tokens) AS cacheReadInputTokens, SUM(cache_write_input_tokens) AS cacheWriteInputTokens,
       SUM(output_tokens) AS outputTokens, SUM(reasoning_output_tokens) AS reasoningOutputTokens
-      FROM token_usage WHERE occurred_at >= ? GROUP BY account_id, host_id, thread_id, project_id, model, source ORDER BY totalTokens DESC LIMIT 1000`).all(rangeStart) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; threadId: string | null; projectId: string | null; model: string | null; source: string; totalTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
+      FROM token_usage WHERE occurred_at >= ? AND occurred_at < ? GROUP BY account_id, host_id, thread_id, project_id, model, source ORDER BY totalTokens DESC LIMIT 1000`).all(rangeStart, rangeEnd) as Array<{ accountId: string; accountName: string; provider: Provider; hostId: string; threadId: string | null; projectId: string | null; model: string | null; source: string; totalTokens: number; inputTokens: number; cachedInputTokens: number; cacheReadInputTokens: number; cacheWriteInputTokens: number; outputTokens: number; reasoningOutputTokens: number }>;
     const sources = usageDb.prepare("SELECT account_id AS accountId, source, status, message, last_scanned_at AS lastScannedAt FROM usage_source_state ORDER BY account_id, source").all() as Array<{ accountId: string; source: string; status: string; message: string | null; lastScannedAt: number | null }>;
     return usageSummarySchema.parse({
       capturedAt: now,
@@ -291,7 +296,7 @@ export default async function plugin(bb: BbPluginApi) {
       hosts: hosts.map(({ id, name, status }) => ({ id, name, status })),
       quota: quota.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
       quotaHistory: quotaHistory.map((entry) => ({ ...entry, remainingPercent: toRemainingPercent(entry.usedPercent) ?? 0 })),
-      bankedResets,
+      bankedResets: bankedResets.map((entry) => ({ ...entry, resets: bankedResetDates.filter((reset) => reset.accountId === entry.accountId && reset.hostId === entry.hostId).map(({ expiresAt }) => ({ expiresAt })) })),
       tokenTotals,
       tokenSeries,
       tokenBreakdown,

@@ -677,8 +677,48 @@ const AccountPage = () => {
   );
 };
 
-type UsageRange = "24h" | "7d" | "30d" | "90d";
-const usageRanges: Array<{ value: UsageRange; label: string }> = [{ value: "24h", label: "Past 24 hours" }, { value: "7d", label: "7 days" }, { value: "30d", label: "30 days" }, { value: "90d", label: "90 days" }];
+type UsageRange = { startAt: number; endAt: number };
+type UsageRangePreset = "7d" | "30d" | "90d" | "this-year" | "last-year" | "past-year" | "custom";
+const usageRangePresets: Array<{ value: Exclude<UsageRangePreset, "custom">; label: string }> = [
+  { value: "7d", label: "Last 7 days" },
+  { value: "30d", label: "Last 30 days" },
+  { value: "90d", label: "Last 90 days" },
+  { value: "this-year", label: "This year" },
+  { value: "last-year", label: "Last year" },
+  { value: "past-year", label: "Past year" },
+];
+const localDateInput = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+const localDayStart = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1).getTime();
+};
+const dateRangeFromInputs = (from: string, to: string): UsageRange => {
+  const end = new Date(localDayStart(to));
+  end.setDate(end.getDate() + 1);
+  return { startAt: localDayStart(from), endAt: end.getTime() };
+};
+const dateRangeForPreset = (preset: Exclude<UsageRangePreset, "custom">, now = new Date()): UsageRange => {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const start = new Date(today);
+  if (preset === "this-year") start.setMonth(0, 1);
+  else if (preset === "last-year") {
+    start.setFullYear(start.getFullYear() - 1, 0, 1);
+    today.setMonth(0, 1);
+  } else if (preset === "past-year") start.setFullYear(start.getFullYear() - 1);
+  else start.setDate(start.getDate() - (Number.parseInt(preset, 10) - 1));
+  return { startAt: start.getTime(), endAt: preset === "last-year" ? today.getTime() : tomorrow.getTime() };
+};
+const dateInputsFromRange = (range: UsageRange) => {
+  const lastDay = new Date(range.endAt);
+  lastDay.setDate(lastDay.getDate() - 1);
+  return { from: localDateInput(new Date(range.startAt)), to: localDateInput(lastDay) };
+};
+const formatDateRange = (range: UsageRange) => {
+  const { from, to } = dateInputsFromRange(range);
+  return `${new Date(`${from}T12:00:00`).toLocaleDateString()} – ${new Date(`${to}T12:00:00`).toLocaleDateString()}`;
+};
 
 const formatCount = (count: number) => new Intl.NumberFormat(undefined, { notation: count >= 1_000_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(count);
 const formatTimestamp = (timestamp: number | null) => timestamp === null ? "Not yet" : new Date(timestamp).toLocaleString();
@@ -702,24 +742,37 @@ const quotaTone = (remainingPercent: number) => remainingPercent <= 10 ? "is-cri
 
 const sortQuotaWindows = (entries: UsageSummary["quota"]) => [...entries].sort((left, right) => quotaWindowRank(left.label) - quotaWindowRank(right.label));
 
+const quotaHistoryChange = (entry: UsageSummary["quota"][number], history: UsageSummary["quotaHistory"]) => {
+  const points = history.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey && point.resetsAt === entry.resetsAt).sort((left, right) => left.capturedAt - right.capturedAt);
+  const first = points[0];
+  const last = points.at(-1);
+  return first && last && first.capturedAt !== last.capturedAt ? Math.round(last.remainingPercent - first.remainingPercent) : null;
+};
+
+const BankedResetDetails = ({ entry, compact = false }: { entry: UsageSummary["bankedResets"][number]; compact?: boolean }) => <details className={`aa-banked-reset-list ${compact ? "is-compact" : ""}`}>
+  <summary>▣ {entry.balance} banked reset{entry.balance === 1 ? "" : "s"}{entry.expiresAt ? ` · earliest expires ${new Date(entry.expiresAt).toLocaleString()}` : ""}</summary>
+  <ol>{entry.resets.map((reset, index) => <li key={`${reset.expiresAt ?? "unknown"}:${index}`}>Reset {index + 1} · {reset.expiresAt ? `expires ${new Date(reset.expiresAt).toLocaleString()}` : "expiry date not reported"}</li>)}</ol>
+  {entry.balance > entry.resets.length ? <p>{entry.balance - entry.resets.length} reset{entry.balance - entry.resets.length === 1 ? "" : "s"} without an individual expiry date from the provider</p> : null}
+</details>;
+
 const FooterProviderMark = ({ provider }: { provider: "codex" | "opencode-go" }) => provider === "codex"
   ? <svg className="aa-footer-provider-mark is-codex" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fillRule="evenodd" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.8956zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z" /></svg>
   : <svg className="aa-footer-provider-mark is-opencode-go" viewBox="-72 -42 384 384" aria-hidden="true"><path fill="currentColor" fillOpacity=".45" d="M180 240H60V120H180V240Z" /><path fill="currentColor" d="M180 60H60V240H180V60ZM240 300H0V0H240V300Z" /></svg>;
 
 const QuotaSparkline = ({ history, range }: { history: UsageSummary["quotaHistory"]; range: UsageRange }) => {
   const ordered = history.slice().sort((left, right) => left.capturedAt - right.capturedAt);
-  if (ordered.length < 2) return <p className="aa-quota-history-empty">Quota trend starts with the next snapshot.</p>;
-  const gapLimit = range === "24h" ? 2 : range === "7d" ? 12 : 48;
+  if (ordered.length < 2) return null;
+  const gapLimitMs = Math.max(2 * 60 * 60 * 1000, (range.endAt - range.startAt) / 15);
   const segments: typeof ordered[] = [];
   for (const entry of ordered) {
     const current = segments.at(-1);
     const previous = current?.at(-1);
-    if (!current || !previous || entry.resetsAt !== previous.resetsAt || entry.capturedAt - previous.capturedAt > gapLimit * 60 * 60 * 1000) segments.push([entry]);
+    if (!current || !previous || entry.resetsAt !== previous.resetsAt || entry.capturedAt - previous.capturedAt > gapLimitMs) segments.push([entry]);
     else current.push(entry);
   }
   const firstAt = ordered[0]?.capturedAt ?? Date.now();
   const lastAt = ordered.at(-1)?.capturedAt ?? firstAt;
-  return <svg className="aa-quota-sparkline" viewBox="0 0 100 28" role="img" aria-label={`Remaining quota history over ${range}`}>
+  return <svg className="aa-quota-sparkline" viewBox="0 0 100 28" role="img" aria-label={`Remaining quota history from ${formatDateRange(range)}`}>
     <line x1="0" x2="100" y1="3" y2="3" stroke="currentColor" strokeOpacity=".12" />
     <line x1="0" x2="100" y1="25" y2="25" stroke="currentColor" strokeOpacity=".12" />
     {segments.filter((segment) => segment.length > 1).map((segment) => <polyline key={`${segment[0]?.capturedAt}`} points={segment.map((entry) => {
@@ -733,7 +786,11 @@ const QuotaSparkline = ({ history, range }: { history: UsageSummary["quotaHistor
 const UsagePage = () => {
   const rpc = useRpc<typeof rpcContract>();
   const navigate = useBbNavigate();
-  const [range, setRange] = useState<UsageRange>("7d");
+  const [range, setRange] = useState<UsageRange>(() => dateRangeForPreset("7d"));
+  const [rangePreset, setRangePreset] = useState<UsageRangePreset>("7d");
+  const [rangeDraft, setRangeDraft] = useState(() => dateInputsFromRange(dateRangeForPreset("7d")));
+  const [rangePickerOpen, setRangePickerOpen] = useState(false);
+  const [rangeError, setRangeError] = useState("");
   const [view, setView] = useState<"tokens" | "limits">("limits");
   const [limitsLayout, setLimitsLayout] = useState<"accounts" | "comparison">("accounts");
   const [accountId, setAccountId] = useState("all");
@@ -743,6 +800,31 @@ const UsagePage = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+
+  const applyRangeDraft = () => {
+    if (!rangeDraft.from || !rangeDraft.to || rangeDraft.from > rangeDraft.to) {
+      setRangeError("Choose a valid start and end date.");
+      return;
+    }
+    const selectedRange = dateRangeFromInputs(rangeDraft.from, rangeDraft.to);
+    if (selectedRange.endAt - selectedRange.startAt > 366 * 24 * 60 * 60 * 1000) {
+      setRangeError("Choose a range of one year or less.");
+      return;
+    }
+    setRange(selectedRange);
+    setRangePreset("custom");
+    setRangeError("");
+    setRangePickerOpen(false);
+  };
+
+  const selectRangePreset = (preset: Exclude<UsageRangePreset, "custom">) => {
+    const selectedRange = dateRangeForPreset(preset);
+    setRange(selectedRange);
+    setRangeDraft(dateInputsFromRange(selectedRange));
+    setRangePreset(preset);
+    setRangeError("");
+    setRangePickerOpen(false);
+  };
 
   const load = async (refresh: boolean) => {
     if (refresh) setRefreshing(true);
@@ -791,10 +873,16 @@ const UsagePage = () => {
   const hostName = (id: string) => summary?.hosts.find((host) => host.id === id)?.name ?? id;
   return <main className="aa-usage-page">
     <header className="aa-usage-header">
-      <div><p className="aa-kicker">AI ACCOUNTS</p><h1>Usage</h1><p className="aa-subtitle">Account limits and token history collected by BB.</p></div>
       <div className="aa-usage-controls">
-        <button className="aa-quiet" type="button" onClick={() => navigate.toPluginPanel("accounts")}>Accounts</button>
-        <select aria-label="Usage range" value={range} onChange={(event) => setRange(usageRanges.find((option) => option.value === event.currentTarget.value)?.value ?? "7d")}>{usageRanges.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select>
+        <div className="aa-date-range-picker" onKeyDown={(event) => { if (event.key === "Escape") setRangePickerOpen(false); }}>
+          <button className="aa-date-range-trigger" type="button" aria-haspopup="dialog" aria-expanded={rangePickerOpen} onClick={() => { setRangeDraft(dateInputsFromRange(range)); setRangeError(""); setRangePickerOpen((open) => !open); }}>
+            {rangePreset === "custom" ? formatDateRange(range) : usageRangePresets.find((preset) => preset.value === rangePreset)?.label ?? formatDateRange(range)} <span aria-hidden="true">⌄</span>
+          </button>
+          {rangePickerOpen ? <div className="aa-date-range-popover" role="dialog" aria-label="Choose usage date range">
+            <div className="aa-date-range-presets"><span>Presets</span>{usageRangePresets.map((preset) => <button key={preset.value} type="button" onClick={() => selectRangePreset(preset.value)}>{preset.label}</button>)}</div>
+            <div className="aa-date-range-custom"><strong>Custom range</strong><label>From<input aria-label="Usage start date" type="date" max={localDateInput(new Date())} value={rangeDraft.from} onChange={(event) => { const from = event.currentTarget.value; setRangeDraft((draft) => ({ ...draft, from })); setRangePreset("custom"); setRangeError(""); }} /></label><label>To<input aria-label="Usage end date" type="date" min={rangeDraft.from} max={localDateInput(new Date())} value={rangeDraft.to} onChange={(event) => { const to = event.currentTarget.value; setRangeDraft((draft) => ({ ...draft, to })); setRangePreset("custom"); setRangeError(""); }} /></label>{rangeError ? <p role="alert">{rangeError}</p> : null}<button className="aa-date-range-apply" type="button" onClick={applyRangeDraft}>Apply range</button></div>
+          </div> : null}
+        </div>
         <select aria-label="Filter by account" value={accountId} onChange={(event) => setAccountId(event.currentTarget.value)}><option value="all">All accounts</option>{summary?.accounts.map((account) => <option key={account.id} value={account.id}>{account.displayName}</option>)}</select>
         <select aria-label="Filter by provider" value={provider} onChange={(event) => setProvider(event.currentTarget.value === "codex" || event.currentTarget.value === "opencode-go" ? event.currentTarget.value : "all")}><option value="all">All providers</option><option value="codex">Codex</option><option value="opencode-go">OpenCode Go</option></select>
         <select aria-label="Filter by machine" value={hostId} onChange={(event) => setHostId(event.currentTarget.value)}><option value="all">All machines</option>{summary?.hosts.map((host) => <option key={host.id} value={host.id}>{host.name}</option>)}</select>
@@ -818,20 +906,23 @@ const UsagePage = () => {
             const first = entries[0];
             if (!first) return null;
             const banked = summary.bankedResets.find((item) => item.accountId === first.accountId && item.hostId === first.hostId);
-            return <article className="aa-account-quota" key={groupKey}><header><div><strong>{first.accountName}</strong><span>{hostName(first.hostId)}</span></div>{banked && banked.balance > 0 ? <div className="aa-banked-reset">▣ {banked.balance} banked reset{banked.balance === 1 ? "" : "s"}{banked.expiresAt ? ` · earliest expires ${new Date(banked.expiresAt).toLocaleString()} (${formatReset(banked.expiresAt).replace("Resets in ", "")})` : ""}</div> : null}</header>
-              {sortQuotaWindows(entries).map((entry) => <div className="aa-account-window" key={entry.windowKey}><div className="aa-window-heading"><strong>{entry.label}</strong><span className={`aa-quota-status ${entry.status === "ok" ? "is-ok" : "is-stale"}`}>{entry.status === "ok" ? "Current" : entry.status}</span></div><div className="aa-window-value"><strong>{entry.remainingPercent.toFixed(0)}% <small>left</small></strong><span>{entry.usedPercent.toFixed(0)}% used</span></div><div className="aa-quota-track" role="progressbar" aria-label={`${first.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>Snapshot {new Date(entry.capturedAt).toLocaleTimeString()}</span></div><QuotaSparkline range={range} history={visibleHistory.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey)} />{entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}</div>)}
+            return <article className={`aa-account-quota is-${first.provider}`} key={groupKey}><header><div className="aa-account-identity"><FooterProviderMark provider={first.provider} /><div><strong>{first.accountName}</strong><span>{hostName(first.hostId)}</span></div></div>{banked && banked.balance > 0 ? <BankedResetDetails entry={banked} /> : null}</header>
+              {sortQuotaWindows(entries).map((entry) => <div className="aa-account-window" key={entry.windowKey}><div className="aa-window-heading"><strong>{entry.label}</strong><span className={`aa-quota-status ${entry.status === "ok" ? "is-ok" : "is-stale"}`}>{entry.status === "ok" ? "Current" : entry.status}</span></div><div className="aa-window-value"><strong>{entry.remainingPercent.toFixed(0)}% <small>left</small></strong><span>{entry.usedPercent.toFixed(0)}% used</span></div><div className="aa-quota-track" role="progressbar" aria-label={`${first.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>Updated {new Date(entry.capturedAt).toLocaleTimeString()}</span></div><QuotaSparkline range={range} history={visibleHistory.filter((point) => point.accountId === entry.accountId && point.hostId === entry.hostId && point.windowKey === entry.windowKey)} />{entry.message ? <p className="aa-quota-error">{entry.message}</p> : null}</div>)}
             </article>;
           })}</div></section>;
         })}</div> : <div className="aa-provider-groups">{["codex", "opencode-go"].map((providerName) => {
           const providerEntries = visibleQuota.filter((entry) => entry.provider === providerName);
           if (providerEntries.length === 0) return null;
           const windows = Array.from(new Set(providerEntries.map((entry) => entry.windowKey))).sort((left, right) => quotaWindowRank(providerEntries.find((entry) => entry.windowKey === left)?.label ?? "") - quotaWindowRank(providerEntries.find((entry) => entry.windowKey === right)?.label ?? ""));
-          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3>{windows.map((windowKey) => {
+          return <section className="aa-provider-group" key={providerName}><h3>{providerName === "codex" ? "Codex" : "OpenCode Go"}</h3><div className="aa-comparison-windows">{windows.map((windowKey) => {
             const entries = providerEntries.filter((entry) => entry.windowKey === windowKey);
             const first = entries[0];
             if (!first) return null;
-            return <article className="aa-comparison-window" key={windowKey}><h4>{first.label}</h4>{entries.map((entry) => <div className="aa-comparison-row" key={`${entry.accountId}:${entry.hostId}`}><div className="aa-comparison-label"><strong>{entry.accountName}</strong><span>{hostName(entry.hostId)} · {entry.remainingPercent.toFixed(0)}% left · {formatReset(entry.resetsAt)}</span></div><div className="aa-comparison-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div></div>)}</article>;
-          })}</section>;
+            const averageRemaining = Math.round(entries.reduce((total, entry) => total + entry.remainingPercent, 0) / entries.length);
+            const changes = entries.map((entry) => quotaHistoryChange(entry, visibleHistory)).filter((change) => change !== null);
+            const averageChange = changes.length ? Math.round(changes.reduce((total, change) => total + change, 0) / changes.length) : null;
+            return <article className="aa-comparison-window" key={windowKey}><header className="aa-comparison-summary"><div><h4>{first.label}</h4><span>{entries.length} {entries.length === 1 ? "account" : "accounts"}</span></div><strong className={quotaTone(averageRemaining)}>{averageRemaining}% <small>left</small></strong><span className={`aa-comparison-trend ${averageChange === null ? "is-empty" : averageChange >= 0 ? "is-rising" : "is-falling"}`}>{averageChange === null ? "Trend starts with next snapshot" : `${averageChange >= 0 ? "↗ +" : "↘ "}${averageChange}%`}</span></header><div className="aa-comparison-accounts">{entries.map((entry) => <div className="aa-comparison-account" key={`${entry.accountId}:${entry.hostId}`}><div className="aa-comparison-label"><strong>{entry.accountName}</strong><span>{hostName(entry.hostId)} · {entry.remainingPercent.toFixed(0)}% left · {formatReset(entry.resetsAt)}</span></div><div className="aa-comparison-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div></div>)}</div></article>;
+          })}</div></section>;
         })}</div> : <p className="aa-usage-empty">No quota snapshots yet. Refresh to query connected account providers.</p>}
       </section>
       <details className="aa-usage-section aa-history-details"><summary><span><strong>Limit history</strong><small>Deduplicated snapshots by account, machine and plan window</small></span><span>{visibleHistory.length} points</span></summary>
@@ -841,7 +932,7 @@ const UsagePage = () => {
     {!loading && !error && summary && view === "tokens" ? <>
       <section className="aa-token-metrics"><article><span>Processed tokens</span><strong>{formatCount(visibleTotals.totalTokens)}</strong><small>{formatCount(visibleTotals.activeTokens)} in active turns</small></article><article><span>Input</span><strong>{formatCount(visibleTotals.inputTokens)}</strong><small>{formatCount(visibleTotals.cachedInputTokens)} cached input</small></article><article><span>Output</span><strong>{formatCount(visibleTotals.outputTokens)}</strong><small>{formatCount(visibleTotals.reasoningOutputTokens)} reasoning tokens</small></article><article><span>Cache detail</span><strong>{formatCount(visibleTotals.cacheReadInputTokens + visibleTotals.cacheWriteInputTokens)}</strong><small>{formatCount(visibleTotals.cacheReadInputTokens)} read · {formatCount(visibleTotals.cacheWriteInputTokens)} writes</small></article></section>
       <section className="aa-usage-section aa-token-chart-section"><div className="aa-usage-section-heading"><div><h2>Token volume</h2><p>Grouped by time and account. Hover points for exact counts.</p></div><strong>Peak {formatCount(timeline.maxTokens)}</strong></div>
-        {timeline.count ? <div className="aa-token-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Token usage over ${range}; peak bucket ${formatCount(timeline.maxTokens)} tokens`}><defs><linearGradient id="aa-token-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2e9a80" stopOpacity=".28" /><stop offset="100%" stopColor="#2e9a80" stopOpacity="0" /></linearGradient></defs><polyline points={timeline.points} fill="none" stroke="#2e9a80" strokeWidth="1.4" vectorEffect="non-scaling-stroke" /><polygon points={`0,100 ${timeline.points} 100,100`} fill="url(#aa-token-fill)" /></svg><div className="aa-token-chart-axis"><span>{new Date(visibleSeries[0]?.bucketAt ?? Date.now()).toLocaleDateString()}</span><span>{new Date(visibleSeries.at(-1)?.bucketAt ?? Date.now()).toLocaleDateString()}</span></div></div> : <p className="aa-usage-empty">No token history in this range. BB imports local provider history and records BB sessions.</p>}
+        {timeline.count ? <div className="aa-token-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label={`Token usage from ${formatDateRange(range)}; peak bucket ${formatCount(timeline.maxTokens)} tokens`}><defs><linearGradient id="aa-token-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2e9a80" stopOpacity=".28" /><stop offset="100%" stopColor="#2e9a80" stopOpacity="0" /></linearGradient></defs><polyline points={timeline.points} fill="none" stroke="#2e9a80" strokeWidth="1.4" vectorEffect="non-scaling-stroke" /><polygon points={`0,100 ${timeline.points} 100,100`} fill="url(#aa-token-fill)" /></svg><div className="aa-token-chart-axis"><span>{new Date(visibleSeries[0]?.bucketAt ?? Date.now()).toLocaleDateString()}</span><span>{new Date(visibleSeries.at(-1)?.bucketAt ?? Date.now()).toLocaleDateString()}</span></div></div> : <p className="aa-usage-empty">No token history in this range. BB imports local provider history and records BB sessions.</p>}
       </section>
       <section className="aa-usage-section"><div className="aa-usage-section-heading"><div><h2>Breakdown</h2><p>Detailed token totals by account, model and source.</p></div></div>
         {visibleBreakdown.length ? <div className="aa-usage-table-wrap"><table className="aa-usage-table"><thead><tr><th>Account</th><th>Model</th><th>Source</th><th>Project</th><th>Thread</th><th>Total</th><th>Input</th><th>Output</th><th>Reasoning</th></tr></thead><tbody>{visibleBreakdown.map((entry) => { const threadId = entry.threadId; return <tr key={`${entry.accountId}:${entry.hostId}:${threadId ?? "local"}:${entry.model ?? "unknown"}:${entry.source}`}><td>{entry.accountName}</td><td>{entry.model ?? "Model unavailable"}</td><td>{entry.source}</td><td>{entry.projectId ?? "—"}</td><td>{threadId ? <button className="aa-usage-table-link" type="button" onClick={() => navigate.toThread(threadId)}>Open BB thread</button> : "—"}</td><td>{formatCount(entry.totalTokens)}</td><td>{formatCount(entry.inputTokens)}</td><td>{formatCount(entry.outputTokens)}</td><td>{formatCount(entry.reasoningOutputTokens)}</td></tr>; })}</tbody></table></div> : <p className="aa-usage-empty">No token breakdown yet. Provider history does not include transcript content.</p>}
@@ -850,6 +941,8 @@ const UsagePage = () => {
     </> : null}
   </main>;
 };
+
+const recentUsageRange = () => ({ startAt: Date.now() - 24 * 60 * 60 * 1000, endAt: Date.now() });
 
 const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
   const rpc = useRpc<typeof rpcContract>();
@@ -860,10 +953,10 @@ const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
   const [hostFilter, setHostFilter] = useState("all");
   const refresh = async () => {
     setRefreshing(true);
-    try { setSummary(await rpc.call("refreshUsage", { range: "24h" })); } catch { setSummary(null); }
+    try { setSummary(await rpc.call("refreshUsage", { range: recentUsageRange() })); } catch { setSummary(null); }
     finally { setRefreshing(false); }
   };
-  useEffect(() => { void rpc.call("usageSummary", { range: "24h" }).then(setSummary).catch(() => setSummary(null)); }, []);
+  useEffect(() => { void rpc.call("usageSummary", { range: recentUsageRange() }).then(setSummary).catch(() => setSummary(null)); }, []);
   const hostName = (id: string) => summary?.hosts.find((host) => host.id === id)?.name ?? id;
   const visibleQuota = summary?.quota.filter((entry) => hostFilter === "all" || entry.hostId === hostFilter) ?? [];
   const providers = Array.from(new Set(visibleQuota.map((entry) => entry.provider)));
@@ -882,7 +975,7 @@ const UsageFooter = ({ dismiss }: { dismiss(): void }) => {
       const banked = summary?.bankedResets.find((item) => item.accountId === first.accountId && item.hostId === first.hostId);
       return <article className="aa-footer-account" key={`${first.accountId}:${first.hostId}`}><header><strong>{first.accountName}</strong><span>{hostName(first.hostId)}</span></header>
         {sortQuotaWindows(entries).map((entry) => <div className="aa-footer-window" key={entry.windowKey}><div className="aa-footer-window-heading"><span>{entry.label}</span><strong>{entry.remainingPercent.toFixed(0)}% left</strong></div><div className="aa-footer-track" role="progressbar" aria-label={`${entry.accountName} ${entry.label} remaining`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={entry.remainingPercent}><span className={quotaTone(entry.remainingPercent)} style={{ width: `${entry.remainingPercent}%` }} /></div><div className="aa-footer-window-meta"><span>{formatReset(entry.resetsAt)}</span><span>{new Date(entry.capturedAt).toLocaleTimeString()}</span></div></div>)}
-        {banked && banked.balance > 0 ? <p className="aa-footer-banked">▣ {banked.balance} banked reset{banked.balance === 1 ? "" : "s"}{banked.expiresAt ? ` · expires ${new Date(banked.expiresAt).toLocaleString()}` : ""}</p> : null}
+        {banked && banked.balance > 0 ? <BankedResetDetails entry={banked} compact /> : null}
       </article>;
     })}{accounts.length === 0 ? <p className="aa-footer-empty">No current usage windows for this provider.</p> : null}</div>
     <button className="aa-usage-footer-open" type="button" onClick={() => { dismiss(); navigate.toPluginPanel("accounts", { subPath: "usage" }); }}>Open usage history</button>

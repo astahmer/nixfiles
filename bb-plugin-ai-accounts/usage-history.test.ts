@@ -49,8 +49,8 @@ test("banked reset parsing reports available count and earliest valid expiry", (
       { status: "used", expires_at: "2026-10-02T12:00:00.000Z" },
       { status: "available", expires_at: "2026-10-03T12:00:00.000Z" },
     ],
-  }), { balance: 3, expiresAt: "2026-10-03T12:00:00.000Z" });
-  assert.deepEqual(parseCodexResetCredits({ available_count: 0, credits: [] }), { balance: 0, expiresAt: null });
+  }), { balance: 3, expiresAt: "2026-10-03T12:00:00.000Z", resets: [{ expiresAt: "2026-10-03T12:00:00.000Z" }, { expiresAt: "2026-10-05T12:00:00.000Z" }] });
+  assert.deepEqual(parseCodexResetCredits({ available_count: 0, credits: [] }), { balance: 0, expiresAt: null, resets: [] });
   assert.equal(parseCodexResetCredits({ available_count: -1 }), null);
 });
 

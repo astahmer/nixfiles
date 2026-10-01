@@ -115,6 +115,14 @@ export const usageMigrations = [
     captured_at INTEGER NOT NULL,
     PRIMARY KEY (account_id, host_id)
   );`,
+  `CREATE TABLE quota_banked_reset_dates (
+    account_id TEXT NOT NULL,
+    host_id TEXT NOT NULL,
+    reset_index INTEGER NOT NULL,
+    expires_at TEXT,
+    captured_at INTEGER NOT NULL,
+    PRIMARY KEY (account_id, host_id, reset_index)
+  );`,
 ];
 
 export const readLatestQuotaSnapshots = (db: UsageDatabase) => db.prepare(`WITH ranked AS (
@@ -141,15 +149,26 @@ export const upsertBankedResets = (db: UsageDatabase, input: {
   hostId: string;
   balance: number;
   expiresAt: string | null;
+  resets: Array<{ expiresAt: string | null }>;
   capturedAt: number;
 }) => {
-  db.prepare(`INSERT INTO quota_banked_resets (account_id, host_id, balance, expires_at, captured_at)
-    VALUES (@accountId, @hostId, @balance, @expiresAt, @capturedAt)
-    ON CONFLICT(account_id, host_id) DO UPDATE SET balance = excluded.balance,
-      expires_at = excluded.expires_at, captured_at = excluded.captured_at`).run({
-    ...input,
-    balance: Math.max(0, Math.floor(input.balance)),
+  const replace = db.transaction(() => {
+    db.prepare(`INSERT INTO quota_banked_resets (account_id, host_id, balance, expires_at, captured_at)
+      VALUES (@accountId, @hostId, @balance, @expiresAt, @capturedAt)
+      ON CONFLICT(account_id, host_id) DO UPDATE SET balance = excluded.balance,
+        expires_at = excluded.expires_at, captured_at = excluded.captured_at`).run({
+      accountId: input.accountId,
+      hostId: input.hostId,
+      balance: Math.max(0, Math.floor(input.balance)),
+      expiresAt: input.expiresAt,
+      capturedAt: input.capturedAt,
+    });
+    db.prepare("DELETE FROM quota_banked_reset_dates WHERE account_id = ? AND host_id = ?").run(input.accountId, input.hostId);
+    const insertResetDate = db.prepare(`INSERT INTO quota_banked_reset_dates
+      (account_id, host_id, reset_index, expires_at, captured_at) VALUES (?, ?, ?, ?, ?)`);
+    input.resets.forEach((reset, index) => insertResetDate.run(input.accountId, input.hostId, index, reset.expiresAt, input.capturedAt));
   });
+  replace();
 };
 
 export const decodeUsageTokenTotals = (value: unknown): UsageTokenTotals | null => {
@@ -395,13 +414,8 @@ export const storeUsageSourceState = (db: UsageDatabase, input: {
 
 export type { UsageDatabase };
 
-export const usageRangeStart = (range: "24h" | "7d" | "30d" | "90d", now = Date.now()) => {
-  const days = range === "24h" ? 1 : Number.parseInt(range, 10);
-  return now - days * 24 * 60 * 60 * 1000;
-};
-
-export const usageChartBucketMs = (range: "24h" | "7d" | "30d" | "90d") =>
-  range === "24h" ? 60 * 60 * 1000 : range === "7d" ? 6 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+export const usageChartBucketMs = (durationMs: number) =>
+  durationMs <= 24 * 60 * 60 * 1000 ? 60 * 60 * 1000 : durationMs <= 7 * 24 * 60 * 60 * 1000 ? 6 * 60 * 60 * 1000 : durationMs <= 90 * 24 * 60 * 60 * 1000 ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
 
 export const toRemainingPercent = (usedPercent: number) =>
   Number.isFinite(usedPercent) && usedPercent >= 0 && usedPercent <= 100 ? 100 - usedPercent : null;

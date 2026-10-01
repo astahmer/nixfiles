@@ -28,10 +28,14 @@ export const parseCodexResetCredits = (value: unknown) => {
   if (!parsed.success) return null;
   const availableCredits = (parsed.data.credits ?? []).filter((credit) => credit.status === "available");
   const balance = parsed.data.available_count ?? availableCredits.length;
-  const expiresAt = availableCredits.map((credit) => credit.expires_at)
-    .filter((value): value is string => value !== undefined && Number.isFinite(Date.parse(value)))
-    .sort((left, right) => Date.parse(left) - Date.parse(right))[0] ?? null;
-  return { balance, expiresAt };
+  const resets = availableCredits.map((credit) => ({
+    expiresAt: credit.expires_at && Number.isFinite(Date.parse(credit.expires_at)) ? new Date(credit.expires_at).toISOString() : null,
+  })).sort((left, right) => {
+    if (!left.expiresAt) return 1;
+    if (!right.expiresAt) return -1;
+    return Date.parse(left.expiresAt) - Date.parse(right.expiresAt);
+  });
+  return { balance, expiresAt: resets.find((reset) => reset.expiresAt)?.expiresAt ?? null, resets };
 };
 
 const readBoundedResponse = async (response: Response) => {
