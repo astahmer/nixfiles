@@ -1,7 +1,10 @@
 # Owned additions for the single DSH web profile.
+- id: hmr
+  disabled: false
+  config:
+    root:
+      - !!js process.env.HOME + '/dev/dsh-plugins'
 - insert:
-    - id: bb-session-search
-      name: '@astahmer/dsh-session-search'
     - id: mcp-tokitoki
       name: '@deepseek-ai/dsh-mcp-client'
       config:
