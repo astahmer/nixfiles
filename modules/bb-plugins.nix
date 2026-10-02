@@ -10,7 +10,6 @@
     let
       pluginRoot = "${config.home.homeDirectory}/dev/bb-plugins";
       customPluginIds = [
-        "ai-accounts"
         "auto-handoff-parent"
         "diff-viewed"
         "jujutsu"
@@ -21,7 +20,6 @@
         "settings-search"
         "sidebar-commands"
         "sidebar-resize"
-        "tokitoki-usage"
       ];
       thirdPartyPlugins = [
         {
