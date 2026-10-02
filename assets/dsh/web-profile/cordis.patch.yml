@@ -1,5 +1,7 @@
 # Owned additions for the single DSH web profile.
 - insert:
+    - id: bb-session-search
+      name: '@astahmer/dsh-session-search'
     - id: mcp-tokitoki
       name: '@deepseek-ai/dsh-mcp-client'
       config:
@@ -67,6 +69,10 @@
         toolName: subagent_codex_alex2
         backgroundMode: one-shot
         maxDepth: provider-managed
+- id: session-query-sqlite
+  config:
+    path: !!js dshHomePath('session-search.db')
+    openAt: first-search
 - id: llm-pi-ai
   config:
     providers:
@@ -258,3 +264,11 @@
       - id: tool-plugin-manager
         name: '@deepseek-ai/dsh-plugin-manager/tools'
         disabled: true
+- id: ui-settings-general
+  name: '@deepseek-ai/dsh-client-ui-settings-general'
+  config:
+    welcomeNoticeVersion: 2026-09-28.1
+- id: ui-theme
+  name: '@deepseek-ai/dsh-client-ui-theme'
+  config:
+    preference: dark

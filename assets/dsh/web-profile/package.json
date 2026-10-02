@@ -5,6 +5,8 @@
     "@agentclientprotocol/codex-acp": "2.0.1",
     "@astahmer/dsh-acp-accounts": "file:../../../dev/dsh-plugins/packages/acp-accounts",
     "@astahmer/dsh-bb-chatgpt-theme": "file:../../../dev/dsh-plugins/packages/bb-chatgpt-theme",
+    "@astahmer/dsh-session-search": "file:../../../dev/dsh-plugins/packages/session-search",
+    "@astahmer/dsh-scheduled-send": "file:../../../dev/dsh-plugins/packages/scheduled-send",
     "@deepseek-ai/dsh-mcp-client": "0.2.0-rc.2",
     "@deepseek-ai/dsh-subagent-acp": "0.2.0-rc.2"
   },
@@ -13,8 +15,11 @@
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
+        "@deepseek-ai/dsh-experimental-voice-input-bundle",
         "@astahmer/dsh-acp-accounts",
-        "@astahmer/dsh-bb-chatgpt-theme"
+        "@astahmer/dsh-bb-chatgpt-theme",
+        "@astahmer/dsh-session-search",
+        "@astahmer/dsh-scheduled-send"
       ]
     }
   }

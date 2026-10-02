@@ -1,33 +1,18 @@
 { ... }:
 {
   config.flake.modules.homeManager.dsh =
-    { pkgs, ... }:
+    { config, pkgs, ... }:
     let
-      appInfo = pkgs.writeText "dsh-web-app-info.plist" ''
-        <?xml version="1.0" encoding="UTF-8"?>
-        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-        <plist version="1.0">
-        <dict>
-          <key>CFBundleExecutable</key>
-          <string>DeepSeek Harness</string>
-          <key>CFBundleIdentifier</key>
-          <string>dev.astahmer.dsh.web</string>
-          <key>CFBundleName</key>
-          <string>DeepSeek Harness</string>
-          <key>CFBundlePackageType</key>
-          <string>APPL</string>
-          <key>CFBundleVersion</key>
-          <string>1</string>
-        </dict>
-        </plist>
+      appScript = pkgs.writeText "dsh-web-app.applescript" ''
+        on run
+          do shell script "/bin/zsh -lc " & quoted form of "exec ${../assets/dsh/start-dsh}"
+        end run
       '';
-      appLauncher = pkgs.writeShellScript "dsh-web-app-launcher" ''
-        exec /bin/zsh -lc '${../assets/dsh/start-dsh}'
-      '';
-      dshApp = pkgs.runCommand "deepseek-harness-app" { } ''
-        mkdir -p "$out/Contents/MacOS"
-        cp ${appInfo} "$out/Contents/Info.plist"
-        cp ${appLauncher} "$out/Contents/MacOS/DeepSeek Harness"
+      dshApp = pkgs.runCommand "deepseek-harness-app.app" { } ''
+        /usr/bin/osacompile -o "$out" ${appScript}
+        /usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string dev.astahmer.dsh.web' "$out/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c 'Set :CFBundleName DeepSeek Harness' "$out/Contents/Info.plist"
+        /usr/bin/codesign --force --deep --sign - "$out"
       '';
       dshStartAlias = pkgs.writeShellScript "dsh-start" ''
         exec "$HOME/.local/bin/dsh-web" "$@"
@@ -36,6 +21,8 @@
     {
       home.file.".dsh/profiles/web/package.json".source = ../assets/dsh/web-profile/package.json;
       home.file.".dsh/profiles/web/cordis.patch.yml".source = ../assets/dsh/web-profile/cordis.patch.yml;
+      home.file.".dsh/AGENTS.md".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
       home.file.".local/bin/dsh-web".source = ../assets/dsh/start-dsh;
       home.file.".local/bin/dsh-start".source = dshStartAlias;
       home.file."Applications/DeepSeek Harness.app".source = dshApp;
