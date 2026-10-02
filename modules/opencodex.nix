@@ -88,12 +88,11 @@ in
         OPENCODEX_OPENCODE_GO_MANU_KEY="$(read_secret opencode-go-manu "${globalSecretConfig}")"
         OPENCODEX_OPENCODE_GO_MATHIAS_KEY="$(read_secret opencode-go-mathias "${globalSecretConfig}")"
         OPENCODEX_CODEX_ALEX2_EMAIL="$(read_secret opencodex-codex-alex2-email)"
-        OPENCODEX_CODEX_WORK_EMAIL="$(read_secret opencodex-codex-work-email)"
         # The jq pass below reads these through `env.*`, which only sees
         # exported variables.
         export OPENCODEX_COMMANDCODE_API_KEY OPENCODEX_OPENCODE_GO_API_KEY \
           OPENCODEX_OPENCODE_GO_MANU_KEY OPENCODEX_OPENCODE_GO_MATHIAS_KEY \
-          OPENCODEX_CODEX_ALEX2_EMAIL OPENCODEX_CODEX_WORK_EMAIL
+          OPENCODEX_CODEX_ALEX2_EMAIL
 
         # Legacy fallback: ~/.config/opencodex/secrets.env overrides the vault
         # for provider keys explicitly placed there (e.g. when Bitwarden is locked).
@@ -247,18 +246,11 @@ in
         # Materialize configured secrets only for providers and accounts that
         # exist. With no secret value, keep existing values.
         ${jq} '
-          # Label whichever live account currently owns each known email,
+          # Label the live account that currently owns the configured email,
           # rather than a hardcoded chatgpt-<id>: ocx mints a fresh id on
           # every browser re-auth, and ids differ per machine entirely.
           # This self-heals after a re-login or on a new machine, as soon
           # as an account with that email exists.
-          (if (env.OPENCODEX_CODEX_WORK_EMAIL // "") != ""
-           then .codexAccounts = ((.codexAccounts // []) | map(
-                  if .email == env.OPENCODEX_CODEX_WORK_EMAIL then . + {alias: "codex-work"} else . end
-                ))
-              | (((.codexAccounts // []) | map(select(.email == env.OPENCODEX_CODEX_WORK_EMAIL)) | .[0].id) // null) as $workId
-              | if $workId != null then .codexAccountNamespaces["codex-work"] = $workId else . end
-           else . end)
           | (if (env.OPENCODEX_CODEX_ALEX2_EMAIL // "") != ""
              then .codexAccounts = ((.codexAccounts // []) | map(
                     if .email == env.OPENCODEX_CODEX_ALEX2_EMAIL then . + {alias: "codex-alex2"} else . end

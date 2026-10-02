@@ -111,18 +111,6 @@
         "_nixSeeded": true
       }
     },
-    "codex-work": {
-      "driver": "codex",
-      "displayName": "Codex Work",
-      "enabled": true,
-      "config": {
-        "binaryPath": "codex",
-        "homePath": "$CODEX_HOME",
-        "shadowHomePath": "$CODEX_SHADOW_ROOT/codex-work",
-        "launchArgs": "",
-        "customModels": []
-      }
-    },
     "codex-alex2": {
       "driver": "codex",
       "displayName": "Codex Alex2",

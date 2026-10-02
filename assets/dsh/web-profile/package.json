@@ -6,6 +6,8 @@
     "@astahmer/dsh-acp-accounts": "link:../../../dev/dsh-plugins/packages/acp-accounts",
     "@astahmer/dsh-bb-chatgpt-theme": "link:../../../dev/dsh-plugins/packages/bb-chatgpt-theme",
     "@astahmer/dsh-session-search": "link:../../../dev/dsh-plugins/packages/session-search",
+    "@astahmer/dsh-session-organizer": "link:../../../dev/dsh-plugins/packages/session-organizer",
+    "@astahmer/dsh-session-forks": "link:../../../dev/dsh-plugins/packages/session-forks",
     "@astahmer/dsh-scheduled-send": "link:../../../dev/dsh-plugins/packages/scheduled-send",
     "@deepseek-ai/dsh-mcp-client": "0.2.0-rc.2",
     "@deepseek-ai/dsh-subagent-acp": "0.2.0-rc.2"
@@ -19,6 +21,8 @@
         "@astahmer/dsh-acp-accounts",
         "@astahmer/dsh-bb-chatgpt-theme",
         "@astahmer/dsh-session-search",
+        "@astahmer/dsh-session-organizer",
+        "@astahmer/dsh-session-forks",
         "@astahmer/dsh-scheduled-send"
       ]
     }

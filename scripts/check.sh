@@ -30,17 +30,8 @@ if command -v jq >/dev/null 2>&1; then
     ]))
     and .providers["opencode-go-alex"].apiKey == "$OPENCODEX_OPENCODE_GO_API_KEY"
     and .providers["opencode-go-mathias"].apiKey == "$OPENCODEX_OPENCODE_GO_MATHIAS_KEY"
-    and .codexAccountNamespaces == {
-      "codex-perso": "@main",
-      "codex-work": "chatgpt-1786023688396",
-      "codex-alex2": "chatgpt-1788600942946"
-    }
-    and ([.codexAccounts[].id] | sort == [
-      "chatgpt-1786023688396",
-      "chatgpt-1788600942946"
-    ])
-    and ([.codexAccounts[].isMain] | all(. == false))
-    and ([.codexAccounts[].email] | all(startswith("$OPENCODEX_CODEX_")))
+    and .codexAccountNamespaces == {"codex-perso": "@main"}
+    and ((.codexAccounts // []) | length == 0)
     # This is the checked-in OpenCodex 2.63.0 visibility snapshot for the
     # configured providers. A catalog refresh that intentionally changes it
     # should update the template and these assertions together.
@@ -59,7 +50,6 @@ if command -v jq >/dev/null 2>&1; then
   jq -e '
     .secrets["opencodex-codex-perso-email"].env == "OPENCODEX_CODEX_PERSO_EMAIL"
     and .secrets["opencodex-codex-perso-email"].type == "login"
-    and .secrets["opencodex-codex-work-email"].env == "OPENCODEX_CODEX_WORK_EMAIL"
     and .secrets["opencodex-codex-alex2-email"].env == "OPENCODEX_CODEX_ALEX2_EMAIL"
   ' .secret.json >/dev/null
   jq -e '

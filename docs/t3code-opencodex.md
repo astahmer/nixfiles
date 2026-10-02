@@ -24,22 +24,17 @@ Codex models come from official model discovery; Nix seeds no custom model or
 default model selection. Nightly is the only T3 app installed by Nix; old Alpha
 bundles in either Applications directory are leftover installations.
 
-Nix seeds `codex-work` and `codex-alex2` as separate Codex instances. Their
-shadow homes live under `~/.local/share/t3code/codex`; the regular `~/.codex`
-login remains separate. On each machine, sign into each account once by running
-the matching command separately in a terminal:
-
-```sh
-CODEX_HOME="$HOME/.local/share/t3code/codex/codex-work" codex -c 'cli_auth_credentials_store="file"' login
-```
+Nix seeds `codex-alex2` as a separate Codex instance. Its shadow home lives
+under `~/.local/share/t3code/codex`; the regular `~/.codex` login remains
+separate. On each machine, sign into that account once by running:
 
 ```sh
 CODEX_HOME="$HOME/.local/share/t3code/codex/codex-alex2" codex -c 'cli_auth_credentials_store="file"' login
 ```
 
-Choose the matching ChatGPT account in the browser for each login. If the
+Choose the matching ChatGPT account in the browser. If the
 browser silently selects the wrong account, sign out there or open the login
-URL in a private window. After both logins finish, refresh the status beside
+URL in a private window. After login finishes, refresh the status beside
 **Checked…** in T3. Codex CLI stores each login under that command's
 `CODEX_HOME` ([credential-store configuration](https://developers.openai.com/codex/config-reference));
 these machine-local auth files are not Nix settings and should not be copied
@@ -89,7 +84,6 @@ reauthentication. The known selectors are rebuilt as follows:
 | Selector | OpenCodex route | Purpose |
 | --- | --- | --- |
 | `codex-perso` | native `openai` `@main` account | Main personal Codex login |
-| `codex-work` | connected pool account matching the work email | Work Codex login |
 | `codex-alex2` | connected pool account matching the Alex2 email | Second personal Codex login |
 
 The native personal account is already represented by Codex's own
@@ -98,11 +92,10 @@ The pool account credentials stay in the local OCX account store. Nix can keep
 already-connected accounts labeled correctly, but a new machine still needs
 each OAuth login once because OAuth tokens must not be copied through Nix.
 
-The stale `activeCodexAccountId` is not carried into the rebuilt config. That
-removes the old persisted `codex-work` preference; the native Codex template
-defaults to `codex-perso/gpt-6-luna`; the matching Sol model and explicit
-account-qualified model selectors remain available when another account is
-intentionally chosen.
+The stale `activeCodexAccountId` is not carried into the rebuilt config. The
+native Codex template defaults to `codex-perso/gpt-6-luna`; the matching Sol
+model and explicit account-qualified model selectors remain available when
+another account is intentionally chosen.
 
 The four provider keys are read by activation via the project or global
 `secret` config; the local `~/.config/opencodex/secrets.env` remains a fallback
@@ -115,14 +108,12 @@ when Bitwarden is locked:
 | `opencode-go-manu` | `OPENCODEX_OPENCODE_GO_MANU_KEY` | `opencode-go-manu` provider + OpenCode pool entry |
 | `opencode-go-mathias` | `OPENCODEX_OPENCODE_GO_MATHIAS_KEY` | OpenCode pool entry |
 
-The two pool-account rows use private `secret` aliases for their email fields:
-`opencodex-codex-alex2-email` and `opencodex-codex-work-email`. None of those
-values are stored in this repository. Create or update them with hidden
-prompts:
+The remaining pool-account row uses a private `secret` alias for its email
+field, `opencodex-codex-alex2-email`. That value is not stored in this
+repository. Create or update it with a hidden prompt:
 
 ```sh
 secret set opencodex-codex-alex2-email
-secret set opencodex-codex-work-email
 ```
 
 The per-machine secret template is deployed at
@@ -135,7 +126,7 @@ OPENCODEX_OPENCODE_GO_MANU_KEY=...
 OPENCODEX_OPENCODE_GO_MATHIAS_KEY=...
 ```
 
-`codex-alex2`, `codex-perso`, and `codex-work` are model-routing selectors;
+`codex-alex2` and `codex-perso` are model-routing selectors;
 they are not provider names to add in the dashboard. `@main` is the
 deterministic native-login target; `__main__` is an internal credential
 sentinel and must not be added as a pool row.

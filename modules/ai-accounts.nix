@@ -134,19 +134,6 @@
               path = "${config.home.homeDirectory}/.codex";
             }
             {
-              id = "codex-work";
-              provider = "codex";
-              displayName = "Codex Work";
-              badge = "CW";
-              accentColor = "#DC2626";
-              providerIcon = "BriefcaseBusiness";
-              modelReasoningDefaults = {
-                "gpt-6-luna" = "max";
-                "gpt-6.1-sol" = "low";
-              };
-              path = "${config.home.homeDirectory}/.local/share/bb-ai-accounts/codex/work";
-            }
-            {
               id = "codex-alex2";
               provider = "codex";
               displayName = "Codex Alex2";
