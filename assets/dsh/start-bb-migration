@@ -2,8 +2,4 @@
 set -eu
 
 script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec fnm exec --using=v22.23.3 -- dsh \
-  --profile bb-migration \
-  --patch "$script_directory/bb-migration.patch.yml" \
-  --port 3081 \
-  "$@"
+exec "$script_directory/start-dsh" "$@"

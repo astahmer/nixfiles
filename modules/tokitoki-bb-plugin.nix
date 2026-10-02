@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ ... }:
 {
   config.flake.modules.homeManager.tokitokiBbPlugin =
     {
@@ -8,7 +8,7 @@
       ...
     }:
     let
-      pluginSource = "${inputs."bb-plugins"}/plugins/tokitoki-usage";
+      pluginSource = "${config.home.homeDirectory}/dev/bb-plugins/plugins/tokitoki-usage";
       pluginDirectory = "${config.home.homeDirectory}/.config/bb-plugins/tokitoki-usage";
     in
     {

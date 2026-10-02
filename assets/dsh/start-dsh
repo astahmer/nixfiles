@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+exec fnm exec --using=v22.23.3 -- dsh web --port 3080 "$@"

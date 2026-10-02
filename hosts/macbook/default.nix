@@ -38,6 +38,7 @@ in
           hm.t3code
           hm.bbPlugins
           hm.aiAccounts
+          hm.dsh
           hm.coding
           hm.zed
           hm.vscode

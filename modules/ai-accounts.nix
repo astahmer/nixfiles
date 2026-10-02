@@ -10,7 +10,7 @@
     let
       inherit (lib) mkEnableOption mkOption types;
       settings = config.programs.bbAiAccounts;
-      pluginSource = ../bb-plugin-ai-accounts;
+      pluginSource = "${config.home.homeDirectory}/dev/bb-plugins/plugins/ai-accounts";
       secretPackage = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret;
       providerIconOptions = [
         "Bot"

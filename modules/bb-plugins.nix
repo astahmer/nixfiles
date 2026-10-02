@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ ... }:
 {
   config.flake.modules.homeManager.bbPlugins =
     {
@@ -8,6 +8,7 @@
       ...
     }:
     let
+      pluginRoot = "${config.home.homeDirectory}/dev/bb-plugins";
       customPluginIds = [
         "ai-accounts"
         "auto-handoff-parent"
@@ -107,7 +108,7 @@
       setupDocument = {
         customPlugins = map (id: {
           inherit id;
-          source = if id == "tokitoki-usage" then "${../bb-plugin-tokitoki}" else "${inputs.bbPlugins}/plugins/${id}";
+          source = "${pluginRoot}/plugins/${id}";
           enabled = id != "auto-handoff-parent";
         }) customPluginIds;
         inherit thirdPartyPlugins;

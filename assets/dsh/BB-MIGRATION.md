@@ -7,16 +7,40 @@ This is the versioned migration record and source-of-truth plan for a first-part
 Checked 2026-10-02 on Apple Silicon macOS.
 
 - BB CLI: `0.44.0`; local data directory: `~/.bb`; current project: `nixfiles`; active plugin service reports no plugins needing attention.
-- BB plugin registry: 62 installed; 52 enabled and running; 10 disabled. Inventory below is from `bb plugin list --json`, which reports versions, source/provenance, running status, frontend bundles, service/schedule declarations, and contributed capabilities. Descriptions and status are verified registry metadata; underlying behavior is not source-audited unless explicitly called out.
+- BB plugin registry: 62 installed; 47 enabled and running; 15 disabled. Disabled plugins are out of migration scope and are omitted from the capability table. Tasks and Automations are enabled but explicitly deferred. Inventory below is from `bb plugin list --json`, which reports versions, source/provenance, running status, frontend bundles, service/schedule declarations, and contributed capabilities. Descriptions and status are verified registry metadata; underlying behavior is not source-audited unless explicitly called out.
 - DSH CLI/package: `@deepseek-ai/dsh@0.2.0-rc.2`; Node `v24.20.0`; `DSH_HOME` is unset and the active home is `~/.dsh`.
-- Installed DSH profiles: `web` and `desktop`. The existing `web` profile has `@deepseek-ai/dsh-base`, `@deepseek-ai/dsh-web-app`, and `dshmarket` in its bundle list; its own package dependency is `dshmarket@^1.66.7`. Its local patch sets only a UI welcome-notice version. Its `cordis.yml` is generated output and must not be edited. The separate migration profile will omit DSH Market and will not alter `web` or `desktop`.
+- Installed DSH profiles: `web` and `desktop`. The existing `web` profile has `@deepseek-ai/dsh-base`, `@deepseek-ai/dsh-web-app`, and `dshmarket` in its bundle list; its own package dependency is `dshmarket@^1.66.7`. Its local patch sets only a UI welcome-notice version. Its `cordis.yml` is generated output and must not be edited. The requested destination is the existing `web` profile, with DSH Market removed from that profile. `desktop` remains untouched.
 - The DSH web endpoint at `http://localhost:3080` returned HTTP 401 during one authorized local probe. This proves an HTTP service answered then, not that a browser session or model request is authenticated. A second sandboxed probe could not connect; service availability must be rechecked outside that restriction.
 - BB server-backed metadata was queried via the documented BB CLI. Available providers are Codex, Claude Code, Pi, Cursor ACP, OpenCode ACP, three Codex account profiles, and three OpenCode Go account profiles. The primary Codex model menu includes GPT-6.1-Sol, GPT-6-Astra/Sol/Luna, GPT-5.6-Sol/Terra/Luna, and GPT-5.5; the `EM · Codex` account defaults to GPT-6-Luna. OpenCode Go account catalogs include DeepSeek V4.1 Flash and Fledge Alpha Free. “Available” is the provider registry state; it does not prove a signed-in session. Provider metadata identifies Codex/Claude/Pi CLI login flows and ChatGPT login for the Codex account plugin. API-key/account secrets were not read or copied.
 - BB exposes two enabled global MCP servers through its tool directory: Dadabase and Tokitoki. Dadabase advertises saved-connection listing, bounded schema inspection and SQL query tools; Tokitoki advertises usage, session, quota, and report tools. Tool names and schemas were obtained from `mcp_list_tools`; no tool was called for this inventory.
 - Nixfiles has existing Codex, OpenCodex, AI Accounts, Executor, Tokitoki, and BB plugin setup. Relevant files include `assets/codex/config.template.toml`, `assets/opencodex/config.template.json`, `assets/ai-accounts/seed.mjs`, `assets/executor/`, and the Home Manager modules. They are configuration clues only; no credential values were inspected. Nixfiles also has unrelated dirty AI-account edits in another JJ workspace, preserved during this migration.
 - The BB plugin source directory `~/dev/bb-plugins` contains local implementations for AI Accounts, Auto Handoff Parent, Diff Viewed, Jujutsu, MCP Manager, Memory Watch, Preserve Child Threads, Secret Catalog, Settings Search, Sidebar Commands, Sidebar Resize, and Tokitoki Usage. These names are verified from the directory listing; their source is not copied or used for DSH replacements.
 
-### Installed BB plugins
+### Active BB settings
+
+Read from `bb settings show --json`; `customCss` contents and credentials were deliberately excluded from captured output.
+
+- General: keyboard hints on; Enter does not steer an active thread; diagnostics and unhandled-provider events hidden; streamer mode off; telemetry on; managed branch prefix `bb/`; provider order/default unset; no default machine access; machine Git credentials enabled; Connect selected as server-access default but pairing is setup-required and effective URL is unset.
+- Appearance: active theme `plugin:chatgpt-skin:chatgpt`; one plugin theme; no standalone custom themes. The active custom CSS is a BB-specific token/UI skin and must be treated as a user setting, not silently discarded.
+- UI/input: 109 active keybindings, 3 overrides; voice transcription enabled. Preserve applicable shortcuts and preferences where DSH offers supported configuration; BB-only UI bindings map to platform boundary when DSH has no equivalent.
+- Experiments: changelog preview, legacy Jiti loader, mobile app, server move, and sidebar progressive disclosure are off. Feature flags observed: placeholder off and timeline window event budget 1500.
+- Providers: Codex, Pi, Cursor ACP, OpenCode ACP, three Codex account homes, and three OpenCode Go account homes are listed. Availability metadata does not prove an authenticated session. Existing subscription-backed homes stay local; no auth files or secret values are copied.
+- Skills: BB reports the installed skill registry separately from plugins; only skills/instructions actually used by enabled BB plugins or active user configuration are in scope. Nix-managed `~/.agents/skills` and project instructions are the source candidates; unrelated Codex skills are not migrated wholesale.
+
+### Active settings mapping
+
+| BB setting | DSH replacement | status | notes |
+|---|---|---|---|
+| Active `plugin:chatgpt-skin:chatgpt` theme and 74,583-character custom CSS | Owned token overlay plus DSH's persisted Dark preference | partial | Fourteen color tokens now match the active BB theme in the live DSH page. BB layout selectors and other CSS remain outside the DSH token contract. |
+| Voice transcription enabled | DSH official Voice input enabled; local SenseVoiceSmall INT8 model prepared | partial | DSH reports local speech recognition ready. The Chrome microphone permission and an actual recording/transcription remain unverified; no audio was recorded. |
+| 109 active shortcuts; overrides `sidebar.toggle` Command+B, `panel.toggle` Command+Shift+B, `terminal.open` Command+J | DSH shortcut editor | partial | Command+Shift+B already toggles the right sidebar. DSH web editor refused bare Command+B and Command+J as unsupported combinations; remaining bindings were not copied wholesale. |
+| Keyboard hints on; Enter does not steer an active thread | DSH keyboard shortcut editor and busy-send preference | partial | DSH exposes its own keybinding list and Queue/Steer behavior; exact parity has not been checked beyond Command+Shift+B. |
+| Diagnostic and unhandled-provider events hidden; streamer mode off; telemetry on | DSH settings and plugin configuration | not replicated | DSH settings have no verified equivalents for these BB preferences; DSH's separate official-model session-log upload setting is on by default and is not treated as equivalent to BB telemetry. |
+| Managed branch prefix `bb/`; default provider/order unset; no default machine access; machine Git credentials enabled | DSH workspace and provider settings | partial | DSH uses local workspace access; there is no verified equivalent for BB machine-provider defaults or branch naming policy. Provider/account routes are documented separately. |
+| Connect selected as BB server-access default, pairing setup-required, no effective URL | DSH local loopback web listener on port 3080 | partial | No remote listener or Connect replacement is enabled. |
+| BB experiments off; timeline event budget 1500 | DSH core defaults | partial | Experiments remain off. The BB timeline event budget has no verified DSH setting. |
+
+### Enabled BB plugins
 
 `replicated` means the replacement has been implemented and behavior verified; `partial` means only a subset is implemented or verified; `not replicated` means no replacement has been implemented. The table was recorded before changing DSH; statuses are updated below as verification completes.
 
@@ -24,14 +48,13 @@ Checked 2026-10-02 on Apple Silicon macOS.
 |---|---|---|---|---|
 | `action-topbar` | Community plugin, v0.1.0, running, app bundle; mirrors thread tabs and launcher | Platform boundary: DSH custom thread-topbar UI not verified | not replicated | UI behavior from registry description |
 | `agent-annotations` | BB built-in v0.1.0, running, app and thread mention; browser element comments | Platform boundary: no equivalent browser-tab annotation surface verified | not replicated | Tool/skill offered by BB plugin |
-| `ai-accounts` | Local path plugin v0.1.0, running, UI/service; six provider IDs, including three isolated Codex homes | Owned DSH ACP LLM adapter exposes six routes in the DSH model picker | partial | Codex routes are fixed to Luna and use existing homes; OpenCode Go routes use separate XDG homes. Model selection/new sessions hit the DSH persona error. Profile editor, quota history and provider-side session reuse remain gaps. |
+| `ai-accounts` | Local path plugin v0.1.0, running, UI/service; six provider IDs, including three isolated Codex homes | Owned DSH ACP LLM adapter exposes six routes in the DSH model picker | partial | Active `web` profile starts a new `codex-personal`/GPT-6-Luna session and completed a Luna turn. Other five routes, account editor, quota history and provider-side session reuse remain unverified or missing. |
 | `ask-user-question` | BB built-in v0.1.0, running, agent tool | First-party DSH user-question tool in standard preset | partial | Present in installed composition; session creation blocker prevents an interactive round trip. |
 | `automations` | BB built-in v0.1.0, running, schedule UI/service | Deferred: Tasks or Automations | deferred | No DSH replacement research or implementation |
 | `bb-guide` | BB built-in v0.1.0, running; skills and onboarding | DSH agent instructions plus filesystem skills | partial | Uses Nix-managed `~/.agents/skills`; prompt injection behavior not independently runtime-tested |
 | `bb-sidebar` | Community plugin v0.2.26, running; sort, snooze, settle | Platform boundary: BB sidebar organization UI | not replicated | No DSH UI slot verified |
 | `chat-search` | Community plugin v0.1.3, running, app bundle | Partial owned session-search command/plugin if DSH session query API allows | not replicated | Search scope needs to match BB open-chat search |
-| `chatgpt-skin` | Community plugin v0.1.5, running, theme registration | Platform boundary: DSH web theme extension not verified | not replicated | BB custom theme is verified active registry metadata |
-| `command-code` | Community plugin v0.1.2, running; ACP provider | Owned provider integration only if installed DSH APIs support the needed transport | not replicated | API-key billing must not replace existing auth silently |
+| `chatgpt-skin` | Community plugin v0.1.5, running, theme registration | Owned DSH plugin `@astahmer/dsh-bb-chatgpt-theme` | partial | DSH plugin panel shows it installed and enabled. Fourteen mapped color tokens now match the active BB theme in dark mode; matching the full 74 KB BB CSS is outside the token mapping so far. |
 | `concurrency-limit` | BB built-in v0.1.0, running; concurrency controls | Partial owned DSH configuration | not replicated | DSH agent/subagent concurrency knobs need verification |
 | `connect` | BB built-in v0.1.0, running; remote access | Platform boundary or owned deployment config, pending DSH listener/auth API | not replicated | Do not expose DSH remotely during this migration |
 | `custom-instructions` | BB built-in v0.1.0, running; persistent task instructions | DSH agent-instructions plugin in the standard preset | partial | Configured; file discovery and precedence are not runtime-verified because DSH cannot create a fresh session. |
@@ -40,13 +63,13 @@ Checked 2026-10-02 on Apple Silicon macOS.
 | `environment-personal-workspace` | BB built-in v0.1.0, running; personal workspace provider | Partial owned workspace configuration | not replicated | Per-thread workspace behavior unverified |
 | `environment-project-checkout` | BB built-in v0.1.0, running; checkout provider | Partial owned workspace configuration | not replicated | Branch/checkout selection parity unverified |
 | `fast-split` | Community plugin v0.1.0, running, app bundle | Platform boundary: neighboring thread panes | not replicated | |
-| `files-editor` | Community plugin v0.1.6, running, app bundle and skill; tree/search/editor | DSH filesystem edit/search tools in the standard preset | partial | Tools are configured; agent-mediated disposable read/write test is blocked by the DSH session error. |
+| `files-editor` | Community plugin v0.1.6, running, app bundle and skill; tree/search/editor | DSH filesystem tools and shell in the standard preset | partial | A Luna session and shell write/readback in `/private/tmp/dsh-migration-smoke` succeeded. The ACP route did not expose DSH filesystem tools, so native DSH filesystem tool use and BB tree/editor UI are not replicated. |
 | `handoff` | Community plugin v0.7.2, running, app bundle and skill; session/provider/machine handoff | Partial owned DSH commands if supported import/export interfaces exist | not replicated | Cross-provider session continuity may be a platform boundary |
 | `hotspot` | Community plugin v0.1.0, running; tools and skill | Owned diagnostic command only if DSH can use safe host metadata | not replicated | Do not poll; do not claim per-plugin attribution without evidence |
 | `inline-vis` | BB built-in v0.1.0, running; inline HTML/Markdown renderer | Platform boundary: inline assistant-message rendering | not replicated | |
 | `jujutsu` | Local plugin v0.1.0, running; CLI and skill | Host `jj` CLI through DSH Bash plus the existing Jujutsu skill | partial | Host command and skill are available; session blocker prevented DSH-mediated verification. |
 | `keep-awake` | BB built-in v0.1.0, running; macOS awake behavior | Owned opt-in command/config if supported | not replicated | Never keep awake by default |
-| `mcp-manager` | Local plugin v0.1.0, running; MCP server management/tools | DSH first-party MCP client configured for local Tokitoki | partial | Tokitoki client is configured; DSH agent tool call is blocked by session creation. Dadabase endpoint is not present in inspected host config. |
+| `mcp-manager` | Local plugin v0.1.0, running; MCP server management/tools | DSH first-party MCP client plus owned ACP adapter passes local Tokitoki to account sessions | partial | Luna invoked Tokitoki `budgets_status` successfully with values suppressed. Dadabase has no independently launchable endpoint/command in the inspected host config; server management UI and Dadabase tools remain gaps. |
 | `memory` | Community plugin v0.2.0, running; durable provider-independent memory | Partial owned DSH memory instructions/storage | not replicated | Cross-provider search and attribution need an owned implementation |
 | `memory-watch` | Local plugin v0.1.0, running; host/plugin memory diagnostics | Owned opt-in, bounded host diagnostic if safe APIs permit | not replicated | Avoid polling |
 | `message-timestamps` | Community plugin v0.1.0, running, app bundle | Platform boundary unless DSH timeline exposes timestamp formatting | not replicated | |
@@ -56,12 +79,10 @@ Checked 2026-10-02 on Apple Silicon macOS.
 | `plugin-api-docs` | BB built-in v0.1.0, running; API browser/mention | Owned DSH development notes from installed API docs | not replicated | Do not port BB API docs/source |
 | `plugin-api-tester` | BB built-in v0.1.0, running; test plugin APIs | Owned DSH smoke command/fixture if API is documented | not replicated | |
 | `preserve-child-threads` | Local plugin v0.1.0, running; archive lifecycle and thread linking | Platform boundary: DSH thread-tree lifecycle UI/API not verified | not replicated | |
-| `provider-acp` | BB built-in v0.1.0, running; Cursor and OpenCode ACP providers | Owned ACP LLM adapter for the available Codex and OpenCode Go account homes | partial | Routes are visible in DSH model picker; session/provider operations hit the DSH persona error before ACP starts. Cursor account route is not configured. |
-| `provider-claude-code` | BB built-in v0.1.0, running; Claude CLI provider | Owned provider adapter if supported DSH interface exists | not replicated | Native CLI login remains host-local |
-| `provider-codex` | BB built-in v0.1.0, running; Codex provider | Owned DSH ACP account adapter launches Codex with existing `CODEX_HOME` | partial | A direct ACP smoke passed with personal `gpt-6-luna`; invoking the DSH route is blocked by the DSH session error. No credential copy or API-key billing. |
+| `provider-acp` | BB built-in v0.1.0, running; Cursor and OpenCode ACP providers | Owned ACP LLM adapter for the available Codex and OpenCode Go account homes | partial | Codex and OpenCode Go routes are configured; fresh-session/provider round trips on active web remain unverified. Cursor account route is not configured. |
+| `provider-codex` | BB built-in v0.1.0, running; Codex provider | Owned DSH ACP account adapter launches Codex with existing `CODEX_HOME` | partial | Active DSH `codex-personal`/`gpt-6-luna` session completed a model turn. No credential copy, Sol request, or API-key billing. |
 | `provider-pi` | BB built-in v0.1.0, running; Pi provider | Owned adapter only if supported DSH interface exists | not replicated | |
 | `provider-retry` | BB built-in v0.1.0, running; retry after overload/reset | DSH first-party retry plugin | partial | Generic retry exists; account reset-specific retry behavior is not verified |
-| `provider-usage` | BB built-in v0.1.0, running; usage settings/sidebar | Partial owned Tokitoki integration | not replicated | DSH token meter is not automatically BB provider usage parity |
 | `push-notifications` | BB built-in v0.1.0, running; mobile/web/desktop notifications | Platform boundary: notification clients not verified in DSH | not replicated | |
 | `scheduled-send` | BB built-in v0.1.0, running; delayed composer send | No owned DSH composer implementation | not replicated | Same-timeline composer control remains outstanding and is distinct from deferred Automations. |
 | `secret-catalog` | Local plugin v0.1.0, running; safe alias listing and scoped reads | Existing host `secret-cli` skill available to DSH | partial | No secret values were read; alias listing was not runtime-tested |
@@ -77,13 +98,13 @@ Checked 2026-10-02 on Apple Silicon macOS.
 
 ### Implementation and verification update
 
-The dedicated profile is `~/.dsh/profiles/bb-migration`, built from the installed DSH base and web-app bundles. It excludes `dshmarket`; the stock `web` and `desktop` profiles are untouched. The profile's default route is now our owned `codex-personal` adapter at `gpt-6-luna`, so it uses the existing ChatGPT subscription home rather than requiring a separate DSH OAuth login. The model menu exposes six owned routes: three Codex homes fixed to Luna, and three OpenCode Go homes pinned to `opencode-go/deepseek-v4.1-flash`.
+The active target is the existing `~/.dsh/profiles/web`, built from the installed DSH base and web-app bundles. Its manifest now excludes DSH Market and includes the owned account adapter plus exact-version DSH ACP/MCP dependencies. The default route is `codex-personal` at `gpt-6-luna`; the model menu defines three Codex homes fixed to Luna and three OpenCode Go homes pinned to `opencode-go/deepseek-v4.1-flash`.
 
-The adapter is in `~/dev/dsh-plugins/packages/acp-accounts`. It uses DSH's `LlmAdapter`, `SessionStore`, managed subprocess service, and ACP SDK 1.5.1. It replays the visible DSH session transcript into a fresh ACP session each turn, so provider selection is designed to keep the same DSH timeline. It does not retain provider-side process state, pass images, or bridge ACP permission requests; those are cancelled. It reads the account homes in place and never copies or prints their credential files.
+The adapter is in `~/dev/dsh-plugins/packages/acp-accounts`. It uses DSH's `LlmAdapter`, `SessionStore`, managed subprocess service, and ACP SDK 1.5.1. It replays the visible DSH session transcript into a fresh ACP session each turn, so provider selection is designed to keep the same DSH timeline. It does not retain provider-side process state, pass images, or bridge ACP permission requests; those are cancelled. It reads the account homes in place and never copies or prints their credential files. Its Codex ACP executable path now points to `~/.dsh/profiles/web`.
 
-**A DSH runtime blocker prevents using the model picker or starting a fresh chat in the installed version.** DSH 0.2.0-rc.2 returns `agent-preset/invalid` with `persona (@deepseek-ai/dsh-persona): prompt section "deployment:persona-prefix" is already registered`. The same error occurred on `New session` and provider selection; it also reproduced with the migration profile's default changed to `minimal` and with the owned ACP bundle disabled. Those operations failed before any DSH model request. This is independent of the owned adapter and is recorded as a platform boundary; upgrading DSH or modifying DSH core is outside scope.
+The earlier duplicate `deployment:persona-prefix` failure was caused by multiple active agent presets registering the same section. The active web patch now removes `persona` from the standard preset and disables the other bundled presets implicated in the collision. A temporary profile using the same fix successfully reached a fresh Luna session composer. The active web server now starts with this composition, but a fresh session in the user's browser has not yet been exercised; do not treat the error fix as fully verified until that interactive check passes.
 
-A direct ACP smoke prompt using the existing personal Codex home completed and returned the expected sentinel with `gpt-6-luna`. No login prompt appeared, no API key was used, and no credentials were copied. The OpenCode Go Alex ACP and plain CLI smoke attempts did not return within 60 seconds; both were stopped, so OpenCode generation remains unverified. The DSH UI did list the OpenCode account routes.
+A direct ACP smoke prompt using the existing personal Codex home completed with `gpt-6-luna`. No login prompt appeared, no API key was used, and no credentials were copied. The OpenCode Go ACP and CLI smoke attempts did not return within 60 seconds; both were stopped, so OpenCode generation remains unverified.
 
 | BB capability | BB implementation | DSH replacement | status | notes |
 |---|---|---|---|---|
@@ -101,15 +122,15 @@ A direct ACP smoke prompt using the existing personal Codex home completed and r
 | `ai-accounts` and provider plugins | BB provider registry and account-switch UI | Owned DSH ACP account choices over the first-party subagent API; default model is configured separately | partial | Codex choices delegate one fresh child turn per call; persistent provider sessions, model catalog controls, and usage history remain gaps. Codex ACP run is not exercised pending user auth and per instruction no model/token call |
 | Tasks and Automations | Enabled BB plugins | None | deferred | Explicitly out of scope |
 
-The migration launcher selects Node `v22.23.3`, port 3081, and DSH's one-time browser token. The authenticated UI loaded in Chrome. The existing installed Chrome app named DeepSeek Harness still points to port 3080; the migration launcher is the supported entry point for this profile. The dedicated 3081 process was stopped after checks.
+Earlier, the isolated `bb-migration` launcher selected Node `v22.23.3`, port 3081, and DSH's one-time browser token. The authenticated UI loaded in Chrome, and that dedicated process was stopped after checks. The current single-profile launcher is `assets/dsh/start-dsh` and targets port 3080, matching the installed Chrome app named DeepSeek Harness. The web profile started successfully; an unauthenticated request to `/` returned HTTP 401, confirming the local server answered and enforced token access. The authenticated page itself was not opened during this check.
 
-The complete BB plugin inventory below is from `bb plugin list --json`: 62 installed, 52 enabled and running, 10 disabled. Descriptions and running state are registry metadata; source behavior is claimed only where separately inspected or exercised.
+The current BB plugin inventory is from `bb plugin list --json`: 62 installed, 47 enabled and running, 15 disabled. Only the 47 enabled plugins appear in the mapping table. Disabled plugins are out of scope; Tasks and Automations remain deferred despite being enabled.
 
 ### Other material BB settings and integrations
 
 | BB capability | BB implementation | DSH replacement | status | notes |
 |---|---|---|---|---|
-| Providers and models | Codex, Claude Code, Pi, Cursor ACP, OpenCode ACP, and six AI Accounts routes | DSH native Pi AI providers plus owned ACP account LLM adapter | partial | Model picker lists owned routes. Session creation/provider changes hit the DSH persona error before generation. |
+| Providers and models | Codex, Claude Code, Pi, Cursor ACP, OpenCode ACP, and six AI Accounts routes | DSH native Pi AI providers plus owned ACP account LLM adapter | partial | Active DSH `codex-personal`/GPT-6-Luna session creation and model turn pass. OpenCode Go, remaining account routes, Pi, Claude Code, Cursor ACP and route switching still need verification or implementation. |
 | Codex subscription accounts | Three named `CODEX_HOME` profiles managed by BB AI Accounts | Owned `codex-personal`, `codex-work`, and `codex-alex2` routes, each fixed to Luna | partial | Direct personal ACP smoke passed on `gpt-6-luna`; running the DSH route is blocked by DSH core. No credentials copied or API-key billing used. |
 | OpenCode Go accounts | Three named profiles isolated by `XDG_DATA_HOME` | Owned `opencode-go-alex`, `opencode-go-manu`, and `opencode-go-mathias` routes | partial | Routes are listed. ACP and CLI prompts stalled beyond 60 seconds; no output or login prompt was observed. |
 | Skills and agent instructions | BB registry, Nix-managed user skills and project instructions | DSH standard preset's instruction and filesystem-skill plugins | partial | Configured in the installed composition. User skill discovery and precedence are not runtime-verified because DSH cannot create a fresh session. |
@@ -117,8 +138,8 @@ The complete BB plugin inventory below is from `bb plugin list --json`: 62 insta
 | Shell and files | BB host shell, file tools and editor | DSH first-party Bash, filesystem edit and search tools | partial | Standard preset composition is verified; agent-mediated disposable file smoke test is blocked by session creation. |
 | Git and JJ | BB environment providers and Jujutsu plugin | Host `jj` CLI, DSH workspace selection and existing Jujutsu skill | partial | No DSH worktree lifecycle parity; no existing repository was changed by this migration. |
 | Browser and terminal | BB browser tools and scoped persistent terminals | DSH web search/fetch and shell APIs | partial | Browser DOM control and persistent-terminal parity are not established. |
-| Planning and persistence | BB plan, goals, forks/rewind and local sessions | DSH plan/goal tools, subagents and JSONL session storage | partial | APIs/config are present; new session failure blocks end-to-end use and cross-provider import/rewind parity is absent. |
-| Permissions and approvals | Provider-specific permission levels and prompts | DSH access presets and approval service | partial | Migration profile retains Workspace Write and default approval behavior. ACP permission requests are rejected in the account adapter because no DSH approval bridge is available. |
+| Planning and persistence | BB plan, goals, forks/rewind and local sessions | DSH plan/goal tools, subagents and JSONL session storage | partial | APIs/config are present; the active web session flow and cross-provider import/rewind parity remain unverified or unavailable. |
+| Permissions and approvals | Provider-specific permission levels and prompts | DSH access presets and approval service | partial | Web profile retains Workspace Write and default approval behavior. ACP permission requests are rejected in the account adapter because no DSH approval bridge is available. |
 | Hooks, commands and prompts | BB plugin commands, prompt registry and skills | DSH built-in command and instruction APIs | partial | No owned BB command-palette port; profile behavior is blocked before a session starts. |
 | UI, keybindings and theme | BB custom theme, tabs, navigation, annotations and composer plugins | DSH web UI and installed plugin extension points | partial | The DSH UI loads. BB-specific sidebar, thread-topbar, settings search, annotations, diff status, and notification surfaces are not replicated. |
 | Secret CLI | BB Secret Catalog and secure credential request flows | Host `secret` CLI remains available to DSH shell/skills | partial | No secret value was requested or read for this migration. Interactive secret capture and BB approval UI are not reproduced. |
@@ -129,13 +150,13 @@ The complete BB plugin inventory below is from `bb plugin list --json`: 62 insta
 
 The initial inventory and mapping were written before DSH profile changes. The implementation order was:
 
-1. Preserve the stock DSH profiles and create an isolated profile without DSH Market.
+1. Use one DSH profile: the existing `web` profile, remove DSH Market, preserve `desktop` unchanged.
 2. Reproduce account selection first with an owned ACP-backed DSH LLM adapter, using existing account homes without moving credentials.
 3. Reuse supported DSH core plugins/configuration for shell, files, instructions, skills, planning, session persistence, permissions, MCP, and web tools.
 4. Verify the profile start, account authentication, route selection, shell/file operations, MCP, same-session provider changes, and the parked composer/project workflows.
 5. Record platform boundaries precisely and update status only from runtime evidence.
 
-Steps 1-3 are implemented as profile configuration and an owned plugin. Step 4 is partially blocked by the reproduced DSH persona-registration failure described above; the exact checks and outcomes are listed below.
+Earlier work added the account adapter and an isolated profile, but did not reproduce the enabled BB plugins and settings. The current work first records the corrected scope and mapping, then consolidates the owned configuration into the single `web` profile. Replication remains partial until each behavior is implemented and verified.
 
 ## Remaining mapping and gaps
 
@@ -158,57 +179,62 @@ The parked BB threads establish these product requirements:
 
 ## Changes made
 
-- Created isolated `~/.dsh/profiles/bb-migration` from the installed web template, excluding `dshmarket`. `web` and `desktop` bundles/configuration were left unchanged.
-- Added exact-version first-party DSH MCP and ACP subagent packages to the migration profile; added the DSH-owned local ACP account adapter from `~/dev/dsh-plugins/packages/acp-accounts`.
+- Corrected the enabled-plugin inventory to 47 enabled and 15 disabled, removed disabled plugins from the migration table, and documented active BB settings without copying custom CSS contents or credentials.
+- Added `modules/dsh.nix`, wired it into the macOS Home Manager profile, and added a single `web` launcher. Updated the old migration launcher to forward to the single-profile launcher.
+- Fixed stale Nix plugin source references: they pointed to missing flake inputs/sibling paths; they now resolve the existing `~/dev/bb-plugins/plugins/<id>` tree at activation time. Home Manager activation was not run because its existing hooks rebuild/install BB plugins, which would change BB during this migration. The full Home Manager activation package and `nix flake check --no-build` now evaluate successfully.
+- Earlier work created `~/.dsh/profiles/bb-migration`; this is now a migration staging profile only. This change targets `web` as the single user profile and leaves `desktop` untouched.
+- Added exact-version first-party DSH MCP and ACP subagent packages to the active web profile; added the DSH-owned local ACP account adapter from `~/dev/dsh-plugins/packages/acp-accounts`. Updated the adapter executable path to the single `web` profile.
 - Added six owned account routes. Codex routes are pinned to GPT-6 Luna and use existing homes; OpenCode Go routes use the existing isolated XDG data roots and the Nix-managed `opencode` command from PATH.
 - Set the migration profile default to `codex-personal` at `gpt-6-luna`; native `openai-codex` remains a separate optional DSH route and is not the default.
-- Added Tokitoki's local stdio MCP registration and the `assets/dsh/start-bb-migration` launcher (Node v22.23.3, port 3081, tokenized UI route).
+- Earlier staging profile used Tokitoki's local stdio MCP registration and a port 3081 launcher; the active single-profile launcher now targets port 3080.
 - Corrected the owned adapter to the installed ACP SDK 1.5.1 `ClientContext.request(...)` API and its select-config request shape.
+- Added owned `@astahmer/dsh-bb-chatgpt-theme` using DSH's supported `overrideTokens` API and paired palette values derived only from the active BB theme's color variables; no BB CSS selectors or third-party theme source was copied. Verified the 14 mapped dark tokens in the live page; light values preserve DSH's built-in palette.
+- Set DSH appearance to `Dark` through its settings UI. Attempted BB's Command+B sidebar override; the DSH web shortcut editor rejects that bare modifier combination. Command+Shift+B already maps to the right-sidebar action; Command+J remains unsupported in the web editor.
+- Enabled DSH Voice input and downloaded/prepared the official local SenseVoiceSmall INT8 model. DSH reports local recognition ready; no microphone permission was granted and no audio was recorded.
+- Verified active-profile Luna session creation and a Luna model turn. A shell-based disposable file write/readback passed. The owned ACP adapter now passes the existing local Tokitoki MCP server through ACP's supported `mcpServers` session setup; Luna's `budgets_status` tool call succeeded with values suppressed.
 - No BB settings, plugins, servers, credentials, or unrelated Nix configuration were changed. No DSH, BB, or unrelated package was upgraded. No DSH Market plugin is used by the migration profile.
+
+## Owned DSH plugins
+
+| Plugin | Purpose and architecture | Permission boundary | Status |
+|---|---|---|---|
+| `@astahmer/dsh-acp-accounts` (`~/dev/dsh-plugins/packages/acp-accounts`, v0.1.0) | DSH `LlmAdapter` starts one ACP process per turn for six isolated Codex/OpenCode Go account routes. It forwards the current DSH transcript as text and passes local Tokitoki through ACP's standard `mcpServers` field. | Uses the existing account homes without reading/copying credentials. ACP permission requests are cancelled. DSH-native filesystem tools are not forwarded into the ACP agent. | Luna route and Tokitoki MCP call verified. Other account routes, image input and interactive permission approval remain gaps. |
+| `@astahmer/dsh-bb-chatgpt-theme` (`~/dev/dsh-plugins/packages/bb-chatgpt-theme`, v0.1.0) | Browser client plugin overlays 14 selected BB color values via `ctx.theme.overrideTokens`; light mode preserves DSH's stock colors. | Theme tokens only; no filesystem, shell, network, or credential access. | Dark palette tokens match live DSH after reload. Full BB CSS layout rules and complete palette are not ported. |
 
 ## Verification performed
 
 | Check | Result |
 |---|---|
-| BB plugin inventory via `bb plugin list --json` | Passed; 62 installed, 52 enabled/running, 10 disabled. Tasks and Automations marked deferred. |
-| DSH package/profile versions | Passed; CLI/package `0.2.0-rc.2`; isolated profile uses exact installed DSH packages; stock profiles unchanged. |
-| DSH profile composition | Passed; `dsh --profile bb-migration --patch assets/dsh/bb-migration.patch.yml --dump-config` shows the owned ACP adapter, six account routes, Tokitoki, and default Luna route. |
-| Owned plugin registry/model list | Passed; package is in `dsh plugin --profile bb-migration list`; authenticated UI model picker displayed all six account routes. |
-| Owned plugin startup | Passed; migration profile bound to localhost:3081 and the UI loaded in Chrome without a plugin activation/startup error. |
-| DSH new session/provider change | Blocked; both failed before model generation with duplicate `deployment:persona-prefix`. Reproduced with minimal default preset and with the ACP adapter disabled. |
-| Codex ACP subscription auth | Passed directly through ACP SDK 1.5.1 using `CODEX_HOME=~/.codex` and model `gpt-6-luna`; exact bounded smoke response returned. No Codex Sol model was selected or requested. |
-| OpenCode Go ACP/CLI | Incomplete; one minimal request through ACP and one through `opencode run` did not return within 60 seconds; both were stopped. Existing Go model catalog is available. No credential data was inspected. |
-| Shell and filesystem agent operations | Blocked; new DSH sessions cannot start. No test file was written. |
-| DSH MCP tool call | Blocked in DSH by session creation. Tokitoki stdio ACP/MCP-independent handshake and `budgets_status` direct check were verified earlier; no values were recorded. |
-| Port 3081 HTTP/UI | Passed; authenticated UI loaded through the one-time route. Port 3082 was used only for temporary isolation and stopped. |
-| Existing DSH web UI on port 3080 and BB | Left running/unchanged. |
-| Logs | The current server started without a plugin activation error. Old startup logs contain earlier duplicate-port/plugin-start diagnostics; no raw log contents or credentials were copied into this document. |
+| BB enabled plugin inventory | Passed via `bb plugin list --json`: 62 installed, 47 enabled/running, 15 disabled. Disabled plugin rows are omitted. Tasks and Automations remain in the enabled inventory and are marked deferred. |
+| BB active settings inventory | Passed via `bb settings show --json`; captured summary excludes custom CSS content and all credentials. General settings, theme ID, feature flags, experiments, keybinding counts, voice setting, and server access state are recorded above. |
+| DSH and Node versions | Passed; installed DSH remains `0.2.0-rc.2`, launcher uses Node `v22.23.3`; no upgrades performed. |
+| Active profile manifest | Passed; `~/.dsh/profiles/web` now has the owned adapter and exact DSH ACP/MCP dependencies; DSH Market removed. Original manifest, patch, and lockfile backed up under `/private/tmp/dsh-web-before-bb-migration`. |
+| Dependency install | Passed offline for the updated ACP adapter and theme packages; 45 packages resolved, 43 reused, zero downloaded. No packages were upgraded. |
+| Plugin listing | Passed; `dsh plugin --profile web list` reports the owned ACP account adapter plus exact-version DSH dependencies; no `dshmarket` dependency. |
+| Composed profile | Passed; `dsh web --dump-config` selects `codex-personal` at `gpt-6-luna`, includes the owned ACP adapter and Tokitoki MCP registration, removes persona from the standard preset, and disables the other bundled presets implicated in the duplicate registration. No `dshmarket` appears. |
+| DSH startup and HTTP | Passed; the `web` profile starts on `127.0.0.1:3080`. An unauthenticated root request returns HTTP 401, which confirms the local server is answering and enforcing its token. The tokenized route is not recorded here. |
+| New session on active `web` profile | Passed in Chrome on `http://127.0.0.1:3080`; composer opens without the duplicate persona error and selects `codex-personal` at `gpt-6-luna`. |
+| Codex subscription route | Passed: a fresh active-profile Luna turn returned the requested exact response. No Sol request, credential copy, or API-key billing. |
+| OpenCode Go | Incomplete; prior minimal ACP and CLI probes stalled at 60 seconds and were stopped. No auth values were inspected. |
+| DSH shell and disposable file edit | Passed through the fresh Luna session: `pwd` reported the default DSH workspace, and the assistant created/read `/private/tmp/dsh-migration-smoke/dsh-proof.txt`; an independent local read confirmed the exact requested content. The ACP route did not expose DSH filesystem tools. |
+| Tokitoki MCP agent call | Passed after the owned ACP adapter began forwarding its stdio server through ACP `NewSessionRequest.mcpServers`: Luna invoked `budgets_status` and reported success; budget values were not exposed. |
+| DSH native filesystem tools | Standard preset inventory shows filesystem tools enabled, but the ACP-backed session did not expose DSH-native filesystem tools. Shell-based disposable file create/readback passed. Native filesystem calls remain unverified. |
+| DSH settings applied | Passed: Appearance is explicitly `Dark`; voice input is enabled and the local SenseVoiceSmall INT8 model reports ready. The browser shortcut editor rejects bare Command+B and Command+J; Command+Shift+B is already assigned to the matching right-sidebar action. A microphone permission/recording check remains user-dependent. |
+| Agent/subagent round trip | Not yet verified from the active web profile; DSH-native tools are not exposed by the ACP adapter route. |
+| Existing repositories and BB | No existing repository content, BB configuration, plugin state, or credentials were changed. |
 
 ## Normal use and rollback
 
-From this Nixfiles checkout, run:
+The one DSH profile is `web`. Start it with `dsh-start` or the `dshstart` shell alias, or open **DeepSeek Harness.app** from `~/Applications`. Each starts the local web app on port 3080 and opens DSH's authenticated local route. The existing Chrome app shortcut targets the same port. Stop a terminal-launched server with Ctrl-C. Nixfiles defines the launchers and alias; the command symlinks and Applications shortcut were installed directly from validated Nix store artifacts without Home Manager activation or BB plugin hooks. The shell alias will be deployed by the next Home Manager apply.
 
-```sh
-./assets/dsh/start-bb-migration
-```
+To roll back the profile consolidation, stop DSH, restore `package.json`, `cordis.patch.yml`, and `pnpm-lock.yaml` from `/private/tmp/dsh-web-before-bb-migration`, then remove migration-only generated dependencies from the `web` profile if desired. Remove `~/.local/bin/dsh-start`, `~/.local/bin/dsh-web`, and `~/Applications/DeepSeek Harness.app`, then revert the Nixfiles JJ revision to remove their managed sources. The `desktop` profile and BB remain untouched. Keep the old `bb-migration` profile until the active `web` profile has passed the remaining interactive checks.
 
-This starts the isolated migration profile on port 3081 with Node `v22.23.3` and opens the one-time tokenized route in the browser. Use `--no-open` to keep it in the foreground without opening a page. The current installed Chrome app remains associated with port 3080; run this command to open the separate migration profile. Stop the server with Ctrl-C.
+## Remaining work and user actions
 
-The model selector contains the owned account routes. Codex routes are all fixed to Luna; OpenCode Go routes use each existing isolated profile. Provider selection is intended to keep the DSH timeline, but DSH 0.2.0-rc.2 currently fails to create/resume sessions with a duplicate persona-section error, so the profile is not usable for conversations until that installed runtime issue is fixed. Do not use the native DSH Codex API-key route as a substitute for subscription auth.
-
-To roll back only migration changes: stop the migration process; remove `~/.dsh/profiles/bb-migration` and the `~/.dsh/BB-MIGRATION.md` symlink; revert the Nixfiles JJ revision that adds `assets/dsh/`; and remove or revert the account-adapter revision in `~/dev/dsh-plugins`. This does not change the stock `web`/`desktop` profiles or BB.
-
-## Remaining user actions
-
-- No credential or login action is required for the verified personal Codex ACP route. The direct DSH-native Codex OAuth route remains separate and should only be used if you want DSH to keep its own login.
-- DSH's duplicate persona-section failure needs a compatible DSH runtime fix; the migration did not upgrade DSH or edit DSH core. After that is resolved, rerun a DSH new-session/provider-switch check, a disposable shell/file operation, and Tokitoki tool call.
-- OpenCode Go generation is still unverified after a 60-second stall. If its ACP CLI prompts for login when retried, complete login inside the correct existing account home yourself; no secret value has been requested.
-- Project changes within an existing session remain blocked by the absence of a DSH session-rehome API. Send Later has not been implemented; the composer failure requirement is recorded and remains in scope, separate from deferred Automations.
-- A dedicated Chrome app shortcut for port 3081 has not been installed yet; the launcher opens the authenticated migration page in Chrome. The already-installed DeepSeek Harness app still points at port 3080.
-
-
-
-- Open the migration profile and sign in to DSH's `openai-codex` route using DSH's own authorization flow. DSH does not reuse credentials from Pi, BB account homes, or Codex ACP processes.
-- The `work` Codex home was reported as not logged in during safe auth-status inspection. If it is still needed, sign it in yourself using `CODEX_HOME="$HOME/.local/share/bb-ai-accounts/codex/work" codex login`; no credential file needs to be copied. Personal and `alex2` homes were reported as logged in, but their auth state was not rechecked during implementation.
-- After login, run one disposable DSH shell/file operation, one Tokitoki report query, and (if desired) one Codex ACP child using Luna. These remain unverified because no authenticated model call was made.
-- Claude Code, Cursor ACP, OpenCode ACP, and OpenCode Go account switching remain unimplemented. Codex ACP account selection is partial; persistent sessions, model catalog editing, and usage history remain gaps.
+- Owned ACP accounts and a first-party theme package now load in the single `web` profile, but **most enabled BB plugin behaviors and several BB settings are still not replicated**; the mapping table records each current status and gap.
+- Implement owned replacements for enabled BB plugins where DSH's supported APIs permit them; document each exact platform boundary where they do not. Do not research or implement Tasks/Automations replacements.
+- Apply remaining compatible settings: general preferences and the two unsupported browser keybindings. Dark mode and voice input are enabled; the local recognition model is ready.
+- To verify voice end to end, click DSH's `Start recording` button and allow Chrome microphone access if prompted. I did not grant microphone permission or record audio.
+- Verify the remaining five ACP account routes, native DSH filesystem tools and an agent/subagent round trip. Dadabase remains unavailable because BB exposes it only through its own MCP bridge and the host has no independently launchable endpoint or command.
+- If OpenCode Go needs a fresh interactive login, complete it in its existing account home; do not copy credentials.
+- Project rehoming within one session and BB-specific sidebar, annotation, editor, composer, notification, and thread lifecycle surfaces remain unimplemented pending supported DSH extension APIs or a documented platform boundary.

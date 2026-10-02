@@ -1,0 +1,21 @@
+{
+  "name": "dsh-profile-web",
+  "private": true,
+  "dependencies": {
+    "@agentclientprotocol/codex-acp": "2.0.1",
+    "@astahmer/dsh-acp-accounts": "file:../../../dev/dsh-plugins/packages/acp-accounts",
+    "@astahmer/dsh-bb-chatgpt-theme": "file:../../../dev/dsh-plugins/packages/bb-chatgpt-theme",
+    "@deepseek-ai/dsh-mcp-client": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-subagent-acp": "0.2.0-rc.2"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "@astahmer/dsh-acp-accounts",
+        "@astahmer/dsh-bb-chatgpt-theme"
+      ]
+    }
+  }
+}
