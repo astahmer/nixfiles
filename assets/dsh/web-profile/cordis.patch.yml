@@ -1,3 +1,11 @@
+- id: storage-domain
+  config:
+    backend: json
+    routes:
+      personal_memory: json
+- id: subagent
+  config:
+    maxActiveSubagents: 10
 # Owned additions for the single DSH web profile.
 - id: hmr
   disabled: false
@@ -5,6 +13,18 @@
     root:
       - !!js process.env.HOME + '/dev/dsh-plugins'
 - insert:
+    - id: mcp-dadabase-readonly
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: dadabase
+        transport: stdio
+        command: node
+        args:
+          - !!js process.env.HOME + '/dev/dsh-plugins/packages/dadabase-readonly-mcp/proxy.mjs'
+        toolCallTimeoutMs: 60000
+        reconnect:
+          enabled: true
+          maxAttempts: 5
     - id: mcp-tokitoki
       name: '@deepseek-ai/dsh-mcp-client'
       config:
@@ -53,6 +73,21 @@
         toolName: subagent_codex_alex2
         backgroundMode: one-shot
         maxDepth: provider-managed
+- insert:
+    - id: dsh-composer-controls
+      name: '@astahmer/dsh-composer-controls'
+    - id: dsh-inline-preview
+      name: '@astahmer/dsh-inline-preview'
+    - id: dsh-memory-watch
+      name: '@astahmer/dsh-memory-watch'
+    - id: dsh-plugin-api-docs
+      name: '@astahmer/dsh-plugin-api-docs'
+    - id: bb-secret-env
+      name: '@astahmer/dsh-secret-env'
+    - id: dsh-workspace-tools
+      name: '@astahmer/dsh-workspace-tools'
+    - id: dsh-usage
+      name: '@astahmer/dsh-usage'
 - id: session-query-sqlite
   config:
     path: !!js dshHomePath('session-search.db')
