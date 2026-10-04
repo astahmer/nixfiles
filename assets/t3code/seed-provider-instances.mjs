@@ -70,7 +70,10 @@ const writeProviderSecret = (instanceId, name, value) => {
     `${providerEnvironmentSecretName(instanceId, name)}.bin`,
   );
   const bytes = Buffer.from(value, "utf8");
-  if (existsSync(secretPath) && readFileSync(secretPath).equals(bytes)) return false;
+  if (existsSync(secretPath) && readFileSync(secretPath).equals(bytes)) {
+    chmodSync(secretPath, 0o600);
+    return false;
+  }
 
   const temporaryPath = `${secretPath}.${randomUUID()}.tmp`;
   try {
@@ -210,16 +213,23 @@ const mergeSettings = (settings) => {
 
 const writeSettings = (original, next) => {
   mkdirSync(userDataDirectory, { recursive: true });
-  if (original !== undefined) {
-    const backupPath = `${settingsPath}.nix-seed-backup`;
-    writeFileSync(backupPath, original, { mode: 0o600 });
-    chmodSync(backupPath, 0o600);
-  }
-
   const temporaryPath = `${settingsPath}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temporaryPath, next, { flag: "wx", mode: 0o600 });
     chmodSync(temporaryPath, 0o600);
+    const current = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : undefined;
+    if (current !== original) {
+      throw new Error("T3 settings changed during seeding; retry activation to preserve the latest settings.");
+    }
+    if (original !== undefined) {
+      const backupPath = `${settingsPath}.nix-seed-backup`;
+      writeFileSync(backupPath, original, { mode: 0o600 });
+      chmodSync(backupPath, 0o600);
+    }
+    const latest = existsSync(settingsPath) ? readFileSync(settingsPath, "utf8") : undefined;
+    if (latest !== original) {
+      throw new Error("T3 settings changed during seeding; retry activation to preserve the latest settings.");
+    }
     renameSync(temporaryPath, settingsPath);
     chmodSync(settingsPath, 0o600);
   } catch (error) {

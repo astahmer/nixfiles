@@ -19,6 +19,8 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { DynamicBorder } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { QueueSubagent } from "./queue-subagent";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
@@ -80,12 +82,23 @@ export default function (pi: ExtensionAPI) {
 
 	const delegateToSubagent = async (text: string, ctx: ExtensionContext) => {
 		if (!outputDir) outputDir = await mkdtemp(join(tmpdir(), "pi-queue-"));
-		const outputFile = join(outputDir, `task-${Date.now()}.md`);
-		const child = spawn("pi", ["-p", text], { cwd: ctx.cwd, stdio: "ignore" });
+		const outputFile = join(outputDir, `task-${randomUUID()}.md`);
+		const child = spawn("pi", ["-p", text], { cwd: ctx.cwd, stdio: ["ignore", "pipe", "pipe"] });
 		children.add(child);
-		child.on("close", () => {
-			children.delete(child);
-			ctx.ui.notify(`Subagent finished, output: ${outputFile}`, "info");
+		QueueSubagent.watch({
+			child,
+			outputFile,
+			onFinished: ({ status, outputSaved }) => {
+				children.delete(child);
+				if (!outputSaved) {
+					ctx.ui.notify("Subagent finished, but its output could not be saved.", "warning");
+					return;
+				}
+				ctx.ui.notify(
+					`Subagent ${status}; output: ${outputFile}`,
+					status === "completed" ? "info" : "warning",
+				);
+			},
 		});
 		ctx.ui.notify(`Delegated to background pi (pid ${child.pid}), output: ${outputFile}`, "info");
 	};
@@ -111,12 +124,19 @@ export default function (pi: ExtensionAPI) {
 			container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
 			const list = new Text("", 0, 0);
 			container.addChild(list);
-			container.addChild(new Text(theme.fg("dim", "↑↓ select · shift+↑/↓ move · enter actions · esc close"), 1, 0));
+			container.addChild(
+				new Text(theme.fg("dim", "↑↓ select · shift+↑/↓ move · enter actions · esc close"), 1, 0),
+			);
 			container.addChild(new DynamicBorder((s) => theme.fg("accent", s)));
 
 			const renderList = () => {
 				const rows = [theme.fg("accent", theme.bold(`Queue (${queue.length})`)), ""];
-				rows.push(truncateToWidth(`${selectedIndex === 0 ? "> " : "  "}${theme.fg("accent", "(all messages)")}`, 100));
+				rows.push(
+					truncateToWidth(
+						`${selectedIndex === 0 ? "> " : "  "}${theme.fg("accent", "(all messages)")}`,
+						100,
+					),
+				);
 				queue.forEach((item, i) => {
 					const selected = i + 1 === selectedIndex;
 					const label = `#${item.id} ${item.text.replace(/\s+/g, " ").slice(0, 70)}`;
@@ -216,10 +236,12 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const manageAll = async (ctx: ExtensionContext) => {
-		const action = await ctx.ui.select(
-			`${queue.length} queued messages`,
-			["Send all", "Steer all", "Delegate all to subagents", "Clear all"],
-		);
+		const action = await ctx.ui.select(`${queue.length} queued messages`, [
+			"Send all",
+			"Steer all",
+			"Delegate all to subagents",
+			"Clear all",
+		]);
 		const texts = queue.map((item) => item.text);
 		switch (action) {
 			case "Send all":
