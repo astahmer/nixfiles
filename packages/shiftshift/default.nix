@@ -60,26 +60,32 @@ let
 
   # Tauri embeds ../dist at compile time, so assemble a source tree with
   # src-tauri/ and the built frontend as siblings.
-  rustSrc = shiftPkgs.runCommand "shiftshift-src" {
-    nativeBuildInputs = [ shiftPkgs.gnugrep shiftPkgs.patch ];
-  } ''
-    mkdir -p $out
-    cp -r ${shiftshiftSource}/.cargo $out/.cargo
-    mkdir -p $out/src-tauri
-    cp -r ${shiftshiftSource}/src-tauri/Cargo.toml $out/src-tauri/
-    cp -r ${shiftshiftSource}/src-tauri/Cargo.lock $out/src-tauri/
-    cp -r ${shiftshiftSource}/src-tauri/build.rs $out/src-tauri/
-    cp -r ${shiftshiftSource}/src-tauri/tauri.conf.json $out/src-tauri/
-    cp -r ${shiftshiftSource}/src-tauri/src $out/src-tauri/
-    cp -r ${shiftshiftSource}/src-tauri/icons $out/src-tauri/
-    cp -r ${shiftshiftSource}/src-tauri/capabilities $out/src-tauri/
-    chmod -R u+w "$out/src-tauri"
-    if [ ! -f "$out/src-tauri/src/instance.rs" ] || \
-      ! ${shiftPkgs.gnugrep}/bin/grep -Fq 'const NIX_LAUNCHD_MARKER' "$out/src-tauri/src/instance.rs"; then
-      ${shiftPkgs.patch}/bin/patch -p1 -d "$out" < ${./managed-single-instance.patch}
-    fi
-    cp -r ${frontendDist} $out/dist
-  '';
+  rustSrc =
+    shiftPkgs.runCommand "shiftshift-src"
+      {
+        nativeBuildInputs = [
+          shiftPkgs.gnugrep
+          shiftPkgs.patch
+        ];
+      }
+      ''
+        mkdir -p $out
+        cp -r ${shiftshiftSource}/.cargo $out/.cargo
+        mkdir -p $out/src-tauri
+        cp -r ${shiftshiftSource}/src-tauri/Cargo.toml $out/src-tauri/
+        cp -r ${shiftshiftSource}/src-tauri/Cargo.lock $out/src-tauri/
+        cp -r ${shiftshiftSource}/src-tauri/build.rs $out/src-tauri/
+        cp -r ${shiftshiftSource}/src-tauri/tauri.conf.json $out/src-tauri/
+        cp -r ${shiftshiftSource}/src-tauri/src $out/src-tauri/
+        cp -r ${shiftshiftSource}/src-tauri/icons $out/src-tauri/
+        cp -r ${shiftshiftSource}/src-tauri/capabilities $out/src-tauri/
+        chmod -R u+w "$out/src-tauri"
+        if [ ! -f "$out/src-tauri/src/instance.rs" ] || \
+          ! ${shiftPkgs.gnugrep}/bin/grep -Fq 'const NIX_LAUNCHD_MARKER' "$out/src-tauri/src/instance.rs"; then
+          ${shiftPkgs.patch}/bin/patch -p1 -d "$out" < ${./managed-single-instance.patch}
+        fi
+        cp -r ${frontendDist} $out/dist
+      '';
 
   shiftshiftBinary = rustPlatform.buildRustPackage {
     pname = "shiftshift-tauri";
@@ -89,7 +95,10 @@ let
 
     # Tauri's CLI enables the dependency feature that switches codegen from
     # dev mode to the custom protocol used for embedded frontend assets.
-    cargoBuildFlags = [ "--features" "tauri/custom-protocol" ];
+    cargoBuildFlags = [
+      "--features"
+      "tauri/custom-protocol"
+    ];
 
     cargoLock.lockFile = "${shiftshiftSource}/src-tauri/Cargo.lock";
     nativeBuildInputs = [

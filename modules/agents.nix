@@ -15,10 +15,6 @@ in
       packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
       calldiff = packages.calldiff;
       executorScopeDir = executorDir;
-      opencodexConfigTemplate = builtins.fromJSON (
-        builtins.readFile ../assets/opencodex/config.template.json
-      );
-
       localAgentsSrc = lib.cleanSource ../assets/.agents;
 
       # Base = the pinned astahmer/AGENTS repo (global contract + portable
@@ -103,15 +99,6 @@ in
             builtins.removeAttrs opencodeBase.mcp [ "executor" ];
       };
       opencodeConfigJson = builtins.toJSON opencodeConfig;
-      # Ensure .ts scripts are stored with executable bit so home-manager
-      # symlinks them (preserving the .ts extension for --experimental-strip-types)
-      # instead of copying them as extensionless regular files.
-      mkExecutableFile =
-        name: src:
-        pkgs.runCommandLocal name {
-          inherit src;
-          preferLocalBuild = true;
-        } "cp $src $out; chmod +x $out";
     in
     {
       home.file.".agents".source = agentsWithSkillOverlays;
