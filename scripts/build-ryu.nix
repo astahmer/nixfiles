@@ -5,8 +5,6 @@
   system ? builtins.currentSystem,
 }:
 let
-  pkgs = import (builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz";
-  }) { inherit system; };
+  pkgs = (builtins.getFlake (toString ../.)).inputs.nixpkgs.legacyPackages.${system};
 in
-import ../packages/ryu { inherit pkgs; }
+import ../packages/ryu { inherit (pkgs) fetchurl lib stdenvNoCC; }
