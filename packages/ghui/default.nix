@@ -36,9 +36,9 @@ pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
 
     mkdir -p "$out/bin"
     cat > "$out/bin/ghui" <<'EOF'
-      #!/bin/sh
-      script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-      exec bun "$script_dir/../lib/node_modules/@kitlangton/ghui/bin/ghui.js" "$@"
+    #!/bin/sh
+    script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+    exec ${pkgs.bun}/bin/bun "$script_dir/../lib/node_modules/@kitlangton/ghui/bin/ghui.js" "$@"
     EOF
     chmod +x "$out/bin/ghui"
 

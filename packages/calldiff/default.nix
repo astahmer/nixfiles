@@ -52,7 +52,7 @@ stdenvNoCC.mkDerivation {
     cat > "$out/bin/calldiff" <<'EOF'
     #!/bin/sh
     script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-    exec node "$script_dir/../lib/node_modules/calldiff/dist/cli.js" "$@"
+    exec ${nodejs_24}/bin/node "$script_dir/../lib/node_modules/calldiff/dist/cli.js" "$@"
     EOF
     chmod 755 "$out/bin/calldiff"
 
