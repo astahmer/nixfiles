@@ -36,14 +36,9 @@
           echo "codex: initialized $config_file from template" >&2
         fi
 
-        # Keep the normal Codex model as the CLI default. Provider-specific
-        # model routing belongs in BB's account provider, not the shared home.
-        if ${pkgs.gnugrep}/bin/grep -qE '^model[[:space:]]*=' "$config_file"; then
-          ${pkgs.gnused}/bin/sed -i -E 's|^model[[:space:]]*=[[:space:]]*"codex-perso/([^"]+)"$|model = "\1"|' "$config_file"
-        else
-          ${pkgs.gnused}/bin/sed -i '1i model = "gpt-6-luna"' "$config_file"
-        fi
-        ${pkgs.gnused}/bin/sed -i -E '/^model_catalog_json[[:space:]]*=/d' "$config_file"
+        ${pkgs.gawk}/bin/awk -f "${../assets/codex/normalize-root-model.awk}" "$config_file" > "$candidate_config"
+        ${pkgs.coreutils}/bin/chmod 600 "$candidate_config"
+        ${pkgs.coreutils}/bin/mv "$candidate_config" "$config_file"
 
         ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$current_sorted" "$candidate_sorted"
       '';

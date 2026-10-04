@@ -30,6 +30,7 @@ fi
 bun test scripts/update-pins.test.ts
 bun test assets/pi/extensions/queue-subagent.test.ts
 node assets/t3code/test-seed-provider-instances.mjs
+assets/codex/test-normalize-root-model.sh
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "nixfiles-check: jq is required for configuration contract checks" >&2
