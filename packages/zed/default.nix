@@ -54,10 +54,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
         mountPoint="$TMPDIR/zed-mount"
         mkdir -p "$mountPoint"
+        trap '/usr/bin/hdiutil detach "$mountPoint" >/dev/null 2>&1 || true' EXIT
         /usr/bin/hdiutil attach -nobrowse -readonly -mountpoint "$mountPoint" "$src"
         mkdir -p "$out/Applications" "$out/bin"
         cp -R "$mountPoint/Zed.app" "$out/Applications/"
         /usr/bin/hdiutil detach "$mountPoint"
+        trap - EXIT
         ln -s "$out/Applications/Zed.app/Contents/MacOS/cli" "$out/bin/zed"
         ln -s "$out/Applications/Zed.app/Contents/MacOS/cli" "$out/bin/zeditor"
 

@@ -127,15 +127,34 @@
             return 1
           fi
 
+          backupPath="$targetPath.nixfiles-backup.$$"
           if [ -L "$targetPath" ]; then
-            ${pkgs.coreutils}/bin/rm "$targetPath"
+            if ! ${pkgs.coreutils}/bin/mv "$targetPath" "$backupPath"; then
+              ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
+              return 1
+            fi
           elif [ -e "$targetPath" ]; then
-            ${pkgs.coreutils}/bin/rm -rf "$targetPath"
+            if ! ${pkgs.coreutils}/bin/mv "$targetPath" "$backupPath"; then
+              ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
+              return 1
+            fi
           fi
-          ${pkgs.coreutils}/bin/mv "$temporaryDirectory/$appName" "$targetPath"
+          if ! ${pkgs.coreutils}/bin/mv "$temporaryDirectory/$appName" "$targetPath"; then
+            if [ -e "$backupPath" ] || [ -L "$backupPath" ]; then
+              if ! ${pkgs.coreutils}/bin/mv "$backupPath" "$targetPath"; then
+                echo "error: failed to install $appName and restore its previous bundle from $backupPath" >&2
+                return 1
+              fi
+            fi
+            ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
+            return 1
+          fi
           ${pkgs.coreutils}/bin/rmdir "$temporaryDirectory"
           printf '%s\n' "$sourcePath" > "$stampPath.tmp.$$"
           ${pkgs.coreutils}/bin/mv -f "$stampPath.tmp.$$" "$stampPath"
+          if [ -e "$backupPath" ] || [ -L "$backupPath" ]; then
+            ${pkgs.coreutils}/bin/rm -rf "$backupPath"
+          fi
         }
 
         ${macosAppInstallCommands}

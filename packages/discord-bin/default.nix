@@ -24,10 +24,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     mountPoint="$TMPDIR/discord-mount"
     mkdir -p "$mountPoint"
+    trap '/usr/bin/hdiutil detach "$mountPoint" >/dev/null 2>&1 || true' EXIT
     /usr/bin/hdiutil attach -nobrowse -readonly -mountpoint "$mountPoint" "$src"
     mkdir -p "$out/Applications"
     cp -R "$mountPoint/Discord.app" "$out/Applications/"
     /usr/bin/hdiutil detach "$mountPoint"
+    trap - EXIT
 
     runHook postInstall
   '';

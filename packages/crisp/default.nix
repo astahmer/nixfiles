@@ -18,10 +18,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook preInstall
     mountPoint="$TMPDIR/crisp-mount"
     mkdir -p "$mountPoint"
+    trap '/usr/bin/hdiutil detach "$mountPoint" >/dev/null 2>&1 || true' EXIT
     /usr/bin/hdiutil attach -nobrowse -readonly -mountpoint "$mountPoint" "$src"
     mkdir -p "$out/Applications"
     cp -R "$mountPoint/Crisp.app" "$out/Applications/"
     /usr/bin/hdiutil detach "$mountPoint"
+    trap - EXIT
     runHook postInstall
   '';
 

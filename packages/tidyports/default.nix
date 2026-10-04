@@ -22,10 +22,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     runHook preInstall
     mountPoint="$TMPDIR/tidyports-mount"
     mkdir -p "$mountPoint"
+    trap '/usr/bin/hdiutil detach "$mountPoint" >/dev/null 2>&1 || true' EXIT
     /usr/bin/hdiutil attach -nobrowse -readonly -mountpoint "$mountPoint" "$src"
     mkdir -p "$out/Applications"
     cp -R "$mountPoint/Tidy Ports.app" "$out/Applications/"
     /usr/bin/hdiutil detach "$mountPoint"
+    trap - EXIT
     runHook postInstall
   '';
 
