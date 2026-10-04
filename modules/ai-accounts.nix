@@ -12,6 +12,8 @@
       settings = config.programs.bbAiAccounts;
       pluginSource = "${config.home.homeDirectory}/dev/bb-plugins/plugins/ai-accounts";
       secretPackage = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret;
+      # The only `bb` client on this machine ships inside the desktop bundle.
+      bbCli = lib.getExe inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.bb;
       providerIconOptions = [
         "Bot"
         "BriefcaseBusiness"
@@ -187,27 +189,22 @@
         home.file.".config/bb-plugin-ai-accounts/secrets.json".text = builtins.toJSON secretsDocument;
 
         home.activation.installBbAiAccounts = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-          bb_cli="''${BB_CLI:-$(command -v bb || true)}"
-          if [ -z "$bb_cli" ]; then
-            echo "error: BB CLI not found; set BB_CLI or add bb to PATH" >&2
-            exit 1
-          fi
           export PATH="${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:${pkgs.coreutils}/bin:$PATH"
-          export PATH="$(dirname "$bb_cli"):$PATH"
           plugin_dir="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin"
           mkdir -p "$plugin_dir"
           rsync -a --delete --exclude node_modules --exclude dist "${pluginSource}/" "$plugin_dir/"
           ${pkgs.coreutils}/bin/chmod -R u+w "$plugin_dir"
           cd "$plugin_dir"
           pnpm install --frozen-lockfile --silent
-          "$bb_cli" plugin build
-          "$bb_cli" plugin install . --yes
+          BB_CLI="${bbCli}" "${bbCli}" plugin build
+          BB_CLI="${bbCli}" "${bbCli}" plugin install . --yes
           AI_ACCOUNTS_CONFIG="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/accounts.json" \
           AI_ACCOUNTS_SECRETS="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/secrets.json" \
           SECRET_BIN="${secretPackage}/bin/secret" \
           PROJECT_SECRET_CONFIG="${config.home.homeDirectory}/.config/nixfiles/.secret.json" \
           GLOBAL_SECRET_CONFIG="${config.home.homeDirectory}/.config/nixfiles/assets/secret/global.json" \
           BB_AI_ACCOUNTS_PLUGIN="${config.home.homeDirectory}/.config/bb-plugin-ai-accounts/plugin" \
+          BB_CLI="${bbCli}" \
             "${pkgs.nodejs_24}/bin/node" "${../assets/ai-accounts/seed.mjs}"
         '';
       };

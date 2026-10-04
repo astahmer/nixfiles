@@ -25,7 +25,12 @@
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
       home.file.".local/bin/dsh-web".source = ../assets/dsh/start-dsh;
       home.file.".local/bin/dsh-start".source = dshStartAlias;
-      home.file."Applications/DeepSeek Harness.app".source = dshApp;
       home.shellAliases.dshstart = "dsh-start";
+
+      # The bundle is a directory, which Home Manager cannot link: its
+      # activation only emits regular files and symlinks, and its comparison
+      # helpers abort with "Is a directory". Registering it with macos-apps
+      # rsync-copies it into ~/Applications like every other GUI app here.
+      macosAppSources."DeepSeek Harness.app" = "${dshApp}";
     };
 }

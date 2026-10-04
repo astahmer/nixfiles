@@ -1,4 +1,4 @@
-{ ... }:
+{ inputs, ... }:
 {
   config.flake.modules.homeManager.tokitokiBbPlugin =
     {
@@ -10,23 +10,20 @@
     let
       pluginSource = "${config.home.homeDirectory}/dev/bb-plugins/plugins/tokitoki-usage";
       pluginDirectory = "${config.home.homeDirectory}/.config/bb-plugins/tokitoki-usage";
+      # The only `bb` client on this machine ships inside the desktop bundle.
+      bbCli = lib.getExe inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.bb;
     in
     {
       home.activation.installTokitokiBbPlugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        bb_cli="''${BB_CLI:-$(command -v bb || true)}"
-        if [ -z "$bb_cli" ]; then
-          echo "error: BB CLI not found; set BB_CLI or add bb to PATH" >&2
-          exit 1
-        fi
         export PATH="${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:$PATH"
         mkdir -p "${pluginDirectory}"
         ${pkgs.rsync}/bin/rsync -a --delete --exclude node_modules --exclude dist "${pluginSource}/" "${pluginDirectory}/"
         ${pkgs.coreutils}/bin/chmod -R u+w "${pluginDirectory}"
         cd "${pluginDirectory}"
         ${pkgs.pnpm}/bin/pnpm install --frozen-lockfile --silent
-        "$bb_cli" plugin build
-        "$bb_cli" plugin install . --yes
-        "$bb_cli" plugin enable tokitoki-usage
+        BB_CLI="${bbCli}" "${bbCli}" plugin build
+        BB_CLI="${bbCli}" "${bbCli}" plugin install . --yes
+        BB_CLI="${bbCli}" "${bbCli}" plugin enable tokitoki-usage
       '';
     };
 }

@@ -1,4 +1,4 @@
-{ ... }:
+{ inputs, ... }:
 {
   config.flake.modules.homeManager.bbPlugins =
     {
@@ -9,6 +9,11 @@
     }:
     let
       pluginRoot = "${config.home.homeDirectory}/dev/bb-plugins";
+      # The only `bb` client on this machine ships inside the desktop bundle,
+      # so resolve it through the Nix-built shim rather than relying on PATH.
+      bbCli = lib.getExe inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.bb;
+      # ai-accounts and tokitoki-usage are installed by their own modules; only
+      # the plugins with no dedicated wiring belong to this generic activation.
       customPluginIds = [
         "auto-handoff-parent"
         "diff-viewed"
@@ -214,8 +219,13 @@
         };
 
       config = lib.mkIf config.programs.bbPlugins.enable {
+        # Expose the shim so `bb` resolves for interactive use, the activation
+        # hook, and anything the plugins themselves shell out to.
+        home.packages = [ inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.bb ];
+
         home.activation.installBbPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          export PATH="${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:$PATH"
+          export PATH="${bbCli}:${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:$PATH"
+          export BB_CLI="${bbCli}"
           BB_SETUP_CONFIG="${setupConfig}" \
           BB_PLUGIN_ROOT="${config.home.homeDirectory}/.config/bb-plugins" \
             "${pkgs.nodejs_24}/bin/node" "${applyScript}"

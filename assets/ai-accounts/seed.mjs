@@ -5,9 +5,10 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+const bbCli = process.env.BB_CLI ?? "bb";
 const accounts = readJson(process.env.AI_ACCOUNTS_CONFIG);
 const secrets = readJson(process.env.AI_ACCOUNTS_SECRETS);
-const existing = JSON.parse(execFileSync("bb", ["ai-accounts", "list", "--json"], { encoding: "utf8" }));
+const existing = JSON.parse(execFileSync(bbCli, ["ai-accounts", "list", "--json"], { encoding: "utf8" }));
 const existingById = new Map(existing.map((account) => [account.id, account]));
 const profileDirectory = join(homedir(), ".local", "share", "bb-ai-accounts");
 const ensurePrivateDirectory = (path) => {
@@ -106,7 +107,7 @@ const mergedAccounts = [
 const mergedPath = join(profileDirectory, `accounts-${randomUUID()}.json`);
 writePrivateFile(mergedPath, `${JSON.stringify({ accounts: mergedAccounts })}\n`);
 try {
-  execFileSync("bb", ["ai-accounts", "sync", mergedPath], { stdio: "ignore" });
+  execFileSync(bbCli, ["ai-accounts", "sync", mergedPath], { stdio: "ignore" });
 } finally {
   rmSync(mergedPath, { force: true });
 }

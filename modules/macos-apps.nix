@@ -71,10 +71,11 @@
         "shiftshift.app" = "${shiftshift}/Applications/shiftshift.app";
         "tldraw offline.app" = "${tldrawOffline}/Applications/tldraw offline.app";
       };
+      allMacosAppSources = macosAppSources // config.macosAppSources;
       macosAppInstallCommands = lib.concatStringsSep "\n" (
         lib.mapAttrsToList (
           appName: sourcePath: "install_app ${lib.escapeShellArg appName} ${lib.escapeShellArg sourcePath}"
-        ) macosAppSources
+        ) allMacosAppSources
       );
       macosAppInstaller = pkgs.writeShellScript "install-macos-apps" ''
         set -eu
@@ -173,10 +174,23 @@
       caffeineModule = import ../macos/caffeine.nix { inherit pkgs lib; };
       cleanMyKeyboardId = "6468120888";
       mas = lib.getExe pkgs.mas;
+      macosAppSourcesOption = {
+        options.macosAppSources = lib.mkOption {
+          type = lib.types.attrsOf lib.types.str;
+          default = { };
+          description = ''
+            App bundles produced by other modules. Home Manager cannot link
+            a directory into $HOME, so a `.app` may not be a `home.file`
+            source; registering it here makes the installer rsync-copy the
+            bundle into ~/Applications instead.
+          '';
+        };
+      };
       # huesyncModule = import ../macos/huesync.nix { inherit pkgs lib; };
     in
     {
       imports = [
+        macosAppSourcesOption
         backgroundMusicModule
         cameracontrollerModule
         cmdcmdModule

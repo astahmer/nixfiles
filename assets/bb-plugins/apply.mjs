@@ -5,15 +5,18 @@ import { join } from "node:path";
 
 const setup = JSON.parse(readFileSync(process.env.BB_SETUP_CONFIG, "utf8"));
 const pluginRoot = process.env.BB_PLUGIN_ROOT;
+const bbCli = process.env.BB_CLI ?? "bb";
 
 mkdirSync(pluginRoot, { recursive: true });
 
 const run = (command, args, options = {}) =>
   execFileSync(command, args, { stdio: "inherit", ...options });
 
+const bb = (args, options = {}) => run(bbCli, args, options);
+
 const sourceFor = (pluginId) => {
   try {
-    const output = execFileSync("bb", ["plugin", "source", pluginId, "--json"], {
+    const output = execFileSync(bbCli, ["plugin", "source", pluginId, "--json"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
@@ -58,26 +61,26 @@ for (const plugin of setup.customPlugins) {
   }
   writeFileSync(dependencyStamp, dependencyHash);
 
-  run("bb", ["plugin", "build"], { cwd: pluginDirectory });
+  bb(["plugin", "build"], { cwd: pluginDirectory });
   const installedSource = sourceFor(plugin.id);
   const targetSource = `path:${pluginDirectory}`;
 
   if (installedSource === targetSource) {
-    run("bb", ["plugin", "reload", plugin.id]);
+    bb(["plugin", "reload", plugin.id]);
   } else {
-    run("bb", ["plugin", "install", targetSource, "--yes"]);
+    bb(["plugin", "install", targetSource, "--yes"]);
   }
 
-  run("bb", ["plugin", plugin.enabled ? "enable" : "disable", plugin.id]);
+  bb(["plugin", plugin.enabled ? "enable" : "disable", plugin.id]);
 }
 
 for (const plugin of setup.thirdPartyPlugins) {
-  if (sourceFor(plugin.id) === null) run("bb", ["plugin", "install", plugin.source, "--yes"]);
-  run("bb", ["plugin", plugin.enabled ? "enable" : "disable", plugin.id]);
+  if (sourceFor(plugin.id) === null) bb(["plugin", "install", plugin.source, "--yes"]);
+  bb(["plugin", plugin.enabled ? "enable" : "disable", plugin.id]);
 }
 
 for (const [key, value] of Object.entries(setup.generalSettings)) {
-  run("bb", [
+  bb([
     "settings",
     "general",
     key,
@@ -86,7 +89,7 @@ for (const [key, value] of Object.entries(setup.generalSettings)) {
 }
 
 for (const [key, value] of Object.entries(setup.uiSettings)) {
-  run("bb", [
+  bb([
     "settings",
     "ui",
     "set",
@@ -96,12 +99,12 @@ for (const [key, value] of Object.entries(setup.uiSettings)) {
 }
 
 for (const shortcut of setup.shortcuts) {
-  run("bb", ["settings", "keyboard", "set", shortcut.command, shortcut.value]);
+  bb(["settings", "keyboard", "set", shortcut.command, shortcut.value]);
 }
 
 for (const plugin of setup.pluginSettings) {
   for (const [key, value] of Object.entries(plugin.values)) {
-    run("bb", [
+    bb([
       "plugin",
       "config",
       plugin.id,
