@@ -183,8 +183,8 @@ else
   fail=$((fail + 1))
   echo "FAIL: help shows the curated aliases" >&2
 fi
-assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "-h after a command shows that command's help"
-assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "secret help env shows env help"
+assert_eq "$(secret env -h 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--merge] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "-h after a command shows that command's help"
+assert_eq "$(secret help env 2>&1 | head -1)" "Usage: secret env [--output FILE] [--env NAME] [--export] [--merge] [--diff|--dry|--dry-run] [--required a,b,c] [--optional a,b,c]" "secret help env shows env help"
 assert_eq "$(secret --help 2>&1 | head -1)" "Usage: secret <status|unlock|lock|list|search|get|set|edit|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]" "--help is accepted"
 assert_eq "$(secret get github-token)" "old-pass" "get value"
 assert_eq "$(secret source github-token)" "https://example.com" "source prints the stored URL"
@@ -462,10 +462,8 @@ else
 fi
 assert_eq "$(secret env --export)" "$(printf 'export DATABASE_URL='\''old-pass'\''\n# source: https://example.com\nexport GITHUB_TOKEN='\''old-pass'\''')" "env --export shell lines with source comments"
 printf "DATABASE_URL='stale'\n" > .env
-assert_eq "$(secret env --diff --output .env)" "- DATABASE_URL='stale'
-+ DATABASE_URL='old-pass'
-+ # source: https://example.com
-+ GITHUB_TOKEN='old-pass'" "env --diff shows changes without writing"
+assert_eq "$(secret env --diff --output .env)" "~ DATABASE_URL
++ GITHUB_TOKEN" "env --diff shows changed keys without exposing values"
 assert_eq "$(secret env --dry --output .env)" "$(secret env --diff --output .env)" "env --dry aliases --diff"
 assert_eq "$(secret env --dry-run --output .env)" "$(secret env --diff --output .env)" "env --dry-run aliases --diff"
 assert_eq "$(cat .env)" "DATABASE_URL='stale'" "env --diff leaves file untouched"

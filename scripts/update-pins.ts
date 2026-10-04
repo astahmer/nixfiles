@@ -132,7 +132,7 @@ async function repoRoot(): Promise<string> {
   }
 
   try {
-    return (await $`git rev-parse --show-toplevel`.text()).trim();
+    return (await $`jj root`.text()).trim();
   } catch {
     return Bun.env.PWD ?? ".";
   }
@@ -273,6 +273,23 @@ function printSummary(results: Result[]): void {
   }
 }
 
+function selectionErrors(config: UpdateConfig, options: Options): string[] {
+  const updateNames = new Set(config.updates.map((entry) => entry.name));
+  const errors: string[] = [];
+
+  for (const name of options.only ?? []) {
+    if (!updateNames.has(name)) errors.push(`Unknown update entry in --only: ${name}`);
+  }
+  for (const name of options.skip) {
+    if (!updateNames.has(name)) errors.push(`Unknown update entry in --skip: ${name}`);
+  }
+  if (options.validate !== null && !Object.hasOwn(config.validations ?? {}, options.validate)) {
+    errors.push(`Unknown validation set: ${options.validate}`);
+  }
+
+  return errors;
+}
+
 async function main(): Promise<void> {
   let options: Options;
   try {
@@ -296,6 +313,13 @@ async function main(): Promise<void> {
     return;
   }
 
+  const errors = selectionErrors(config, options);
+  if (errors.length > 0) {
+    await Bun.write(Bun.stderr, `${errors.join("\n")}\n`);
+    process.exitCode = 2;
+    return;
+  }
+
   const system = await currentSystem();
   const results: Result[] = selectedEntries(config, options, system);
   for (const entry of runnableEntries(config, options, system)) {
@@ -304,12 +328,7 @@ async function main(): Promise<void> {
 
   const failed = results.some((result) => result.status === "failed");
   if (!failed && options.validate !== null) {
-    const validations = config.validations?.[options.validate];
-    if (validations === undefined) {
-      await Bun.write(Bun.stderr, `Unknown validation set: ${options.validate}\n`);
-      process.exitCode = 2;
-      return;
-    }
+    const validations = config.validations?.[options.validate] ?? [];
     for (const entry of validations) {
       const unsupportedReason = unsupportedSystemReason(entry, system);
       if (unsupportedReason !== null) {
@@ -326,5 +345,4 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
-
+if (import.meta.main) await main();

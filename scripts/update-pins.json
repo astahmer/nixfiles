@@ -198,6 +198,18 @@
       ]
     },
     {
+      "name": "devenv",
+      "type": "flake-input",
+      "description": "Official Cachix-backed devenv package input",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "devenv"
+      ]
+    },
+    {
       "name": "nix-index-database",
       "type": "flake-input",
       "description": "Nix index database pin",
@@ -219,6 +231,42 @@
         "lock",
         "--update-input",
         "llm-agents"
+      ]
+    },
+    {
+      "name": "qmd",
+      "type": "flake-input",
+      "description": "Pinned qmd local search backend input",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "qmd"
+      ]
+    },
+    {
+      "name": "jjw",
+      "type": "flake-input",
+      "description": "Nix-managed Jujutsu workspace helper source",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "jjw"
+      ]
+    },
+    {
+      "name": "secret-cli",
+      "type": "flake-input",
+      "description": "Nix-managed secret CLI and SecretBar source",
+      "command": [
+        "nix",
+        "flake",
+        "lock",
+        "--update-input",
+        "secret-cli"
       ]
     },
     {
