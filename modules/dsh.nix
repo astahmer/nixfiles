@@ -17,11 +17,12 @@
       dshStartAlias = pkgs.writeShellScript "dsh-start" ''
         exec "$HOME/.local/bin/dsh-web" "$@"
       '';
+      profileSync = ../assets/dsh/sync-web-profile.py;
     in
     {
-      # DSH rewrites both files itself (plugin_manager installs, settings
-      # mutations), so a read-only store link would break it. Seed only.
-      home.activation.dshWebProfileSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      # DSH rewrites these files itself, so keep writable copies. Reconcile only
+      # the Nix-declared plugin entries and marked Cordis block under DSH's lock.
+      home.activation.dshWebProfile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         profile="$HOME/.dsh/profiles/web"
         run mkdir -p "$profile"
         for name in package.json cordis.patch.yml; do
@@ -29,6 +30,10 @@
             run install -m 600 "${../assets/dsh/web-profile}/$name" "$profile/$name"
           fi
         done
+        run ${pkgs.python3}/bin/python3 "${profileSync}" \
+          "$profile" \
+          "${../assets/dsh/web-profile/package.json}" \
+          "${../assets/dsh/web-profile/cordis.patch.yml}"
       '';
       home.file.".dsh/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
