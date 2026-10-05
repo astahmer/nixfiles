@@ -79,3 +79,6 @@
   name: "@deepseek-ai/dsh-client-ui-theme"
   config:
     preference: light
+- insert:
+    - id: dshfiles-multi-host
+      name: '@dshfiles/multi-host'
