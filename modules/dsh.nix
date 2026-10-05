@@ -1,7 +1,7 @@
 { ... }:
 {
   config.flake.modules.homeManager.dsh =
-    { config, pkgs, ... }:
+    { config, lib, pkgs, ... }:
     let
       appScript = pkgs.writeText "dsh-web-app.applescript" ''
         on run
@@ -19,8 +19,17 @@
       '';
     in
     {
-      home.file.".dsh/profiles/web/package.json".source = ../assets/dsh/web-profile/package.json;
-      home.file.".dsh/profiles/web/cordis.patch.yml".source = ../assets/dsh/web-profile/cordis.patch.yml;
+      # DSH rewrites both files itself (plugin_manager installs, settings
+      # mutations), so a read-only store link would break it. Seed only.
+      home.activation.dshWebProfileSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        profile="$HOME/.dsh/profiles/web"
+        run mkdir -p "$profile"
+        for name in package.json cordis.patch.yml; do
+          if [ ! -e "$profile/$name" ]; then
+            run install -m 600 "${../assets/dsh/web-profile}/$name" "$profile/$name"
+          fi
+        done
+      '';
       home.file.".dsh/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
       home.file.".local/bin/dsh-web".source = ../assets/dsh/start-dsh;
