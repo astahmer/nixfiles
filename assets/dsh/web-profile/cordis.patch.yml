@@ -83,4 +83,7 @@
 - insert:
     - id: dshfiles-multi-host
       name: '@dshfiles/multi-host'
+- id: our-free-model
+  config:
+    distribution: managed
 # END NIX-MANAGED DSH PLUGINS

@@ -38,6 +38,7 @@
       home.file.".dsh/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
       home.file.".local/bin/dsh-web".source = ../assets/dsh/start-dsh;
+      home.file.".local/bin/dsh-web-supervisor.mjs".source = ../assets/dsh/supervise-web.mjs;
       home.file.".local/bin/dsh-start".source = dshStartAlias;
       home.shellAliases.dshstart = "dsh-start";
 
