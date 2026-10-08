@@ -13,7 +13,6 @@
     "@dshfiles/secret-catalog": "link:../../../dev/dshfiles/plugins/@dshfiles/secret-catalog",
     "@dshfiles/settings-search": "link:../../../dev/dshfiles/plugins/@dshfiles/settings-search",
     "@dshfiles/agent-communication": "link:../../../dev/dshfiles/plugins/@dshfiles/agent-communication",
-    "@dshfiles/plugin-marketplace": "link:../../../dev/dshfiles/plugins/@dshfiles/plugin-marketplace",
     "@dshfiles/goal-stall-guard": "link:../../../dev/dshfiles/plugins/@dshfiles/goal-stall-guard",
     "@dshfiles/multi-host": "link:../../../dev/dshfiles/plugins/@dshfiles/multi-host"
   },
@@ -33,7 +32,6 @@
         "@dshfiles/secret-catalog",
         "@dshfiles/settings-search",
         "@dshfiles/agent-communication",
-        "@dshfiles/plugin-marketplace",
         "@dshfiles/goal-stall-guard",
         "@dshfiles/multi-host"
       ]
