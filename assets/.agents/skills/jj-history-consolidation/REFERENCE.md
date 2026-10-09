@@ -126,3 +126,28 @@ workspace contract requires. Those belong in the same closeout commit.
 | `jj file show` says "exists but is not a file" | path is a symlink or gitlink in the tree | `git ls-tree <rev> <dir>` (120000 symlink, 160000 submodule) |
 | stale workspace error when rebasing another workspace's work | jj refuses to move foreign `@`s in some flows | `jj duplicate` the commit and rebase the copy |
 | workspace `@` lands below the base after abandonment | fresh `@` created on nearest visible ancestor | sweep `jj workspace list` and rebase strays onto the tip |
+| a pass leaves dozens of new heads | live `@`s were children of the rewritten tip | `jj rebase -r <head> -d <tip>` each stray, abandon the duplicate copies |
+| `jj op revert` appears to do nothing, or re-applies the damage | the op was already reverted once | stop chaining; read `jj op log`, then one `jj op restore <good-op>` |
+| scripts fail with `Name <bookmark> is conflicted` | a conflicted bookmark cannot be used as a revset name | `jj bookmark set <name> -r <rev> --allow-backwards` first |
+| a content cache always reports "carried over" | its base bookmark now points at the tip, so the diff is empty | key the cache on the tree (`jj diff --from root() --to <rev>`), not a bookmark |
+| a rebase of an interior marker re-conflicts resolved commits | descendants were re-applied onto the marker's old parent | move interior workspace `@`s with `jj new <tip>` inside the workspace |
+
+## 6. Rebased twins and conflict-artifact copies
+
+A store that survived several rewrites often holds two copies of one change: one
+clean, one whose tree carries `.jjconflict-*` materialised side files.
+
+```bash
+for c in $(jj log -r "<range>" --no-graph -T 'commit_id ++ "\n"'); do
+  echo "$c sidefiles=$(git ls-tree -r --name-only "$c" | grep -c '^\.jjconflict-')"
+done
+jj log -r '<range>' --no-graph -T 'change_id ++ "\n"' | sort | uniq -d   # twins
+```
+
+- Keep the copy with zero side files; it is the resolved tree.
+- `jj rebase` drops inherited side files — they cancel in the change diff — while a
+  git patch of the same commit re-adds them. Rebase, do not cherry-pick patches.
+- To prove a prune changed no tree, read the pre-op tip with `jj --at-op <op-id>`
+  and compare: `git diff <old-tip> <new-tip>` must be 0 files. Compare the right
+  pair: other agents editing the shared checkout change the tree too.
+

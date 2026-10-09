@@ -30,6 +30,14 @@ Keep set 2, abandon set 3. Never linearize set 3.
   one change cannot share a line — pick a side or drop the duplicate.
 - Abandon junk in one operation (`jj abandon '<base>:: & ~::<tip>'`), then sweep
   `jj workspace list`: re-created `@`s can land below the base.
+- Snapshot every workspace before the first rewrite (`jj status` inside each);
+  edits that were never snapshotted are not in the store.
+- Move an interior workspace `@` with `jj new <tip>` **inside that workspace**,
+  never `jj rebase -r`: moving an interior revision re-applies every commit above
+  it and re-introduces conflicts you already resolved.
+- Re-fold after every pass. A rewrite orphans each live `@` that was a child of
+  the tip: `jj rebase -r <stray-head> -d <tip>`, then abandon the duplicate copy.
+  Live agents keep committing, so expect to repeat this until they stop.
 - Verify: one head, zero conflicts, every workspace `@` on the line, then the
   repository's own gates (install, typecheck, build, test).
 
@@ -55,6 +63,14 @@ Keep set 2, abandon set 3. Never linearize set 3.
 - **Splitting a many-change tip into nothing.** Record the tree-equality gate
   (`jj diff --from <old-tip> --to <new-tip>` = 0 files) before you claim a
   revision split preserved the content.
+- **`jj op revert` on an op you already reverted.** Reverting a revert re-applies
+  it, and a long chain drifts. One op per call, newest first; for a window you own,
+  one `jj op restore <good-op>`.
+- **Describing an interior revision without re-folding.** It rewrites the whole
+  subtree above it and orphans every live `@` that hung off the tip.
+- **Moving the base bookmark onto the tip.** Tools that treat it as the base —
+  `main::` revsets, a cache keyed on `jj diff --from main` — go silently empty.
+  Key content caches on the tree, not on a bookmark.
 
 ## Recovery
 
