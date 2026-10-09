@@ -131,6 +131,7 @@ workspace contract requires. Those belong in the same closeout commit.
 | scripts fail with `Name <bookmark> is conflicted` | a conflicted bookmark cannot be used as a revset name | `jj bookmark set <name> -r <rev> --allow-backwards` first |
 | a content cache always reports "carried over" | its base bookmark now points at the tip, so the diff is empty | key the cache on the tree (`jj diff --from root() --to <rev>`), not a bookmark |
 | a rebase of an interior marker re-conflicts resolved commits | descendants were re-applied onto the marker's old parent | move interior workspace `@`s with `jj new <tip>` inside the workspace |
+| the same change-id appears twice, a second head, a `@` off the line | two writers raced; jj reconciled divergent operations by keeping both results | keep the copy a live workspace holds, `jj rebase -r <stray-head> -d <tip>`, abandon the twin; re-scan after every pass |
 
 ## 6. Rebased twins and conflict-artifact copies
 
