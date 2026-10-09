@@ -17,9 +17,9 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
 
 ## Layout
 
-- `inputs.agents` supplies the user-global `AGENTS.md` contract and portable skills. `assets/.agents/` is the Nix-owned source for machine-specific overlays only. Home Manager combines both trees into the deployed `~/.agents` directory.
+- `inputs.agents` supplies the user-global `AGENTS.md` contract and portable skills, including durable user preferences. `assets/.agents/` is the Nix-owned source for machine-specific overlays such as skills and memory. Home Manager combines both trees into the deployed `~/.agents` directory.
 - `inputs.emilint` owns the executable Oxlint and ast-grep rule sources and fixtures that the agents module overlays into `antislop/` and `effect-antislop/`. `modules/coding.nix` installs the matching `oxlint` and `ast-grep` CLIs globally.
-- Agent deployment source is the pinned `agents` input (base contract + portable skills) with the `assets/.agents/` machine overlay on top, plus `assets/.cursor/` rules. Home Manager deploys to `~/.agents`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`, `~/.copilot/instructions/`, and `~/.cursor/rules`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies the deployed global `AGENTS.md`, not the clone.
+- Agent deployment source is the pinned `agents` input (global contract, durable preferences + portable skills) with the `assets/.agents/` machine overlay on top, plus `assets/.cursor/` rules. Home Manager deploys to `~/.agents`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`, `~/.copilot/instructions/`, and `~/.cursor/rules`. Do not manually copy into `$HOME`; run `nixapply` to apply. `initagent` copies the deployed global `AGENTS.md`, not the clone.
 - `assets/executor/` configures the local [Executor](https://executor.sh) integration layer. Agents connect only to Executor over MCP; Executor itself hosts the GitHub Copilot, Context7, and Chrome DevTools integrations. `assets/executor/setup.ts` seeds these integrations idempotently after `nixbootstrap` and when activation inputs change.
 - DSH web profile config belongs to `~/dev/dshfiles/profiles/web/`;
   `modules/dsh.nix` seeds its manifest, Cordis patch, workspace policy, and
@@ -74,7 +74,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 ## Notes for Agents
 
 - Global-scope secret aliases (the `secret` CLI's global config) live in the git-synced file `assets/secret/global.json`; Home Manager symlinks `~/.config/secret/config.json` to it through the `~/.config/nixfiles` stable pointer, so `secret set --global` edits land in the working copy and jj snapshots them — push so other machines see new aliases. Machine-specific overrides belong in `.secret.local.json`.
-- Keep cross-user portable guidance and skills in the `agents` repository. Store user-global skills and preferences explicitly requested for this setup in `assets/.agents`; keep project-specific skills in their project repositories. Run `nixapply` to deploy the Nix-owned guidance.
+- Keep cross-user portable guidance, durable user preferences, and portable skills in the `agents` repository. Store machine-specific overlays such as local skills and memory in `assets/.agents`; keep project-specific skills in their project repositories. Run `nixapply` to deploy the Nix-owned guidance.
 - Agent-made `jj` revisions carry a session deeplink and a short summary of the initial prompt in the description body (after the first line), prefixed with `prompt_summary:`; keep the first line a lowercase concise title. Use the harness active at request time, not a fixed one: Codex desktop links `codex://threads/<thread-id>` via `$CODEX_THREAD_ID`; T3 Code/OpenCode and other harnesses use their own session id/link from their session store. Summarize the prompt in 1-2 lines after `prompt_summary:`; the deeplink preserves full context.
 
   ```text

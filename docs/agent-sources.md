@@ -6,8 +6,9 @@ The deployed agent tree is assembled from three sources:
    user-global `AGENTS.md` contract and the portable skill set.
 2. `inputs.emilint` supplies executable antislop and Effect rules, their
    companion skills, configs, and fixtures.
-3. `assets/.agents/` overlays machine-specific skills, preferences, and memory
-   on top of the base.
+3. `assets/.agents/` overlays machine-specific skills and memory on top of the
+   base. Durable user preferences belong in the global `AGENTS.md` contract so
+   they are available in every thread without a separate file read.
 
 `modules/agents.nix` copies the base first, overlays `assets/.agents`, then adds
 the emilint and calldiff skills, and deploys the result to:
@@ -47,8 +48,8 @@ nix build --no-link '.#homeConfigurations.macbook.activationPackage'
 
 `nixfiles-check` runs the lint fixtures from the pinned `inputs.emilint`
 source. The checked-in `assets/.agents` tree keeps only machine-specific
-overlays; the global contract, portable skills, and lint rules each have one
-maintained source.
+overlays; the global contract and durable preferences, portable skills, and
+lint rules each have one maintained source.
 
 Do not add a Git submodule. The lockfile pins the source revisions, while this
 module owns the small amount of composition needed for machine deployment.

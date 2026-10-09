@@ -41,7 +41,7 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
   AI-account metadata only when the DSH account store is absent. Provider auth,
   lockfiles, sessions, and other runtime state stay local. Keep DSH plugin
   declarations in dshfiles, not `assets/dsh/`.
-- The pinned `agents` flake input is the base (user-global `AGENTS.md` contract + portable skills); `assets/.agents/` overlays machine-specific skills and preferences. Home Manager combines both and deploys the contract to `~/.agents/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`, and `~/.copilot/instructions/` on every machine.
+- The pinned `agents` flake input is the base (user-global `AGENTS.md` contract, durable user preferences + portable skills); `assets/.agents/` overlays machine-specific skills and memory. Home Manager combines both and deploys the contract to `~/.agents/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`, and `~/.copilot/instructions/` on every machine.
 - The source split and migration procedure are documented in [`docs/agent-sources.md`](docs/agent-sources.md).
 - `assets/tokitoki/` contains the value-free Tokitoki configuration template; secret-backed runtime projection and macOS startup are documented in [`docs/tokitoki.md`](docs/tokitoki.md).
 - `assets/executor/` keeps the local [Executor](https://executor.sh) integration config and seeder. The `nixfiles.executor.enable` option defaults to `false`; when enabled, Home Manager deploys the client MCP entries and seeds Executor after `nixbootstrap` or when activation inputs change.
