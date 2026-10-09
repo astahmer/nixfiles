@@ -26,21 +26,27 @@
       dshfilesWebProfile = "${config.home.homeDirectory}/dev/dshfiles/profiles/web";
     in
     {
-      # DSH rewrites its profile files, so seed writable copies from dshfiles.
-      # Reconcile only managed plugin entries and Cordis region under DSH's lock.
+      # DSH rewrites its profile; seed portable config and account metadata.
+      # Reconcile managed plugins under DSH's lock; keep credentials local.
       home.activation.dshWebProfile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        profile="$HOME/.dsh/profiles/web"
+        dsh_home="''${DSH_HOME:-$HOME/.dsh}"
+        profile="$dsh_home/profiles/web"
         source_profile="${dshfilesWebProfile}"
         if [ ! -d "$source_profile" ]; then
           echo "Missing dshfiles web profile at $source_profile" >&2
           exit 1
         fi
         run mkdir -p "$profile"
-        for name in package.json cordis.patch.yml; do
+        for name in package.json cordis.patch.yml pnpm-workspace.yaml; do
           if [ ! -e "$profile/$name" ]; then
             run install -m 600 "$source_profile/$name" "$profile/$name"
           fi
         done
+        accounts_file="$dsh_home/plugins/ai-accounts/accounts.json"
+        if [ ! -e "$accounts_file" ] && [ ! -L "$accounts_file" ]; then
+          run mkdir -p "$dsh_home/plugins/ai-accounts"
+          run install -m 600 "$source_profile/ai-accounts.json" "$accounts_file"
+        fi
         run ${pkgs.python3}/bin/python3 "${profileSync}" \
           "$profile" \
           "$source_profile/package.json" \
