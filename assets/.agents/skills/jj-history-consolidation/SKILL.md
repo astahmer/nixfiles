@@ -1,6 +1,6 @@
 ---
 name: jj-history-consolidation
-description: Collapse many stale, duplicated, or divergent jj revisions above a base revision into a single line of descendants without losing live work. Use when a repository above one revision has exploded into dozens of heads, when a previous unification attempt left duplicate branches, or when the user asks to "unify the history" into one branch.
+description: Collapse many stale, duplicated, or divergent jj revisions above a base revision into a single line of descendants without losing live work. Use when a repository above one revision has exploded into dozens of heads, when a previous unification attempt left duplicate branches, or for any history-shape request — "unify the history" into one branch, "spine branch", "linear history", "single line of descendants", "too many heads", "consolidate the history".
 ---
 
 # Consolidate jj history into one line
@@ -49,6 +49,12 @@ Keep set 2, abandon set 3. Never linearize set 3.
   revert only your own ops, newest first.
 - **Calling it done from shape alone.** One head and zero conflicts can still
   join two versions of one function; run the gates.
+- **Rewriting a revision another workspace holds as its `@`.** A concurrent
+  snapshot turns it into a divergent copy of the same change (same change-id,
+  second commit-id); name only revisions you created.
+- **Splitting a many-change tip into nothing.** Record the tree-equality gate
+  (`jj diff --from <old-tip> --to <new-tip>` = 0 files) before you claim a
+  revision split preserved the content.
 
 ## Recovery
 
