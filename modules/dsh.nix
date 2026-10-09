@@ -1,7 +1,12 @@
 { ... }:
 {
   config.flake.modules.homeManager.dsh =
-    { config, lib, pkgs, ... }:
+    {
+      config,
+      lib,
+      pkgs,
+      ...
+    }:
     let
       appScript = pkgs.writeText "dsh-web-app.applescript" ''
         on run
@@ -18,22 +23,28 @@
         exec "$HOME/.local/bin/dsh-web" "$@"
       '';
       profileSync = ../assets/dsh/sync-web-profile.py;
+      dshfilesWebProfile = "${config.home.homeDirectory}/dev/dshfiles/profiles/web";
     in
     {
-      # DSH rewrites these files itself, so keep writable copies. Reconcile only
-      # the Nix-declared plugin entries and marked Cordis block under DSH's lock.
+      # DSH rewrites its profile files, so seed writable copies from dshfiles.
+      # Reconcile only managed plugin entries and Cordis region under DSH's lock.
       home.activation.dshWebProfile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         profile="$HOME/.dsh/profiles/web"
+        source_profile="${dshfilesWebProfile}"
+        if [ ! -d "$source_profile" ]; then
+          echo "Missing dshfiles web profile at $source_profile" >&2
+          exit 1
+        fi
         run mkdir -p "$profile"
         for name in package.json cordis.patch.yml; do
           if [ ! -e "$profile/$name" ]; then
-            run install -m 600 "${../assets/dsh/web-profile}/$name" "$profile/$name"
+            run install -m 600 "$source_profile/$name" "$profile/$name"
           fi
         done
         run ${pkgs.python3}/bin/python3 "${profileSync}" \
           "$profile" \
-          "${../assets/dsh/web-profile/package.json}" \
-          "${../assets/dsh/web-profile/cordis.patch.yml}"
+          "$source_profile/package.json" \
+          "$source_profile/cordis.patch.yml"
       '';
       home.file.".dsh/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
