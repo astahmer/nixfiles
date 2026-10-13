@@ -61,6 +61,25 @@
       home.file.".local/bin/dsh-start".source = dshStartAlias;
       home.shellAliases.dshstart = "dsh-start";
 
+      # `dsh lkg` starts the last known good snapshot instead of the live
+      # installation. The recovery script is self-contained: it reads only the
+      # snapshot store, never the repository, the pnpm global install or the live
+      # ~/.dsh profile, so it still works after an agent breaks the main install.
+      # Every other subcommand delegates to the real CLI unchanged.
+      programs.zsh.initContent = lib.mkAfter ''
+        dsh() {
+          case "''${1:-}" in
+            lkg)
+              shift
+              exec "$HOME/.local/bin/dsh-recover" "$@"
+              ;;
+            *)
+              command dsh "$@"
+              ;;
+          esac
+        }
+      '';
+
       # The bundle is a directory, which Home Manager cannot link: its
       # activation only emits regular files and symlinks, and its comparison
       # helpers abort with "Is a directory". Registering it with macos-apps
