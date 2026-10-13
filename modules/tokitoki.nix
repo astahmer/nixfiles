@@ -118,10 +118,9 @@
 
         # The values stay in process memory and are consumed through jq's
         # environment interface; neither the template nor the Nix store gets
-        # a credential. These aliases are shared with OpenCodex's provider
-        # configuration and are value-free in the checked-in secret configs.
-        # The shared accounts live in global.json; the personal account is a
-        # project alias because it is already used by OpenCodex.
+        # a credential. The aliases are value-free in the checked-in secret
+        # configs: shared accounts live in global.json, the personal one in
+        # the project .secret.json.
         TOKITOKI_OPENCODE_GO_MATHIAS="$(read_secret opencode-go-mathias "${globalSecretConfig}")"
         TOKITOKI_OPENCODE_GO_MANU="$(read_secret opencode-go-manu "${globalSecretConfig}")"
         TOKITOKI_OPENCODE_GO_ALEX="$(read_secret opencode-go-alex "${secretConfig}")"

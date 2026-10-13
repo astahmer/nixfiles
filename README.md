@@ -270,7 +270,6 @@ using it.
 - `modules/git.nix` for git defaults
 - `modules/bitwarden.nix` for Bitwarden, `rbw`, and the scoped `secret` CLI; see [`docs/bitwarden.md`](docs/bitwarden.md)
 - `modules/ryu.nix` for `jj-ryu` on both macOS and NixOS
-- `modules/opencodex.nix` for `opencodex` (`ocx`) on both macOS and NixOS
 - `modules/tokitoki.nix` for Tokitoki usage analytics, secret-backed quota keys, and the macOS menu-bar LaunchAgent
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 

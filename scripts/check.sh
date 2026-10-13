@@ -40,38 +40,6 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 jq -e '
-  .accountPoolStrategy == "quota"
-  and .codexAccountPickerEnabled == true
-  and (.providers | keys | contains([
-    "opencode-go-alex",
-    "opencode-free",
-    "opencode-go-mathias"
-  ]))
-  and .providers["opencode-go-alex"].apiKey == "$OPENCODEX_OPENCODE_GO_API_KEY"
-  and .providers["opencode-go-mathias"].apiKey == "$OPENCODEX_OPENCODE_GO_MATHIAS_KEY"
-  and .codexAccountNamespaces == {"codex-perso": "@main"}
-  and ((.codexAccounts // []) | length == 0)
-  # This is the checked-in OpenCodex 2.63.0 visibility snapshot for the
-  # configured providers. A catalog refresh that intentionally changes it
-  # should update the template and these assertions together.
-  and (.disabledModels | length == 170)
-  and ((.disabledModels | length) == (.disabledModels | unique | length))
-  and (.providers.commandcode.defaultModel == "gpt-6-luna")
-  and (.providers.commandcode.models | contains(["gpt-6-luna", "gpt-6-sol"]))
-  and (.subagentModels | index("gpt-6-luna") != null)
-  and (.disabledModels | index("gpt-6-astra") == null)
-  and (.disabledModels | index("gpt-6-sol") == null)
-  and (.disabledModels | index("gpt-6-luna") == null)
-  and (.disabledModels | index("opencode-go-alex/deepseek-v4-flash-vision-exp") != null)
-  and (.disabledModels | index("opencode-go-manu/gpt-5.6-luna") != null)
-  and (.disabledModels | index("opencode-go-mathias/qwen3.8-max") != null)
-' assets/opencodex/config.template.json >/dev/null
-jq -e '
-  .secrets["opencodex-codex-perso-email"].env == "OPENCODEX_CODEX_PERSO_EMAIL"
-  and .secrets["opencodex-codex-perso-email"].type == "login"
-  and .secrets["opencodex-codex-alex2-email"].env == "OPENCODEX_CODEX_ALEX2_EMAIL"
-' .secret.json >/dev/null
-jq -e '
   .poll.enabled == true
   and ([.poll.extraKeys[].id] | sort == [
     "opencode-go-alex",
@@ -91,10 +59,6 @@ jq -e '
   ["devenv", "qmd", "jjw", "secret-cli"] as $required
   | ([.updates[].name] as $names | ($required - $names) | length == 0)
 ' scripts/update-pins.json >/dev/null
-bun test assets/opencodex/strip-legacy-base-url.test.ts
-if command -v ocx >/dev/null 2>&1; then
-  ocx config validate assets/opencodex/config.template.json --json >/dev/null
-fi
 
 if ! command -v ast-grep >/dev/null 2>&1 || ! command -v oxlint >/dev/null 2>&1; then
   echo "nixfiles-check: ast-grep and oxlint are required for lint fixtures" >&2

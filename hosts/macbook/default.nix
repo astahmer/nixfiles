@@ -31,7 +31,6 @@ in
           hm.jujutsu
           hm.ryu
           hm.drydock
-          hm.opencodex
           hm.codexConfig
           hm.tokitoki
           hm.t3code

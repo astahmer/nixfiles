@@ -330,20 +330,6 @@
       ]
     },
     {
-      "name": "opencodex",
-      "type": "manual",
-      "description": "Pinned OpenCodex release binary and matching prebuilt dashboard bundle move together",
-      "enabled": false,
-      "command": [
-        "nix",
-        "run",
-        "nixpkgs#nix-update",
-        "--",
-        "--flake",
-        "opencodex"
-      ]
-    },
-    {
       "name": "plannotator",
       "type": "manual",
       "description": "Release version and per-platform executable hashes move together",

@@ -18,8 +18,7 @@ The declarative, non-secret defaults live in
 
 The two shared OpenCode Go aliases are read from the global secret config:
 `opencode-go-mathias` and `opencode-go-manu`. The personal alias
-`opencode-go-alex` is read from the project `.secret.json`, matching the
-OpenCodex setup. Alias metadata is value-free and safe to commit.
+`opencode-go-alex` is read from the project `.secret.json`. Alias metadata is value-free and safe to commit.
 
 ## Automatic startup
 

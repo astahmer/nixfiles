@@ -510,11 +510,9 @@ typecheck is skipped with a hint until the dev deps are installed.
 
 The nixfiles repo declares the same scoped model in its root `.secret.json`:
 
-- `opencodex-commandcode-api-key` maps to the CommandCode dotenv variable.
-- `opencode-go-alex` maps to the OpenCodex primary OpenCode key.
-- `opencode-go-manu` and `opencode-go-mathias` map to the OpenCodex secondary
-  OpenCode pool keys (global aliases, used by the `opencode-go-manu` provider
-  and the extra `opencode` pool entries).
+- `opencode-go-alex` maps to the personal OpenCode Go key; `opencode-go-manu`
+  and `opencode-go-mathias` are the shared keys (global aliases). Tokitoki and
+  T3 Code read all three.
 - `github-token` maps to the raw GitHub token projection consumed by Executor.
 - `gemini-api-key` maps to the `GEMINI_API_KEY` env var.
 - `ssh-private-key` maps to the multiline SSH private key stored in a

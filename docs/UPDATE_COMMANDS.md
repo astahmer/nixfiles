@@ -52,7 +52,7 @@ while the profile keeps only the CLI launchers needed by the shell.
 
 ## Manual package updates
 
-`hunk`, `opencodex`, `plannotator`, `ghui`,
+`hunk`, `plannotator`, `ghui`,
 `claude-desktop`, `discord-bin`, `recordly`, `t3code-bin`,
 `tldraw-offline` remain in the registry as disabled manual entries.
 `pi-packages` is also manual because its package.json, npm lockfile,
@@ -65,10 +65,6 @@ T3 Code currently pins the upstream nightly channel. Keep the prerelease version
 archive hash, and `T3 Code (Nightly).app` wiring together; switching back to stable
 also requires restoring the `T3 Code (Alpha).app` bundle name. Orchestrator v2
 is a separate unmerged preview branch, not part of the regular nightly channel.
-
-OpenCodex combines per-platform standalone release binaries with `gui/dist`
-from the matching published npm tarball. Update its binary hashes and dashboard
-tarball hash together.
 
 ## Flake inputs
 

@@ -13,7 +13,7 @@
       configTemplate = "${../assets/codex/config.template.toml}";
     in
     {
-      home.activation.codexConfig = lib.hm.dag.entryAfter [ "opencodexConfig" ] ''
+      home.activation.codexConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         codex_home="${codexHome}"
         config_file="${configFile}"
         config_template="${configTemplate}"

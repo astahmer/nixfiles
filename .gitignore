@@ -4,6 +4,5 @@ result
 *.local.md
 .secret.local.json
 node_modules
-.opencodex-secrets.env
 .composto
 *.build
