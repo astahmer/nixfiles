@@ -51,6 +51,26 @@ point other projects at the clone's absolute path.
 - Keep NixOS and Home Manager concerns split when the repo already has separate modules.
 - Use thin host/profile files that only wire modules together.
 
+## Scripts and activation
+
+- Write new scripts in TypeScript, not Python or long shell. Activation
+  scripts run with `${pkgs.nodejs_24}/bin/node` (native type stripping, use
+  `.mts`, Node built-ins only); maintenance scripts under `scripts/` run with
+  `bun`. Tests sit beside the script (`*.test.mts` → `node --test`,
+  `*.test.ts` → `bun test`) and get a line in `scripts/check.sh`.
+- Shell stays for thin launchers, `exec` wrappers, completions, and
+  command-orchestration (`check.sh`, `update-all.sh`).
+- Activation snippets source `lib/activation.nix` instead of hand-rolling
+  timeouts and logging: `nixfiles_step <scope> <step> <limit> <cmd...>` for
+  any step that can hang, `nixfiles_launch_agent_install <label> <plist>` for
+  hand-managed LaunchAgents. Prefer `launchd.agents.*` when the app does not
+  need the manual bootstrap.
+- Reuse a helper only when the logic is non-trivial and identical; a one-line
+  constant or `read_secret` wrapper duplicated per module is fine.
+- Remove a tool completely when dropping it: module, package, assets, host
+  wiring, `.secret.json` aliases, `scripts/update-pins.json`, `check.sh`
+  contracts, and docs.
+
 ## Data and type boundaries
 
 - Decode external data once at the boundary; internal APIs use named validated
