@@ -61,8 +61,8 @@
         "aarch64-darwin"
       ],
       "command": [
-        "bash",
-        "scripts/update-whatsapp.sh"
+        "bun",
+        "scripts/update-whatsapp.ts"
       ]
     },
     {

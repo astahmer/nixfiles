@@ -25,7 +25,7 @@ These packages use release archives and the `finalAttrs` pattern:
 
 | Package | Upstream | Update command |
 | --- | --- | --- |
-| `whatsapp-bin` | Official signed WhatsApp desktop DMG | `bash scripts/update-whatsapp.sh` (included in `nixupdateall`) |
+| `whatsapp-bin` | Official signed WhatsApp desktop DMG | `bun scripts/update-whatsapp.ts` (included in `nixupdateall`) |
 | `codex` | OpenAI Codex release archive | `nix run nixpkgs#nix-update -- --flake codex --use-github-releases --github-releases-limit 100 --version-regex 'rust-v(.*)'` |
 | `iris` | IRIS release archive | `nix run nixpkgs#nix-update -- --flake iris` |
 | `lightjj` | lightjj release binary | `nix run nixpkgs#nix-update -- --flake lightjj` |
@@ -45,7 +45,7 @@ upstream DMG in `discord-bin` because the nixpkgs package reconstructs its
 bundle and Gatekeeper rejects it. WhatsApp uses the pinned signed official DMG
 in `whatsapp-bin` because the nixpkgs package can lag WhatsApp's expiry
 window. `nixupdateall` resolves and verifies the official WhatsApp DMG through
-`scripts/update-whatsapp.sh`. Update nixpkgs-managed apps by updating the
+`scripts/update-whatsapp.ts`. Update nixpkgs-managed apps by updating the
 `nixpkgs` flake input; update `discord-bin` as a manual package. Do not add
 separate Homebrew installs. Their bundles are linked once into `~/Applications`,
 while the profile keeps only the CLI launchers needed by the shell.
