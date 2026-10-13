@@ -692,11 +692,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1789383963,
-        "narHash": "sha256-wKcWt+hlzSDAYU+wBEp4o0TvhsCXfT2koBnuuEtcjPg=",
+        "lastModified": 1791897269,
+        "narHash": "sha256-V9RzGmdYzxx/xsb7Hs3ItSdKGV8p55qEZwEHvcmkMIk=",
         "ref": "main",
-        "rev": "28ccf4b05bdbf50699845a0604af7a34901a9e4f",
-        "revCount": 59,
+        "rev": "a34cbbaf8f7928bcd0b5f3c648dc087c84a7d3d9",
+        "revCount": 85,
         "type": "git",
         "url": "ssh://git@github.com/astahmer/shiftshift-app.git"
       },
