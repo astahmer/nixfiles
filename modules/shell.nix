@@ -36,7 +36,7 @@ in
         if config.programs.jujutsu.package != null then config.programs.jujutsu.package else pkgs.jujutsu;
 
       bootstrap = {
-        executorVersion = "1.5.35";
+        executorVersion = "1.6.10";
         astOutlineVersion = "1.8.2";
         skepsisRevision = "cf699d2593e270fb8767daffcd9c46c8ce539f15";
         skepsisUrl = "https://github.com/oxidecomputer/skepsis.git";
