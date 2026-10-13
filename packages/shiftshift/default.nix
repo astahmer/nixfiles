@@ -30,7 +30,7 @@ let
     inherit version;
     src = frontendSrc;
     fetcherVersion = 4;
-    hash = "sha256-uFbzz1sYxoHxhCOhJkCY7pLT3r9gX7rPHf3EOUT7014=";
+    hash = "sha256-1cDijPSB+qoPoyWABX0shDov0fPqeGCUuHZKQjbTm5o=";
   };
 
   frontendDist = shiftPkgs.stdenv.mkDerivation {
