@@ -101,3 +101,24 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 - **When adding a CLI binary** to `home.packages` (nixpkgs or `packages/`), also update the cockpit: `assets/cli-tools/cli-tools.sh` (`list_term`) and `assets/cli-tools/overview.html` (tool card). Keep the map curated — skip noise; document tools agents/humans should know about.
 - Ghostty config is managed by Home Manager (`programs.ghostty` in `modules/terminal.nix`, written to `~/.config/ghostty/config`). Theme is Flexoki Dark. On macOS the official app is used (`package = null`); on Linux the nixpkgs package is installed.
 - Custom local Raycast extensions live under `assets/raycast/<name>/` (source of truth). `modules/raycast-local-extensions.nix` seeds them as **writable copies** into `~/RaycastExtensions/<name>` on every activation (node_modules is preserved across reseeds; NOT `~/.config` — Raycast rejects hidden folders as dev-extension sources), so Raycast's `Import Extension` can point at the stable path. After editing an extension, run `nixapply` to reseed, and `pnpm install && pnpm exec ray build` inside `~/RaycastExtensions/<name>` for typecheck/build validation.
+
+## DSH ADE (jj workspace automation)
+
+- `assets/dsh/start-dsh` is the single entry point that shapes `PATH` for the
+  supervisor, the `dsh web` child, and every subprocess. It prepends
+  `${JJ_ISOLATION_SHIM_DIR:-$HOME/.dsh/jj-isolation/bin}` so the guarded `jj` is
+  what `resolveExecutable('jj')` and the agent bash tool find. Do not add a
+  second wrapper or a shell-rc shim — and do not remove that prepend: without
+  it nothing enforces the concurrent-workspace rules.
+- Installing the launcher in the store is not activating it. A host started as a
+  bare `node .../dsh/lib/bin.js web` inherits the caller's `PATH` and is
+  **unguarded**; start it through `~/.local/bin/dsh-web` (or export
+  `JJ_ISOLATION_SHIM_DIR`) so the shim is inherited. Verify with
+  `ps eww <pid> | grep PATH` and `command -v jj` in an agent shell.
+- Home Manager seeds `~/.dsh/profiles/web/` from `$HOME/dev/dshfiles/profiles/web`.
+  The ADE plugins (`@dshfiles/jj-integration`, `@dshfiles/activity-timeline`)
+  are owned bundles: reconcile the seed, then
+  `pnpm profile:sync --profile web --bundle @dshfiles/<name>`. Never restart the
+  live instance from here.
+- Do not run `nixapply` as part of an agent task without the user asking; the
+  ADE pieces above are activated by a user-controlled restart.
