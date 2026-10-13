@@ -226,9 +226,21 @@
         home.activation.installBbPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           export PATH="${bbCli}:${pkgs.nodejs_24}/bin:${pkgs.pnpm}/bin:${pkgs.rsync}/bin:$PATH"
           export BB_CLI="${bbCli}"
-          BB_SETUP_CONFIG="${setupConfig}" \
-          BB_PLUGIN_ROOT="${config.home.homeDirectory}/.config/bb-plugins" \
-            "${pkgs.nodejs_24}/bin/node" "${applyScript}"
+          started="$SECONDS"
+          printf '[nixfiles:installBbPlugins] activation started\n' >&2
+          if ${pkgs.coreutils}/bin/timeout --kill-after=5s 240s \
+            ${pkgs.coreutils}/bin/env \
+              "BB_SETUP_CONFIG=${setupConfig}" \
+              "BB_PLUGIN_ROOT=${config.home.homeDirectory}/.config/bb-plugins" \
+              "${pkgs.nodejs_24}/bin/node" "${applyScript}"; then
+            elapsed=$((SECONDS - started))
+            printf '[nixfiles:installBbPlugins] activation completed in %ss\n' "$elapsed" >&2
+          else
+            status="$?"
+            elapsed=$((SECONDS - started))
+            printf '[nixfiles:installBbPlugins] activation failed after %ss (status %s)\n' "$elapsed" "$status" >&2
+            exit "$status"
+          fi
         '';
       };
     };
