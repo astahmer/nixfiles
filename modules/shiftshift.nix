@@ -18,6 +18,15 @@
       appDataDir = "${config.home.homeDirectory}/Library/Application Support/dev.shiftshift.tauri";
       shiftshiftLauncher = pkgs.writeShellScript "shiftshift-launcher" ''
         export SHIFTSHIFT_MANAGED_LAUNCHD=1
+        # iCloud evicts the folder backend's entry files and the app reads them
+        # all at startup. `brctl download <dir>` does not recurse, so request
+        # each evicted file, in the background so the launch is not delayed.
+        folder_path="$(${pkgs.jq}/bin/jq -r 'select(.backend == "folder") | .folder_path // empty' \
+          "${appDataDir}/settings.json" 2>/dev/null || true)"
+        if [ -n "$folder_path" ] && [ -x /usr/bin/brctl ]; then
+          /usr/bin/find "''${folder_path/#\~/$HOME}" -flags +dataless -name '*.json' -print0 2>/dev/null \
+            | /usr/bin/xargs -0 -n 100 /usr/bin/brctl download >/dev/null 2>&1 &
+        fi
         exec "${shiftshiftApp}/Contents/MacOS/shiftshift-tauri" "$@"
       '';
       activationLib = import ../lib/activation.nix { inherit pkgs; };
