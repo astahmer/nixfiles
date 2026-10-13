@@ -214,7 +214,6 @@
           '';
         };
       };
-      # huesyncModule = import ../macos/huesync.nix { inherit pkgs lib; };
     in
     {
       imports = [
@@ -224,7 +223,6 @@
         cmdcmdModule
         cleanshotModule
         caffeineModule
-        # huesyncModule
       ];
 
       home.file.".local/lib/nixfiles/home-manager-profile-bin/nix".source =

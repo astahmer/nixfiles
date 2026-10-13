@@ -29,12 +29,4 @@
           "${pkgs.nodejs_24}/bin/node" "${../assets/t3code/seed-provider-instances.mjs}"
       '';
     };
-
-  config.flake.modules.nixos.t3code =
-    { ... }:
-    {
-      # T3 Code is a desktop app; on NixOS the seed is only useful when the
-      # user data directory is reachable, so this is intentionally a no-op.
-      environment.systemPackages = [ ];
-    };
 }
