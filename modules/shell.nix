@@ -419,7 +419,7 @@ in
       home.activation.removeStandaloneMise = lib.hm.dag.entryBefore [ "installPackages" ] ''
         ${nixPathSetup}
         to_remove="$(
-          nix profile list --json 2>/dev/null \
+          ${pkgs.coreutils}/bin/timeout --kill-after=2s 10s nix profile list --json 2>/dev/null \
             | ${lib.getExe pkgs.jq} -r '
                 .elements
                 | to_entries[]
@@ -433,7 +433,7 @@ in
           while IFS= read -r name; do
             [ -n "$name" ] || continue
             echo "  $name"
-            $DRY_RUN_CMD nix profile remove "$name"
+            $DRY_RUN_CMD ${pkgs.coreutils}/bin/timeout --kill-after=5s 60s nix profile remove "$name"
           done <<< "$to_remove"
         fi
       '';
@@ -485,18 +485,25 @@ in
             setup_changed=0
 
             if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1 && [ "$setup_hash" != "$previous_setup_hash" ]; then
-              if $DRY_RUN_CMD "$setup_file"; then
+              started="$SECONDS"
+              printf '[nixfiles:executorSeed] setup started\n' >&2
+              if $DRY_RUN_CMD ${pkgs.coreutils}/bin/timeout --kill-after=5s 120s "$setup_file"; then
+                elapsed=$((SECONDS - started))
+                printf '[nixfiles:executorSeed] setup completed in %ss\n' "$elapsed" >&2
                 setup_changed=1
                 if [ -z "$DRY_RUN_CMD" ]; then
                   printf '%s\n' "$setup_hash" > "$setup_hash_file"
                 fi
               else
-                echo "warning: Executor seeding failed; it will be retried on the next activation" >&2
+                status="$?"
+                elapsed=$((SECONDS - started))
+                printf '[nixfiles:executorSeed] setup failed after %ss (status %s); it will be retried\n' "$elapsed" "$status" >&2
               fi
             fi
 
             if [ "$setup_changed" -eq 1 ] && command -v executor >/dev/null 2>&1; then
-              $DRY_RUN_CMD executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
+              $DRY_RUN_CMD ${pkgs.coreutils}/bin/timeout --kill-after=2s 15s \
+                executor daemon restart --base-url http://localhost:4789 >/dev/null 2>&1 || true
             fi
         ''}
       '';

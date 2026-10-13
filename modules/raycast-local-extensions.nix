@@ -1,8 +1,7 @@
 # Local Raycast extensions developed in this repo live under
 # assets/raycast/<name>. Raycast imports them from a stable path so the
-# registration survives clone moves: ~/RaycastExtensions/<name>
-# is seeded as a WRITABLE copy on every activation (Raycast needs to run
-# npm/pnpm install inside it), with node_modules preserved across reseeds.
+# registration survives clone moves: ~/RaycastExtensions/<name>. Source
+# files sync incrementally; each extension's mutable node_modules stays put.
 # NOTE: deliberately NOT ~/.config — Raycast rejects hidden folders as
 # "Invalid development sources location" when importing.
 # See assets/raycast/window-switcher/README.md for the import flow and the
@@ -19,28 +18,31 @@ in
         set -eu
         src_base="${raycastAssets}"
         dst_base="$HOME/RaycastExtensions"
-        mkdir -p "$dst_base"
+        ${pkgs.coreutils}/bin/mkdir -p "$dst_base"
         for src in "$src_base"/*/; do
+          [ -d "$src" ] || continue
           name="$(basename "$src")"
           dst="$dst_base/$name"
-          tmp="$dst_base/.tmp-$name"
-          keep="$dst_base/.keep-node_modules-$name"
-          if [ -d "$dst/node_modules" ]; then mv "$dst/node_modules" "$keep"; fi
-          # Store copies are read-only (cp -R preserves 555/444); clear macOS
-          # immutable flags then grant owner write so rm -rf can actually unlink.
-          chflags -R nouchg "$dst" "$tmp" 2>/dev/null || true
-          chmod -R u+wx "$dst" "$tmp" 2>/dev/null || true
-          rm -rf "$dst" "$tmp"
-          mkdir -p "$dst"
-          cp -R "$src"/. "$dst"/
-          # Keep the seeded copy writable (Raycast runs npm/pnpm install inside
-          # it) and reseedable (read-only dirs break the next rm -rf).
-          chmod -R u+wx "$dst"
-          if [ -d "$keep" ]; then mv "$keep" "$dst/node_modules"; fi
+          ${pkgs.coreutils}/bin/mkdir -p "$dst"
+          started="$SECONDS"
+          printf '[nixfiles:raycastLocalExtensions] %s sync started\n' "$name" >&2
+          if ${pkgs.coreutils}/bin/timeout --kill-after=5s 60s \
+            ${pkgs.rsync}/bin/rsync -a --delete --exclude=node_modules \
+              --chmod=Du+wx,Fu+rwX "$src" "$dst/"; then
+            elapsed=$((SECONDS - started))
+            printf '[nixfiles:raycastLocalExtensions] %s sync completed in %ss\n' "$name" "$elapsed" >&2
+          else
+            status="$?"
+            elapsed=$((SECONDS - started))
+            printf '[nixfiles:raycastLocalExtensions] %s sync failed after %ss (status %s)\n' "$name" "$elapsed" "$status" >&2
+            exit "$status"
+          fi
         done
       '';
     in
     lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
-      home.activation.raycastLocalExtensions = lib.hm.dag.entryAfter [ "writeBoundary" ] "${seedScript}";
+      home.activation.raycastLocalExtensions = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        ${pkgs.coreutils}/bin/timeout --kill-after=5s 180s "${seedScript}"
+      '';
     };
 }

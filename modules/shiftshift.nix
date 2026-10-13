@@ -58,10 +58,12 @@
           uid="$(/usr/bin/id -u)"
           destination="$agents_dir/shiftshift.plist"
           ${pkgs.coreutils}/bin/mkdir -p "$agents_dir"
-          /bin/launchctl bootout "gui/$uid/shiftshift" >/dev/null 2>&1 || true
+          ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
+            /bin/launchctl bootout "gui/$uid/shiftshift" >/dev/null 2>&1 || true
           ${pkgs.coreutils}/bin/install -m 600 "${shiftshiftPlist}" "$destination.next.$$"
           ${pkgs.coreutils}/bin/mv -f "$destination.next.$$" "$destination"
-          /bin/launchctl bootstrap "gui/$uid" "$destination"
+          ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
+            /bin/launchctl bootstrap "gui/$uid" "$destination"
         ''
       );
 

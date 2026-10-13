@@ -227,8 +227,28 @@
           uid="$(/usr/bin/id -u)"
           ${pkgs.coreutils}/bin/mkdir -p "$agents_dir"
 
+          run_bootstrap() {
+            label="$1"
+            destination="$2"
+            error_file="$3"
+            started="$SECONDS"
+            printf '[nixfiles:tokitokiLaunchd] %s bootstrap started\n' "$label" >&2
+            if ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
+              /bin/launchctl bootstrap "gui/$uid" "$destination" 2>"$error_file"; then
+              elapsed=$((SECONDS - started))
+              printf '[nixfiles:tokitokiLaunchd] %s bootstrap completed in %ss\n' "$label" "$elapsed" >&2
+              return 0
+            else
+              status="$?"
+              elapsed=$((SECONDS - started))
+              printf '[nixfiles:tokitokiLaunchd] %s bootstrap failed after %ss (status %s)\n' "$label" "$elapsed" "$status" >&2
+              return "$status"
+            fi
+          }
+
           bootout_agent() {
-            /bin/launchctl bootout "gui/$uid/$1" >/dev/null 2>&1 || true
+            ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
+              /bin/launchctl bootout "gui/$uid/$1" >/dev/null 2>&1 || true
           }
 
           install_agent() {
@@ -243,16 +263,17 @@
             # refuse a same-label bootstrap ("Input/output error") right
             # after. Retry instead of failing the whole activation on that race.
             attempt=1
-            while ! /bin/launchctl bootstrap "gui/$uid" "$destination" 2>/tmp/tokitoki-bootstrap-err.$$; do
+            bootstrap_error="/tmp/tokitoki-bootstrap-err.$$"
+            while ! run_bootstrap "$label" "$destination" "$bootstrap_error"; do
               if [ "$attempt" -ge 5 ]; then
-                ${pkgs.coreutils}/bin/cat /tmp/tokitoki-bootstrap-err.$$ >&2
-                ${pkgs.coreutils}/bin/rm -f /tmp/tokitoki-bootstrap-err.$$
+                ${pkgs.coreutils}/bin/cat "$bootstrap_error" >&2
+                ${pkgs.coreutils}/bin/rm -f "$bootstrap_error"
                 return 1
               fi
               ${pkgs.coreutils}/bin/sleep 1
               attempt=$((attempt + 1))
             done
-            ${pkgs.coreutils}/bin/rm -f /tmp/tokitoki-bootstrap-err.$$
+            ${pkgs.coreutils}/bin/rm -f "$bootstrap_error"
           }
 
           # Replace the legacy hand-installed agent so it cannot run beside

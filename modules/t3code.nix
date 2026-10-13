@@ -17,13 +17,24 @@
     in
     {
       home.activation.t3codeSeedProviderInstances = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        SECRET_BIN="${secretBin}" \
-        PROJECT_SECRET_CONFIG="${projectSecretConfig}" \
-        GLOBAL_SECRET_CONFIG="${globalSecretConfig}" \
-        OPENCODE_BIN="${openCodeBin}" \
-        OPENCODE_V2_BIN="${openCode2Bin}" \
-        T3CODE_SETTINGS_SEED_PATH="${../assets/t3code/settings-seed.json}" \
-          "${pkgs.nodejs_24}/bin/node" "${../assets/t3code/seed-provider-instances.mjs}"
+        started="$SECONDS"
+        printf '[nixfiles:t3codeSeedProviderInstances] seed started\n' >&2
+        if SECRET_BIN="${secretBin}" \
+          PROJECT_SECRET_CONFIG="${projectSecretConfig}" \
+          GLOBAL_SECRET_CONFIG="${globalSecretConfig}" \
+          OPENCODE_BIN="${openCodeBin}" \
+          OPENCODE_V2_BIN="${openCode2Bin}" \
+          T3CODE_SETTINGS_SEED_PATH="${../assets/t3code/settings-seed.json}" \
+          ${pkgs.coreutils}/bin/timeout --kill-after=5s 120s \
+            "${pkgs.nodejs_24}/bin/node" "${../assets/t3code/seed-provider-instances.mjs}"; then
+          elapsed=$((SECONDS - started))
+          printf '[nixfiles:t3codeSeedProviderInstances] seed completed in %ss\n' "$elapsed" >&2
+        else
+          status="$?"
+          elapsed=$((SECONDS - started))
+          printf '[nixfiles:t3codeSeedProviderInstances] seed failed after %ss (status %s)\n' "$elapsed" "$status" >&2
+          exit "$status"
+        fi
       '';
     };
 
