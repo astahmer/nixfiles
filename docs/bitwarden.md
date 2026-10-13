@@ -497,14 +497,19 @@ each.
 
 ## Regression tests
 
-`assets/bitwarden/test-secret.sh` runs a self-contained fake-`bw` suite
-(temp HOME, fake vault, no network, 182 assertions) against the Swift binary
-by default; `SECRET_IMPL=ts bash assets/bitwarden/test-secret.sh` runs the
-same suite against the TypeScript reference implementation. The daemon-mode
-assertions use a real unix-socket HTTP fixture (`test-daemon.ts`). The suite
-builds the CLI from the locked `secret-cli` flake input with `swift build -c release` on first run.
-`assets/bitwarden/tsconfig.json` typechecks `secret.ts` strictly (`bun run
-typecheck` from `assets/bitwarden`, after one `bun install`).
+`assets/bitwarden/secret.test.ts` is a self-contained fake-`bw` suite
+(`bun test`; temp HOME, fake vault, no network) that spawns the CLI as a
+subprocess. It runs against the Swift binary by default
+(`bun test assets/bitwarden/secret.test.ts`, building from `SECRET_SOURCE_ROOT`
+or the locked `secret-cli` flake input with `swift build -c release`);
+`SECRET_IMPL=ts bun test assets/bitwarden/secret.test.ts` runs the same suite
+against the TypeScript reference implementation. The daemon-mode assertions
+use a real unix-socket HTTP fixture (`test-daemon.ts`). `KEEP_TMP=1` keeps the
+temp HOME; `RUN_KEYCHAIN_TESTS=1` adds the Swift keychain-backend roundtrip.
+The completion and shell-function suites (`test-completions.sh`,
+`test-shell.sh`) stay in bash because they drive zsh/bash directly.
+`assets/bitwarden/tsconfig.json` typechecks `secret.ts` and `secret.test.ts`
+strictly (`bun run typecheck` from `assets/bitwarden`, after one `bun install`).
 `nixfiles-check` runs the suites when `bun`/`swift` are on `PATH`; the
 typecheck is skipped with a hint until the dev deps are installed.
 

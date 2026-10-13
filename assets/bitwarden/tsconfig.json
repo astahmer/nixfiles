@@ -11,5 +11,5 @@
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["secret.ts"]
+  "include": ["secret.ts", "secret.test.ts"]
 }

@@ -64,7 +64,10 @@ if ! command -v ast-grep >/dev/null 2>&1 || ! command -v oxlint >/dev/null 2>&1;
   echo "nixfiles-check: ast-grep and oxlint are required for lint fixtures" >&2
   exit 1
 fi
-emilint_source="${EMILINT_SOURCE:-$(nix eval --raw --impure --expr 'builtins.toString ((builtins.getFlake (toString ./.)).inputs.emilint)')}"
+# `nix flake archive` resolves the locked inputs without copying the working
+# tree, which getFlake cannot do when .git holds a socket (fsmonitor).
+flake_inputs="$(nix flake archive --json .)"
+emilint_source="${EMILINT_SOURCE:-$(jq -r '.inputs.emilint.path' <<< "$flake_inputs")}"
 if [ ! -d "$emilint_source" ]; then
   echo "nixfiles-check: pinned emilint source is unavailable at $emilint_source" >&2
   exit 1
@@ -114,8 +117,8 @@ jj --color never diff --git | awk '
   END { exit failed }
 '
 if command -v swift >/dev/null 2>&1 && command -v bun >/dev/null 2>&1; then
-  secret_cli_root="$(nix eval --raw --impure --expr 'builtins.toString ((builtins.getFlake (toString ./.)).inputs.secret-cli)')"
-  SECRET_SOURCE_ROOT="$secret_cli_root/secret" assets/bitwarden/test-secret.sh
+  SECRET_SOURCE_ROOT="$(jq -r '.inputs["secret-cli"].path' <<< "$flake_inputs")/secret" \
+    bun test assets/bitwarden/secret.test.ts
   assets/bitwarden/test-completions.sh
   assets/bitwarden/test-shell.sh
   if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
@@ -124,7 +127,7 @@ if command -v swift >/dev/null 2>&1 && command -v bun >/dev/null 2>&1; then
     echo "nixfiles-check: skipping secret typecheck (run 'bun install' in assets/bitwarden first)" >&2
   fi
 elif command -v bun >/dev/null 2>&1; then
-  SECRET_IMPL=ts assets/bitwarden/test-secret.sh
+  SECRET_IMPL=ts bun test assets/bitwarden/secret.test.ts
   assets/bitwarden/test-completions.sh
   assets/bitwarden/test-shell.sh
   if [ -x assets/bitwarden/node_modules/.bin/tsc ]; then
