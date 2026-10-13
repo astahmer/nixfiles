@@ -42,6 +42,30 @@
       zeditorCli = pkgs.writeShellScriptBin "zeditor" ''
         exec "${zed}/bin/zeditor" "$@"
       '';
+      homeManagerProfileWrapper =
+        name: binaryVariable:
+        let
+          binaryReference = "$" + binaryVariable;
+        in
+        pkgs.writeShellScript "home-manager-${name}-profile-wrapper" ''
+          binary="${binaryReference}"
+          log_file="$HOME/.local/state/nixfiles/home-manager-nix-profile.log"
+          ${pkgs.coreutils}/bin/mkdir -p "$HOME/.local/state/nixfiles" 2>/dev/null || true
+          started="$SECONDS"
+          printf 'started %ss ${name} %s %s\n' "$started" "$1" "$2" >> "$log_file" 2>/dev/null || true
+
+          if [ -z "$binary" ]; then
+            status=127
+          elif ${pkgs.coreutils}/bin/timeout --kill-after=5s 120s "$binary" "$@"; then
+            status=0
+          else
+            status="$?"
+          fi
+
+          elapsed=$((SECONDS - started))
+          printf 'finished %ss ${name} after %ss (status %s)\n' "$SECONDS" "$elapsed" "$status" >> "$log_file" 2>/dev/null || true
+          exit "$status"
+        '';
       macosAppSources = {
         "AltTab.app" = "${pkgs."alt-tab-macos"}/Applications/AltTab.app";
         "Beekeeper Studio.app" = "${beekeeperStudio}/Applications/Beekeeper Studio.app";
@@ -82,7 +106,16 @@
 
         applicationsDirectory="$HOME/Applications"
         stateDirectory="$HOME/.local/state/nixfiles/macos-apps"
+        temporaryDirectory=""
         ${pkgs.coreutils}/bin/mkdir -p "$applicationsDirectory" "$stateDirectory"
+
+        cleanup_temporary_directory() {
+          if [ -n "$temporaryDirectory" ] && [ -d "$temporaryDirectory" ]; then
+            ${pkgs.coreutils}/bin/timeout --kill-after=5s 20s \
+              ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory" || true
+          fi
+        }
+        trap cleanup_temporary_directory EXIT
 
         install_app() {
           appName="$1"
@@ -114,29 +147,33 @@
             return 0
           fi
 
+          started="$SECONDS"
+          printf '[nixfiles:installMacosApps] %s copy started\n' "$appName" >&2
           temporaryDirectory="$(${pkgs.coreutils}/bin/mktemp -d "$applicationsDirectory/.nixfiles-app.XXXXXX")"
-          if ! ${lib.getExe pkgs.rsync} \
+          if ${pkgs.coreutils}/bin/timeout --kill-after=5s 180s ${lib.getExe pkgs.rsync} \
             --recursive \
-            --checksum \
             --perms \
             --links \
             --copy-unsafe-links \
             --specials \
             --chmod=+w \
             "$sourcePath/" "$temporaryDirectory/$appName/"; then
-            ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
-            return 1
+            elapsed=$((SECONDS - started))
+            printf '[nixfiles:installMacosApps] %s copy completed in %ss\n' "$appName" "$elapsed" >&2
+          else
+            status="$?"
+            elapsed=$((SECONDS - started))
+            printf '[nixfiles:installMacosApps] %s copy failed after %ss (status %s)\n' "$appName" "$elapsed" "$status" >&2
+            return "$status"
           fi
 
           backupPath="$targetPath.nixfiles-backup.$$"
           if [ -L "$targetPath" ]; then
             if ! ${pkgs.coreutils}/bin/mv "$targetPath" "$backupPath"; then
-              ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
               return 1
             fi
           elif [ -e "$targetPath" ]; then
             if ! ${pkgs.coreutils}/bin/mv "$targetPath" "$backupPath"; then
-              ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
               return 1
             fi
           fi
@@ -147,25 +184,30 @@
                 return 1
               fi
             fi
-            ${pkgs.coreutils}/bin/rm -rf "$temporaryDirectory"
             return 1
           fi
           ${pkgs.coreutils}/bin/rmdir "$temporaryDirectory"
+          temporaryDirectory=""
           printf '%s\n' "$sourcePath" > "$stampPath.tmp.$$"
           ${pkgs.coreutils}/bin/mv -f "$stampPath.tmp.$$" "$stampPath"
           if [ -e "$backupPath" ] || [ -L "$backupPath" ]; then
-            ${pkgs.coreutils}/bin/rm -rf "$backupPath"
+            if ! ${pkgs.coreutils}/bin/timeout --kill-after=5s 30s \
+              ${pkgs.coreutils}/bin/rm -rf "$backupPath"; then
+              echo "warning: retained previous app bundle at $backupPath" >&2
+            fi
           fi
         }
 
         ${macosAppInstallCommands}
       '';
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
-        /usr/bin/pkill -TERM -f '/SecretBar\.app/Contents/MacOS/secretbar' 2>/dev/null || true
+        ${pkgs.coreutils}/bin/timeout --kill-after=2s 5s \
+          /usr/bin/pkill -TERM -f '/SecretBar\.app/Contents/MacOS/secretbar' 2>/dev/null || true
         /bin/sleep 1
         # SECRETBAR_AUTOSTART makes the app hide its window after launch; it
         # is a background resident at login/activation time only.
-        exec /usr/bin/open --env SECRETBAR_AUTOSTART=1 "$HOME/Applications/SecretBar.app"
+        exec ${pkgs.coreutils}/bin/timeout --kill-after=5s 15s \
+          /usr/bin/open --env SECRETBAR_AUTOSTART=1 "$HOME/Applications/SecretBar.app"
       '';
       backgroundMusicModule = import ../macos/background-music.nix { inherit pkgs lib; };
       cameracontrollerModule = import ../macos/cameracontroller.nix { inherit pkgs lib; };
@@ -199,14 +241,37 @@
         # huesyncModule
       ];
 
+      home.file.".local/lib/nixfiles/home-manager-profile-bin/nix".source =
+        homeManagerProfileWrapper "nix" "NIXFILES_HM_NIX_BIN";
+      home.file.".local/lib/nixfiles/home-manager-profile-bin/nix-env".source =
+        homeManagerProfileWrapper "nix-env" "NIXFILES_HM_NIX_ENV_BIN";
+
+      home.activation.boundHomeManagerNixProfile =
+        (lib.hm.dag.entryAfter [ "linkGeneration" "removeStandaloneMise" ] ''
+          nix_binary="$(type -P nix || true)"
+          if [ -z "$nix_binary" ]; then
+            echo "failed: cannot find nix before Home Manager profile activation" >&2
+            exit 1
+          fi
+          export NIXFILES_HM_NIX_BIN="$nix_binary"
+          export NIXFILES_HM_NIX_ENV_BIN="$(type -P nix-env || true)"
+          export PATH="$HOME/.local/lib/nixfiles/home-manager-profile-bin:$PATH"
+        '')
+        // {
+          before = [ "installPackages" ];
+        };
+
       home.activation.cleanMyKeyboard = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        if installedApps="$("${mas}" list 2>/dev/null)"; then
+        if installedApps="$(
+          ${pkgs.coreutils}/bin/timeout --kill-after=2s 10s "${mas}" list 2>/dev/null
+        )"; then
           case "$installedApps" in
             *"${cleanMyKeyboardId}"*) ;;
             *)
               # mas install escalates to sudo, which an unattended activation
               # cannot answer; a failed install must not abort the whole switch.
-              $DRY_RUN_CMD "${mas}" install ${cleanMyKeyboardId} 2>/dev/null ||
+              $DRY_RUN_CMD ${pkgs.coreutils}/bin/timeout --kill-after=5s 120s \
+                "${mas}" install ${cleanMyKeyboardId} 2>/dev/null ||
                 echo "warning: could not install CleanMyKeyboard; run mas install ${cleanMyKeyboardId} manually" >&2
               ;;
           esac
@@ -240,8 +305,87 @@
       # Copy app bundles into a writable directory so macOS metadata never
       # mutates the Nix store.
       home.activation.installMacosApps = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-        $DRY_RUN_CMD ${macosAppInstaller}
+        started="$SECONDS"
+        printf '[nixfiles:installMacosApps] activation started\n' >&2
+        if $DRY_RUN_CMD ${pkgs.coreutils}/bin/timeout --kill-after=15s 300s ${macosAppInstaller}; then
+          elapsed=$((SECONDS - started))
+          printf '[nixfiles:installMacosApps] activation completed in %ss\n' "$elapsed" >&2
+        else
+          status="$?"
+          elapsed=$((SECONDS - started))
+          printf '[nixfiles:installMacosApps] activation failed after %ss (status %s)\n' "$elapsed" "$status" >&2
+          exit "$status"
+        fi
       '';
+
+      home.activation.boundHomeManagerLaunchctl =
+        (lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+          run() {
+            local output_mode=""
+            if [[ "''${1:-}" == "--quiet" ]]; then
+              output_mode="quiet"
+              shift
+            elif [[ "''${1:-}" == "--silence" ]]; then
+              output_mode="silence"
+              shift
+            fi
+
+            if [[ -v DRY_RUN ]]; then
+              echo "$@"
+              return 0
+            fi
+
+            if [[ "''${1:-}" != "/bin/launchctl" ]]; then
+              if [[ "$output_mode" == "quiet" ]]; then
+                "$@" > /dev/null
+              elif [[ "$output_mode" == "silence" ]]; then
+                "$@" > /dev/null 2>&1
+              else
+                "$@"
+              fi
+              return "$?"
+            fi
+
+            local operation="$2"
+            local started="$SECONDS"
+            local status
+            local log_file="$HOME/.local/state/nixfiles/home-manager-launchd.log"
+            ${pkgs.coreutils}/bin/mkdir -p "$(dirname "$log_file")"
+            if [ ! -e "$log_file" ]; then
+              (umask 077; : > "$log_file")
+            fi
+            printf 'started %ss launchctl %s\n' "$started" "$operation" >> "$log_file" 2>/dev/null || true
+
+            if [[ "$output_mode" == "quiet" ]]; then
+              if ${pkgs.coreutils}/bin/timeout --kill-after=5s 15s "$@" > /dev/null; then
+                status=0
+              else
+                status="$?"
+              fi
+            elif [[ "$output_mode" == "silence" ]]; then
+              if ${pkgs.coreutils}/bin/timeout --kill-after=5s 15s "$@" > /dev/null 2>&1; then
+                status=0
+              else
+                status="$?"
+              fi
+            elif ${pkgs.coreutils}/bin/timeout --kill-after=5s 15s "$@"; then
+              status=0
+            else
+              status="$?"
+            fi
+
+            local elapsed=$((SECONDS - started))
+            if [ "$status" -eq 0 ]; then
+              printf 'completed %ss launchctl %s in %ss\n' "$SECONDS" "$operation" "$elapsed" >> "$log_file" 2>/dev/null || true
+            else
+              printf 'failed %ss launchctl %s after %ss (status %s)\n' "$SECONDS" "$operation" "$elapsed" "$status" >> "$log_file" 2>/dev/null || true
+            fi
+            return "$status"
+          }
+        '')
+        // {
+          before = [ "setupLaunchAgents" ];
+        };
 
       # The plist may be unchanged when only the app store path changes. Run
       # the same single-instance launcher during every activation so the live
