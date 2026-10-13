@@ -103,7 +103,12 @@
         inputs.home-manager.flakeModules.home-manager
       ]
       ++ [ (inputs.import-tree ./modules) ]
-      ++ [ (inputs.import-tree ./hosts) ];
+      # hosts/ also holds standalone, deploy-only flakes (for example the Pi
+      # runtime). Those are complete flakes, not flake-parts modules, so skip
+      # any nested flake.nix instead of importing it into the tree.
+      ++ [
+        (inputs.import-tree.filterNot (path: inputs.nixpkgs.lib.hasSuffix "/flake.nix" path) ./hosts)
+      ];
 
       perSystem =
         { pkgs, system, ... }:
