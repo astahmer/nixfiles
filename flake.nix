@@ -137,11 +137,6 @@
               meta.description = "Run the ${name} maintenance app";
             };
 
-          # The BB desktop app ships the only `bb` client on this machine and keeps it
-          # inside the bundle; the shim package below follows the installed app
-          # instead of pinning a store copy that goes stale on every update.
-          bbAppPath = "/Applications/bb.app";
-
           nixfilesConfigureNixCache = pkgs'.writeShellApplication {
             name = "nixfiles-configure-nix-cache";
             runtimeInputs = [
@@ -164,7 +159,6 @@
           };
 
           packages = {
-            bb = pkgs'.callPackage ./packages/bb { inherit bbAppPath; };
             calldiff = pkgs'.callPackage ./packages/calldiff { };
             codex = pkgs'.callPackage ./packages/codex { };
             configure-nix-cache = nixfilesConfigureNixCache;

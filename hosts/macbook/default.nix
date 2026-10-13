@@ -34,10 +34,7 @@ in
           hm.opencodex
           hm.codexConfig
           hm.tokitoki
-          hm.tokitokiBbPlugin
           hm.t3code
-          hm.bbPlugins
-          hm.aiAccounts
           hm.dsh
           hm.coding
           hm.zed

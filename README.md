@@ -9,8 +9,7 @@ The repo follows the same broad pattern as the reference configs: `flake-parts` 
 
 ## Quick Start
 
-Clone this repo anywhere, clone `bb-plugins` beside it, then create the stable
-flake symlink and apply:
+Clone this repo anywhere, then create the stable flake symlink and apply:
 
 ```bash
 git clone <url> ~/wherever/nixfiles
@@ -34,7 +33,6 @@ To add a new module, create a `.nix` file under `modules/`, expose it under `con
 - `modules/` holds reusable modules. Some files export both Home Manager and NixOS modules when a concern spans both scopes.
 - `hosts/macbook/default.nix` wires the standalone Home Manager profile for macOS.
 - `hosts/workstation/default.nix` wires the NixOS host.
-- `../bb-plugins/` is the local flake input for BB plugin sources. Clone the dedicated repository beside this checkout before applying Home Manager.
 - DSH's checked-in web profile lives in `~/dev/dshfiles/profiles/web/`;
   `modules/dsh.nix` seeds its manifest, Cordis patch, and pnpm workspace
   policy, then reconciles managed plugin declarations. It seeds non-secret
