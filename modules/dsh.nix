@@ -22,7 +22,7 @@
       dshStartAlias = pkgs.writeShellScript "dsh-start" ''
         exec "$HOME/.local/bin/dsh-web" "$@"
       '';
-      profileSync = ../assets/dsh/sync-web-profile.py;
+      profileSync = ../assets/dsh/sync-web-profile.mts;
       dshfilesWebProfile = "${config.home.homeDirectory}/dev/dshfiles/profiles/web";
     in
     {
@@ -47,7 +47,7 @@
           run mkdir -p "$dsh_home/plugins/ai-accounts"
           run install -m 600 "$source_profile/ai-accounts.json" "$accounts_file"
         fi
-        run ${pkgs.python3}/bin/python3 "${profileSync}" \
+        run ${pkgs.nodejs_24}/bin/node "${profileSync}" \
           "$profile" \
           "$source_profile/package.json" \
           "$source_profile/cordis.patch.yml"
