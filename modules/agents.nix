@@ -120,8 +120,8 @@ in
       home.file.".vscode/mcp.json".text = builtins.toJSON vscodeMcp;
       home.file."Library/Application Support/Code/User/mcp.json".text = builtins.toJSON vscodeMcp;
 
-      # opencode2 config: use activation script to preserve user edits from app updates
-      home.activation.opencode2Config = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      # opencode config: use activation script to preserve user edits from app updates
+      home.activation.opencodeConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
                 config_file="${config.home.homeDirectory}/.config/opencode/opencode.json"
                 candidate_config="$config_file.next.$$"
                 current_sorted="$config_file.current.sorted"
@@ -152,7 +152,7 @@ in
                 if [ "$config_changed" -eq 1 ]; then
                   ${pkgs.coreutils}/bin/cp "$candidate_config" "$config_file"
                   ${pkgs.coreutils}/bin/chmod 600 "$config_file"
-                  echo "opencode2: initialized or updated $config_file" >&2
+                  echo "opencode: initialized or updated $config_file" >&2
                 fi
 
                 ${pkgs.coreutils}/bin/rm -f "$candidate_config" "$current_sorted" "$candidate_sorted"

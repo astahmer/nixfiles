@@ -179,7 +179,6 @@
             mise = pkgs'.callPackage ./packages/mise { };
             nub = pkgs'.callPackage ./packages/nub { };
             nh = pkgs'.callPackage ./packages/nh { };
-            opencode = inputs.llm-agents.packages.${system}.opencode;
             qmd = inputs.qmd.packages.${system}.default;
             pi-watchdog = pkgs'.callPackage ./packages/pi-watchdog { };
             opencode2 = inputs.llm-agents.packages.${system}.opencode2;

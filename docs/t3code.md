@@ -5,8 +5,8 @@
 `assets/t3code/settings-seed.json` is the Nix-owned first-run settings source.
 The activation merges only missing defaults into `~/.t3/userdata/settings.json`,
 preserves existing provider choices, and no longer edits T3's SQLite project
-defaults. It migrates the old T3 OpenCode 2 binary path to stable OpenCode 1;
-the separate `opencode2` command remains installed.
+defaults. Only OpenCode 2 is installed, as `opencode`; the seed rewrites T3
+providers that still point at the old `opencode2` path.
 
 OpenCode Go credentials come from the existing `secret` aliases and are written
 to T3's supported provider-environment secret files. The app settings retain

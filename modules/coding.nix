@@ -17,8 +17,10 @@ in
       lightjj = packages.lightjj;
       plannotator = packages.plannotator;
       codex = packages.codex;
-      opencode = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.opencode;
-      opencode2 = packages.opencode2;
+      # Only OpenCode 2 is installed; llm-agents still ships it as `opencode2`.
+      opencode = pkgs.writeShellScriptBin "opencode" ''
+        exec ${lib.getExe' packages.opencode2 "opencode2"} "$@"
+      '';
       agent = pkgs.writeShellScriptBin "agent" ''
         exec ${lib.getExe cursorAgent} "$@"
       '';
@@ -68,7 +70,6 @@ in
         pkgs."yt-dlp"
         pkgs.uv
         opencode
-        opencode2
         pkgs.htop
         pkgs.btop
         devenv
