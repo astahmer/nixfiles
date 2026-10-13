@@ -13,6 +13,7 @@
       tokitoki = inputs.self.packages.${system}.tokitoki;
       tokitokiMenubar = inputs.self.packages.${system}."tokitoki-menubar";
       secretBin = "${inputs.self.packages.${system}.secret}/bin/secret";
+      activationLib = import ../lib/activation.nix { inherit pkgs; };
       globalSecretConfig = "${../assets/secret/global.json}";
       secretConfig = "${../.secret.json}";
       configFile = "${config.home.homeDirectory}/.config/tokitoki/config.json";
@@ -223,65 +224,15 @@
 
       home.activation.tokitokiLaunchd = lib.mkIf isDarwin (
         lib.hm.dag.entryAfter [ "tokitokiConfig" ] ''
+          . ${activationLib}
           agents_dir="${config.home.homeDirectory}/Library/LaunchAgents"
-          uid="$(/usr/bin/id -u)"
-          ${pkgs.coreutils}/bin/mkdir -p "$agents_dir"
-
-          run_bootstrap() {
-            label="$1"
-            destination="$2"
-            error_file="$3"
-            started="$SECONDS"
-            printf '[nixfiles:tokitokiLaunchd] %s bootstrap started\n' "$label" >&2
-            if ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
-              /bin/launchctl bootstrap "gui/$uid" "$destination" 2>"$error_file"; then
-              elapsed=$((SECONDS - started))
-              printf '[nixfiles:tokitokiLaunchd] %s bootstrap completed in %ss\n' "$label" "$elapsed" >&2
-              return 0
-            else
-              status="$?"
-              elapsed=$((SECONDS - started))
-              printf '[nixfiles:tokitokiLaunchd] %s bootstrap failed after %ss (status %s)\n' "$label" "$elapsed" "$status" >&2
-              return "$status"
-            fi
-          }
-
-          bootout_agent() {
-            ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
-              /bin/launchctl bootout "gui/$uid/$1" >/dev/null 2>&1 || true
-          }
-
-          install_agent() {
-            label="$1"
-            source="$2"
-            destination="$agents_dir/$label.plist"
-            bootout_agent "$label"
-            ${pkgs.coreutils}/bin/install -m 600 "$source" "$destination.next.$$"
-            ${pkgs.coreutils}/bin/mv -f "$destination.next.$$" "$destination"
-
-            # bootout deregisters asynchronously: launchd can still briefly
-            # refuse a same-label bootstrap ("Input/output error") right
-            # after. Retry instead of failing the whole activation on that race.
-            attempt=1
-            bootstrap_error="/tmp/tokitoki-bootstrap-err.$$"
-            while ! run_bootstrap "$label" "$destination" "$bootstrap_error"; do
-              if [ "$attempt" -ge 5 ]; then
-                ${pkgs.coreutils}/bin/cat "$bootstrap_error" >&2
-                ${pkgs.coreutils}/bin/rm -f "$bootstrap_error"
-                return 1
-              fi
-              ${pkgs.coreutils}/bin/sleep 1
-              attempt=$((attempt + 1))
-            done
-            ${pkgs.coreutils}/bin/rm -f "$bootstrap_error"
-          }
 
           # Replace the legacy hand-installed agent so it cannot run beside
           # the Nix-managed process or resurrect itself at the next login.
           legacy_label="dev.tokitoki.menubar"
           legacy_plist="$agents_dir/$legacy_label.plist"
           if [ -e "$legacy_plist" ]; then
-            bootout_agent "$legacy_label"
+            nixfiles_launch_agent_bootout "$legacy_label"
             legacy_backup="$legacy_plist.hm-backup"
             if [ -e "$legacy_backup" ]; then
               legacy_backup="$legacy_plist.hm-backup.$(/bin/date +%Y%m%d%H%M%S)"
@@ -289,8 +240,8 @@
             ${pkgs.coreutils}/bin/mv "$legacy_plist" "$legacy_backup"
           fi
 
-          install_agent "${menubarLabel}" "${menubarPlist}"
-          install_agent "${syncLabel}" "${syncPlist}"
+          nixfiles_launch_agent_install "${menubarLabel}" "${menubarPlist}"
+          nixfiles_launch_agent_install "${syncLabel}" "${syncPlist}"
         ''
       );
     };

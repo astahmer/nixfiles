@@ -14,35 +14,20 @@ in
   config.flake.modules.homeManager.raycastLocalExtensions =
     { pkgs, lib, ... }:
     let
-      seedScript = pkgs.writeShellScript "seed-raycast-extensions" ''
-        set -eu
-        src_base="${raycastAssets}"
-        dst_base="$HOME/RaycastExtensions"
-        ${pkgs.coreutils}/bin/mkdir -p "$dst_base"
-        for src in "$src_base"/*/; do
-          [ -d "$src" ] || continue
-          name="$(basename "$src")"
-          dst="$dst_base/$name"
-          ${pkgs.coreutils}/bin/mkdir -p "$dst"
-          started="$SECONDS"
-          printf '[nixfiles:raycastLocalExtensions] %s sync started\n' "$name" >&2
-          if ${pkgs.coreutils}/bin/timeout --kill-after=5s 60s \
-            ${pkgs.rsync}/bin/rsync -a --delete --exclude=node_modules \
-              --chmod=Du+wx,Fu+rwX "$src" "$dst/"; then
-            elapsed=$((SECONDS - started))
-            printf '[nixfiles:raycastLocalExtensions] %s sync completed in %ss\n' "$name" "$elapsed" >&2
-          else
-            status="$?"
-            elapsed=$((SECONDS - started))
-            printf '[nixfiles:raycastLocalExtensions] %s sync failed after %ss (status %s)\n' "$name" "$elapsed" "$status" >&2
-            exit "$status"
-          fi
-        done
-      '';
+      activationLib = import ../lib/activation.nix { inherit pkgs; };
     in
     lib.mkIf pkgs.stdenv.hostPlatform.isDarwin {
       home.activation.raycastLocalExtensions = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        ${pkgs.coreutils}/bin/timeout --kill-after=5s 180s "${seedScript}"
+        . ${activationLib}
+        destination_base="$HOME/RaycastExtensions"
+        for source in "${raycastAssets}"/*/; do
+          [ -d "$source" ] || continue
+          name="$(${pkgs.coreutils}/bin/basename "$source")"
+          ${pkgs.coreutils}/bin/mkdir -p "$destination_base/$name"
+          nixfiles_step raycastLocalExtensions "$name sync" 60s \
+            ${pkgs.rsync}/bin/rsync -a --delete --exclude=node_modules \
+            --chmod=Du+wx,Fu+rwX "$source" "$destination_base/$name/"
+        done
       '';
     };
 }

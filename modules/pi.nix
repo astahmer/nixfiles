@@ -9,6 +9,7 @@
     }:
     let
       system = pkgs.stdenv.hostPlatform.system;
+      activationLib = import ../lib/activation.nix { inherit pkgs; };
 
       piPackages = pkgs.buildNpmPackage {
         pname = "pi-packages";
@@ -78,33 +79,16 @@
                 stamp_file="$npm_dir/.nix-stamp"
                 wanted="${piPackages}/node_modules"
 
+                . ${activationLib}
                 export PATH="${pkgs.coreutils}/bin:${pkgs.diffutils}/bin:$PATH"
                 ${pkgs.coreutils}/bin/mkdir -p "$npm_dir"
 
-                run_step() {
-                  step="$1"
-                  limit="$2"
-                  shift 2
-                  started="$SECONDS"
-                  printf '[nixfiles:piSeed] %s started\n' "$step" >&2
-                  if ${pkgs.coreutils}/bin/timeout --kill-after=5s "$limit" "$@"; then
-                    elapsed=$((SECONDS - started))
-                    printf '[nixfiles:piSeed] %s completed in %ss\n' "$step" "$elapsed" >&2
-                  else
-                    status="$?"
-                    elapsed=$((SECONDS - started))
-                    printf '[nixfiles:piSeed] %s failed after %ss (status %s)\n' "$step" "$elapsed" "$status" >&2
-                    return "$status"
-                  fi
-                }
-
                 current_stamp="$(${pkgs.coreutils}/bin/cat "$stamp_file" 2>/dev/null || true)"
                 if [ "$current_stamp" != "$wanted" ]; then
-                  run_step "managed packages sync" 180s \
+                  nixfiles_step piSeed "managed packages sync" 180s \
                     ${pkgs.rsync}/bin/rsync -a --delete --chmod=Du+wx,Fu+rwX \
                     "$wanted/" "$npm_dir/node_modules/"
-                  run_step "remove managed seed files" 10s \
-                    ${pkgs.coreutils}/bin/rm -f "$agent_dir/settings.json" \
+                  ${pkgs.coreutils}/bin/rm -f "$agent_dir/settings.json" \
                     "$npm_dir/package.json" "$npm_dir/package-lock.json"
                   ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package.json}" "$npm_dir/package.json"
                   ${pkgs.coreutils}/bin/install -m 644 "${../assets/pi/npm/package-lock.json}" "$npm_dir/package-lock.json"

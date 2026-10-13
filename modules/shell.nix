@@ -12,6 +12,7 @@ in
       ...
     }:
     let
+      activationLib = import ../lib/activation.nix { inherit pkgs; };
       pnpmHome = "${config.home.homeDirectory}/.local/share/pnpm";
       pnpmBin = "${pnpmHome}/bin";
 
@@ -468,6 +469,7 @@ in
 
       home.activation.executorSeed = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         ${lib.optionalString executorEnabled ''
+            . ${activationLib}
             export PATH="${pkgs.nodejs_24}/bin:${pnpmBin}:$PATH"
 
             setup_file="${config.home.homeDirectory}/.executor/setup.ts"
@@ -485,19 +487,13 @@ in
             setup_changed=0
 
             if [ -x "$setup_file" ] && command -v executor >/dev/null 2>&1 && [ "$setup_hash" != "$previous_setup_hash" ]; then
-              started="$SECONDS"
-              printf '[nixfiles:executorSeed] setup started\n' >&2
-              if $DRY_RUN_CMD ${pkgs.coreutils}/bin/timeout --kill-after=5s 120s "$setup_file"; then
-                elapsed=$((SECONDS - started))
-                printf '[nixfiles:executorSeed] setup completed in %ss\n' "$elapsed" >&2
+              if nixfiles_step executorSeed setup 120s $DRY_RUN_CMD "$setup_file"; then
                 setup_changed=1
                 if [ -z "$DRY_RUN_CMD" ]; then
                   printf '%s\n' "$setup_hash" > "$setup_hash_file"
                 fi
               else
-                status="$?"
-                elapsed=$((SECONDS - started))
-                printf '[nixfiles:executorSeed] setup failed after %ss (status %s); it will be retried\n' "$elapsed" "$status" >&2
+                echo "warning: Executor seeding failed; it will be retried on the next activation" >&2
               fi
             fi
 

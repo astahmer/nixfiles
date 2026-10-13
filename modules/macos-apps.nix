@@ -39,6 +39,7 @@
       zedCli = pkgs.writeShellScriptBin "zed" ''
         exec "${zed}/bin/zed" "$@"
       '';
+      activationLib = import ../lib/activation.nix { inherit pkgs; };
       zeditorCli = pkgs.writeShellScriptBin "zeditor" ''
         exec "${zed}/bin/zeditor" "$@"
       '';
@@ -103,6 +104,7 @@
       );
       macosAppInstaller = pkgs.writeShellScript "install-macos-apps" ''
         set -eu
+        . ${activationLib}
 
         applicationsDirectory="$HOME/Applications"
         stateDirectory="$HOME/.local/state/nixfiles/macos-apps"
@@ -147,35 +149,19 @@
             return 0
           fi
 
-          started="$SECONDS"
-          printf '[nixfiles:installMacosApps] %s copy started\n' "$appName" >&2
           temporaryDirectory="$(${pkgs.coreutils}/bin/mktemp -d "$applicationsDirectory/.nixfiles-app.XXXXXX")"
-          if ${pkgs.coreutils}/bin/timeout --kill-after=5s 180s ${lib.getExe pkgs.rsync} \
+          nixfiles_step installMacosApps "$appName copy" 180s ${lib.getExe pkgs.rsync} \
             --recursive \
             --perms \
             --links \
             --copy-unsafe-links \
             --specials \
             --chmod=+w \
-            "$sourcePath/" "$temporaryDirectory/$appName/"; then
-            elapsed=$((SECONDS - started))
-            printf '[nixfiles:installMacosApps] %s copy completed in %ss\n' "$appName" "$elapsed" >&2
-          else
-            status="$?"
-            elapsed=$((SECONDS - started))
-            printf '[nixfiles:installMacosApps] %s copy failed after %ss (status %s)\n' "$appName" "$elapsed" "$status" >&2
-            return "$status"
-          fi
+            "$sourcePath/" "$temporaryDirectory/$appName/"
 
           backupPath="$targetPath.nixfiles-backup.$$"
-          if [ -L "$targetPath" ]; then
-            if ! ${pkgs.coreutils}/bin/mv "$targetPath" "$backupPath"; then
-              return 1
-            fi
-          elif [ -e "$targetPath" ]; then
-            if ! ${pkgs.coreutils}/bin/mv "$targetPath" "$backupPath"; then
-              return 1
-            fi
+          if [ -e "$targetPath" ] || [ -L "$targetPath" ]; then
+            ${pkgs.coreutils}/bin/mv "$targetPath" "$backupPath" || return 1
           fi
           if ! ${pkgs.coreutils}/bin/mv "$temporaryDirectory/$appName" "$targetPath"; then
             if [ -e "$backupPath" ] || [ -L "$backupPath" ]; then
@@ -305,17 +291,8 @@
       # Copy app bundles into a writable directory so macOS metadata never
       # mutates the Nix store.
       home.activation.installMacosApps = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-        started="$SECONDS"
-        printf '[nixfiles:installMacosApps] activation started\n' >&2
-        if $DRY_RUN_CMD ${pkgs.coreutils}/bin/timeout --kill-after=15s 300s ${macosAppInstaller}; then
-          elapsed=$((SECONDS - started))
-          printf '[nixfiles:installMacosApps] activation completed in %ss\n' "$elapsed" >&2
-        else
-          status="$?"
-          elapsed=$((SECONDS - started))
-          printf '[nixfiles:installMacosApps] activation failed after %ss (status %s)\n' "$elapsed" "$status" >&2
-          exit "$status"
-        fi
+        . ${activationLib}
+        nixfiles_step installMacosApps activation 300s $DRY_RUN_CMD ${macosAppInstaller}
       '';
 
       home.activation.boundHomeManagerLaunchctl =

@@ -20,6 +20,7 @@
         export SHIFTSHIFT_MANAGED_LAUNCHD=1
         exec "${shiftshiftApp}/Contents/MacOS/shiftshift-tauri" "$@"
       '';
+      activationLib = import ../lib/activation.nix { inherit pkgs; };
       shiftshiftPlist = pkgs.writeText "shiftshift.plist" ''
         <?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,16 +55,8 @@
 
       home.activation.shiftshiftLaunchd = lib.mkIf isDarwin (
         lib.hm.dag.entryAfter [ "installMacosApps" ] ''
-          agents_dir="${config.home.homeDirectory}/Library/LaunchAgents"
-          uid="$(/usr/bin/id -u)"
-          destination="$agents_dir/shiftshift.plist"
-          ${pkgs.coreutils}/bin/mkdir -p "$agents_dir"
-          ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
-            /bin/launchctl bootout "gui/$uid/shiftshift" >/dev/null 2>&1 || true
-          ${pkgs.coreutils}/bin/install -m 600 "${shiftshiftPlist}" "$destination.next.$$"
-          ${pkgs.coreutils}/bin/mv -f "$destination.next.$$" "$destination"
-          ${pkgs.coreutils}/bin/timeout --kill-after=2s 8s \
-            /bin/launchctl bootstrap "gui/$uid" "$destination"
+          . ${activationLib}
+          nixfiles_launch_agent_install shiftshift "${shiftshiftPlist}"
         ''
       );
 
