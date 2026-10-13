@@ -1,23 +1,7 @@
 #!/bin/sh
-# The single entry point for the DSH host: it shapes PATH for the supervisor,
-# the `dsh web` child, and every subprocess they spawn (plugins, the agent bash
-# tool, background jobs). The jj-isolation shim goes first here rather than in a
-# shell rc, so the guarded jj is what `resolveExecutable('jj')` finds.
+# Launcher for the DeepSeek Harness app bundle and `dsh-web`: keeps the Mac awake
+# and restarts `dsh web` if it exits unexpectedly. Plain `dsh web` works too; it
+# just runs without the supervisor.
 set -eu
-
-jj_isolation_shim_dir="${JJ_ISOLATION_SHIM_DIR:-$HOME/.dsh/jj-isolation/bin}"
-if [ -x "$jj_isolation_shim_dir/jj" ]; then
-  PATH="$jj_isolation_shim_dir:$PATH"
-  export PATH
-fi
-
-# The session-controller attach fix lives inside the dsh installation, whose pnpm
-# global directory is content-hashed: an install or update can move it and
-# silently revert the Host to the unpatched controller. Re-assert it on every
-# launch, and refuse to start rather than serve a Host that cannot create threads.
-if ! fnm exec --using=v22.23.3 -- node "$HOME/.local/bin/dsh-ensure-controller-patch.mjs"; then
-  echo "dsh-web: refusing to launch: the session-controller attach fix is not in place" >&2
-  exit 1
-fi
 
 exec /usr/bin/caffeinate -i fnm exec --using=v22.23.3 -- node "$HOME/.local/bin/dsh-web-supervisor.mjs" "$@"

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { open, mkdir, readFile, unlink } from 'node:fs/promises'
+import { open, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 
@@ -41,6 +41,10 @@ try {
 const runtimeDirectory = join(dshHome, 'runtime')
 await mkdir(runtimeDirectory, { recursive: true, mode: 0o700 })
 
+// The tokenized launch URL, readable by this user only, so agents and `dshx` can reach this DSH without copying it by hand.
+const webUrlPath = join(runtimeDirectory, 'web-url')
+const LAUNCH_URL_PATTERN = /^dsh web: (http:\/\/\S+\?token=\S+)$/m
+
 const forwardedArgs = process.argv.slice(2)
 const hasPort = forwardedArgs.some(argument => argument === '--port' || argument.startsWith('--port='))
 const webArgs = ['web', ...(hasPort ? [] : ['--port', '3080']), ...forwardedArgs]
@@ -67,9 +71,14 @@ const runDsh = runId =>
         DSH_RESTART_REQUEST_PATH: requestPath,
         DSH_RESTART_RUN_ID: runId,
       },
-      stdio: 'inherit',
+      stdio: ['inherit', 'pipe', 'inherit'],
     })
     const launchedChild = child
+    launchedChild.stdout.on('data', chunk => {
+      process.stdout.write(chunk)
+      const url = LAUNCH_URL_PATTERN.exec(chunk.toString())?.[1]
+      if (url !== undefined) void writeFile(webUrlPath, `${url}\n`, { mode: 0o600 }).catch(() => undefined)
+    })
     let settled = false
     const finish = result => {
       if (settled) return
@@ -83,6 +92,7 @@ const runDsh = runId =>
       finish({ exitCode: 1, restartRequested: false })
     })
     launchedChild.once('exit', (code, signal) => {
+      void unlink(webUrlPath).catch(() => undefined)
       const exitCode = code ?? (signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 1)
       void readFile(requestPath, 'utf8')
         .then(async requestId => {

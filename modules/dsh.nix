@@ -56,13 +56,12 @@
         config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
       home.file.".local/bin/dsh-web".source = ../assets/dsh/start-dsh;
       home.file.".local/bin/dsh-web-supervisor.mjs".source = ../assets/dsh/supervise-web.mjs;
-      home.file.".local/bin/dsh-ensure-controller-patch.mjs".source =
-        ../assets/dsh/ensure-controller-patch.mjs;
       home.file.".local/bin/dsh-start".source = dshStartAlias;
       home.shellAliases.dshstart = "dsh-start";
 
-      # `dsh lkg` starts the last known good snapshot instead of the live
-      # installation. The recovery script is self-contained: it reads only the
+      # `dsh web` runs the supervised launcher, so it gets the same environment
+      # as the app bundle. `dsh lkg` starts the last known good snapshot instead
+      # of the live installation. The recovery script is self-contained: it reads only the
       # snapshot store, never the repository, the pnpm global install or the live
       # ~/.dsh profile, so it still works after an agent breaks the main install.
       # Every other subcommand delegates to the real CLI unchanged.
@@ -72,6 +71,10 @@
             lkg)
               shift
               exec "$HOME/.local/bin/dsh-recover" "$@"
+              ;;
+            web)
+              shift
+              "$HOME/.local/bin/dsh-web" "$@"
               ;;
             *)
               command dsh "$@"
