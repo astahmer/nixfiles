@@ -32,7 +32,7 @@ bun test assets/pi/extensions/queue-subagent.test.ts
 bun test assets/pi/extensions/free-model-retry-policy.test.ts
 node assets/t3code/test-seed-provider-instances.mjs
 node --test assets/dsh/sync-web-profile.test.mts
-assets/codex/test-normalize-root-model.sh
+bun test assets/codex/normalize-root-model.test.ts
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "nixfiles-check: jq is required for configuration contract checks" >&2
@@ -91,7 +91,7 @@ jq -e '
   ["devenv", "qmd", "jjw", "secret-cli"] as $required
   | ([.updates[].name] as $names | ($required - $names) | length == 0)
 ' scripts/update-pins.json >/dev/null
-assets/opencodex/test-strip-legacy-base-url.sh
+bun test assets/opencodex/strip-legacy-base-url.test.ts
 if command -v ocx >/dev/null 2>&1; then
   ocx config validate assets/opencodex/config.template.json --json >/dev/null
 fi
