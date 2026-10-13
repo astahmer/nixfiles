@@ -153,6 +153,7 @@
 
           devShells.default = pkgs'.mkShell {
             packages = [
+              pkgs'.bashInteractive
               pkgs'.deadnix
               pkgs'.nixfmt
             ];
