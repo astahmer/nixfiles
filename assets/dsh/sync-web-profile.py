@@ -4,6 +4,7 @@ import errno
 import hashlib
 import json
 import os
+import signal
 import stat
 import subprocess
 import sys
@@ -16,6 +17,8 @@ LOCK_WAIT_SECONDS = 120
 PATCH_START = "# BEGIN NIX-MANAGED DSH PLUGINS"
 PATCH_END = "# END NIX-MANAGED DSH PLUGINS"
 STATE_FILENAME = ".nixfiles-managed-plugins.json"
+PROFILE_INSTALL_TIMEOUT_SECONDS = 180
+PROCESS_TERM_GRACE_SECONDS = 5
 
 
 def read_object(path: Path) -> dict:
@@ -162,6 +165,42 @@ def reconcile_patch(path: Path, source: str) -> bool:
     return True
 
 
+def run_bounded(command: list[str], environment: dict[str, str], timeout_seconds: float, label: str) -> None:
+    started_at = time.monotonic()
+    print(f"[nixfiles:dshWebProfile] {label} started.", flush=True)
+    process = subprocess.Popen(command, env=environment, start_new_session=True)
+    try:
+        status = process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as error:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+        term_deadline = time.monotonic() + PROCESS_TERM_GRACE_SECONDS
+        while True:
+            process.poll()
+            try:
+                os.killpg(process.pid, 0)
+            except ProcessLookupError:
+                break
+            if time.monotonic() >= term_deadline:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                break
+            time.sleep(0.05)
+        process.wait()
+        elapsed = time.monotonic() - started_at
+        raise TimeoutError(f"{label} exceeded {timeout_seconds}s after {elapsed:.0f}s") from error
+    elapsed = time.monotonic() - started_at
+    if status != 0:
+        print(f"[nixfiles:dshWebProfile] {label} failed with status {status} after {elapsed:.1f}s.", flush=True)
+        raise subprocess.CalledProcessError(status, command)
+    print(f"[nixfiles:dshWebProfile] {label} completed in {elapsed:.1f}s.", flush=True)
+
+
 def install_profile(profile: Path) -> None:
     environment = os.environ.copy()
     pnpm_home = Path.home() / ".local/share/pnpm"
@@ -170,16 +209,17 @@ def install_profile(profile: Path) -> None:
     environment["PATH"] = os.pathsep.join(
         [str(pnpm_home / "bin"), str(pnpm_home), environment.get("PATH", "")]
     )
-    subprocess.run(
+    run_bounded(
         [
             "/bin/zsh",
             "-lc",
-            'fnm exec --using=v22.23.3 -- pnpm --dir "$1" install',
+            'fnm exec --using=v22.23.3 -- pnpm --dir "$1" install --prefer-offline',
             "dsh-profile-sync",
             str(profile),
         ],
-        check=True,
-        env=environment,
+        environment,
+        PROFILE_INSTALL_TIMEOUT_SECONDS,
+        "DSH web profile dependency install",
     )
 
 
