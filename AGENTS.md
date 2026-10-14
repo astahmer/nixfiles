@@ -128,8 +128,17 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
   `dsh-start` and the DeepSeek Harness app all run `assets/dsh/start-dsh`, which
   keeps the Mac awake and supervises `dsh web` on port 3080 with this machine's
   environment (`supervise-web.mjs`).
-- Home Manager seeds `~/.dsh/profiles/web/` from `$HOME/dev/dshfiles/profiles/web`.
-  Owned bundles are reconciled with
-  `pnpm profile:sync --profile web --bundle @dshfiles/<name>` from dshfiles.
-  Never restart the live instance from here.
+- dshfiles owns the web profile: its `scripts/profile-sync.ts` reconciles
+  `~/.dsh/profiles/web/` from `profiles/web/` in the checkout
+  (`dsh.dshfilesCheckout`, exported as `DSHFILES_DIR`; `start-dsh` defaults it).
+  The supervisor runs it before every start and restart and starts DSH with the
+  previous profile if it fails; `dshx checkout sync` runs it when the seed
+  changed. Seed and plugin changes therefore need a DSH restart, not `nixapply`.
+  The `dshWebProfile` activation only calls the same script and warns on
+  failure; nixfiles carries no copy of the reconciler. `nixapply` is for Nix
+  changes: the supervisor, `start-dsh`, shell functions, packages.
+- Migration: one `nixapply` after this change installs the syncing supervisor
+  and `start-dsh`; restart DSH once, then Restart is enough. See dshfiles
+  `docs/profile-installs.md`.
+- Never restart the live instance from here.
 - Do not run `nixapply` as part of an agent task without the user asking.

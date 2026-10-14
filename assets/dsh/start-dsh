@@ -4,4 +4,8 @@
 # just runs without the supervisor.
 set -eu
 
+# The supervisor syncs the web profile from this dshfiles checkout before each start.
+DSHFILES_DIR="${DSHFILES_DIR:-@dshfilesCheckout@}"
+export DSHFILES_DIR
+
 exec /usr/bin/caffeinate -i fnm exec --using=v22.23.3 -- node "$HOME/.local/bin/dsh-web-supervisor.mjs" "$@"

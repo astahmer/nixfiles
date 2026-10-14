@@ -10,7 +10,7 @@
     let
       appScript = pkgs.writeText "dsh-web-app.applescript" ''
         on run
-          do shell script "/bin/zsh -lc " & quoted form of "exec ${../assets/dsh/start-dsh}"
+          do shell script "/bin/zsh -lc " & quoted form of "exec ${startDsh}"
         end run
       '';
       dshApp = pkgs.runCommand "deepseek-harness-app.app" { } ''
@@ -22,8 +22,11 @@
       dshStartAlias = pkgs.writeShellScript "dsh-start" ''
         exec "$HOME/.local/bin/dsh-web" "$@"
       '';
-      profileSync = ../assets/dsh/sync-web-profile.mts;
-      dshfilesWebProfile = "${config.dsh.dshfilesCheckout}/profiles/web";
+      startDsh = pkgs.replaceVarsWith {
+        src = ../assets/dsh/start-dsh;
+        replacements.dshfilesCheckout = config.dsh.dshfilesCheckout;
+        isExecutable = true;
+      };
     in
     {
       options.dsh.dshfilesCheckout = lib.mkOption {
@@ -33,35 +36,20 @@
       };
 
       config = {
-        # DSH rewrites its profile; seed portable config and account metadata.
-        # Reconcile managed plugins under DSH's lock; keep credentials local.
+        # dshfiles owns the web profile reconciler (scripts/profile-sync.ts); the dsh web supervisor runs it before
+        # every start, so this only applies seed changes early. A failure warns: the next start retries it.
         home.activation.dshWebProfile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          dsh_home="''${DSH_HOME:-$HOME/.dsh}"
-          profile="$dsh_home/profiles/web"
-          source_profile="${dshfilesWebProfile}"
-          if [ ! -d "$source_profile" ]; then
-            echo "Missing dshfiles web profile at $source_profile" >&2
-            exit 1
+          checkout="${config.dsh.dshfilesCheckout}"
+          if [ ! -f "$checkout/scripts/profile-sync.ts" ]; then
+            warnEcho "No dshfiles profile reconciler in $checkout; dsh web syncs the web profile once it exists."
+          elif ! run env PNPM_HOME="$HOME/.local/share/pnpm" PNPM_STORE_DIR="$HOME/.local/share/pnpm/store" \
+            /bin/zsh -lc 'fnm exec --using=v22.23.3 -- node "$1/scripts/profile-sync.ts" --profile web' dsh-profile-sync "$checkout"; then
+            warnEcho "The dshfiles web profile sync failed; dsh web retries it on its next start."
           fi
-          run mkdir -p "$profile"
-          for name in package.json cordis.patch.yml pnpm-workspace.yaml; do
-            if [ ! -e "$profile/$name" ]; then
-              run install -m 600 "$source_profile/$name" "$profile/$name"
-            fi
-          done
-          accounts_file="$dsh_home/plugins/ai-accounts/accounts.json"
-          if [ ! -e "$accounts_file" ] && [ ! -L "$accounts_file" ]; then
-            run mkdir -p "$dsh_home/plugins/ai-accounts"
-            run install -m 600 "$source_profile/ai-accounts.json" "$accounts_file"
-          fi
-          run ${pkgs.nodejs_24}/bin/node "${profileSync}" \
-            "$profile" \
-            "$source_profile/package.json" \
-            "$source_profile/cordis.patch.yml"
         '';
         home.file.".dsh/AGENTS.md".source =
           config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
-        home.file.".local/bin/dsh-web".source = ../assets/dsh/start-dsh;
+        home.file.".local/bin/dsh-web".source = startDsh;
         home.file.".local/bin/dsh-web-supervisor.mjs".source = ../assets/dsh/supervise-web.mjs;
         home.file.".local/bin/dsh-start".source = dshStartAlias;
         home.shellAliases.dshstart = "dsh-start";
