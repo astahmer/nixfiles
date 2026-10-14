@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { runBounded } from "./sync-web-profile.mts";
+import { resolveLocalSpec, runBounded } from "./sync-web-profile.mts";
 
 test("a timeout kills the whole child process group, including SIGTERM-ignoring grandchildren", async () => {
   const temporaryDirectory = mkdtempSync(join(tmpdir(), "sync-web-profile-"));
@@ -36,4 +36,13 @@ test("a timeout kills the whole child process group, including SIGTERM-ignoring 
   } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
+});
+
+test("a profile link relative to the checkout's profile folder resolves to an absolute path", () => {
+  assert.equal(
+    resolveLocalSpec("link:../../plugins/@dshfiles/memory", "/somewhere/dshfiles/profiles/web"),
+    "link:/somewhere/dshfiles/plugins/@dshfiles/memory",
+  );
+  assert.equal(resolveLocalSpec("link:/abs/plugin", "/somewhere"), "link:/abs/plugin");
+  assert.equal(resolveLocalSpec("1.2.3", "/somewhere"), "1.2.3");
 });

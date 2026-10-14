@@ -12,7 +12,7 @@ import {
   writeSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, delimiter, dirname, join } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
 
@@ -24,6 +24,13 @@ const patchEnd = "# END NIX-MANAGED DSH PLUGINS";
 const stateFilename = ".nixfiles-managed-plugins.json";
 const profileInstallTimeoutMs = 180_000;
 const logPrefix = "[nixfiles:dshWebProfile]";
+
+export const resolveLocalSpec = (spec: string, sourceDirectory: string): string => {
+  const protocol = ["link:", "file:"].find((prefix) => spec.startsWith(prefix));
+  if (protocol === undefined) return spec;
+  const target = spec.slice(protocol.length);
+  return isAbsolute(target) ? spec : `${protocol}${resolve(sourceDirectory, target)}`;
+};
 
 const isObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -280,7 +287,17 @@ const reconcile = async (options: { profile: string; sourceManifestPath: string;
   const sourceManifest = readObject(options.sourceManifestPath);
   const sourcePatch = readFileSync(options.sourcePatchPath, "utf8");
 
-  const desiredDependencies = sourceManifest.dependencies ?? {};
+  // The checkout's profile links plugins relative to its own folder, so resolve them to
+  // absolute paths: the live profile sits elsewhere and the checkout can live anywhere.
+  const sourceDependencies = sourceManifest.dependencies ?? {};
+  const desiredDependencies = isObject(sourceDependencies)
+    ? Object.fromEntries(
+        Object.entries(sourceDependencies).map(([name, spec]) => [
+          name,
+          typeof spec === "string" ? resolveLocalSpec(spec, dirname(options.sourceManifestPath)) : spec,
+        ]),
+      )
+    : sourceDependencies;
   const sourceDsh = sourceManifest.dsh ?? {};
   const sourceProfile = isObject(sourceDsh) ? (sourceDsh.profile ?? {}) : {};
   const desiredBundles = isObject(sourceProfile) ? (sourceProfile.bundles ?? []) : [];
