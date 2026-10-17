@@ -7,6 +7,8 @@ import { dirname, join, resolve } from 'node:path'
 
 const REQUESTED_RESTART_EXIT_CODE = 75
 const PROFILE_SYNC_TIMEOUT_MS = Number(process.env.DSH_WEB_PROFILE_SYNC_TIMEOUT_MS) || 300_000
+// A run that stays up this long is worth keeping as the recovery snapshot.
+const LKG_REFRESH_DELAY_MS = Number(process.env.DSH_WEB_LKG_REFRESH_DELAY_MS) || 600_000
 const dshHome = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'))
 process.env.DSH_HOME = dshHome
 process.env.DSH_CHANNEL_PACK_STATE_DIR = dshHome
@@ -107,6 +109,31 @@ const syncProfile = () =>
 process.once('SIGINT', () => stopChild('SIGINT'))
 process.once('SIGTERM', () => stopChild('SIGTERM'))
 
+// dsh-lkg builds a candidate, boots it on its own port with its own state, and
+// promotes it only when the Host and the browser half both pass; --if-changed
+// makes a refresh of an unchanged installation a no-op. It runs detached so a
+// slow snapshot never holds up DSH or the supervisor's shutdown.
+const refreshLastKnownGood = () => {
+  const dshfilesDirectory = process.env.DSHFILES_DIR?.trim()
+  const script = dshfilesDirectory ? join(dshfilesDirectory, 'scripts', 'dsh-lkg', 'cli.mjs') : undefined
+  if (script === undefined || !existsSync(script)) return
+  const logsDirectory = join(homedir(), '.dsh-lkg', 'logs')
+  void mkdir(logsDirectory, { recursive: true })
+    .then(() => open(join(logsDirectory, 'auto-snapshot.log'), 'a'))
+    .then(log => {
+      const snapshot = spawn(process.execPath, [script, 'snapshot', '--if-changed', '--label', 'auto'], {
+        cwd: dshfilesDirectory,
+        detached: true,
+        stdio: ['ignore', log.fd, log.fd],
+        env: { ...process.env, DSH_LKG_ADMIN: '1' },
+      })
+      snapshot.once('error', error => warn(`Could not refresh the last known good snapshot: ${error.message}`))
+      snapshot.unref()
+      void log.close()
+    })
+    .catch(error => warn(`Could not refresh the last known good snapshot: ${error.message}`))
+}
+
 const runDsh = runId =>
   new Promise(resolveRun => {
     const requestPath = join(runtimeDirectory, `dsh-web-restart-${runId}.request`)
@@ -119,10 +146,16 @@ const runDsh = runId =>
       stdio: ['inherit', 'pipe', 'inherit'],
     })
     const launchedChild = child
+    let refreshTimer
     launchedChild.stdout.on('data', chunk => {
       process.stdout.write(chunk)
       const url = LAUNCH_URL_PATTERN.exec(chunk.toString())?.[1]
-      if (url !== undefined) void writeFile(webUrlPath, `${url}\n`, { mode: 0o600 }).catch(() => undefined)
+      if (url === undefined) return
+      void writeFile(webUrlPath, `${url}\n`, { mode: 0o600 }).catch(() => undefined)
+      refreshTimer ??= setTimeout(() => {
+        if (launchedChild.exitCode === null && !stopping) refreshLastKnownGood()
+      }, LKG_REFRESH_DELAY_MS)
+      refreshTimer.unref()
     })
     let settled = false
     const finish = result => {
@@ -137,6 +170,7 @@ const runDsh = runId =>
       finish({ exitCode: 1, restartRequested: false })
     })
     launchedChild.once('exit', (code, signal) => {
+      clearTimeout(refreshTimer)
       void unlink(webUrlPath).catch(() => undefined)
       const exitCode = code ?? (signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 1)
       void readFile(requestPath, 'utf8')

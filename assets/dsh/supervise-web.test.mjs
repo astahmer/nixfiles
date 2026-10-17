@@ -17,11 +17,19 @@ if (starts === 1 && process.env.TEST_RESTART_ONCE === '1') {
   fs.writeFileSync(process.env.DSH_RESTART_REQUEST_PATH, process.env.DSH_RESTART_RUN_ID)
   process.exit(75)
 }
+if (process.env.TEST_LAUNCH_MS) {
+  console.log('dsh web: http://127.0.0.1:3080/?token=test')
+  setTimeout(() => {}, Number(process.env.TEST_LAUNCH_MS))
+}
 `
 const fakeSync = `const fs = process.getBuiltinModule('node:fs')
 fs.appendFileSync(process.env.TEST_LOG, 'sync ' + process.argv.slice(2).join(' ') + '\\n')
 if (process.env.TEST_SYNC_HANG === '1') setInterval(() => {}, 1000)
 else process.exitCode = Number(process.env.TEST_SYNC_EXIT ?? 0)
+`
+
+const fakeLkg = `const fs = process.getBuiltinModule('node:fs')
+fs.appendFileSync(process.env.TEST_LOG, 'lkg ' + process.argv.slice(2).join(' ') + ' admin=' + process.env.DSH_LKG_ADMIN + '\\n')
 `
 
 const supervise = (environment = {}) => {
@@ -49,6 +57,8 @@ beforeEach(() => {
   chmodSync(join(root, 'bin/dsh'), 0o755)
   mkdirSync(join(root, 'dshfiles/scripts'), { recursive: true })
   writeFileSync(join(root, 'dshfiles/scripts/profile-sync.ts'), fakeSync)
+  mkdirSync(join(root, 'dshfiles/scripts/dsh-lkg'))
+  writeFileSync(join(root, 'dshfiles/scripts/dsh-lkg/cli.mjs'), fakeLkg)
 })
 
 afterEach(() => rmSync(root, { recursive: true, force: true }))
@@ -79,4 +89,16 @@ test('starts DSH without a sync when the dshfiles checkout has no reconciler', (
   assert.equal(result.status, 0)
   assert.deepEqual(result.log, ['dsh web --port 3080 --no-open'])
   assert.match(result.stderr, /No dshfiles profile reconciler/)
+})
+
+test('refreshes the last known good snapshot once DSH has stayed up', () => {
+  const result = supervise({ TEST_LAUNCH_MS: '1500', DSH_WEB_LKG_REFRESH_DELAY_MS: '200' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.ok(result.log.includes('lkg snapshot --if-changed --label auto admin=1'), result.log.join('\n'))
+})
+
+test('does not refresh the snapshot when DSH exits before it proved itself', () => {
+  const result = supervise({ TEST_LAUNCH_MS: '100', DSH_WEB_LKG_REFRESH_DELAY_MS: '1000' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.ok(!result.log.some(line => line.startsWith('lkg ')), result.log.join('\n'))
 })

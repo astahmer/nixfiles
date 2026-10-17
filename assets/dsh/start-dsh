@@ -8,4 +8,10 @@ set -eu
 DSHFILES_DIR="${DSHFILES_DIR:-@dshfilesCheckout@}"
 export DSHFILES_DIR
 
+# Bundles DSH already skips on this runtime and that the recovery snapshot may
+# skip too; any other skipped bundle refuses the snapshot. commandcode pins
+# engines.dsh 0.2.0-rc.2 and has no 0.2.1 release yet.
+DSH_LKG_ALLOW_SKIPPED="${DSH_LKG_ALLOW_SKIPPED-@mars-sea/dsh-commandcode-provider}"
+export DSH_LKG_ALLOW_SKIPPED
+
 exec /usr/bin/caffeinate -i fnm exec --using=v22.23.3 -- node "$HOME/.local/bin/dsh-web-supervisor.mjs" "$@"
