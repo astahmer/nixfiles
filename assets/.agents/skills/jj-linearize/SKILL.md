@@ -89,6 +89,23 @@ node ~/.agents/skills/jj-linearize/scripts/linearize.mjs rebase 1 --auto-empty
   re-run `rebase n` (it skips what is already in place) or continue with `rebase n+1`.
 - `--auto-empty` empties commits whose description already exists on the bookmark line.
 
+### Pre-strip the noisy shared paths (before the rebase)
+
+A lane that keeps editing the same marker files (`plans/*.md`, `scripts/lint-ratchet.json`,
+`pnpm-lock.yaml`, snapshots) conflicts in almost every commit once the base moved. Take the base
+side for those paths **on the pre-rebase lane**, where nothing cascades, then rebase — what is
+left is the real overlap:
+
+```sh
+node ~/.agents/skills/jj-linearize/scripts/linearize.mjs prestrip <lane>   # one pass, no conflicts
+node ~/.agents/skills/jj-linearize/scripts/linearize.mjs rebase <lane>
+node ~/.agents/skills/jj-linearize/scripts/linearize.mjs resolve <lane>    # oldest-first, until clean
+```
+
+Regenerate the stripped generated files once at the end (lockfile) and port the doc rows that
+still matter as one follow-up revision. Worth it whenever a lane has more than a handful of
+commits: on the dshfiles lane this removes ~140 of 145 resolutions.
+
 Never use `jj rebase … --skip-emptied` when the human asked to keep every revision: it
 abandons commits. Emptying keeps the revision (and its bookmark/workspace references).
 
@@ -183,3 +200,16 @@ usually clears it.
   pushed without being asked.
 
 See `reference.md` for the jj syntax traps and the deterministic-vs-judgment split.
+
+## 9. Cost and scale — decide before you pay
+
+- A lane of N commits costs ~N rewrites per resolution pass: on dshfiles that was ~6.5 s per
+  resolution across a ~200-commit range, so a 148-commit lane conflicting in 146 commits is
+  ~16 minutes of pure rewriting — per attempt, before any gate runs.
+- Trial-rebase first (13 s for 148 commits), classify own-vs-inherited conflicts, then choose:
+  fewer than ~10 own-conflict commits → the resolve loop is fine; a chain over ~50 commits whose
+  refactor conflicts everywhere → **unit-level merge**: take the lane's whole tree for the layer
+  it owns, or reimplement its intent on the base's newer code, instead of replaying commits.
+- Gate in cost order, never start with the expensive one: 1. import sweep, 2. the touched
+  package's build/typecheck, 3. package tests, 4. boot check, 5. journeys/smoke. Each step costs
+  roughly ten times the previous one.

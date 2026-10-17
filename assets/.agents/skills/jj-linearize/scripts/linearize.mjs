@@ -2,7 +2,7 @@
 /**
  * Deterministic helper for collapsing many jj workspace heads into one line.
  *
- * Every subcommand is read-only except `rebase`, `resolve`, `empty`, `take-main`,
+ * Every subcommand is read-only except `rebase`, `prestrip`, `resolve`, `empty`, `take-main`,
  * `preserve` and `prune --apply`. State (lanes, plan, running tip, resolutions)
  * lives in the state dir, never in the repository.
  *
@@ -11,6 +11,8 @@
  *   inventory [--force]             dump every off-bookmark revision and lane
  *   plan                            write the ordered lane plan + lane-list + tip
  *   rebase <lane> [--auto-empty]    rebase one lane onto the running tip
+ *   prestrip <lane> [--paths RE]    drop the lane's shared/noisy path edits BEFORE rebasing
+ *   resolve <lane> [--max N]        take the base side for every conflict, oldest first, until clean
  *   empty <change...>               empty commits (take the parent's content)
  *   take-main <change...>           take the destination side of each conflict
  *   preserve <lane> <name>          duplicate a lane you keep aside + bookmark it
@@ -149,7 +151,7 @@ const readTip = () => (existsSync(join(stateDir, 'tip.txt')) ? readFileSync(join
 const writeTip = tip => writeFileSync(join(stateDir, 'tip.txt'), `${tip}\n`)
 const laneIndex = () => loadJson(join(stateDir, 'lanes.json')) ?? buildLanes()
 const log = record => appendFileSync(join(stateDir, 'resolutions.jsonl'), `${JSON.stringify({ ...record, at: new Date().toISOString() })}\n`)
-const conflictsIn = revset => jjTry('log', '-r', `(${revset}) & conflicts()`, '--no-graph', '-T', `${T([short, 'description.first_line()'])}`).out.split('\n').filter(Boolean)
+const conflictsIn = (revset, oldestFirst = false) => jjTry('log', '-r', `(${revset}) & conflicts()`, ...(oldestFirst ? ['--reversed'] : []), '--no-graph', '-T', `${T([short, 'description.first_line()'])}`).out.split('\n').filter(Boolean)
 const changedPaths = change => jj('diff', '-r', change, '--summary').split('\n').filter(Boolean).map(line => line.slice(2).trim())
 const conflictedPaths = change => {
   const out = jjTry('resolve', '-r', change, '--list').out
@@ -233,6 +235,56 @@ const commands = {
     const next = heads.at(-1) ?? tip
     writeTip(next)
     console.log(`lane ${at} ok -> tip ${next}`)
+  },
+
+  prestrip() {
+    const at = Number(positional[0])
+    const lane = laneIndex()[at]
+    if (!lane) {
+      throw new Error(`no lane ${at}`)
+    }
+    const pattern = new RegExp(flag('paths', '^(plans/|docs/|pnpm-lock\\.yaml$|scripts/lint-ratchet\\.json$|.*\\.snap$)'))
+    let stripped = 0
+    for (const change of lane.ids) {
+      const paths = changedPaths(change).filter(path => pattern.test(path))
+      if (paths.length === 0) {
+        continue
+      }
+      jj('restore', '--from', `${change}-`, '--to', change, ...paths)
+      log({ change, resolution: 'pre-strip: took the base side for a shared/noisy path before the rebase', paths })
+      stripped += paths.length
+    }
+    console.log(`pre-stripped ${stripped} path change(s) across lane ${at}; now run rebase ${at}`)
+  },
+
+  resolve() {
+    const at = Number(positional[0])
+    const lane = laneIndex()[at]
+    if (!lane) {
+      throw new Error(`no lane ${at}`)
+    }
+    const revset = lane.ids.join(' | ')
+    const max = Number(flag('max', 400))
+    let done = 0
+    for (; done < max; done += 1) {
+      const rows = conflictsIn(revset, true)
+      if (rows.length === 0) {
+        console.log(`converged after ${done} resolution(s)`)
+        return
+      }
+      const [change, description] = rows[0].split('\t')
+      const paths = conflictedPaths(change)
+      if (paths.length === 0) {
+        console.log(`${change} is reported conflicted with no resolvable paths; stopping`)
+        process.exitCode = 3
+        return
+      }
+      jj('restore', '--from', `${change}-`, '--to', change, ...paths)
+      log({ change, description, resolution: 'took the base side for every conflicted path', paths })
+      console.log(`${done + 1} ${change} ${description.slice(0, 44)} paths=${paths.length}`)
+    }
+    console.log(`stopped at --max ${max} with ${conflictsIn(revset, true).length} conflicted commit(s) left`)
+    process.exitCode = 3
   },
 
   empty() {

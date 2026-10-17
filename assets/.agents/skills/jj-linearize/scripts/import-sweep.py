@@ -25,7 +25,7 @@ def exports_of(path, seen=None):
     names = set(re.findall(r'^export\s+(?:default\s+)?(?:async\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z0-9_$]+)', text, re.M))
     for match in re.finditer(r'^export\s+(?:type\s+)?\{([^}]*)\}', text, re.M | re.S):
         for part in match.group(1).split(','):
-            part = part.strip()
+            part = re.sub(r'^type\s+', '', part.strip())
             if part:
                 names.add(part.split(' as ')[-1].strip())
     for match in re.finditer(r"^export\s+\*\s+from\s+['\"]([^'\"]+)['\"]", text, re.M):
