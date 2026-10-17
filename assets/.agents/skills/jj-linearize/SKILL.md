@@ -12,8 +12,10 @@ at the target bookmark: `base..bookmark` = **1 head, 0 merges, 0 conflicts,
 else is scripted and reproducible.
 
 Run every command from the repository, never with `-R` on a workspace you do not own.
-`scripts/linearize.mjs` does the bookkeeping; state lives in `$TMPDIR/jj-linearize/<repo>`
-(override with `--state`), never in the repository.
+`scripts/linearize.mjs` does the bookkeeping; `<skill>` below is wherever this
+skill was loaded from (`~/.agents/skills/jj-linearize` once the Nix setup is applied, its source
+tree before that); state lives in `$TMPDIR/jj-linearize/<repo>` (override with `--state`), never
+in the repository.
 
 ## 0a. Which case are you in?
 
@@ -30,7 +32,7 @@ Run every command from the repository, never with `-R` on a workspace you do not
 ## 0. Snapshot first (always)
 
 ```sh
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs snapshot
+node <skill>/scripts/linearize.mjs snapshot
 ```
 
 Prints the op id to restore to (`jj op restore <op>`) and the current shape. Record
@@ -40,8 +42,8 @@ one operation.
 ## 1. Inventory the lanes
 
 ```sh
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs inventory          # lanes, oldest first, with owners + verdicts
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs plan               # ordered lane list + the exact rebase per lane
+node <skill>/scripts/linearize.mjs inventory          # lanes, oldest first, with owners + verdicts
+node <skill>/scripts/linearize.mjs plan               # ordered lane list + the exact rebase per lane
 ```
 
 A **lane** is a connected component of `base.. ~ ::bookmark`: revisions that are not
@@ -77,8 +79,8 @@ attempt commit by commit.
 ## 3. Chain the lanes, oldest first
 
 ```sh
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs rebase 0            # rebase lane 0 onto the tip, update tip.txt
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs rebase 1 --auto-empty
+node <skill>/scripts/linearize.mjs rebase 0            # rebase lane 0 onto the tip, update tip.txt
+node <skill>/scripts/linearize.mjs rebase 1 --auto-empty
 ```
 
 - `rebase <n>` rebases `lane n` onto the running tip with `jj rebase -r '<ids|…>' -o <tip>`.
@@ -97,9 +99,10 @@ side for those paths **on the pre-rebase lane**, where nothing cascades, then re
 left is the real overlap:
 
 ```sh
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs prestrip <lane>   # one pass, no conflicts
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs rebase <lane>
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs resolve <lane>    # oldest-first, until clean
+node <skill>/scripts/linearize.mjs prestrip <lane>   # one pass, no conflicts
+# prestrip's default path set is opinionated: narrow it with --paths for a docs-only lane
+node <skill>/scripts/linearize.mjs rebase <lane>
+node <skill>/scripts/linearize.mjs resolve <lane>    # oldest-first, until clean
 ```
 
 Regenerate the stripped generated files once at the end (lockfile) and port the doc rows that
@@ -112,8 +115,8 @@ abandons commits. Emptying keeps the revision (and its bookmark/workspace refere
 ## 4. Resolve conflicts
 
 ```sh
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs take-main <change>…   # destination side of every conflict in that commit
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs empty <change>…       # make the commit content-free
+node <skill>/scripts/linearize.mjs take-main <change>…   # destination side of every conflict in that commit
+node <skill>/scripts/linearize.mjs empty <change>…       # make the commit content-free
 ```
 
 | situation | resolution |
@@ -131,8 +134,8 @@ usually clears their inherited conflicts. Re-check `jj log -r 'conflicts()'` aft
 ## 5. Keep a lane you are not integrating
 
 ```sh
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs skip 27 --reason "rewrites newer thread-sidebar code"
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs preserve 27 kept/thread-sidebar-settings-surfaces
+node <skill>/scripts/linearize.mjs skip 27 --reason "rewrites newer thread-sidebar code"
+node <skill>/scripts/linearize.mjs preserve 27 kept/thread-sidebar-settings-surfaces
 ```
 
 `preserve` runs `jj duplicate` on the lane and bookmarks the copy. Why not bookmark the
@@ -148,10 +151,10 @@ concrete reason.
 # put the default workspace on the tip (never `jj rebase @` if @ is inside the new line)
 jj new <bookmark>                       # in the default workspace
 jj bookmark set main -r <final-tip>     # only when the human wants the bookmark moved
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs prune              # dry run: content-free empty revisions
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs prune --apply      # excludes working_copies() and bookmarks()
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs verify             # 1 head, 0 merges, 0 conflicts, 0 divergence
-node ~/.agents/skills/jj-linearize/scripts/linearize.mjs report
+node <skill>/scripts/linearize.mjs prune              # dry run: content-free empty revisions
+node <skill>/scripts/linearize.mjs prune --apply      # excludes working_copies() and bookmarks()
+node <skill>/scripts/linearize.mjs verify             # 1 head, 0 merges, 0 conflicts, 0 divergence
+node <skill>/scripts/linearize.mjs report
 ```
 
 `prune` only abandons empties that are neither a live workspace's `@` nor a bookmark
