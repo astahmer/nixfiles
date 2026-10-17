@@ -169,6 +169,12 @@ node tooling/dshx/packages/dshx/dist/cli/bin.js checkout sync    # rebuild + pro
 
 ## 7. Verify before claiming success
 
+**Gate the tree that is actually on the tip.** A rebase rewrites revisions, but the working
+copy keeps the old tree until its `@` moves: move it first (`jj rebase -r @ -o <new tip>` or
+`jj new <new tip>`), then sweep/build/test. Gating before that validates the *old* tree and can
+report a clean pass for an integration that never landed. Also force a rebuild (`--force`) after
+swapping files: a cached task replays logs from a different source state.
+
 Shape (`verify`) proves nothing about the code. Run the repository gates and compare
 every failure against a scratch workspace at the **pre-linearization tip**:
 

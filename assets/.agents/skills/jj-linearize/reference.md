@@ -94,3 +94,9 @@ Then rebuild the package and run the consumer checks (plugin builds, boot, journ
   files, rebuild with `--force` before trusting a green build.
 - Generated config (`pnpm-lock.yaml`) resolved to the base side fails `--frozen-lockfile` as soon
   as the merged manifests add a dependency; regenerate it and land that as its own revision.
+
+Beyond missing exports, a half-applied refactor also *moves* members: the caller compiles
+against `TS2305 Module X has no exported member Y`, which the sweep reports as unresolved
+because nothing in the target declares Y any more. That is the signal to stop replaying commits
+and merge the layer as a unit, or to repair it package by package against the lane's own tree
+(`jj file show -r <lane tip> <path>` is the reference implementation).
