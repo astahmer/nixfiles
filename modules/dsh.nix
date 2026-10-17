@@ -72,7 +72,7 @@
                 "$HOME/.local/bin/dsh-web" "$@"
                 ;;
               *)
-                command dsh "$@"
+                fnm exec --using=v22.23.3 -- dsh "$@"
                 ;;
             esac
           }
