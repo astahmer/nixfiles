@@ -12,7 +12,10 @@ import re, sys, pathlib
 
 root = pathlib.Path(sys.argv[1]).resolve()
 fix = '--fix' in sys.argv
+extra = [pathlib.Path(sys.argv[i + 1]).resolve() for i, arg in enumerate(sys.argv) if arg == '--extra' and i + 1 < len(sys.argv)]
 files = {p.resolve(): p.read_text() for p in root.rglob('*.ts')}
+for other in extra:
+    files.update({p.resolve(): p.read_text() for p in other.rglob('*.ts')})
 fixed = []
 
 
@@ -36,10 +39,23 @@ def exports_of(path, seen=None):
 
 
 def declares(text, name):
-    return re.search(rf'^(?:const|let|var|async function|function|class|interface|type|enum)\s+{re.escape(name)}\b', text, re.M) is not None
+    return re.search(rf'^\s*(?:const|let|var|async function|function|class|interface|type|enum)\s+{re.escape(name)}\b', text, re.M) is not None
+
+
+PACKAGE_ROOTS = {}
 
 
 def resolve_module(from_file, spec):
+    if spec.startswith('@dshfiles/'):
+        package, _, subpath = spec[len('@dshfiles/'):].partition('/')
+        root_for_package = PACKAGE_ROOTS.get(package)
+        if root_for_package is None or not subpath:
+            return None
+        base = (root_for_package / subpath).resolve()
+        for candidate in (pathlib.Path(str(base) + '.ts'), base / 'index.ts'):
+            if candidate in files:
+                return candidate
+        return None
     base = (from_file.parent / spec).resolve()
     for candidate in (pathlib.Path(str(base).replace('.js', '.ts')), base / 'index.ts'):
         if candidate in files:
@@ -61,6 +77,18 @@ for path, text in files.items():
             if name and name not in available:
                 problems.append((path, target, name))
 
+for candidate_root in [root, *extra]:
+    parts = candidate_root.parts
+    if 'packages' in parts:
+        PACKAGE_ROOTS[parts[parts.index('packages') + 1]] = candidate_root
+    elif candidate_root.name == 'src' and candidate_root.parent.name.startswith('@'):
+        PACKAGE_ROOTS[candidate_root.parent.name] = candidate_root.parent / 'src'
+    elif candidate_root.name == 'plugins':
+        for package_dir in candidate_root.glob('@dshfiles/*/src'):
+            PACKAGE_ROOTS[package_dir.parent.name] = package_dir
+    else:
+        PACKAGE_ROOTS.setdefault(candidate_root.name, candidate_root)
+
 print(f'{len(problems)} import(s) of names their module does not export (root {root.name})')
 for path, target, name in problems:
     if not declares(files[target], name):
@@ -69,7 +97,7 @@ for path, target, name in problems:
     print(f'  {"exported" if fix else "declares but does not export"}  {name} in {target.relative_to(root)} (used by {path.relative_to(root)})')
     if fix:
         files[target], count = re.subn(
-            rf'^(?:const|let|var|async function|function|class|interface|type|enum)\s+{re.escape(name)}\b',
+            rf'^\s*(?:const|let|var|async function|function|class|interface|type|enum)\s+{re.escape(name)}\b',
             lambda m: f'export {m.group(0)}', files[target], count=1, flags=re.M)
         if count:
             fixed.append(f'{target.relative_to(root)}::{name}')
