@@ -363,13 +363,43 @@
 
       jjCleanFunction = ''
         jjc() {
-          # abandon empty-diff commits reachable from @; mutable() keeps immutable history out
-          local revset="empty() & ::@ & mutable()"
-          if [[ -z "$(jj log -r "$revset" --no-graph -T 'change_id.short()' 2>/dev/null)" ]]; then
+          local dry_run=""
+          if [[ "$1" == "-n" || "$1" == "--dry-run" ]]; then
+            dry_run=1
+            shift
+          fi
+          if [[ $# -gt 1 ]]; then
+            echo "Usage: jjc [-n|--dry-run] [REV]" >&2
+            echo "  jjc         abandon empty commits below @ (ancestors of @)" >&2
+            echo "  jjc REV     abandon empty commits above REV (strict descendants, every depth)" >&2
+            return 1
+          fi
+
+          local range
+          if [[ -n "$1" ]]; then
+            range="$1:: ~ $1"
+          else
+            range="::@"
+          fi
+
+          # live working copies keep their revision and description; bookmark targets stay,
+          # since plain abandon deletes bookmarks and --retain-bookmarks conflicts on merges
+          local revset="($range) & empty() & ~working_copies() & ~bookmarks() & mutable()"
+
+          local found
+          if ! found="$(jj log -r "$revset" --no-graph -T 'change_id.shortest(8) ++ "\n"' 2>&1)"; then
+            echo "jjc: $found" >&2
+            return 1
+          fi
+          if [[ -z "$found" ]]; then
             echo "jjc: no empty commits to clean"
             return 0
           fi
-          jj abandon "$revset"
+          if [[ -n "$dry_run" ]]; then
+            printf '%s\n' "$found"
+            return 0
+          fi
+          jj abandon -r "$revset"
         }
       '';
 
