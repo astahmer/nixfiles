@@ -50,6 +50,11 @@
         home.file.".dsh/AGENTS.md".source =
           config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/.agents/AGENTS.md";
         home.file.".local/bin/dsh-web".source = startDsh;
+        # The supervisor restarts `dsh web` when it exits unexpectedly (bounded, with backoff) and when the running
+        # Host answers HTTP but lost its Session surface to a failed hot reload — every Session route then answers
+        # 'active Service "sessionController" is unavailable' and each plugin API 404s, which only a restart clears.
+        # Knobs: DSH_WEB_HEALTH_PROBE=off, DSH_WEB_MAX_HEALTH_RESTARTS, DSH_WEB_MAX_CRASH_RESTARTS,
+        # DSH_WEB_HEALTH_PROBE_GRACE_MS/INTERVAL_MS/ATTEMPTS, DSH_WEB_CRASH_RESTART_BACKOFF_MS.
         home.file.".local/bin/dsh-web-supervisor.mjs".source = ../assets/dsh/supervise-web.mjs;
         home.file.".local/bin/dsh-start".source = dshStartAlias;
         home.shellAliases.dshstart = "dsh-start";

@@ -17,10 +17,27 @@ if (starts === 1 && process.env.TEST_RESTART_ONCE === '1') {
   fs.writeFileSync(process.env.DSH_RESTART_REQUEST_PATH, process.env.DSH_RESTART_RUN_ID)
   process.exit(75)
 }
+if (starts === 1 && process.env.TEST_CRASH_ONCE === '1') process.exit(3)
+if (process.env.TEST_CRASH_ALWAYS === '1') process.exit(3)
 if (process.env.TEST_LAUNCH_MS) {
   console.log('dsh web: http://127.0.0.1:3080/?token=test')
   setTimeout(() => {}, Number(process.env.TEST_LAUNCH_MS))
 }
+`
+const fakeDshx = `#!/usr/bin/env node
+const fs = require('node:fs')
+const mode = process.env.TEST_HEALTH ?? 'always-ok'
+const probes = fs.readFileSync(process.env.TEST_LOG, 'utf8').split('\\n').filter(line => line.startsWith('health ')).length
+fs.appendFileSync(process.env.TEST_LOG, 'health ' + mode + '\\n')
+const unavailable = mode === 'always-fail' || (mode === 'fail-once' && probes === 0)
+console.log(JSON.stringify(unavailable
+  ? {
+      schemaVersion: 1,
+      command: 'status',
+      ok: false,
+      error: { code: 'gateway/service-unavailable', message: 'typert gateway: session/list: active Service "sessionController" is unavailable' },
+    }
+  : { schemaVersion: 1, command: 'status', ok: true, data: {} }))
 `
 const fakeSync = `const fs = process.getBuiltinModule('node:fs')
 fs.appendFileSync(process.env.TEST_LOG, 'sync ' + process.argv.slice(2).join(' ') + '\\n')
@@ -59,6 +76,8 @@ beforeEach(() => {
   writeFileSync(join(root, 'dshfiles/scripts/profile-sync.ts'), fakeSync)
   mkdirSync(join(root, 'dshfiles/scripts/dsh-lkg'))
   writeFileSync(join(root, 'dshfiles/scripts/dsh-lkg/cli.mjs'), fakeLkg)
+  mkdirSync(join(root, 'dshfiles/tooling/dshx/packages/dshx/dist/cli'), { recursive: true })
+  writeFileSync(join(root, 'dshfiles/tooling/dshx/packages/dshx/dist/cli/bin.js'), fakeDshx)
 })
 
 afterEach(() => rmSync(root, { recursive: true, force: true }))
@@ -101,4 +120,61 @@ test('does not refresh the snapshot when DSH exits before it proved itself', () 
   const result = supervise({ TEST_LAUNCH_MS: '100', DSH_WEB_LKG_REFRESH_DELAY_MS: '1000' })
   assert.equal(result.status, 0, result.stderr)
   assert.ok(!result.log.some(line => line.startsWith('lkg ')), result.log.join('\n'))
+})
+
+test('restarts DSH after an unexpected exit', () => {
+  const result = supervise({ TEST_CRASH_ONCE: '1', DSH_WEB_CRASH_RESTART_BACKOFF_MS: '10' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.log.filter(line => line.startsWith('dsh ')).length, 2)
+  assert.match(result.stderr, /DSH exited unexpectedly \(exit 3\); restarting/)
+})
+
+test('gives up after the crash-restart cap instead of spinning', () => {
+  const result = supervise({ TEST_CRASH_ALWAYS: '1', DSH_WEB_MAX_CRASH_RESTARTS: '1', DSH_WEB_CRASH_RESTART_BACKOFF_MS: '10' })
+  assert.equal(result.status, 3, result.stderr)
+  assert.equal(result.log.filter(line => line.startsWith('dsh ')).length, 2)
+  assert.match(result.stderr, /not restarting again/)
+})
+
+test('leaves a Host whose Session surface answers alone', () => {
+  const result = supervise({ TEST_LAUNCH_MS: '1200', TEST_HEALTH: 'always-ok', DSH_WEB_HEALTH_PROBE_GRACE_MS: '50' })
+  assert.equal(result.status, 0, result.stderr)
+  assert.deepEqual(result.log.filter(line => line.startsWith('dsh ') || line.startsWith('health ')), [
+    'dsh web --port 3080 --no-open',
+    'health always-ok',
+  ])
+})
+
+test('skips the Session-surface probe when it is disabled', () => {
+  const result = supervise({ TEST_LAUNCH_MS: '300', DSH_WEB_HEALTH_PROBE: 'off' })
+  assert.deepEqual(result.log.filter(line => line.startsWith('dsh ') || line.startsWith('health ')), ['dsh web --port 3080 --no-open'])
+})
+
+test('restarts a Host whose Session surface is unavailable, then leaves it up for inspection', () => {
+  const result = supervise({
+    TEST_LAUNCH_MS: '4000',
+    TEST_HEALTH: 'always-fail',
+    DSH_WEB_HEALTH_PROBE_GRACE_MS: '50',
+    DSH_WEB_HEALTH_PROBE_INTERVAL_MS: '10',
+    DSH_WEB_HEALTH_PROBE_ATTEMPTS: '2',
+    DSH_WEB_MAX_HEALTH_RESTARTS: '1',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.log.filter(line => line.startsWith('dsh ')).length, 2)
+  assert.match(result.stderr, /Session surface is unavailable \(gateway\/service-unavailable/)
+  assert.match(result.stderr, /leaving DSH up for inspection/)
+})
+
+test('stops restarting once a restarted Host answers again', () => {
+  const result = supervise({
+    TEST_LAUNCH_MS: '1200',
+    TEST_HEALTH: 'fail-once',
+    DSH_WEB_HEALTH_PROBE_GRACE_MS: '30',
+    DSH_WEB_HEALTH_PROBE_ATTEMPTS: '1',
+    DSH_WEB_MAX_HEALTH_RESTARTS: '2',
+  })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.log.filter(line => line.startsWith('dsh ')).length, 2)
+  assert.match(result.stderr, /Restarting DSH to restore its Session surface \(1\/2\)/)
+  assert.ok(!/leaving DSH up for inspection/.test(result.stderr))
 })
