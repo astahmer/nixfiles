@@ -336,11 +336,11 @@
     "jjw": {
       "flake": false,
       "locked": {
-        "lastModified": 1790408254,
-        "narHash": "sha256-TRamZ7sldkeg2+Rky6Qb7LbOQHiYVM0eFpa47rhos48=",
+        "lastModified": 1790936969,
+        "narHash": "sha256-0eRLNkURv5qsFD+EBnsdoHduWr1NHvnhaGydzBQ2QCE=",
         "ref": "main",
-        "rev": "f8ad87973d2015ec7336290ef0aadae6aaa686ea",
-        "revCount": 1,
+        "rev": "f2159f0a5c555ae5cf5da1065646bef4af42e2e0",
+        "revCount": 6,
         "type": "git",
         "url": "ssh://git@github.com/astahmer/jjw.git"
       },

@@ -5,22 +5,22 @@ let
     {
       x86_64-linux = {
         url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-x86_64";
-        hash = "sha256-8kf07nJRDNHagkO2f0ktDXh7GAiFQbICPqRMvWsSWz4=";
+        hash = "sha256-tiM+W+MyHape2W27bayntl0UFx0ytZ+Bsf6Lh7SpaQg=";
       };
       aarch64-linux = {
         url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-linux-arm64";
-        hash = "sha256-BDpvcHrOKABklfLBGC/33rdY6WfDI9iyyGD5p/49Zgo=";
+        hash = "sha256-Gf4VmVd7Waf+D4T9ZGT7FuHJaLXCF23M5TVPLqQat/E=";
       };
       aarch64-darwin = {
         url = "https://github.com/chronologos/lightjj/releases/download/v${version}/lightjj-macos-arm64";
-        hash = "sha256-NeQFDeI9gC2YCNt3pRtdeFJZHabae4VQ5ATweogAAb4=";
+        hash = "sha256-HZD+QmyQ7UXxV7SG5VhENC4nLKySyA+gTj7R968zceU=";
       };
     }
     .${system} or (throw "Unsupported platform for lightjj: ${system}");
 in
 pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "lightjj";
-  version = "1.38.0";
+  version = "1.40.0";
 
   src = pkgs.fetchurl (sourceFor pkgs.stdenv.hostPlatform.system finalAttrs.version);
 
