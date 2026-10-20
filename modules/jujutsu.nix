@@ -19,6 +19,9 @@
 
           git = {
             write-change-id-header = true;
+            # jj shells out to git (workspace add, fetch) and needs git >= 2.42; a login or agent shell can put
+            # Apple's /usr/bin/git (2.39) first on PATH, so jj uses the Nix git whatever the PATH.
+            executable-path = "${pkgs.git}/bin/git";
           };
 
           revsets = {
