@@ -8,4 +8,8 @@ set -eu
 DSHFILES_DIR="${DSHFILES_DIR:-@dshfilesCheckout@}"
 export DSHFILES_DIR
 
+# Nix git first: a login shell puts Apple's older git ahead of the Nix profile, and jj needs git >= 2.41.
+PATH="@gitBin@:$PATH"
+export PATH
+
 exec /usr/bin/caffeinate -i fnm exec --using=v22.23.3 -- node "$HOME/.local/bin/dsh-web-supervisor.mjs" "$@"
