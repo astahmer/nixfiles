@@ -13,39 +13,63 @@ in
     let
       executorDir = "${config.home.homeDirectory}/.executor";
       packages = inputs.self.packages.${pkgs.stdenv.hostPlatform.system};
-      calldiff = packages.calldiff;
       executorScopeDir = executorDir;
       localAgentsSrc = lib.cleanSource ../assets/.agents;
 
       # Base = the pinned astahmer/AGENTS repo (global contract + portable
       # skills); overlay = the Nix-local assets/.agents tree (machine-specific
-      # skills and preferences), then the emilint/calldiff rule sources.
+      # skills and preferences), then the emilint lint rule sources.
+      #
+      # Machine curation (not upstream, see the removals at the end): the Oct
+      # 2026 usage audit merged the create/maintain verification pair into one
+      # `verification-skill`, folded the selectable `effect-antislop` skill into
+      # `antislop` via its EFFECT.md, deleted the retired `jj-merge-workspaces`
+      # redirect (`jj-linearize` owns that procedure), and dropped the calldiff
+      # wrapper because `calldiff --help` documents the same commands. The
+      # pinned inputs keep their own copies; only the deployed catalog is
+      # curated here.
       agentsWithSkillOverlays = pkgs.runCommandLocal "agents-with-overlays" { } ''
         mkdir -p "$out/skills"
         cp "${inputs.agents}/AGENTS.md" "$out/AGENTS.md"
         cp -R --no-preserve=mode "${inputs.agents}/.agents/skills/." "$out/skills/"
 
-        # Machine-specific overlays win over the shared base.
-        cp -R --no-preserve=mode "${localAgentsSrc}/." "$out/"
-
-        # emilint owns executable lint assets and their companion guidance.
-        mkdir -p "$out/skills/antislop" "$out/skills/effect-antislop"
+        # emilint owns executable lint assets and their companion guidance. The
+        # Effect profile is part of `antislop` (see its EFFECT.md) instead of a
+        # second catalog entry.
+        mkdir -p "$out/skills/antislop/effect"
         cp -R --no-preserve=mode "${inputs.emilint}/ast-grep" "$out/skills/antislop/"
         cp -R --no-preserve=mode "${inputs.emilint}/oxlint" "$out/skills/antislop/"
         cp -R --no-preserve=mode "${inputs.emilint}/tests" "$out/skills/antislop/"
-        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/ast-grep" "$out/skills/effect-antislop/"
-        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/oxlint" "$out/skills/effect-antislop/"
-        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/tests" "$out/skills/effect-antislop/"
+        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/ast-grep" "$out/skills/antislop/effect/"
+        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/oxlint" "$out/skills/antislop/effect/"
+        cp -R --no-preserve=mode "${inputs.emilint}/profiles/effect/tests" "$out/skills/antislop/effect/"
         cp "${inputs.emilint}/sgconfig.yml" "$out/skills/antislop/"
         cp "${inputs.emilint}/oxlint.test.config.json" "$out/skills/antislop/"
-        cp "${inputs.emilint}/profiles/effect/sgconfig.yml" "$out/skills/effect-antislop/"
-        cp "${inputs.emilint}/profiles/effect/oxlint.test.config.json" "$out/skills/effect-antislop/"
+        cp "${inputs.emilint}/profiles/effect/sgconfig.yml" "$out/skills/antislop/effect/"
+        cp "${inputs.emilint}/profiles/effect/oxlint.test.config.json" "$out/skills/antislop/effect/"
 
-        cp "${inputs.emilint}/skills/antislop/SKILL.md" "$out/skills/antislop/"
-        cp "${inputs.emilint}/skills/effect-antislop/SKILL.md" "$out/skills/effect-antislop/"
+        # --no-preserve=mode: the appended section below needs a writable file.
+        cp --no-preserve=mode "${inputs.emilint}/skills/antislop/SKILL.md" "$out/skills/antislop/"
         cp "${inputs.emilint}/CATALOG.md" "$out/skills/antislop/"
+        cat >> "$out/skills/antislop/SKILL.md" <<'EFFECT_SECTION'
 
-        cp -R "${calldiff}/share/calldiff/skills/calldiff" "$out/skills/"
+## Effect profile
+
+The Effect rules are no longer a separately selectable skill: they live in
+[EFFECT.md](EFFECT.md), with executable rules and fixtures under `effect/`.
+EFFECT_SECTION
+
+        # Machine-specific overlays win over the shared base; copied last so the
+        # curated `verification-skill` and `antislop/EFFECT.md` survive.
+        cp -R --no-preserve=mode "${localAgentsSrc}/." "$out/"
+
+        # One catalog entry per job: the overlay supplies `verification-skill`,
+        # `jj-merge-workspaces` folded into `jj-linearize`, and the calldiff CLI
+        # documents itself. The pinned inputs keep their copies.
+        rm -rf "$out/skills/create-verification-skill" \
+               "$out/skills/maintain-verification-skill" \
+               "$out/skills/jj-merge-workspaces" \
+               "$out/skills/calldiff"
       '';
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);

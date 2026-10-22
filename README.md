@@ -274,7 +274,8 @@ using it.
 - `modules/agents.nix` for Executor config deployment (`~/.executor/`), MCP configs, and global Copilot agent skills
 
 The coding profile also installs `calldiff`, a call-stack diff CLI for agentic
-code review; its skill is merged into the deployed `~/.agents/skills` tree.
+code review. The CLI documents its own commands (`calldiff --help`), so the
+agents module does not deploy a skill wrapper for it.
 
 ## Updating versions
 
