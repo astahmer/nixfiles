@@ -70,6 +70,11 @@
           backup="$target.migrated.$(${pkgs.coreutils}/bin/date +%Y%m%d%H%M%S)"
           mv "$target" "$backup"
           echo "secret: machine-local global config moved to $backup" >&2
+          stranded="$(${pkgs.jq}/bin/jq -r --slurpfile tracked "${globalSecretConfig}" \
+            '(.secrets // {}) | keys - (($tracked[0].secrets // {}) | keys) | join(", ")' "$backup" 2>/dev/null || true)"
+          if [ -n "$stranded" ]; then
+            warnEcho "secret: aliases only in the machine-local config are no longer resolvable: $stranded. Add them to nixfiles assets/secret/global.json (kept in $backup)."
+          fi
         fi
         ln -sfn "${globalSecretConfig}" "$target"
       '';
