@@ -92,6 +92,13 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 - `nixfiles-check` (alias: `nixcheck`) runs formatting, dead-code, whitespace, and flake checks from a checkout root.
 - `sudo nixos-rebuild switch --flake "$NH_FLAKE#workstation"` (alias: `nixos-switch` on NixOS)
 
+## Product and UI
+
+- Before adding code for an unlikely or hypothetical race or security problem, explain in simple words what could go wrong, how likely it is, and how much extra code it needs. Wait for the user's OK before adding it. Do not add guards for problems that cannot happen in practice.
+- Remove taglines, helper text, and secondary labels. If the screen needs them to make sense, fix the layout instead.
+- Use existing components, sizes, variants, interaction patterns, and design tokens first.
+- Say whether a UI change affects page layout or a component's internal styling.
+
 ## Notes for Agents
 
 - Global-scope secret aliases (the `secret` CLI's global config) live in the git-synced file `assets/secret/global.json`; Home Manager symlinks `~/.config/secret/config.json` to it through the `~/.config/nixfiles` stable pointer, so `secret set --global` edits land in the working copy and jj snapshots them — push so other machines see new aliases. Machine-specific overrides belong in `.secret.local.json`.
