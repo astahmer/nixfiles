@@ -69,7 +69,7 @@ list_term() {
   print_row "secretbar" "" "macOS menu bar launcher: search, copy, Touch ID unlock for secret"
   print_row "herdr / iris / opencode" "" "Agent multiplexer + command suggest + coding agent"
   print_row "tokitoki" "" "Usage analytics, quota polling, reports, and the macOS menu bar"
-  print_row "dsh-traces" "" "Local OpenTelemetry viewer for DSH traces/metrics (UI :8000, OTLP :4318)"
+  print_row "dsh-traces" "" "Local OpenTelemetry viewer for DSH traces/metrics (UI :8000, OTLP :14318)"
   print_row "cursor-agent" "" "Cursor Agent CLI for terminal and T3 Code"
   print_row "codex" "" "OpenAI Codex CLI for terminal and T3 Code"
   print_row "pi-watchdog" "" "RSS timeline for pi agents + auto V8 heap snapshots"

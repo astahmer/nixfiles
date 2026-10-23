@@ -40,13 +40,15 @@
         isExecutable = true;
       };
       # otel-desktop-viewer comes prebuilt from cache.nixos.org (Go binary with an embedded UI); it keeps
-      # telemetry in an in-memory DuckDB unless `--db <file>` is passed through.
+      # telemetry in an in-memory DuckDB unless `--db <file>` is passed through. It listens on 14318/14317 because
+      # the in-DSH viewer (@dshfiles/traces) owns the standard 4318; set that plugin's mode to `both` with
+      # forwardUrl http://127.0.0.1:14318 to see the same telemetry here too.
       dshTraces = pkgs.writeShellApplication {
         name = "dsh-traces";
         runtimeInputs = [ pkgs.otel-desktop-viewer ];
         text = ''
-          echo "dsh-traces: UI http://127.0.0.1:8000 — OTLP HTTP http://127.0.0.1:4318, gRPC 127.0.0.1:4317"
-          exec otel-desktop-viewer --host 127.0.0.1 --http 4318 --grpc 4317 --browser-port 8000 "$@"
+          echo "dsh-traces: UI http://127.0.0.1:8000 — OTLP HTTP http://127.0.0.1:14318, gRPC 127.0.0.1:14317"
+          exec otel-desktop-viewer --host 127.0.0.1 --http 14318 --grpc 14317 --browser-port 8000 "$@"
         '';
       };
     in
@@ -57,10 +59,11 @@
         description = "Where the dshfiles checkout lives on this machine; hosts override it when it is elsewhere.";
       };
 
-      # Opt-in: with it, the supervised `dsh web` (dsh-web, dsh-start, the app bundle) exports OTLP to the local
-      # `dsh-traces` viewer. Off by default so DSH never retries an endpoint nobody listens on.
+      # Opt-in: with it, the supervised `dsh web` (dsh-web, dsh-start, the app bundle) exports OTLP to 4318, which
+      # the in-DSH traces viewer (@dshfiles/traces) receives. Point `endpoint` at http://127.0.0.1:14318 to send
+      # straight to `dsh-traces` instead. Off by default so DSH never retries an endpoint nobody listens on.
       options.dsh.otelExport = {
-        enable = lib.mkEnableOption "OTLP export from the supervised dsh web Host to the local dsh-traces viewer";
+        enable = lib.mkEnableOption "OTLP export from the supervised dsh web Host to the local traces viewer";
         endpoint = lib.mkOption {
           type = lib.types.str;
           default = "http://127.0.0.1:4318";
