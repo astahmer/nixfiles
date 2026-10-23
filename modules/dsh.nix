@@ -72,15 +72,15 @@
       };
 
       config = {
-        # dshfiles owns the web profile reconciler (scripts/profile-sync.ts); the dsh web supervisor runs it before
+        # dshfiles owns the web profile reconciler (scripts/profile-sync.ts); the dsh-web supervisor runs it before
         # every start, so this only applies seed changes early. A failure warns: the next start retries it.
         home.activation.dshWebProfile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
           checkout="${config.dsh.dshfilesCheckout}"
           if [ ! -f "$checkout/scripts/profile-sync.ts" ]; then
-            warnEcho "No dshfiles profile reconciler in $checkout; dsh web syncs the web profile once it exists."
+            warnEcho "No dshfiles profile reconciler in $checkout; dsh-web syncs the web profile once it exists."
           elif ! run env PNPM_HOME="$HOME/.local/share/pnpm" PNPM_STORE_DIR="$HOME/.local/share/pnpm/store" \
             /bin/zsh -lc 'fnm exec --using=v22.23.3 -- node "$1/scripts/profile-sync.ts" --profile web' dsh-profile-sync "$checkout"; then
-            warnEcho "The dshfiles web profile sync failed; dsh web retries it on its next start."
+            warnEcho "The dshfiles web profile sync failed; dsh-web retries it on its next start."
           fi
         '';
         home.file.".dsh/AGENTS.md".source =
@@ -96,27 +96,15 @@
         home.shellAliases.dshstart = "dsh-start";
         home.packages = [ dshTraces ];
 
-        # `dsh web` runs the supervised launcher, so it gets the same environment
-        # as the app bundle. `dsh lkg` starts the last known good snapshot instead
-        # of the live installation. The recovery script is self-contained: it reads only the
-        # snapshot store, never the repository, the pnpm global install or the live
-        # ~/.dsh profile, so it still works after an agent breaks the main install.
-        # Every other subcommand delegates to the real CLI unchanged.
+        # DSH 0.2.1 loads node-addon-require-builtin, which scans the Node binary for an internal getter that
+        # nixpkgs Node builds lack, so the real CLI runs on the fnm Node DSH supports with its arguments unchanged.
+        # The supervised Host is `dsh-web`; the last known good snapshot is `dsh-lkg`. The recovery script reads
+        # only the snapshot store, never the repository, the pnpm global install or the live ~/.dsh profile, so it
+        # still works after an agent breaks the main install.
+        home.shellAliases.dsh-lkg = "dsh-recover";
         programs.zsh.initContent = lib.mkAfter ''
           dsh() {
-            case "''${1:-}" in
-              lkg)
-                shift
-                exec "$HOME/.local/bin/dsh-recover" "$@"
-                ;;
-              web)
-                shift
-                "$HOME/.local/bin/dsh-web" "$@"
-                ;;
-              *)
-                fnm exec --using=v22.23.3 -- dsh "$@"
-                ;;
-            esac
+            fnm exec --using=v22.23.3 -- dsh "$@"
           }
 
           # dshx is built inside the dshfiles checkout, not installed globally;
