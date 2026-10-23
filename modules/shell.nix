@@ -506,7 +506,7 @@ in
 
       home.file.".config/pnpm/config.yaml".text = ''
         packageImportMethod: clone-or-copy
-        enableGlobalVirtualStore: true
+        enableGlobalVirtualStore: false
         storeDir: ${pnpmHome}/store
       '';
 
