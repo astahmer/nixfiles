@@ -66,6 +66,9 @@ in
               # native copier disabled because GUI packages stay out of the
               # profile to avoid duplicate app discovery.
               targets.darwin.copyApps.enable = false;
+
+              # Send dshfiles traces and metrics to the local `dsh-traces` viewer.
+              dsh.otelExport.enable = true;
             }
           )
         ];
