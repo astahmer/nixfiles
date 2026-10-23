@@ -20,13 +20,27 @@ if [[ ! "$login_user" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 1
 fi
 
-if [[ "$nix_conf" == "/etc/nix/nix.conf" && "$EUID" -ne 0 ]]; then
-  exec /usr/bin/sudo -H -- "$0" "$@"
-fi
-
 cache_substituters="https://cache.numtide.com https://devenv.cachix.org https://cachix.cachix.org"
 cache_keys="niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g= devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw= cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM="
 include_line="!include $managed_conf"
+managed_content="$(printf '%s\n' \
+  "# Managed by nixfiles-configure-nix-cache; edit the nixfiles source instead." \
+  "trusted-users = root $login_user" \
+  "extra-experimental-features = nix-command flakes" \
+  "extra-substituters = $cache_substituters" \
+  "extra-trusted-public-keys = $cache_keys" \
+  "max-jobs = auto")"
+
+# Without changes there is nothing to write and no daemon to restart, so skip sudo.
+if [[ -f "$managed_conf" && "$(<"$managed_conf")" == "$managed_content" && -e "$nix_conf" ]] \
+  && grep -Fqx "$include_line" "$nix_conf"; then
+  echo "nixfiles-configure-nix-cache: Nix CLI features, binary caches, and max-jobs=auto already configured"
+  exit 0
+fi
+
+if [[ "$nix_conf" == "/etc/nix/nix.conf" && "$EUID" -ne 0 ]]; then
+  exec /usr/bin/sudo -H -- "$0" "$@"
+fi
 
 managed_tmp="$(mktemp "${managed_conf}.tmp.XXXXXX")"
 main_tmp=""
@@ -38,13 +52,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-printf '%s\n' \
-  "# Managed by nixfiles-configure-nix-cache; edit the nixfiles source instead." \
-  "trusted-users = root $login_user" \
-  "extra-experimental-features = nix-command flakes" \
-  "extra-substituters = $cache_substituters" \
-  "extra-trusted-public-keys = $cache_keys" \
-  "max-jobs = auto" > "$managed_tmp"
+printf '%s\n' "$managed_content" > "$managed_tmp"
 install -m 0644 "$managed_tmp" "$managed_conf"
 
 if [[ ! -e "$nix_conf" ]] || ! grep -Fqx "$include_line" "$nix_conf"; then
