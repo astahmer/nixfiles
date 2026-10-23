@@ -29,6 +29,7 @@
           # The app bundle starts through a login shell, where /usr/bin (Apple git 2.39) precedes the Nix profile;
           # jj needs git >= 2.41 for `jj git fetch`, which the Host's jj-integration runs.
           gitBin = "${pkgs.git}/bin";
+          jjBin = "${config.programs.jujutsu.package}/bin";
         };
         isExecutable = true;
       };
