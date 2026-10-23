@@ -30,8 +30,24 @@
           # jj needs git >= 2.41 for `jj git fetch`, which the Host's jj-integration runs.
           gitBin = "${pkgs.git}/bin";
           jjBin = "${config.programs.jujutsu.package}/bin";
+          # A value already in the launching environment wins, so one run can point elsewhere.
+          otelEnv = lib.optionalString config.dsh.otelExport.enable ''
+            OTEL_EXPORTER_OTLP_ENDPOINT="''${OTEL_EXPORTER_OTLP_ENDPOINT:-${config.dsh.otelExport.endpoint}}"
+            OTEL_SERVICE_NAME="''${OTEL_SERVICE_NAME:-dshfiles}"
+            export OTEL_EXPORTER_OTLP_ENDPOINT OTEL_SERVICE_NAME
+          '';
         };
         isExecutable = true;
+      };
+      # otel-desktop-viewer comes prebuilt from cache.nixos.org (Go binary with an embedded UI); it keeps
+      # telemetry in an in-memory DuckDB unless `--db <file>` is passed through.
+      dshTraces = pkgs.writeShellApplication {
+        name = "dsh-traces";
+        runtimeInputs = [ pkgs.otel-desktop-viewer ];
+        text = ''
+          echo "dsh-traces: UI http://127.0.0.1:8000 — OTLP HTTP http://127.0.0.1:4318, gRPC 127.0.0.1:4317"
+          exec otel-desktop-viewer --host 127.0.0.1 --http 4318 --grpc 4317 --browser-port 8000 "$@"
+        '';
       };
     in
     {
@@ -39,6 +55,17 @@
         type = lib.types.str;
         default = "${config.home.homeDirectory}/dev/dshfiles";
         description = "Where the dshfiles checkout lives on this machine; hosts override it when it is elsewhere.";
+      };
+
+      # Opt-in: with it, the supervised `dsh web` (dsh-web, dsh-start, the app bundle) exports OTLP to the local
+      # `dsh-traces` viewer. Off by default so DSH never retries an endpoint nobody listens on.
+      options.dsh.otelExport = {
+        enable = lib.mkEnableOption "OTLP export from the supervised dsh web Host to the local dsh-traces viewer";
+        endpoint = lib.mkOption {
+          type = lib.types.str;
+          default = "http://127.0.0.1:4318";
+          description = "OTEL_EXPORTER_OTLP_ENDPOINT given to the supervised dsh web Host (OTEL_SERVICE_NAME=dshfiles).";
+        };
       };
 
       config = {
@@ -64,6 +91,7 @@
         home.file.".local/bin/dsh-web-supervisor.mjs".source = ../assets/dsh/supervise-web.mjs;
         home.file.".local/bin/dsh-start".source = dshStartAlias;
         home.shellAliases.dshstart = "dsh-start";
+        home.packages = [ dshTraces ];
 
         # `dsh web` runs the supervised launcher, so it gets the same environment
         # as the app bundle. `dsh lkg` starts the last known good snapshot instead

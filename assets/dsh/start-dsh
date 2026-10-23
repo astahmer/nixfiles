@@ -13,4 +13,6 @@ export DSHFILES_DIR
 PATH="@gitBin@:@jjBin@:$PATH"
 export PATH
 
+@otelEnv@
+
 exec /usr/bin/caffeinate -i fnm exec --using=v22.23.3 -- node "$HOME/.local/bin/dsh-web-supervisor.mjs" "$@"
