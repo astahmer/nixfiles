@@ -1,6 +1,7 @@
 set -euo pipefail
 
 nixfiles-configure-nix-cache
+nixfiles-absolute-worktrees
 
 flake="${NH_FLAKE:-}"
 if [ -z "$flake" ] || [ ! -f "$flake/flake.nix" ]; then

@@ -257,12 +257,19 @@ in
         text = builtins.readFile ../scripts/check.sh;
       };
 
+      nixfilesAbsoluteWorktrees = pkgs.writeShellApplication {
+        name = "nixfiles-absolute-worktrees";
+        runtimeInputs = [ pkgs.git ];
+        text = builtins.readFile ../scripts/absolute-worktrees.sh;
+      };
+
       nixfilesUpdateAll = pkgs.writeShellApplication {
         name = "nixfiles-update-all";
         runtimeInputs = [
           pkgs.nix
           pkgs.nix-output-monitor
           nixfilesConfigureNixCache
+          nixfilesAbsoluteWorktrees
           inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
         ];
         text = builtins.readFile ../scripts/update-all.sh;
@@ -281,6 +288,7 @@ in
         inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
         nixfilesBootstrap
         nixfilesConfigureNixCache
+        nixfilesAbsoluteWorktrees
         nixfilesCheck
         nixfilesUpdateAll
         jjPrompt
