@@ -31,6 +31,9 @@ in
       agentsWithSkillOverlays = pkgs.runCommandLocal "agents-with-overlays" { } ''
         mkdir -p "$out/skills"
         cp "${inputs.agents}/AGENTS.md" "$out/AGENTS.md"
+        substituteInPlace "$out/AGENTS.md" \
+          --replace 'title, a body explaining why, and a `Co-Authored-By` trailer.' \
+            'title and a body explaining why. Do not add `Co-Authored-By` trailers or local agent handles to commit metadata; they are not GitHub collaborators.'
         cp -R --no-preserve=mode "${inputs.agents}/.agents/skills/." "$out/skills/"
 
         # emilint owns executable lint assets and their companion guidance. The
