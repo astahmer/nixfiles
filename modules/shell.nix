@@ -241,6 +241,12 @@ in
       nixfilesConfigureNixCache =
         inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.configure-nix-cache;
 
+      nixfilesAbsoluteWorktrees = pkgs.writeShellApplication {
+        name = "nixfiles-absolute-worktrees";
+        runtimeInputs = [ pkgs.git ];
+        text = builtins.readFile ../scripts/absolute-worktrees.sh;
+      };
+
       nixfilesCheck = pkgs.writeShellApplication {
         name = "nixfiles-check";
         runtimeInputs = [
@@ -250,6 +256,7 @@ in
           pkgs.nix
           pkgs.nixfmt
           pkgs.oxlint
+          nixfilesAbsoluteWorktrees
         ];
         runtimeEnv = {
           EMILINT_SOURCE = inputs.emilint;
@@ -257,10 +264,16 @@ in
         text = builtins.readFile ../scripts/check.sh;
       };
 
-      nixfilesAbsoluteWorktrees = pkgs.writeShellApplication {
-        name = "nixfiles-absolute-worktrees";
-        runtimeInputs = [ pkgs.git ];
-        text = builtins.readFile ../scripts/absolute-worktrees.sh;
+      # Nix's libgit2 cannot open a repository whose worktrees carry relative
+      # paths, which jj enables for every colocated workspace, so repair the
+      # repositories nh is about to read before it evaluates the flake.
+      nixfilesNh = pkgs.writeShellApplication {
+        name = "nh";
+        runtimeInputs = [ nixfilesAbsoluteWorktrees ];
+        text = ''
+          nixfiles-absolute-worktrees
+          exec ${inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh}/bin/nh "$@"
+        '';
       };
 
       nixfilesUpdateAll = pkgs.writeShellApplication {
@@ -285,7 +298,7 @@ in
         # nh pipes builds through nom by default and fails with a bare ENOENT
         # when it is not on PATH.
         pkgs.nix-output-monitor
-        inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.nh
+        nixfilesNh
         nixfilesBootstrap
         nixfilesConfigureNixCache
         nixfilesAbsoluteWorktrees

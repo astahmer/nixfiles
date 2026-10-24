@@ -9,6 +9,8 @@ fi
 
 cd "$root"
 
+nixfiles-absolute-worktrees "$root"
+
 if ! command -v jj >/dev/null 2>&1; then
   echo "nixfiles-check: jj is required for revision and whitespace checks" >&2
   exit 1
