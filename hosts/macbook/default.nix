@@ -67,8 +67,8 @@ in
               # profile to avoid duplicate app discovery.
               targets.darwin.copyApps.enable = false;
 
-              # Send dshfiles traces and metrics to the local `dsh-traces` viewer.
-              dsh.otelExport.enable = true;
+              # dshfiles telemetry reaches the in-DSH Traces panel in-process; set this only to export elsewhere.
+              dsh.otelExport.enable = false;
             }
           )
         ];
