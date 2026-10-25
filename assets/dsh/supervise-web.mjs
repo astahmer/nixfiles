@@ -23,6 +23,8 @@ const MAX_HEALTH_RESTARTS = Number(process.env.DSH_WEB_MAX_HEALTH_RESTARTS) || 2
 // deterministically broken build cannot spin forever.
 const MAX_CRASH_RESTARTS = Number(process.env.DSH_WEB_MAX_CRASH_RESTARTS) || 5
 const CRASH_RESTART_BACKOFF_MS = Number(process.env.DSH_WEB_CRASH_RESTART_BACKOFF_MS) || 2_000
+const SCRATCH_REAP_INTERVAL_MS = 10 * 60_000
+const SCRATCH_REAP_MIN_AGE_SECONDS = 60 * 60
 const dshHome = resolve(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'))
 process.env.DSH_HOME = dshHome
 process.env.DSH_CHANNEL_PACK_STATE_DIR = dshHome
@@ -33,19 +35,21 @@ await mkdir(dirname(channelPackStatePath), { recursive: true, mode: 0o700 })
 try {
   const stateFile = await open(channelPackStatePath, 'wx', 0o600)
   try {
-    await stateFile.writeFile(`${JSON.stringify(
-      {
-        schema: 'dsh-codearts-auth/auto-checkin/v1',
-        enabled: false,
-        lastDate: '',
-        lastResult: '',
-        lastAt: 0,
-        channels: [],
-        dismissedRunAt: 0,
-      },
-      null,
-      2,
-    )}\n`)
+    await stateFile.writeFile(
+      `${JSON.stringify(
+        {
+          schema: 'dsh-codearts-auth/auto-checkin/v1',
+          enabled: false,
+          lastDate: '',
+          lastResult: '',
+          lastAt: 0,
+          channels: [],
+          dismissedRunAt: 0,
+        },
+        null,
+        2,
+      )}\n`,
+    )
   } catch (error) {
     await unlink(channelPackStatePath).catch(() => undefined)
     throw error
@@ -70,6 +74,7 @@ let stopping = false
 let stopCode = 0
 let child
 let syncChild
+let scratchCleanupChild
 
 const stopChild = signal => {
   if (stopping) return
@@ -81,6 +86,8 @@ const stopChild = signal => {
       process.kill(-syncChild.pid, 'SIGTERM')
     } catch {}
   }
+  if (scratchCleanupChild?.exitCode === null) scratchCleanupChild.kill(signal)
+  clearInterval(scratchCleanupTimer)
   for (const cancel of [...stopWaiters]) cancel()
 }
 
@@ -102,6 +109,29 @@ const delay = milliseconds =>
   })
 
 const warn = message => process.stderr.write(`[dsh-web-supervisor] ${message}\n`)
+
+const reapRecordedScratchHosts = () => {
+  const dshfilesDirectory = process.env.DSHFILES_DIR?.trim()
+  const script = dshfilesDirectory ? join(dshfilesDirectory, 'tooling', 'dshx', 'scripts', 'reap-scratch-processes.mjs') : undefined
+  if (script === undefined || !existsSync(script) || scratchCleanupChild?.exitCode === null) return
+  scratchCleanupChild = spawn(process.execPath, [script, '--all-workspaces', '--min-age-seconds', String(SCRATCH_REAP_MIN_AGE_SECONDS), '--quiet'], {
+    cwd: dshfilesDirectory,
+    stdio: 'ignore',
+  })
+  const launchedCleanup = scratchCleanupChild
+  launchedCleanup.once('error', error => {
+    if (scratchCleanupChild === launchedCleanup) scratchCleanupChild = undefined
+    warn(`Could not reap abandoned scratch check hosts: ${error.message}`)
+  })
+  launchedCleanup.once('exit', code => {
+    if (scratchCleanupChild === launchedCleanup) scratchCleanupChild = undefined
+    if (code !== 0) warn(`Scratch check cleanup exited with status ${String(code)}.`)
+  })
+}
+
+const scratchCleanupTimer = setInterval(reapRecordedScratchHosts, SCRATCH_REAP_INTERVAL_MS)
+scratchCleanupTimer.unref()
+reapRecordedScratchHosts()
 
 // dshfiles owns the profile reconciler; run it before every start so seed and plugin changes land on restart without
 // nixapply. It must never block startup: on failure or timeout DSH starts with the profile it already has.
@@ -133,9 +163,7 @@ const syncProfile = () =>
       resolveSync()
     }
     launchedSync.once('error', error => finish(`Could not run the web profile sync: ${error.message}`))
-    launchedSync.once('exit', (code, signal) =>
-      finish(code === 0 ? undefined : `The web profile sync failed (${signal ?? `exit ${code}`})`),
-    )
+    launchedSync.once('exit', (code, signal) => finish(code === 0 ? undefined : `The web profile sync failed (${signal ?? `exit ${code}`})`))
   })
 
 process.once('SIGINT', () => stopChild('SIGINT'))
