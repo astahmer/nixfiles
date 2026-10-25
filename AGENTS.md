@@ -111,7 +111,11 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
   Session: codex://threads/<thread-id>
   prompt_summary: user wants an ssh multiplexer module shared by both hosts
   ```
-- `ast-outline` (installed via `nixbootstrap`) is the primary code-exploration tool. The canonical agent snippet lives in the `agents` repository `AGENTS.md` inside `<!-- ast-outline:start -->` markers; a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
+- `ast-outline` (installed via `nixbootstrap`) is the primary structural
+  code-exploration tool; Agent `grep`/`glob` handle lexical search and path
+  discovery (fff-backed in DSH web). The canonical snippet lives in the
+  `agents` repository `AGENTS.md` inside `<!-- ast-outline:start -->` markers;
+  a Cursor rule is at `assets/.cursor/rules/ast-outline.mdc`.
 - `jje <base>` is a shell function (defined in `modules/shell.nix`) that duplicates a commit range (`<base>::@`) then squashes the original — preserves evolution history while producing a single clean commit. Shell reload after applying.
 - To unify recent parallel work, rebase each branch and its descendants with `jj rebase -b <branch-head> -o <destination>`, stacking branches oldest to newest and using the previous tip as the next destination. Resolve conflicts from the oldest commit upward, inspect the resulting history and workspace heads, then leave the default workspace working copy above the unified tip. Check `jj workspace list` first and preserve work owned by other active workspaces.
 - Optional workspace test configs `.cursor/mcp.json` and `.vscode/mcp.json` now also route through the local Executor instance (`executor mcp`) instead of repo-local MCP servers.

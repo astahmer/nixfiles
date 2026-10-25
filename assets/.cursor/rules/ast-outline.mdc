@@ -5,6 +5,10 @@ alwaysApply: true
 
 # Code exploration — prefer `ast-outline` over full reads
 
+Use `Grep`/`Glob` for lexical text search and path discovery; in the DSH web
+profile these are backed by `fff-search`. `ast-outline` is the complementary
+structural view for supported languages, not a replacement for text search.
+
 For supported languages, use `ast-outline` to read structure before opening full contents.
 
 ## Broad-to-narrow menu
@@ -26,6 +30,8 @@ For supported languages, use `ast-outline` to read structure before opening full
 
 ## Fallback
 
-Use native Read / Grep / Glob when `ast-outline` is unavailable or for unsupported file formats.
+Use `Read` when you need content beyond the outline or when `ast-outline` is
+unavailable. Use `Grep`/`Glob` for lexical search and path discovery as described
+above, regardless of whether `ast-outline` is available.
 
 Full guide: `~/.agents/skills/ast-outline/SKILL.md`
