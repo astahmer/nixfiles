@@ -16,7 +16,10 @@ for repo in "${repos[@]}"; do
   if [ "$(git --git-dir="$common_dir" config --get extensions.relativeworktrees || true)" != true ]; then
     continue
   fi
-  git --git-dir="$common_dir" worktree repair --no-relative-paths
-  git --git-dir="$common_dir" config --unset extensions.relativeworktrees
+  # A deleted workspace leaves an admin entry whose gitdir no longer exists;
+  # repair aborts on that mismatch, so drop the dead entries first.
+  git -C "$repo" worktree prune
+  git -C "$repo" worktree repair --no-relative-paths
+  git -C "$repo" config --unset extensions.relativeWorktrees
   echo "nixfiles-absolute-worktrees: rewrote worktrees in $common_dir with absolute paths so Nix can read it"
 done

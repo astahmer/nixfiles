@@ -608,5 +608,26 @@ in
           warn_timeout = "0s";
         };
       };
+
+      # Nix's libgit2 refuses a repository whose git worktrees carry relative
+      # paths, and every colocated `jj workspace add` turns that on. Let direnv
+      # repair the flake it is about to evaluate: nix-direnv sources this after
+      # its own lib, so `use flake` runs on absolute worktrees instead of
+      # falling back to the previous shell when a workspace was just added.
+      home.file.".config/direnv/lib/zz-nixfiles-worktrees.sh".text = ''
+        # -*- mode: sh -*-
+        if declare -F use_flake >/dev/null 2>&1; then
+          _nixfiles_use_flake_body="$(declare -f use_flake)"
+          _nixfiles_use_flake_body="''${_nixfiles_use_flake_body#*$'\n'}"
+          eval "nixfiles_use_flake_orig () $_nixfiles_use_flake_body"
+          unset _nixfiles_use_flake_body
+          use_flake() {
+            _nixfiles_repo="''${DIRENV_DIR:-$PWD}"
+            _nixfiles_repo="''${_nixfiles_repo#-}"
+            "${nixfilesAbsoluteWorktrees}/bin/nixfiles-absolute-worktrees" "$_nixfiles_repo" >/dev/null 2>&1 || true
+            nixfiles_use_flake_orig "$@"
+          }
+        fi
+      '';
     };
 }
