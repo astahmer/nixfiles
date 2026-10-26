@@ -30,6 +30,8 @@
           # jj needs git >= 2.41 for `jj git fetch`, which the Host's jj-integration runs.
           gitBin = "${pkgs.git}/bin";
           jjBin = "${config.programs.jujutsu.package}/bin";
+          # A dev-shell launch strips this bin from PATH; the Host still needs `secret` and `direnv` from it.
+          profileBin = "${config.home.profileDirectory}/bin";
           # A value already in the launching environment wins, so one run can point elsewhere.
           otelEnv = lib.optionalString config.dsh.otelExport.enable ''
             OTEL_EXPORTER_OTLP_ENDPOINT="''${OTEL_EXPORTER_OTLP_ENDPOINT:-${config.dsh.otelExport.endpoint}}"
