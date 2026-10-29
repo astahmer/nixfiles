@@ -70,17 +70,45 @@ const LAUNCH_URL_PATTERN = /^dsh web: (http:\/\/\S+\?token=\S+)$/m
 const forwardedArgs = process.argv.slice(2)
 const hasPort = forwardedArgs.some(argument => argument === '--port' || argument.startsWith('--port='))
 const webArgs = ['web', ...(hasPort ? [] : ['--port', '3080']), ...forwardedArgs]
+const STOP_GRACE_MS = 10_000
 let stopping = false
 let stopCode = 0
 let child
 let syncChild
 let scratchCleanupChild
 
+// DSH runs in its own process group so a stop reaches its subprocesses too, and a terminal Ctrl+C reaches it only
+// through here.
+const signalGroup = (target, signal) => {
+  if (target?.exitCode !== null || target.pid === undefined) return
+  try {
+    process.kill(-target.pid, signal)
+  } catch {
+    target.kill(signal)
+  }
+}
+
+const forceStop = () => {
+  signalGroup(child, 'SIGKILL')
+  if (syncChild?.exitCode === null) {
+    try {
+      process.kill(-syncChild.pid, 'SIGKILL')
+    } catch {}
+  }
+  process.exit(stopCode)
+}
+
 const stopChild = signal => {
-  if (stopping) return
+  // A second Ctrl+C, or a DSH still booting past the grace period, must not leave the Host running after the shell
+  // prompt returns.
+  if (stopping) {
+    forceStop()
+    return
+  }
   stopping = true
   stopCode = signal === 'SIGINT' ? 130 : 143
-  if (child?.exitCode === null) child.kill(signal)
+  signalGroup(child, signal)
+  setTimeout(forceStop, STOP_GRACE_MS).unref()
   if (syncChild?.exitCode === null) {
     try {
       process.kill(-syncChild.pid, 'SIGTERM')
@@ -166,8 +194,8 @@ const syncProfile = () =>
     launchedSync.once('exit', (code, signal) => finish(code === 0 ? undefined : `The web profile sync failed (${signal ?? `exit ${code}`})`))
   })
 
-process.once('SIGINT', () => stopChild('SIGINT'))
-process.once('SIGTERM', () => stopChild('SIGTERM'))
+process.on('SIGINT', () => stopChild('SIGINT'))
+process.on('SIGTERM', () => stopChild('SIGTERM'))
 
 // dsh-lkg builds a candidate, boots it on its own port with its own state, and
 // promotes it only when the Host and the browser half both pass; --if-changed
@@ -255,6 +283,7 @@ const runDsh = runId =>
         DSH_RESTART_RUN_ID: runId,
       },
       stdio: ['inherit', 'pipe', 'inherit'],
+      detached: true,
     })
     const launchedChild = child
     let refreshTimer
@@ -281,7 +310,7 @@ const runDsh = runId =>
             }
             healthFailure = reason
             warn(`DSH answers HTTP but its Session surface is unavailable (${reason}); restarting it.`)
-            launchedChild.kill('SIGTERM')
+            signalGroup(launchedChild, 'SIGTERM')
           })
         },
         attempt === 0 ? HEALTH_PROBE_GRACE_MS : HEALTH_PROBE_INTERVAL_MS,
