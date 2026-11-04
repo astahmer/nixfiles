@@ -6,7 +6,8 @@ Local clones under `~/.references/` (globally shared). Refresh with the `referen
 | --- | --- | --- | --- |
 | composto | https://github.com/mertcanaltin/composto | `~/.references/composto` | IR LOD (L0–L3), blast radius hooks, CLI — upstream for layer semantics |
 | cachebro | https://github.com/glommer/cachebro | `~/.references/cachebro` | Raw read cache (reference only — benchmark baseline) |
-| effect | https://github.com/Effect-TS/effect | `~/.references/effect` | Effect, Platform, CLI, `@effect/ai` MCP patterns |
+| effect-4.1.0 | https://github.com/Effect-TS/effect (tag `effect@4.1.0`) | `~/.references/effect-4.1.0` | Effect 4.1 APIs: Schema, Platform, CLI, `@effect/ai` MCP patterns |
+| effect (4.0 RC) | https://github.com/Effect-TS/effect | `~/.references/effect` | Stale 4.0.0-rc.111 checkout; only for projects still on the RC |
 | neolectron/nixfiles | https://github.com/neolectron/nixfiles | `~/.references/manu-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
 | Vincent-HD/.nixfiles | https://github.com/Vincent-HD/.nixfiles | `~/.references/vincent-nixfiles` (+ `.references/vincent-nixfiles`) | nix-darwin + home-manager; command-line overview/cockpit inspiration for `cli-tools` |
 | Christopher2K/NixConfig | https://github.com/Christopher2K/NixConfig | `~/.references/chris2-nixfiles` | flake-parts NixOS/nix-darwin config (multi-host) |
