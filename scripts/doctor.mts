@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_MIN_FREE_GIB = 20;
@@ -36,7 +36,7 @@ export type DuplicateBundleGroup = {
 	bundles: BundleEntry[];
 };
 
-export type BundleSource = "shadow" | "legacy Home Manager Apps" | "nix" | "system";
+export type BundleSource = "nix-managed" | "legacy Home Manager Apps" | "unmanaged" | "system";
 
 type DirectoryEntry = {
 	name: string;
@@ -306,22 +306,53 @@ export const collectBundles = ({ roots }: { roots: string[] }) => {
 export const classifyBundle = ({
 	path,
 	applicationsRoot,
+	stampsRoot,
 }: {
 	path: string;
 	applicationsRoot: string;
+	stampsRoot: string;
 }): BundleSource => {
 	const directory = dirname(path);
-	if (directory === applicationsRoot) return "shadow";
+	if (directory === applicationsRoot) {
+		return existsSync(join(stampsRoot, `${basename(path)}.source`)) ? "nix-managed" : "unmanaged";
+	}
 	if (directory === join(applicationsRoot, "Home Manager Apps")) return "legacy Home Manager Apps";
-	if (path.startsWith("/nix/store/")) return "nix";
+	if (path.startsWith("/nix/store/")) return "nix-managed";
 	return "system";
 };
 
-export const formatDuplicateGroup = (group: DuplicateBundleGroup, applicationsRoot: string) => {
+export type DuplicateDisposition = "warning" | "info" | "ignore";
+
+export const duplicateDisposition = ({
+	group,
+	applicationsRoot,
+	stampsRoot,
+}: {
+	group: DuplicateBundleGroup;
+	applicationsRoot: string;
+	stampsRoot: string;
+}): DuplicateDisposition => {
+	const sources = group.bundles.map((bundle) =>
+		classifyBundle({ path: bundle.path, applicationsRoot, stampsRoot }),
+	);
+	const hasUnmanaged = sources.includes("unmanaged");
+	const hasManaged = sources.includes("nix-managed");
+	const hasSystem = sources.includes("system");
+
+	if (hasUnmanaged && (hasManaged || hasSystem)) return "warning";
+	if (hasManaged && hasSystem) return "info";
+	return "ignore";
+};
+
+export const formatDuplicateGroup = (
+	group: DuplicateBundleGroup,
+	applicationsRoot: string,
+	stampsRoot: string,
+) => {
 	const bundles = group.bundles
 		.map(
 			(bundle) =>
-				`${classifyBundle({ path: bundle.path, applicationsRoot })}: ${bundle.path} (${formatGib(bundle.sizeKb)} GB)`,
+				`${classifyBundle({ path: bundle.path, applicationsRoot, stampsRoot })}: ${bundle.path} (${formatGib(bundle.sizeKb)} GB)`,
 		)
 		.join(", ");
 	return `${group.bundleId}: ${formatGib(group.totalKb)} GB total — ${bundles}`;
@@ -330,6 +361,7 @@ export const formatDuplicateGroup = (group: DuplicateBundleGroup, applicationsRo
 const collectResults = () => {
 	const home = process.env.HOME || homedir();
 	const applicationsRoot = safeRealpath(join(home, "Applications"));
+	const stampsRoot = safeRealpath(join(home, ".local/state/nixfiles/macos-apps"));
 	const results: CheckResult[] = [];
 
 	const disk = readDiskUsage();
@@ -392,19 +424,33 @@ const collectResults = () => {
 		],
 	});
 	const duplicates = summarizeDuplicateBundles({ bundles, applicationsRoot });
+	const warningGroups = duplicates.filter(
+		(group) => duplicateDisposition({ group, applicationsRoot, stampsRoot }) === "warning",
+	);
+	const infoGroups = duplicates.filter(
+		(group) => duplicateDisposition({ group, applicationsRoot, stampsRoot }) === "info",
+	);
+	const duplicateDetail = [
+		...warningGroups.map((group) => formatDuplicateGroup(group, applicationsRoot, stampsRoot)),
+		...infoGroups.map(
+			(group) => `info: ${formatDuplicateGroup(group, applicationsRoot, stampsRoot)}`,
+		),
+	].join("\n");
 	results.push(
-		duplicates.length
+		warningGroups.length || infoGroups.length
 			? {
 					name: "duplicate bundle ids",
-					status: "warning",
-					detail: duplicates.map((group) => formatDuplicateGroup(group, applicationsRoot)).join("\n"),
+					status: warningGroups.length > 0 ? "warning" : "ok",
+					detail: duplicateDetail,
 					recovery:
-						"remove the shadow copy under ~/Applications; a legacy Home Manager Apps copy is safe to remove when it duplicates a system or installed app",
+						warningGroups.length > 0
+							? "remove the unmanaged copy (no matching .source stamp) under ~/Applications; keep system and nix-managed copies"
+							: undefined,
 				}
 			: {
 					name: "duplicate bundle ids",
 					status: "ok",
-					detail: "no shadow copies directly under ~/Applications",
+					detail: "no unmanaged duplicate app copies",
 				},
 	);
 

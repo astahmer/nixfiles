@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	classifyBundle,
+	duplicateDisposition,
 	evaluateDisk,
 	evaluateNixVersion,
 	findAppHomeLeftovers,
@@ -169,33 +170,119 @@ describe("duplicate bundle groups", () => {
 		expect(duplicates).toEqual([]);
 	});
 
-	test("labels shadow and legacy copies on one summary line", () => {
-		const line = formatDuplicateGroup(
-			{
+	test("labels nix-managed, unmanaged, and legacy copies", () => {
+		withTempDirectory((directory) => {
+			const applicationsRoot = join(directory, "Applications");
+			const stampsRoot = join(directory, "stamps");
+			mkdirSync(stampsRoot, { recursive: true });
+			writeFileSync(join(stampsRoot, "App.app.source"), "");
+
+			const line = formatDuplicateGroup(
+				{
+					bundleId: "com.example.app",
+					totalKb: 3 * 1024 * 1024,
+					bundles: [
+						{
+							bundleId: "com.example.app",
+							path: `${applicationsRoot}/App.app`,
+							sizeKb: 2 * 1024 * 1024,
+						},
+						{
+							bundleId: "com.example.app",
+							path: `${applicationsRoot}/Home Manager Apps/App.app`,
+							sizeKb: 1 * 1024 * 1024,
+						},
+					],
+				},
+				applicationsRoot,
+				stampsRoot,
+			);
+
+			expect(line).toContain("com.example.app: 3.00 GB total");
+			expect(line).toContain(`nix-managed: ${applicationsRoot}/App.app (2.00 GB)`);
+			expect(line).toContain(
+				`legacy Home Manager Apps: ${applicationsRoot}/Home Manager Apps/App.app (1.00 GB)`,
+			);
+			expect(
+				classifyBundle({ path: "/Applications/App.app", applicationsRoot, stampsRoot }),
+			).toBe("system");
+			expect(classifyBundle({ path: "/nix/store/x/App.app", applicationsRoot, stampsRoot })).toBe(
+				"nix-managed",
+			);
+			expect(
+				classifyBundle({ path: `${applicationsRoot}/Other.app`, applicationsRoot, stampsRoot }),
+			).toBe("unmanaged");
+		});
+	});
+
+	test("warns when an unmanaged copy duplicates a system app", () => {
+		withTempDirectory((directory) => {
+			const applicationsRoot = join(directory, "Applications");
+			const stampsRoot = join(directory, "stamps");
+			const group = {
 				bundleId: "com.example.app",
-				totalKb: 3 * 1024 * 1024,
+				totalKb: 0,
 				bundles: [
+					{ bundleId: "com.example.app", path: "/Applications/App.app", sizeKb: 100 },
 					{
 						bundleId: "com.example.app",
 						path: `${applicationsRoot}/App.app`,
-						sizeKb: 2 * 1024 * 1024,
-					},
-					{
-						bundleId: "com.example.app",
-						path: `${applicationsRoot}/Home Manager Apps/App.app`,
-						sizeKb: 1 * 1024 * 1024,
+						sizeKb: 50,
 					},
 				],
-			},
-			applicationsRoot,
-		);
+			};
 
-		expect(line).toContain("com.example.app: 3.00 GB total");
-		expect(line).toContain(`shadow: ${applicationsRoot}/App.app (2.00 GB)`);
-		expect(line).toContain(
-			`legacy Home Manager Apps: ${applicationsRoot}/Home Manager Apps/App.app (1.00 GB)`,
-		);
-		expect(classifyBundle({ path: "/Applications/App.app", applicationsRoot })).toBe("system");
-		expect(classifyBundle({ path: "/nix/store/x/App.app", applicationsRoot })).toBe("nix");
+			expect(duplicateDisposition({ group, applicationsRoot, stampsRoot })).toBe("warning");
+		});
+	});
+
+	test("warns when an unmanaged copy duplicates a nix-managed app", () => {
+		withTempDirectory((directory) => {
+			const applicationsRoot = join(directory, "Applications");
+			const stampsRoot = join(directory, "stamps");
+			mkdirSync(stampsRoot, { recursive: true });
+			writeFileSync(join(stampsRoot, "T3 Code (Nightly).app.source"), "");
+			const group = {
+				bundleId: "com.t3tools.t3code",
+				totalKb: 0,
+				bundles: [
+					{
+						bundleId: "com.t3tools.t3code",
+						path: `${applicationsRoot}/T3 Code (Nightly).app`,
+						sizeKb: 100,
+					},
+					{
+						bundleId: "com.t3tools.t3code",
+						path: `${applicationsRoot}/T3 Code (Alpha).app`,
+						sizeKb: 50,
+					},
+				],
+			};
+
+			expect(duplicateDisposition({ group, applicationsRoot, stampsRoot })).toBe("warning");
+		});
+	});
+
+	test("reports nix-managed and system pairs as info", () => {
+		withTempDirectory((directory) => {
+			const applicationsRoot = join(directory, "Applications");
+			const stampsRoot = join(directory, "stamps");
+			mkdirSync(stampsRoot, { recursive: true });
+			writeFileSync(join(stampsRoot, "App.app.source"), "");
+			const group = {
+				bundleId: "com.example.app",
+				totalKb: 0,
+				bundles: [
+					{ bundleId: "com.example.app", path: "/Applications/App.app", sizeKb: 100 },
+					{
+						bundleId: "com.example.app",
+						path: `${applicationsRoot}/App.app`,
+						sizeKb: 50,
+					},
+				],
+			};
+
+			expect(duplicateDisposition({ group, applicationsRoot, stampsRoot })).toBe("info");
+		});
 	});
 });
