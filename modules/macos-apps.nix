@@ -26,6 +26,7 @@
       visualStudioCode = pkgs.vscode;
       cursor = pkgs."code-cursor";
       monitorControl = pkgs.monitorcontrol;
+      karabinerElements = pkgs."karabiner-elements";
       beekeeperStudio = pkgs."beekeeper-studio";
       chatgpt = pkgs.chatgpt;
       linear = pkgs.linear;
@@ -70,6 +71,7 @@
       macosAppSources = {
         "AltTab.app" = "${pkgs."alt-tab-macos"}/Applications/AltTab.app";
         "Beekeeper Studio.app" = "${beekeeperStudio}/Applications/Beekeeper Studio.app";
+        "Caffeine.app" = "${pkgs.caffeine}/Applications/Caffeine.app";
         "ChatGPT.app" = "${chatgpt}/Applications/ChatGPT.app";
         "Claude.app" = "${claudeDesktop}/Applications/Claude.app";
         "Crisp.app" = "${crisp}/Applications/Crisp.app";
@@ -77,6 +79,8 @@
         "Discord.app" = "${discordBin}/Applications/Discord.app";
         "Ghostty.app" = "${ghosttyBin}/Applications/Ghostty.app";
         "Google Chrome.app" = "${googleChrome}/Applications/Google Chrome.app";
+        "Karabiner-Elements.app" = "${karabinerElements}/Applications/Karabiner-Elements.app";
+        "Karabiner-EventViewer.app" = "${karabinerElements}/Applications/Karabiner-EventViewer.app";
         "Linear.app" = "${linear}/Applications/Linear.app";
         "MonitorControl.app" = "${monitorControl}/Applications/MonitorControl.app";
         "OrbStack.app" = "${pkgs.orbstack}/Applications/OrbStack.app";
