@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	evaluateDisk,
 	evaluateNixVersion,
@@ -19,6 +21,27 @@ const withTempDirectory = (run: (directory: string) => void) => {
 		rmSync(directory, { recursive: true, force: true });
 	}
 };
+
+describe("entry point", () => {
+	test(
+		"runs when invoked through a symlink",
+		() => {
+			withTempDirectory((directory) => {
+				const link = join(directory, "doctor-link.mts");
+				symlinkSync(fileURLToPath(new URL("./doctor.mts", import.meta.url)), link);
+
+				const result = spawnSync("node", [link], {
+					encoding: "utf8",
+					env: { ...process.env, HOME: directory },
+				});
+
+				expect(result.status).toBe(0);
+				expect(result.stdout).toContain("nixfiles-doctor:");
+			});
+		},
+		30000,
+	);
+});
 
 describe("disk check", () => {
 	test("warns below the threshold and keeps the exact df numbers", () => {
@@ -105,13 +128,16 @@ describe("sqlite sidecar directories", () => {
 });
 
 describe("duplicate bundle groups", () => {
+	const applicationsRoot = "/Users/me/Applications";
+
 	test("groups distinct app paths and sums their sizes", () => {
 		const duplicates = summarizeDuplicateBundles({
+			applicationsRoot,
 			bundles: [
 				{ bundleId: "com.example.app", path: "/Applications/App.app", sizeKb: 2 * 1024 * 1024 },
 				{
 					bundleId: "com.example.app",
-					path: "/Users/me/Applications/App.app",
+					path: `${applicationsRoot}/App.app`,
 					sizeKb: 1 * 1024 * 1024,
 				},
 				{ bundleId: "com.example.app", path: "/Applications/App.app", sizeKb: 2 * 1024 * 1024 },
@@ -123,5 +149,21 @@ describe("duplicate bundle groups", () => {
 		expect(duplicates[0].bundleId).toBe("com.example.app");
 		expect(duplicates[0].bundles).toHaveLength(2);
 		expect(duplicates[0].totalKb).toBe(3 * 1024 * 1024);
+	});
+
+	test("ignores system and Home Manager Apps pairs", () => {
+		const duplicates = summarizeDuplicateBundles({
+			applicationsRoot,
+			bundles: [
+				{ bundleId: "com.raycast.macos", path: "/Applications/Raycast.app", sizeKb: 100 },
+				{
+					bundleId: "com.raycast.macos",
+					path: `${applicationsRoot}/Home Manager Apps/Raycast.app`,
+					sizeKb: 50,
+				},
+			],
+		});
+
+		expect(duplicates).toEqual([]);
 	});
 });

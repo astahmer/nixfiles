@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DEFAULT_MIN_FREE_GIB = 20;
@@ -199,8 +199,10 @@ export const findSqliteSidecarDirectories = ({
 
 export const summarizeDuplicateBundles = ({
 	bundles,
+	applicationsRoot,
 }: {
 	bundles: BundleEntry[];
+	applicationsRoot: string;
 }) => {
 	const seen = new Set<string>();
 	const byId = new Map<string, BundleEntry[]>();
@@ -215,7 +217,11 @@ export const summarizeDuplicateBundles = ({
 	}
 
 	return [...byId.entries()]
-		.filter(([, group]) => group.length > 1)
+		.filter(
+			([, group]) =>
+				group.length > 1 &&
+				group.some((bundle) => dirname(bundle.path) === applicationsRoot),
+		)
 		.map(([bundleId, group]) => ({
 			bundleId,
 			totalKb: group.reduce((sum, bundle) => sum + bundle.sizeKb, 0),
@@ -304,6 +310,7 @@ const formatDuplicateGroup = (group: DuplicateBundleGroup) => {
 
 const collectResults = () => {
 	const home = process.env.HOME || homedir();
+	const applicationsRoot = safeRealpath(join(home, "Applications"));
 	const results: CheckResult[] = [];
 
 	const disk = readDiskUsage();
@@ -318,7 +325,7 @@ const collectResults = () => {
 				},
 	);
 
-	const leftovers = findAppHomeLeftovers({ root: join(home, "Applications") });
+	const leftovers = findAppHomeLeftovers({ root: applicationsRoot });
 	results.push(
 		leftovers.length
 			? {
@@ -361,11 +368,11 @@ const collectResults = () => {
 	const bundles = collectBundles({
 		roots: [
 			"/Applications",
-			join(home, "Applications"),
-			join(home, "Applications", "Home Manager Apps"),
+			applicationsRoot,
+			join(applicationsRoot, "Home Manager Apps"),
 		],
 	});
-	const duplicates = summarizeDuplicateBundles({ bundles });
+	const duplicates = summarizeDuplicateBundles({ bundles, applicationsRoot });
 	results.push(
 		duplicates.length
 			? {
@@ -373,12 +380,12 @@ const collectResults = () => {
 					status: "warning",
 					detail: duplicates.map(formatDuplicateGroup).join("\n"),
 					recovery:
-						"remove the duplicate app copies you do not launch, keeping one app per bundle id",
+						"remove the shadow copy under ~/Applications, keeping the system or Home Manager app",
 				}
 			: {
 					name: "duplicate bundle ids",
 					status: "ok",
-					detail: "one app per bundle id across /Applications and ~/Applications",
+					detail: "no shadow copies directly under ~/Applications",
 				},
 	);
 
@@ -423,7 +430,8 @@ const main = () => {
 	process.exitCode = errors > 0 ? 1 : 0;
 };
 
-const invokedPath = process.argv[1] ? resolve(process.argv[1]) : "";
-if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
+const invokedPath = process.argv[1] ? safeRealpath(resolve(process.argv[1])) : "";
+const modulePath = safeRealpath(fileURLToPath(import.meta.url));
+if (invokedPath && invokedPath === modulePath) {
 	main();
 }
