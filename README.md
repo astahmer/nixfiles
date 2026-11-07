@@ -118,6 +118,22 @@ large—to remove old profile generations, collect unreachable paths, and
 deduplicate the remaining store. The first command is intentionally first:
 deleting old generations can make more paths collectible.
 
+The macbook profile also runs `nixfiles-reclaim` weekly (Sunday 03:00). It
+prunes Home Manager generations older than 14 days except the current one,
+then runs `nix-collect-garbage --delete-older-than 14d`. It logs the
+`df` before/after and freed bytes to `~/.local/state/nixfiles/reclaim.log`.
+
+```bash
+# Run it now.
+nixfiles-reclaim
+
+# Or trigger the same script through launchd.
+launchctl kickstart -k "gui/$(id -u)/org.nix-community.home.nixfiles-reclaim"
+```
+
+Disable it by removing `hm.reclaim` from `hosts/macbook/default.nix` or by
+setting `nixfiles.reclaim.enable = false` in the macbook Home Manager profile.
+
 ```bash
 # Remove generations older than seven days and collect what becomes unreachable.
 sudo nix-collect-garbage --delete-older-than 7d

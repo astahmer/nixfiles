@@ -91,6 +91,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 - `nixfiles-bootstrap` (alias: `nixbootstrap`) installs optional external tools and seeds Executor/Skepsis.
 - `nixfiles-check` (alias: `nixcheck`) runs formatting, dead-code, whitespace, and flake checks from a checkout root.
 - `nixfiles-doctor` (alias: `nixdoctor`) reports disk pressure, stale `*.app-as-home*` artifacts, SQLite `-wal`/`-shm` directories, duplicate app bundle ids, and the Nix version; it never changes anything.
+- `nixfiles-reclaim` runs the weekly macOS disk reclamation now: it prunes Home Manager generations older than 14 days except the current one, then runs `nix-collect-garbage --delete-older-than 14d`. The launchd job is `org.nix-community.home.nixfiles-reclaim`; logs go to `~/.local/state/nixfiles/reclaim.log`.
 - `sudo nixos-rebuild switch --flake "$NH_FLAKE#workstation"` (alias: `nixos-switch` on NixOS)
 
 ## Product and UI

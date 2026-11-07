@@ -41,6 +41,7 @@ in
           hm.agents
           hm.pi
           hm.tools
+          hm.reclaim
           hm.cliTools
           hm.work
           hm.iris
