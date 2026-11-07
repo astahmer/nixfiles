@@ -18,16 +18,9 @@ in
 
       # Base = the pinned astahmer/AGENTS repo (global contract + portable
       # skills); overlay = the Nix-local assets/.agents tree (machine-specific
-      # skills and preferences), then the emilint lint rule sources.
-      #
-      # Machine curation (not upstream, see the removals at the end): the Oct
-      # 2026 usage audit merged the create/maintain verification pair into one
-      # `verification-skill`, folded the selectable `effect-antislop` skill into
-      # `antislop` via its EFFECT.md, deleted the retired `jj-merge-workspaces`
-      # redirect (`jj-linearize` owns that procedure), and dropped the calldiff
-      # wrapper because `calldiff --help` documents the same commands. The
-      # pinned inputs keep their own copies; only the deployed catalog is
-      # curated here.
+      # skills and preferences), then the emilint lint rule sources. The
+      # upstream repo owns the portable skill catalog; the overlay only adds
+      # machine-specific skills.
       agentsWithSkillOverlays = pkgs.runCommandLocal "agents-with-overlays" { } ''
         mkdir -p "$out/skills"
         cp "${inputs.agents}/AGENTS.md" "$out/AGENTS.md"
@@ -62,17 +55,11 @@ The Effect rules are no longer a separately selectable skill: they live in
 [EFFECT.md](EFFECT.md), with executable rules and fixtures under `effect/`.
 EFFECT_SECTION
 
-        # Machine-specific overlays win over the shared base; copied last so the
-        # curated `verification-skill` and `antislop/EFFECT.md` survive.
+        # Machine-specific overlays win over the shared base; copied last so
+        # the curated `antislop/EFFECT.md` survives. The upstream catalog now
+        # ships `jj-linearize` and `verification-skill` itself, so the overlay
+        # no longer duplicates or removes them.
         cp -R --no-preserve=mode "${localAgentsSrc}/." "$out/"
-
-        # One catalog entry per job: the overlay supplies `verification-skill`,
-        # `jj-merge-workspaces` folded into `jj-linearize`, and the calldiff CLI
-        # documents itself. The pinned inputs keep their copies.
-        rm -rf "$out/skills/create-verification-skill" \
-               "$out/skills/maintain-verification-skill" \
-               "$out/skills/jj-merge-workspaces" \
-               "$out/skills/calldiff"
       '';
 
       cursorMcpBase = builtins.fromJSON (builtins.readFile ../assets/.cursor/mcp.json);
