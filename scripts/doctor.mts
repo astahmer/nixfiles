@@ -36,6 +36,8 @@ export type DuplicateBundleGroup = {
 	bundles: BundleEntry[];
 };
 
+export type BundleSource = "shadow" | "legacy Home Manager Apps" | "nix" | "system";
+
 type DirectoryEntry = {
 	name: string;
 	isDirectory: () => boolean;
@@ -301,9 +303,26 @@ export const collectBundles = ({ roots }: { roots: string[] }) => {
 	return bundles;
 };
 
-const formatDuplicateGroup = (group: DuplicateBundleGroup) => {
+export const classifyBundle = ({
+	path,
+	applicationsRoot,
+}: {
+	path: string;
+	applicationsRoot: string;
+}): BundleSource => {
+	const directory = dirname(path);
+	if (directory === applicationsRoot) return "shadow";
+	if (directory === join(applicationsRoot, "Home Manager Apps")) return "legacy Home Manager Apps";
+	if (path.startsWith("/nix/store/")) return "nix";
+	return "system";
+};
+
+export const formatDuplicateGroup = (group: DuplicateBundleGroup, applicationsRoot: string) => {
 	const bundles = group.bundles
-		.map((bundle) => `${bundle.path} (${formatGib(bundle.sizeKb)} GB)`)
+		.map(
+			(bundle) =>
+				`${classifyBundle({ path: bundle.path, applicationsRoot })}: ${bundle.path} (${formatGib(bundle.sizeKb)} GB)`,
+		)
 		.join(", ");
 	return `${group.bundleId}: ${formatGib(group.totalKb)} GB total — ${bundles}`;
 };
@@ -378,9 +397,9 @@ const collectResults = () => {
 			? {
 					name: "duplicate bundle ids",
 					status: "warning",
-					detail: duplicates.map(formatDuplicateGroup).join("\n"),
+					detail: duplicates.map((group) => formatDuplicateGroup(group, applicationsRoot)).join("\n"),
 					recovery:
-						"remove the shadow copy under ~/Applications, keeping the system or Home Manager app",
+						"remove the shadow copy under ~/Applications; a legacy Home Manager Apps copy is safe to remove when it duplicates a system or installed app",
 				}
 			: {
 					name: "duplicate bundle ids",

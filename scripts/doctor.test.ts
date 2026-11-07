@@ -5,10 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+	classifyBundle,
 	evaluateDisk,
 	evaluateNixVersion,
 	findAppHomeLeftovers,
 	findSqliteSidecarDirectories,
+	formatDuplicateGroup,
 	isVersionBelow,
 	summarizeDuplicateBundles,
 } from "./doctor.mts";
@@ -165,5 +167,35 @@ describe("duplicate bundle groups", () => {
 		});
 
 		expect(duplicates).toEqual([]);
+	});
+
+	test("labels shadow and legacy copies on one summary line", () => {
+		const line = formatDuplicateGroup(
+			{
+				bundleId: "com.example.app",
+				totalKb: 3 * 1024 * 1024,
+				bundles: [
+					{
+						bundleId: "com.example.app",
+						path: `${applicationsRoot}/App.app`,
+						sizeKb: 2 * 1024 * 1024,
+					},
+					{
+						bundleId: "com.example.app",
+						path: `${applicationsRoot}/Home Manager Apps/App.app`,
+						sizeKb: 1 * 1024 * 1024,
+					},
+				],
+			},
+			applicationsRoot,
+		);
+
+		expect(line).toContain("com.example.app: 3.00 GB total");
+		expect(line).toContain(`shadow: ${applicationsRoot}/App.app (2.00 GB)`);
+		expect(line).toContain(
+			`legacy Home Manager Apps: ${applicationsRoot}/Home Manager Apps/App.app (1.00 GB)`,
+		);
+		expect(classifyBundle({ path: "/Applications/App.app", applicationsRoot })).toBe("system");
+		expect(classifyBundle({ path: "/nix/store/x/App.app", applicationsRoot })).toBe("nix");
 	});
 });
