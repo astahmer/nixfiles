@@ -518,6 +518,7 @@
         nixbootstrap = "nixfiles-bootstrap";
         nixlint = "nixfiles-check";
         nixcheck = "nixfiles-check";
+        nixdoctor = "nixfiles-doctor";
         #
         zshconfig = "code ~/.config/zsh/.zshrc";
         jjconfig = "code $(jj config path --user)";

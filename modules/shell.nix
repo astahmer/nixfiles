@@ -264,6 +264,14 @@ in
         text = builtins.readFile ../scripts/check.sh;
       };
 
+      nixfilesDoctor = pkgs.writeShellApplication {
+        name = "nixfiles-doctor";
+        runtimeInputs = [ pkgs.bun ];
+        text = ''
+          exec ${pkgs.bun}/bin/bun ${../scripts/doctor.mts} "$@"
+        '';
+      };
+
       # Nix's libgit2 cannot open a repository whose worktrees carry relative
       # paths, which jj enables for every colocated workspace, so repair the
       # repositories nh is about to read before it evaluates the flake.
@@ -303,6 +311,7 @@ in
         nixfilesConfigureNixCache
         nixfilesAbsoluteWorktrees
         nixfilesCheck
+        nixfilesDoctor
         nixfilesUpdateAll
         jjPrompt
         pkgs.nodejs_24

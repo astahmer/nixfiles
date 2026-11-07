@@ -90,6 +90,7 @@ Stable flake pointer: `~/.config/nixfiles` → clone (`NH_FLAKE`). Create with `
 - `nh home switch -c macbook -b hm-backup -u` (alias: `nixupdate`)
 - `nixfiles-bootstrap` (alias: `nixbootstrap`) installs optional external tools and seeds Executor/Skepsis.
 - `nixfiles-check` (alias: `nixcheck`) runs formatting, dead-code, whitespace, and flake checks from a checkout root.
+- `nixfiles-doctor` (alias: `nixdoctor`) reports disk pressure, stale `*.app-as-home*` artifacts, SQLite `-wal`/`-shm` directories, duplicate app bundle ids, and the Nix version; it never changes anything.
 - `sudo nixos-rebuild switch --flake "$NH_FLAKE#workstation"` (alias: `nixos-switch` on NixOS)
 
 ## Product and UI

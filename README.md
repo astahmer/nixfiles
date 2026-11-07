@@ -378,3 +378,11 @@ Validate a checkout with:
 ```bash
 nixcheck
 ```
+
+Inspect the live machine with:
+
+```bash
+nixdoctor
+```
+
+`nixfiles-doctor` is report-only: it warns about low disk space and an old Nix, and fails on stale `*.app-as-home*` artifacts or SQLite `-wal`/`-shm` directories beside databases under `~/.codex`, `~/.claude`, and `~/.config/opencode`. It also lists duplicate app bundle ids with their sizes. It never repairs anything.
