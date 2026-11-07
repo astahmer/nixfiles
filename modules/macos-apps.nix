@@ -108,6 +108,7 @@
 
         applicationsDirectory="$HOME/Applications"
         stateDirectory="$HOME/.local/state/nixfiles/macos-apps"
+        removalLog="$stateDirectory/removals.log"
         temporaryDirectory=""
         ${pkgs.coreutils}/bin/mkdir -p "$applicationsDirectory" "$stateDirectory"
 
@@ -118,6 +119,33 @@
           fi
         }
         trap cleanup_temporary_directory EXIT
+
+        prune_legacy_duplicate() {
+          appName="$1"
+          targetPath="$2"
+          legacyPath="$applicationsDirectory/Home Manager Apps/$appName"
+
+          # Home Manager's copyApps tree is legacy; prune only same-name bundles the installer covers.
+          [ -d "$legacyPath" ] || return 0
+          [ -f "$targetPath/Contents/Info.plist" ] || return 0
+          [ -f "$legacyPath/Contents/Info.plist" ] || return 0
+
+          installedBundleId="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$targetPath/Contents/Info.plist" 2>/dev/null || true)"
+          legacyBundleId="$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$legacyPath/Contents/Info.plist" 2>/dev/null || true)"
+
+          if [ -z "$installedBundleId" ] || [ "$installedBundleId" != "$legacyBundleId" ]; then
+            return 0
+          fi
+
+          if ${pkgs.coreutils}/bin/timeout --kill-after=5s 60s \
+            ${pkgs.coreutils}/bin/rm -rf "$legacyPath"; then
+            printf '%s removed legacy Home Manager app copy %s (bundle %s)\n' \
+              "$(${pkgs.coreutils}/bin/date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              "$legacyPath" "$installedBundleId" >> "$removalLog" 2>/dev/null || true
+          else
+            echo "warning: failed to remove legacy Home Manager app copy $legacyPath" >&2
+          fi
+        }
 
         install_app() {
           appName="$1"
@@ -131,6 +159,7 @@
           fi
 
           if [ -d "$targetPath" ] && [ ! -L "$targetPath" ] && [ "$previousSourcePath" = "$sourcePath" ]; then
+            prune_legacy_duplicate "$appName" "$targetPath"
             return 0
           fi
 
@@ -182,6 +211,8 @@
               echo "warning: retained previous app bundle at $backupPath" >&2
             fi
           fi
+
+          prune_legacy_duplicate "$appName" "$targetPath"
         }
 
         ${macosAppInstallCommands}
