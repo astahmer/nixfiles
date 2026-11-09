@@ -3,11 +3,11 @@
     "agents": {
       "flake": false,
       "locked": {
-        "lastModified": 1794235713,
-        "narHash": "sha256-U6c9JE8+QZy7zCkkFZEVjEB8sTv4cuI4v/ZNu+EWJHg=",
+        "lastModified": 1794236105,
+        "narHash": "sha256-gXp/G8hmIt/+/Kd2ClvKOitXUIO+z6sGQFv5KHSA6NE=",
         "owner": "astahmer",
         "repo": "AGENTS",
-        "rev": "59c07dff0f1229e98d7001554415dbffb0061747",
+        "rev": "aa74332d6659b6edb11c85684a1dd69d75d204b5",
         "type": "github"
       },
       "original": {
