@@ -221,6 +221,9 @@
 
         ${macosAppInstallCommands}
       '';
+      # Off while SecretBar's `bw serve` daemon rewrites its whole 340 KB state file every few seconds (8.6 GB of
+      # disk writes in 12 h, flagged by macOS on 2026-11-13). The app stays installed; true starts it at login again.
+      secretbarAutostart = false;
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
         ${pkgs.coreutils}/bin/timeout --kill-after=2s 5s \
           /usr/bin/pkill -TERM -f '/SecretBar\.app/Contents/MacOS/secretbar' 2>/dev/null || true
@@ -400,12 +403,19 @@
       # The plist may be unchanged when only the app store path changes. Run
       # the same single-instance launcher during every activation so the live
       # menu-bar process always matches the current Home Manager generation.
-      home.activation.restartSecretbar = lib.hm.dag.entryAfter [ "installMacosApps" ] ''
-        ${secretbarLauncher}
-      '';
+      home.activation.restartSecretbar = lib.hm.dag.entryAfter [ "installMacosApps" ] (
+        if secretbarAutostart then
+          ''
+            ${secretbarLauncher}
+          ''
+        else
+          ''
+            $DRY_RUN_CMD /usr/bin/pkill -TERM -f '/SecretBar\.app/Contents/MacOS/secretbar' 2>/dev/null || true
+          ''
+      );
 
       launchd.agents.secretbar = {
-        enable = true;
+        enable = secretbarAutostart;
         config = {
           # Restart old store-path instances before launching through
           # LaunchServices, otherwise a Nix switch can leave the old menu
