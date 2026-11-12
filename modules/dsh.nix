@@ -81,7 +81,7 @@
           if [ ! -f "$checkout/scripts/profile-sync.ts" ]; then
             warnEcho "No dshfiles profile reconciler in $checkout; dsh-web syncs the web profile once it exists."
           elif ! run env PNPM_HOME="$HOME/.local/share/pnpm" PNPM_STORE_DIR="$HOME/.local/share/pnpm/store" \
-            /bin/zsh -lc 'fnm exec --using=v22.23.3 -- node "$1/scripts/profile-sync.ts" --profile web' dsh-profile-sync "$checkout"; then
+            /bin/zsh -lc 'fnm exec --using=v24.11.1 -- node "$1/scripts/profile-sync.ts" --profile web' dsh-profile-sync "$checkout"; then
             warnEcho "The dshfiles web profile sync failed; dsh-web retries it on its next start."
           fi
         '';
@@ -106,13 +106,13 @@
         home.shellAliases.dsh-lkg = "dsh-recover";
         programs.zsh.initContent = lib.mkAfter ''
           dsh() {
-            fnm exec --using=v22.23.3 -- dsh "$@"
+            fnm exec --using=v24.11.1 -- dsh "$@"
           }
 
           # dshx is built inside the dshfiles checkout, not installed globally;
           # run that build with the Node version DSH itself uses.
           dshx() {
-            fnm exec --using=v22.23.3 -- node "''${DSHFILES_DIR:-${config.dsh.dshfilesCheckout}}/tooling/dshx/packages/dshx/dist/cli/bin.js" "$@"
+            fnm exec --using=v24.11.1 -- node "''${DSHFILES_DIR:-${config.dsh.dshfilesCheckout}}/tooling/dshx/packages/dshx/dist/cli/bin.js" "$@"
           }
         '';
 

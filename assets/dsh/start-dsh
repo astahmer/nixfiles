@@ -21,4 +21,4 @@ export PATH
 NODE_COMPILE_CACHE="${NODE_COMPILE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/dshfiles/node-compile-cache}"
 export NODE_COMPILE_CACHE
 
-exec /usr/bin/caffeinate -i fnm exec --using=v22.23.3 -- node "$HOME/.local/bin/dsh-web-supervisor.mjs" "$@"
+exec /usr/bin/caffeinate -i fnm exec --using=v24.11.1 -- node "$HOME/.local/bin/dsh-web-supervisor.mjs" "$@"
