@@ -20,6 +20,20 @@ owns machine integration (`modules/bitwarden.nix`, `modules/macos-apps.nix`).
   holds an unlocked session; most commands talk to the daemon instead of
   spawning `bw`. `secret lock` clears everything.
 
+## Global items resolve without a config alias
+
+`secret set ALIAS --global` creates a vault item named `global/<alias>`. Reads
+(`get`, `id`, `totp`, `source`) fall back to that item when no config declares
+the alias, so a machine with only the vault unlocked resolves shared keys
+without `~/.config/secret/config.json` — the case where a shared key "exists in
+the vault" but every consumer still failed.
+
+- Config wins. Two vault items with the same name are refused instead of guessed.
+- Mutations and env injection stay config-only: `set`, `pin`, `env` and `run`
+  need a field, a pinned item id or an env key, which only the config carries.
+- `secret unaliased [--json]` lists what the fallback reaches, and `secret
+  doctor` reports the same count, so an item no config declares stays visible.
+
 ## Backends
 
 Selected via the top-level `"backend"` key in the global config (default:

@@ -582,6 +582,54 @@ const resolveRequired = async (
 const resolveOptional = (items: Record<string, any>[] | undefined, definition: SecretDefinition): string | undefined =>
   valueFor(itemFor(items, definition.item), definition);
 
+// MARK: - Vault-as-registry fallback
+
+// The vault is the shared registry across machines: `secret set ALIAS --global` names its item
+// global/<alias>. A read therefore still resolves when no config declares the alias but the vault holds
+// exactly one item with that name. Config always wins, an ambiguous name refuses instead of guessing,
+// and mutations plus env injection stay config-only because they need a field, an env key or an intent.
+const globalItemPrefix = "global";
+
+const vaultFallbackDefinition = async (alias: string): Promise<SecretDefinition | undefined> => {
+  if (!aliasNamePattern.test(alias)) return undefined;
+  const wanted = `${globalItemPrefix}/${alias.toLowerCase().replaceAll("_", "-")}`;
+  const items = (await vaultItems()) ?? [];
+  const matches = items.filter((item) => item.name === wanted);
+  if (matches.length > 1) {
+    fail(`ambiguous alias: ${matches.length} vault items are named ${wanted}; declare one with 'secret set ${alias} --global'`);
+  }
+  return matches.length === 1 ? { item: wanted, field: "password" } : undefined;
+};
+
+/** A definition for reading a value: the declared alias, else the unique vault item named after it. */
+const definitionForRead = async (alias: string, loaded: { definitions: Record<string, SecretDefinition> }): Promise<SecretDefinition> => {
+  const known = loaded.definitions[alias];
+  if (known) return known;
+  const fallback = await vaultFallbackDefinition(alias);
+  if (fallback) return fallback;
+  fail(`unknown alias: ${alias} (no config entry, and no unique vault item named ${globalItemPrefix}/${alias.toLowerCase().replaceAll("_", "-")}) (see 'secret list')`);
+};
+
+/** Global items no alias in the user config declares, one row per unique name: what the read fallback reaches. */
+const unaliasedGlobalItems = async (): Promise<Array<{ alias: string; item: string }>> => {
+  const user = existsSync(userConfigPath) ? readJson(userConfigPath) : undefined;
+  const declared = new Set<string>();
+  const collect = (secrets: Record<string, SecretDefinition> | undefined): void => {
+    for (const definition of Object.values(secrets ?? {})) if (definition.item) declared.add(definition.item);
+  };
+  collect(user?.secrets);
+  for (const environment of Object.values(user?.environments ?? {})) collect(environment.secrets);
+  const counts = new Map<string, number>();
+  for (const item of (await vaultItems()) ?? []) {
+    const name = typeof item.name === "string" ? item.name : "";
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts]
+    .filter(([name, count]) => count === 1 && name.startsWith(`${globalItemPrefix}/`) && !declared.has(name))
+    .map(([name]) => ({ alias: name.slice(globalItemPrefix.length + 1), item: name }))
+    .sort((a, b) => a.alias.localeCompare(b.alias));
+};
+
 const dotenvKey = (alias: string, definition: SecretDefinition): string => {
   const key = definition.env || alias;
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) fail(`invalid dotenv key for ${alias}`);
@@ -1405,6 +1453,21 @@ const doctor = async (definitions: Record<string, SecretDefinition>, json = fals
   let problems = 0;
   const rows: Array<Record<string, string>> = [];
   const items = await vaultItems();
+  if (!json) {
+    const declared = new Set(Object.values(definitions).map((definition) => definition.item));
+    const counts = new Map<string, number>();
+    for (const item of items ?? []) {
+      const name = typeof item.name === "string" ? item.name : "";
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    const unaliased = [...counts]
+      .filter(([name, count]) => count === 1 && name.startsWith(`${globalItemPrefix}/`) && !declared.has(name))
+      .map(([name]) => name.slice(globalItemPrefix.length + 1))
+      .sort();
+    if (unaliased.length > 0) {
+      info(`${unaliased.length} unaliased global item(s), resolvable by name after the 'global/' prefix is dropped: ${unaliased.join(", ")}`);
+    }
+  }
   for (const [alias, definition] of Object.entries(definitions)) {
     const field = definition.field || "password";
     const item = itemFor(items, definition.item);
@@ -1479,7 +1542,8 @@ Find aliases by alias, item, or env key across scopes (no values).
 `,
   get: `Usage: secret get <alias> [--copy] [--env NAME]
 
-Print exactly one configured value.
+Print exactly one value: a configured alias, or a unique vault item named
+global/<alias> when no config declares it (the vault works across machines).
 
   --copy       Copy to the clipboard instead of stdout
   --env NAME   Environment override (default: prod)
@@ -1579,6 +1643,12 @@ secret global unset <alias> = secret unset --global <alias>.
 Remove config aliases whose vault items no longer exist. --dry-run only lists
 them; --global prunes the user config instead of the project one.
 `,
+  unaliased: `Usage: secret unaliased [--json]
+
+List vault items under global/ that no global alias declares. They still resolve
+on read, so another machine needs only the vault. Declaring an alias adds an env
+key, a field, id pinning and doctor coverage.
+`,
   lint: `Usage: secret lint [--config FILE] [--json]
 
 Validate configs offline: items, env keys, collisions (no vault).
@@ -1599,7 +1669,7 @@ Show recent secret commands (aliases only, no values).
 };
 
 const printHelp = (): void => {
-  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|edit|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|lint|doctor|recent|history> [options]
+  console.log(`Usage: secret <status|unlock|lock|list|search|get|set|edit|id|totp|source|pull|pin|rotate|rm|unset|mv|init|env|run|print|global|prune|unaliased|lint|doctor|recent|history> [options]
 
 Commands:
   status (st)         Check Bitwarden auth state and print the next command to run
@@ -1607,7 +1677,7 @@ Commands:
   lock                Lock the vault and clear any stored session
   list (ls)           List configured aliases (vault touched only for created dates on a TTY)
   search <term>       Find aliases by alias, item, or env key across scopes (no values)
-  get (g) <alias>     Print exactly one configured value
+  get (g) <alias>     Print exactly one value: a configured alias, or a unique vault item named global/<alias>
   set (s, add) [<alias>]
                       Prompt (hidden) a value and write it to Bitwarden; a missing
                       alias is added to the config and created in the vault
@@ -1629,7 +1699,7 @@ Commands:
   run <cmd...>        Inject project aliases into a command's environment (secret run -- npm test)
   print (pr) [scope]  Show aliases in project (default), global, or local; --all merges scopes
   global              Show the global (user) scope aliases
-  prune [--dry-run]   Remove config aliases whose vault items no longer exist
+  unaliased [--json]  Vault items under global/ with no alias; get still resolves them by name
   lint                Validate configs offline: items, env keys, collisions (no vault)
   doctor (d)          Validate configs, Bitwarden state, and alias resolvability
   recent              Show recently used aliases
@@ -1794,6 +1864,14 @@ const main = async (): Promise<void> => {
     const hadSession = readSession() !== undefined;
     clearSession();
     console.error(hadSession ? "secret: vault locked; stored session cleared" : "secret: vault locked");
+  } else if (options.command === "unaliased") {
+    const rows = await unaliasedGlobalItems();
+    if (options.json) {
+      console.log(JSON.stringify(rows.map((row) => ({ ...row, field: "password" }))));
+    } else {
+      for (const row of rows) console.log(`${row.alias}\t${row.item}`);
+      console.error(`secret: ${rows.length} unaliased global item(s). next: secret get <alias>, or 'secret set <alias> --global' to declare one`);
+    }
   } else if (options.command === "list") {
     const entries = Object.entries(loaded.definitions);
     if (options.json) {
@@ -1841,7 +1919,7 @@ const main = async (): Promise<void> => {
     console.error(`secret: ${entries.length} aliases configured. next: secret get <alias>, or secret env --output .env`);
   } else if (options.command === "get") {
     const alias = options.positional[0] || fail("get requires an alias, e.g. secret get github-token (see 'secret list')");
-    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    const definition = await definitionForRead(alias, loaded);
     const value = await getValue(alias, definition);
     recordHistory({ at: new Date().toISOString(), cmd: "get", target: alias, env: environment });
     if (options.copy) {
@@ -1976,7 +2054,7 @@ const main = async (): Promise<void> => {
     recordHistory({ at: new Date().toISOString(), cmd: "edit", target: alias, env: environment });
   } else if (options.command === "id") {
     const alias = options.positional[0] || fail("id requires an alias, e.g. secret id github-token (see 'secret list')");
-    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    const definition = await definitionForRead(alias, loaded);
     const items = await vaultItems();
     const item = itemFor(items, definition.item);
     if (item === undefined) {
@@ -1988,7 +2066,7 @@ const main = async (): Promise<void> => {
     console.log(String(item.id));
   } else if (options.command === "totp") {
     const alias = options.positional[0] || fail("totp requires an alias, e.g. secret totp github-token (see 'secret list')");
-    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    const definition = await definitionForRead(alias, loaded);
     await requireUnlocked();
     const code = runBw(["get", "totp", definition.item]);
     recordHistory({ at: new Date().toISOString(), cmd: "totp", target: alias, env: environment });
@@ -2000,7 +2078,10 @@ const main = async (): Promise<void> => {
     }
   } else if (options.command === "source") {
     const alias = options.positional[0] || fail("source requires an alias, e.g. secret source github-token");
-    const definition = loaded.definitions[alias] || fail(`unknown alias: ${alias} (see 'secret list')`);
+    const definition = await definitionForRead(alias, loaded);
+    if (!loaded.definitions[alias] && options.positional[1] !== undefined) {
+      fail(`source needs a declared alias before it can store a URL; run 'secret set ${alias} --global' first`);
+    }
     const url = options.positional[1];
     const items = await vaultItems();
     const item = itemFor(items, definition.item);
