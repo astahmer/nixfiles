@@ -161,6 +161,11 @@ unused named volumes; use it only after reviewing every candidate. These are
 real data deletions, not image/cache cleanup. Never infer permission to delete
 volumes from approval for `system prune -af`.
 
+Deleting volumes also shrinks OrbStack's sparse `data.img` by itself: a 2026-11
+session went from 10.24 GB of local volumes to 867 MB and the host `df` gained
+9.65 GB with no OrbStack restart. Confirm with `df -h /`, since `docker system
+df` only reports inside the VM.
+
 ## OrbStack sparse disk
 
 Measure the host-side image and compare it with Docker's object-level report.
@@ -264,6 +269,26 @@ unique physical bytes.
 
 References: https://pnpm.io/settings/node-modules and https://pnpm.io/cli/store.
 
+### Obsolete pnpm store versions
+
+Each pnpm major writes its own `store/vN`. Before removing an old one, prove no
+project still pins that major:
+
+```bash
+pnpm --version
+pnpm store path
+du -sh "$HOME/.local/share/pnpm/store/"*
+grep -rl '"packageManager": "pnpm@10' "$HOME/dev" --include=package.json \
+  --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null \
+  | while read -r f; do printf '%s\t%s\n' "$(git -C "$(dirname "$f")" log -1 --format=%cs 2>/dev/null)" "$(dirname "$f")"; done
+```
+
+A store directory is safe to delete only when every project pinning that major
+is retired. On this machine pnpm 12 used `v11`; `v10` (19 GB) was pinned only by
+one project idle since September and nested reference clones, so deleting it
+returned 20.2 GB host space. Inspect store directories as plain directories;
+they can be large and are re-downloaded on demand.
+
 ### Bun package cache
 
 ```bash
@@ -323,10 +348,94 @@ is authorized, remove that one dependency tree:
 rm -rf "/exact/stale/workspace/node_modules"
 ```
 
+## Stale node_modules
+
+Rank dependency trees by the project's last commit and skip anything a process
+still has open:
+
+```bash
+lsof -n -P -w -d cwd -Fn 2>/dev/null | awk '/^n/{print substr($0,2)}' | sort -u > /tmp/cwds.txt
+# For each candidate, age from the last commit, not the directory mtime.
+git -C /exact/project log -1 --format=%ct
+grep -c '^/exact/project/' /tmp/cwds.txt
+```
+
+A candidate needs a stale commit (30+ days on this machine) and zero matches in
+the cwd map before removal. Expect `du` to overstate recovery: pnpm installs
+hardlink from the shared store, so deleting `node_modules` often frees a small
+fraction of its reported size. Delete the whole tree only, never a subdirectory
+the user did not name:
+
+```bash
+rm -rf -- "/exact/project/node_modules"
+```
+
+## Reference clones by mention
+
+A clone under `~/.references` is still referenced when a project's
+`reference-repos.md` names it. Count mentions across every project before
+removing one:
+
+```bash
+find "$HOME/dev" -maxdepth 5 -name reference-repos.md -print0 \
+  | xargs -0 cat 2>/dev/null > /tmp/all-refs-md.txt
+for d in "$HOME/.references"/*/; do n=$(basename "$d");
+  printf '%s\t%s\t%s\n' "$(grep -ci "$n" /tmp/all-refs-md.txt)" \
+    "$(du -sk "$d" | cut -f1)" "$n"; done | sort -n
+```
+
+Zero-mention clones are re-cloneable with `add-reference-repository`; confirm
+the user accepts that before deleting. Age is a second signal only: freshly
+cloned clones can be unmentioned because the thread has not written its table
+yet, so pair `stat -c %Y "$d/.git"` with the mention count and ask when the two
+disagree.
+
+## Agent app data
+
+Agent and desktop harness stores grow silently and are usually disposable once
+the owner agrees. Measure exact files first; sqlite plus its `-wal`/`-shm`
+companions must go together, and a running server must be checked with `lsof`:
+
+```bash
+du -sh "$HOME/.t3" "$HOME/.codex" "$HOME/.dsh-lkg" "$HOME/.local/share/opencode"
+du -ah -d 1 "$HOME/.t3" | sort -rh | head
+find "$HOME/.t3" -maxdepth 1 -type f -size +100M -exec ls -lh {} \;
+find "$HOME/.codex/sessions" -name '*.jsonl.zst' -mtime +30 -print | head
+pgrep -fl opencode; lsof -p EXACT_PID | grep '\.db'
+```
+
+Safe targets after approval: `.t3/artifacts`, old `.t3/userdata/state.sqlite`,
+`.codex/.tmp`, `.codex/cache`, zstd sessions older than the agreed cutoff, and
+`~/.local/share/opencode/opencode*.db{,-wal,-shm}` when no server holds them.
+Keep the current app state and at least one DSH version plus `recover` under
+`~/.dsh-lkg`; failed and candidate version directories and `recover.prev` are
+fair game. APFS clones make `.dsh-lkg` deletion free far less than `du` says.
+
+## JJ workspace disposal
+
+Use `jjw` rather than hand-pruning; its `review` action already requires a clean
+working copy and, for JJ rows, ancestry in the default workspace.
+
+```bash
+jjw list --check-state --format tsv | awk -F'\t' '$12=="review"'
+jjw cleanup --dry-run   # preview only; state is unchecked in the preview
+```
+
+`jjw cleanup` needs a terminal and fzf. When driving it non-interactively:
+
+1. Run `git -C REPO worktree remove -- PATH` for clean Git worktrees, then
+   `git worktree prune` (commits and branches survive in the repository).
+2. Forget only JJ workspace registrations whose directory is already gone:
+   `jj --ignore-working-copy -R REPO workspace forget NAME`.
+3. Never forget a registration that still points at a live directory under a
+   different name; JJ workspace names and directory names drift apart.
+
 ## Verify
 
 Measure the same host paths and daemon context before and after. Check service
-health and workspace state for interruptions.
+health and workspace state for interruptions. Report the `df` delta next to any
+`du` totals: APFS clones and package hardlinks can make a 19 GiB tree return
+5.7 GiB, and the reverse happens when the real bytes live in the package store.
 
 ```bash
 df -h /

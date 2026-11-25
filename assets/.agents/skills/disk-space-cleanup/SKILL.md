@@ -28,7 +28,9 @@ store checks, and separately reviewed Docker volume removal.
    daemon context. Do not combine unrelated targets or include volumes in a
    broad prune.
 5. Measure the same paths again and check service, container, and workspace
-   state. Report measured recovery separately from estimates.
+   state. Report measured recovery separately from estimates: use the `df`
+   delta, not the sum of `du` sizes, because APFS clones and pnpm hardlinks
+   make logical sizes larger than the bytes actually returned.
 
 ## Guardrails
 
@@ -48,3 +50,9 @@ store checks, and separately reviewed Docker volume removal.
   remove generations automatically as routine maintenance.
 - Prefer an available Nix-backed one-shot tool for diagnostics; do not install
   cleanup tools globally just to inspect a disk.
+- On macOS 26 `stat -f` prints filesystem information, not a format string.
+  Use `stat -c %Y FILE` for mtimes; `stat -f %m` silently reports the wrong
+  thing and breaks age filters.
+- Removing unused Docker volumes also shrinks OrbStack's sparse `data.img`
+  without a restart; confirm with a fresh `df`, not with `docker system df`
+  alone.
