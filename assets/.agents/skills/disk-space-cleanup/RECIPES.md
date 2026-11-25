@@ -390,6 +390,21 @@ cloned clones can be unmentioned because the thread has not written its table
 yet, so pair `stat -c %Y "$d/.git"` with the mention count and ask when the two
 disagree.
 
+A reference-repos table is not the only index: projects can track their
+references in a generated catalog or comparison doc instead. Before deleting a
+zero-mention clone, also scan those sources:
+
+```bash
+grep -rhoE '\.references/[a-zA-Z0-9_.-]+' "$HOME/dev" \
+  --include='*.ts' --include='*.json' --include='*.md' \
+  --exclude-dir=node_modules --exclude-dir=.git 2>/dev/null | sort -u
+```
+
+On this machine `~/dev/maocode/plugins/watchtower` keeps a competitor catalog
+whose entries are `.references/<name>` paths, with URLs, and never writes a
+`reference-repos.md`; deleting those clones broke `watchtower.scan` and they
+had to be re-cloned from the catalog.
+
 ## Agent app data
 
 Agent and desktop harness stores grow silently and are usually disposable once
