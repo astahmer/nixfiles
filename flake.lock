@@ -671,11 +671,11 @@
     "secret-cli": {
       "flake": false,
       "locked": {
-        "lastModified": 1795694916,
-        "narHash": "sha256-sNP6SB/e8MZBxAqJrKxU6rY4akKPOtzZougWLH5cUFY=",
+        "lastModified": 1795703505,
+        "narHash": "sha256-DJ6ZG2v93B/YzftV48D8ov8M1utbUUl2VE2kU8x4DKs=",
         "ref": "main",
-        "rev": "cf8519e18777e8ffc8de25223031f57f81c8bf08",
-        "revCount": 19,
+        "rev": "92d55835c69d4aadd8c89cf435829263978dc31a",
+        "revCount": 20,
         "type": "git",
         "url": "ssh://git@github.com/astahmer/secret-cli.git"
       },
