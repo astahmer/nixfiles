@@ -16,6 +16,7 @@
         name = "secret";
         runtimeInputs = [
           pkgs.bitwarden-cli
+          pkgs._1password-cli
           pkgs.coreutils
         ];
         text = ''
@@ -55,6 +56,8 @@
         pkgs.bitwarden-cli
         pkgs.bitwarden-desktop
         pkgs.rbw
+        # The secret CLI's 1password backend shells out to `op`.
+        pkgs._1password-cli
         secret
       ];
 
