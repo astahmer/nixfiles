@@ -35,6 +35,7 @@ bun test assets/pi/extensions/queue-subagent.test.ts
 bun test assets/pi/extensions/free-model-retry-policy.test.ts
 node assets/t3code/test-seed-provider-instances.mjs
 node --test assets/dsh/supervise-web.test.mjs
+assets/dev-clis/test-launcher.sh
 bun test assets/codex/normalize-root-model.test.ts
 
 if ! command -v jq >/dev/null 2>&1; then

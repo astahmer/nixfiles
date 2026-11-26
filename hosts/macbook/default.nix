@@ -56,6 +56,7 @@ in
           hm.shiftshift
           hm.macosApps
           hm.raycastLocalExtensions
+          hm.devClis
 
           (
             { ... }:
@@ -70,6 +71,18 @@ in
 
               # dshfiles telemetry reaches the in-DSH Traces panel in-process; set this only to export elsewhere.
               dsh.otelExport.enable = false;
+
+              # `mao` follows main@origin from a workspace nobody edits; `mao-update` moves it.
+              devClis.mao = {
+                checkout = "~/dev/maocode-main";
+                repo = "~/dev/maocode";
+                track = "main@origin";
+                entry = "apps/cli/src/main.ts";
+                completions = [
+                  "completions"
+                  "zsh"
+                ];
+              };
             }
           )
         ];

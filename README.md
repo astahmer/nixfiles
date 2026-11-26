@@ -381,6 +381,20 @@ extra-trusted-public-keys = niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc
 The shell profile installs Node.js and pnpm. `pn`, `ppnm`, and `pnp` are shell aliases for `pnpm`.
 `nodejs_24` and `pnpm` are available for Nix builds and development use.
 
+### Local dev CLIs on PATH
+
+A CLI you develop in a checkout (for example `mao` from maocode) goes on PATH
+through `devClis`, never `npm -g` or `pnpm link`: one line in the host wiring,
+
+```nix
+devClis.foo = { checkout = "~/dev/foo"; entry = "src/cli.ts"; };
+```
+
+gives `foo`, which runs the live source with the checkout's `.node-version`
+Node from any directory, and `foo-update`, which refreshes the checkout and its
+dependencies. See [`docs/dev-clis.md`](docs/dev-clis.md) for tracking a
+revision in a dedicated jj workspace, checkout overrides and completions.
+
 ## Common workflow
 
 Inspect the flake outputs with:

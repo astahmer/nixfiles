@@ -27,6 +27,7 @@ To add a module, create a file under `modules/`, export it as `config.flake.modu
   non-secret AI-account metadata. Credentials, provider auth, lockfiles,
   sessions, and other runtime state stay local. Keep plugin declarations out of
   `assets/dsh/`, which holds Nix-specific launcher and sync machinery.
+- Local dev CLIs (a TypeScript entry in a checkout, such as `mao`) are exposed with `devClis.<name>` from `modules/dev-clis.nix`, wired in the host; never a global package-manager install or link. See `docs/dev-clis.md`.
 - `~/.references/` contains globally-shared cloned reference repositories used for comparison and pattern mining. Per-project `.references/` is used only as an escape hatch.
 
 Global Codex instruction discovery uses CODEX_HOME/AGENTS.md (normally
