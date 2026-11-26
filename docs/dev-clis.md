@@ -29,6 +29,7 @@ devClis.foo = { checkout = "~/dev/foo"; entry = "src/cli.ts"; };
 | `completions` | `[ ]`   | Arguments that print the zsh completion, such as `[ "completions" "zsh" ]`.             |
 | `checkoutEnv` | `null`  | Variable that overrides the checkout per call; defaults to `<NAME>_CHECKOUT`.           |
 | `build`       | `null`  | Command `<name>-update` runs in the checkout after installing, for a built entry.       |
+| `bundle`      | `null`  | `{ entry; stamp; build; }`: a prebuilt entry run while its stamp names the checkout's commit. |
 
 A built entry (a `dist/` file) works the same way: `devClis.dshx` in
 `modules/dsh.nix` runs `tooling/dshx/packages/dshx/dist/cli/bin.js` from the
@@ -58,6 +59,19 @@ reinstalls and rebuilds it.
    is not a terminal or the checkout is overridden. The stamp lives in
    `~/.local/state/dev-clis/<name>.behind`.
 
+7. With `bundle`, runs `bundle.entry` instead of `entry` when the first line
+   of `bundle.stamp` equals the checkout's Git `HEAD` commit, read from files
+   only (the `.git` file → worktree gitdir → `HEAD`; a jj workspace keeps it
+   detached at `@-`; a branch resolves through its loose ref). Anything else
+   (no build, a failed build, a newer commit) runs the source silently.
+   `<NAME>_SOURCE=1` forces the source. Only the configured checkout is
+   trusted to carry no uncommitted edits, which `<name>-update` enforces: there
+   is no per-call file walk (it costs 60–100 ms on maocode). A
+   `<NAME>_CHECKOUT` override is a workspace you edit, so it always runs its
+   source.
+8. `DEV_CLIS_DEBUG=1` prints the file it runs (`mao: running …/dist/mao.mjs`)
+   on stderr.
+
 `PATH` is left alone: children of the CLI see the same `node` as your shell.
 
 ## Which checkout to follow
@@ -76,6 +90,14 @@ set, rather than the checkout you work in:
 `repo`), then on later runs fetches, refuses if the workspace has changes, moves
 it with `jj new <track>` only when the tracked revision moved, and runs
 `pnpm install --frozen-lockfile` (or `npm ci`). It never rewrites history.
+With `bundle`, it then deletes the stamp and runs `bundle.build`; a failure
+prints one warning and leaves the CLI on its source, with the build output in
+`~/.local/state/dev-clis/<name>-bundle.log`.
+
+`devClis.mao` uses it: `node apps/cli/build.ts --no-binaries` writes
+`apps/cli/dist/mao.mjs` and `apps/cli/dist/.source-commit` (gitignored, so jj
+never snapshots them), and the bundle runs about 65 % fewer instructions than
+the sources.
 
 ## Completions
 
@@ -88,4 +110,6 @@ the `compinit -C` dump stays valid. Open a new shell after the first update.
 
 `assets/dev-clis/test-launcher.sh` (run by `nixcheck`) drives the launcher
 against a fake checkout and fnm tree: exact version, same-major fallback, a
-missing major, missing dependencies, the checkout override and shebang flags.
+missing major, missing dependencies, the checkout override, shebang flags, and
+bundle selection (matching stamp, `<NAME>_SOURCE`, checkout override, newer
+commit, branch `HEAD`, missing bundle).

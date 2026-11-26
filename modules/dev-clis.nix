@@ -35,6 +35,8 @@
         else
           "refs/remotes/${builtins.elemAt parts 1}/${builtins.elemAt parts 0}";
 
+      bundleField = cli: field: if cli.bundle == null then "" else cli.bundle.${field};
+
       cliPackages =
         name: cli:
         let
@@ -48,6 +50,9 @@
               "repo_git=${lib.escapeShellArg (if cli.repo == null then "" else "${expandHome cli.repo}/.git")}"
               "hint_stamp=${lib.escapeShellArg "${config.xdg.stateHome}/dev-clis/${name}.behind"}"
               "git_bin=${pkgs.git}/bin/git"
+              "bundle_entry=${lib.escapeShellArg (bundleField cli "entry")}"
+              "bundle_stamp=${lib.escapeShellArg (bundleField cli "stamp")}"
+              "source_env=${envName name}_SOURCE"
               (builtins.readFile ../assets/dev-clis/common.sh)
               (builtins.readFile ../assets/dev-clis/launcher.sh)
             ];
@@ -62,6 +67,9 @@
               "completion_args=(${lib.escapeShellArgs cli.completions})"
               "completion_dir=${lib.escapeShellArg completionDir}"
               "build=${lib.escapeShellArg (if cli.build == null then "" else cli.build)}"
+              "bundle_build=${lib.escapeShellArg (bundleField cli "build")}"
+              "bundle_stamp=${lib.escapeShellArg (bundleField cli "stamp")}"
+              "bundle_log=${lib.escapeShellArg "${config.xdg.stateHome}/dev-clis/${name}-bundle.log"}"
               (builtins.readFile ../assets/dev-clis/common.sh)
               (builtins.readFile ../assets/dev-clis/update.sh)
             ];
@@ -108,6 +116,28 @@
                 type = lib.types.nullOr lib.types.str;
                 default = null;
                 description = "Shell command `<name>-update` runs in the checkout after installing, for an entry that is a build output.";
+              };
+              bundle = lib.mkOption {
+                default = null;
+                description = "Prebuilt entry the launcher runs instead of `entry` while its stamp names the checked-out commit; `<name>-update` builds it, `<NAME>_SOURCE=1` forces the source.";
+                type = lib.types.nullOr (
+                  lib.types.submodule {
+                    options = {
+                      entry = lib.mkOption {
+                        type = lib.types.str;
+                        description = "Built entry file relative to the checkout.";
+                      };
+                      stamp = lib.mkOption {
+                        type = lib.types.str;
+                        description = "File relative to the checkout whose first line is the commit the bundle was built from.";
+                      };
+                      build = lib.mkOption {
+                        type = lib.types.str;
+                        description = "Shell command `<name>-update` runs in the checkout to build the bundle and write the stamp.";
+                      };
+                    };
+                  }
+                );
               };
               completions = lib.mkOption {
                 type = lib.types.listOf lib.types.str;

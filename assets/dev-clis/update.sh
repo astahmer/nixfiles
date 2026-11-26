@@ -1,7 +1,8 @@
 # `<name>-update`: creates or moves the checkout to the tracked revision (a
 # dedicated jj workspace nobody edits), reinstalls its dependencies and
 # refreshes the zsh completion. Extra settings: repo, track, launcher,
-# completion_args (array), completion_dir, build.
+# completion_args (array), completion_dir, build, bundle_build, bundle_stamp,
+# bundle_log.
 
 if [ -n "$track" ]; then
   if [ ! -e "$checkout" ]; then
@@ -39,6 +40,18 @@ elif [ -f "$checkout/package-lock.json" ]; then
 fi
 if [ -n "$build" ]; then
   (cd "$checkout" && PATH="$node_bin:$PATH" bash -c "$build")
+fi
+# A failed bundle build leaves no stamp, so the launcher keeps running the
+# source; one warning points at the full log.
+if [ -n "$bundle_build" ]; then
+  rm -f "$checkout/$bundle_stamp"
+  mkdir -p "$(dirname "$bundle_log")"
+  if (cd "$checkout" && PATH="$node_bin:$PATH" bash -c "$bundle_build") >"$bundle_log" 2>&1 && [ -s "$checkout/$bundle_stamp" ]; then
+    echo "$name: bundle built ($bundle_stamp)"
+  else
+    rm -f "$checkout/$bundle_stamp"
+    echo "$name-update: warning: the bundle build failed, so $name runs from source (log: $bundle_log)" >&2
+  fi
 fi
 
 if [ "${#completion_args[@]}" -gt 0 ]; then

@@ -26,6 +26,7 @@ launcher="$tmp/demo"
   echo "name=demo default_checkout='$checkout' entry=src/main.ts checkout_env=DEMO_CHECKOUT update_env=DEMO_UPDATE_COMMAND"
   echo "fallback_node='$tmp/nix/bin/node' fallback_node_major=24"
   echo "track_ref=refs/remotes/origin/main repo_git='$checkout/.git' hint_stamp='$tmp/state/demo.behind' git_bin=git"
+  echo "bundle_entry=dist/demo.mjs bundle_stamp=dist/.source-commit source_env=DEMO_SOURCE"
   cat "$here/common.sh" "$here/launcher.sh"
 } >"$launcher"
 chmod +x "$launcher"
@@ -43,6 +44,36 @@ export FNM_DIR="$tmp/fnm"
 cd /
 expect "exact fnm version with shebang flags" \
   "fnm-node --max-semi-space-size=2 $checkout/src/main.ts a b c" "$("$launcher" a 'b c')"
+
+# Bundle selection: a jj workspace's `.git` file points at a worktree gitdir
+# whose detached HEAD is @-; a branch HEAD resolves through commondir.
+sha_a=1111111111111111111111111111111111111111
+sha_b=2222222222222222222222222222222222222222
+mkdir -p "$checkout/dist" "$tmp/repo/.git/worktrees/checkout" "$tmp/repo/.git/refs/heads"
+printf '#!/usr/bin/env -S node --enable-source-maps\n' >"$checkout/dist/demo.mjs"
+echo "gitdir: ../repo/.git/worktrees/checkout" >"$checkout/.git"
+echo "$sha_a" >"$tmp/repo/.git/worktrees/checkout/HEAD"
+echo "../.." >"$tmp/repo/.git/worktrees/checkout/commondir"
+bundle_run="fnm-node --enable-source-maps $checkout/dist/demo.mjs x"
+source_run="fnm-node --max-semi-space-size=2 $checkout/src/main.ts x"
+expect "no stamp runs the source" "$source_run" "$("$launcher" x)"
+echo "$sha_a" >"$checkout/dist/.source-commit"
+expect "stamp equal to the worktree HEAD runs the bundle" "$bundle_run" "$("$launcher" x)"
+expect "DEMO_SOURCE forces the source" "$source_run" "$(DEMO_SOURCE=1 "$launcher" x)"
+[[ "$(DEV_CLIS_DEBUG=1 "$launcher" x 2>&1 >/dev/null)" == "demo: running $checkout/dist/demo.mjs" ]] || fail "debug line missing"
+cp -R "$checkout" "$tmp/copy"
+echo "gitdir: $tmp/repo/.git/worktrees/checkout" >"$tmp/copy/.git"
+expect "a checkout override runs its source" \
+  "fnm-node --max-semi-space-size=2 $tmp/copy/src/main.ts x" "$(DEMO_CHECKOUT="$tmp/copy" "$launcher" x)"
+rm -rf "$tmp/copy"
+echo "$sha_b" >"$tmp/repo/.git/worktrees/checkout/HEAD"
+expect "a newer commit than the stamp runs the source" "$source_run" "$("$launcher" x)"
+echo "ref: refs/heads/main" >"$tmp/repo/.git/worktrees/checkout/HEAD"
+echo "$sha_a" >"$tmp/repo/.git/refs/heads/main"
+expect "a branch HEAD resolves through commondir" "$bundle_run" "$("$launcher" x)"
+rm "$checkout/dist/demo.mjs"
+expect "a stamp without its bundle runs the source" "$source_run" "$("$launcher" x)"
+rm -rf "$checkout/dist" "$checkout/.git" "$tmp/repo"
 
 # The behind hint needs a terminal on stderr; macOS `script` provides one.
 if [ "$(uname)" = Darwin ]; then
