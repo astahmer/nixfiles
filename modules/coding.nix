@@ -11,6 +11,7 @@ in
       devenv = packages.devenv;
       nub = packages.nub;
       cursorAgent = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."cursor-agent";
+      mistralVibe = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}."mistral-vibe";
       ghui = packages.ghui;
       hunk = packages.hunk;
       jjw = packages.jjw;
@@ -35,6 +36,7 @@ in
         pkgs."github-copilot-cli"
         cursorAgent
         agent
+        mistralVibe
         codex
         plannotator
         pkgs.comma
