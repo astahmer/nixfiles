@@ -50,6 +50,14 @@ reinstalls and rebuilds it.
 5. Exports `<NAME>_UPDATE_COMMAND=<name>-update`, so the CLI can tell users how
    this install updates.
 
+6. With `repo` and a `bookmark@remote` `track`, prints one dim line at most
+   once a day when the last fetched ref is ahead of the checkout
+   (`mao: 16 new commit(s) on origin/main; run mao-update`). It reads the
+   colocated repo's loose Git ref and the checkout's `HEAD` (no network, no jj),
+   runs `git rev-list --count` once per new tip, and stays silent when stderr
+   is not a terminal or the checkout is overridden. The stamp lives in
+   `~/.local/state/dev-clis/<name>.behind`.
+
 `PATH` is left alone: children of the CLI see the same `node` as your shell.
 
 ## Which checkout to follow

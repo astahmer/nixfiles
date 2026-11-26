@@ -25,6 +25,7 @@ launcher="$tmp/demo"
   echo 'set -euo pipefail'
   echo "name=demo default_checkout='$checkout' entry=src/main.ts checkout_env=DEMO_CHECKOUT update_env=DEMO_UPDATE_COMMAND"
   echo "fallback_node='$tmp/nix/bin/node' fallback_node_major=24"
+  echo "track_ref=refs/remotes/origin/main repo_git='$checkout/.git' hint_stamp='$tmp/state/demo.behind' git_bin=git"
   cat "$here/common.sh" "$here/launcher.sh"
 } >"$launcher"
 chmod +x "$launcher"
@@ -42,6 +43,27 @@ export FNM_DIR="$tmp/fnm"
 cd /
 expect "exact fnm version with shebang flags" \
   "fnm-node --max-semi-space-size=2 $checkout/src/main.ts a b c" "$("$launcher" a 'b c')"
+
+# The behind hint needs a terminal on stderr; macOS `script` provides one.
+if [ "$(uname)" = Darwin ]; then
+  git_quiet() { git -C "$checkout" -c user.name=t -c user.email=t@t -c commit.gpgsign=false "$@" >/dev/null; }
+  git_quiet init -q
+  git_quiet commit -q --allow-empty -m one
+  old="$(git -C "$checkout" rev-parse HEAD)"
+  git_quiet commit -q --allow-empty -m two
+  git_quiet commit -q --allow-empty -m three
+  mkdir -p "$checkout/.git/refs/remotes/origin"
+  git -C "$checkout" rev-parse HEAD >"$checkout/.git/refs/remotes/origin/main"
+  echo "$old" >"$checkout/.git/HEAD"
+  in_tty() { script -q /dev/null "$launcher" 2>&1 | tr -d '\r'; }
+  [[ "$(in_tty)" == *"demo: 2 new commit(s) on origin/main; run demo-update"* ]] || fail "behind hint missing"
+  [[ "$(in_tty)" != *"new commit"* ]] || fail "behind hint repeated within a day"
+  [[ "$("$launcher" 2>&1)" != *"new commit"* ]] || fail "behind hint without a terminal"
+  rm "$tmp/state/demo.behind"
+  cp "$checkout/.git/refs/remotes/origin/main" "$checkout/.git/HEAD"
+  [[ "$(in_tty)" != *"new commit"* ]] || fail "behind hint when up to date"
+  rm -rf "$checkout/.git"
+fi
 
 echo "24" >"$checkout/.node-version"
 expect "partial version falls back to the pinned major" \

@@ -24,6 +24,17 @@
           "fallback_node_major=${lib.versions.major pkgs.nodejs_24.version}"
         ];
 
+      # `bookmark@remote` maps to the Git ref a colocated jj repo exports on fetch.
+      trackRef =
+        cli:
+        let
+          parts = if cli.track == null then null else builtins.match "([^@]+)@([^@]+)" cli.track;
+        in
+        if parts == null || cli.repo == null then
+          ""
+        else
+          "refs/remotes/${builtins.elemAt parts 1}/${builtins.elemAt parts 0}";
+
       cliPackages =
         name: cli:
         let
@@ -33,6 +44,10 @@
               (settings name cli)
               "entry=${lib.escapeShellArg cli.entry}"
               "update_env=${envName name}_UPDATE_COMMAND"
+              "track_ref=${lib.escapeShellArg (trackRef cli)}"
+              "repo_git=${lib.escapeShellArg (if cli.repo == null then "" else "${expandHome cli.repo}/.git")}"
+              "hint_stamp=${lib.escapeShellArg "${config.xdg.stateHome}/dev-clis/${name}.behind"}"
+              "git_bin=${pkgs.git}/bin/git"
               (builtins.readFile ../assets/dev-clis/common.sh)
               (builtins.readFile ../assets/dev-clis/launcher.sh)
             ];
