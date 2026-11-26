@@ -225,9 +225,16 @@
       # disk writes in 12 h, flagged by macOS on 2026-11-13). The app stays installed; true starts it at login again.
       secretbarAutostart = false;
       secretbarLauncher = pkgs.writeShellScript "secretbar-launcher" ''
+        # Stop the previous build before opening the new one. `open` starts a
+        # second process when the old one is still exiting, which is how two
+        # SecretBars and two popovers appeared; wait for the pid to disappear
+        # instead of sleeping a fixed second.
         ${pkgs.coreutils}/bin/timeout --kill-after=2s 5s \
           /usr/bin/pkill -TERM -f '/SecretBar\.app/Contents/MacOS/secretbar' 2>/dev/null || true
-        /bin/sleep 1
+        for _ in $(seq 1 50); do
+          /usr/bin/pgrep -f '/SecretBar\.app/Contents/MacOS/secretbar' >/dev/null 2>&1 || break
+          /bin/sleep 0.1
+        done
         # SECRETBAR_AUTOSTART makes the app hide its window after launch; it
         # is a background resident at login/activation time only.
         exec ${pkgs.coreutils}/bin/timeout --kill-after=5s 15s \
