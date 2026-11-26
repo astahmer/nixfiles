@@ -19,7 +19,7 @@
         lib.concatStringsSep "\n" [
           "name=${lib.escapeShellArg name}"
           "default_checkout=${lib.escapeShellArg (expandHome cli.checkout)}"
-          "checkout_env=${envName name}_CHECKOUT"
+          "checkout_env=${if cli.checkoutEnv == null then "${envName name}_CHECKOUT" else cli.checkoutEnv}"
           "fallback_node=${pkgs.nodejs_24}/bin/node"
           "fallback_node_major=${lib.versions.major pkgs.nodejs_24.version}"
         ];
@@ -46,6 +46,7 @@
               "launcher=${launcher}/bin/${name}"
               "completion_args=(${lib.escapeShellArgs cli.completions})"
               "completion_dir=${lib.escapeShellArg completionDir}"
+              "build=${lib.escapeShellArg (if cli.build == null then "" else cli.build)}"
               (builtins.readFile ../assets/dev-clis/common.sh)
               (builtins.readFile ../assets/dev-clis/update.sh)
             ];
@@ -82,6 +83,16 @@
                 type = lib.types.nullOr lib.types.str;
                 default = null;
                 description = "jj revset `<name>-update` fetches and moves the checkout onto (for example main@origin).";
+              };
+              checkoutEnv = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Environment variable that overrides the checkout; defaults to `<NAME>_CHECKOUT`.";
+              };
+              build = lib.mkOption {
+                type = lib.types.nullOr lib.types.str;
+                default = null;
+                description = "Shell command `<name>-update` runs in the checkout after installing, for an entry that is a build output.";
               };
               completions = lib.mkOption {
                 type = lib.types.listOf lib.types.str;

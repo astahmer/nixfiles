@@ -108,13 +108,15 @@
           dsh() {
             fnm exec --using=v24.11.1 -- dsh "$@"
           }
-
-          # dshx is built inside the dshfiles checkout, not installed globally;
-          # run that build with the Node version DSH itself uses.
-          dshx() {
-            fnm exec --using=v24.11.1 -- node "''${DSHFILES_DIR:-${config.dsh.dshfilesCheckout}}/tooling/dshx/packages/dshx/dist/cli/bin.js" "$@"
-          }
         '';
+
+        # dshx is built inside the dshfiles checkout you work in, not installed globally; `dshx-update` rebuilds it.
+        devClis.dshx = {
+          checkout = config.dsh.dshfilesCheckout;
+          checkoutEnv = "DSHFILES_DIR";
+          entry = "tooling/dshx/packages/dshx/dist/cli/bin.js";
+          build = "pnpm --dir tooling/dshx run build";
+        };
 
         # The bundle is a directory, which Home Manager cannot link: its
         # activation only emits regular files and symlinks, and its comparison

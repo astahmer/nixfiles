@@ -27,6 +27,13 @@ devClis.foo = { checkout = "~/dev/foo"; entry = "src/cli.ts"; };
 | `repo`        | `null`  | jj repository `<name>-update` adds the checkout to as a workspace when it is missing.   |
 | `track`       | `null`  | jj revset `<name>-update` fetches and moves the checkout onto, such as `main@origin`.   |
 | `completions` | `[ ]`   | Arguments that print the zsh completion, such as `[ "completions" "zsh" ]`.             |
+| `checkoutEnv` | `null`  | Variable that overrides the checkout per call; defaults to `<NAME>_CHECKOUT`.           |
+| `build`       | `null`  | Command `<name>-update` runs in the checkout after installing, for a built entry.       |
+
+A built entry (a `dist/` file) works the same way: `devClis.dshx` in
+`modules/dsh.nix` runs `tooling/dshx/packages/dshx/dist/cli/bin.js` from the
+dshfiles checkout you work in, honors `DSHFILES_DIR`, and `dshx-update`
+reinstalls and rebuilds it.
 
 ## What the launcher does
 

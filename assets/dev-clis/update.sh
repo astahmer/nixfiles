@@ -1,7 +1,7 @@
 # `<name>-update`: creates or moves the checkout to the tracked revision (a
 # dedicated jj workspace nobody edits), reinstalls its dependencies and
 # refreshes the zsh completion. Extra settings: repo, track, launcher,
-# completion_args (array), completion_dir.
+# completion_args (array), completion_dir, build.
 
 if [ -n "$track" ]; then
   if [ ! -e "$checkout" ]; then
@@ -36,6 +36,9 @@ if [ -f "$checkout/pnpm-lock.yaml" ]; then
   (cd "$checkout" && PATH="$node_bin:$PATH" pnpm install --frozen-lockfile)
 elif [ -f "$checkout/package-lock.json" ]; then
   (cd "$checkout" && PATH="$node_bin:$PATH" npm ci)
+fi
+if [ -n "$build" ]; then
+  (cd "$checkout" && PATH="$node_bin:$PATH" bash -c "$build")
 fi
 
 if [ "${#completion_args[@]}" -gt 0 ]; then
