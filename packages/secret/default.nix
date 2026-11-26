@@ -7,7 +7,7 @@
 }:
 stdenv.mkDerivation {
   pname = "secret";
-  version = "2.6.0";
+  version = "2.7.0";
 
   src = secretSource;
 
@@ -25,6 +25,7 @@ stdenv.mkDerivation {
   installPhase = ''
     runHook preInstall
     install -Dm755 "$NIX_BUILD_TOP/.build/release/secret" "$out/bin/secret"
+    install -Dm644 "$src/secret.1" "$out/share/man/man1/secret.1"
     runHook postInstall
   '';
 

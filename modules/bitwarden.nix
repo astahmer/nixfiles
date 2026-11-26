@@ -11,8 +11,9 @@
       ...
     }:
     let
-      secretBin = "${inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret}/bin/secret";
-      secret = pkgs.writeShellApplication {
+      secretPackage = inputs.self.packages.${pkgs.stdenv.hostPlatform.system}.secret;
+      secretBin = "${secretPackage}/bin/secret";
+      secretWrapper = pkgs.writeShellApplication {
         name = "secret";
         runtimeInputs = [
           pkgs.bitwarden-cli
@@ -37,6 +38,16 @@
           exec ${secretBin} "$@"
         '';
       };
+      # The wrapper is what lands on PATH, so its store path must also carry
+      # the man page: `man secret` reads the profile's share/man, not a
+      # dependency's.
+      secret = pkgs.runCommand "secret" { } ''
+        mkdir -p $out/bin $out/share/man/man1
+        ln -s ${secretWrapper}/bin/secret $out/bin/secret
+        ${lib.optionalString (builtins.pathExists "${secretPackage}/share/man/man1/secret.1.gz") ''
+          install -m644 ${secretPackage}/share/man/man1/secret.1.gz $out/share/man/man1/secret.1.gz
+        ''}
+      '';
       sshSecretConfig = ../.secret.json;
       # Global-scope secret aliases are git-synced through the nixfiles clone.
       # The symlink targets the clone (via the ~/.config/nixfiles stable
