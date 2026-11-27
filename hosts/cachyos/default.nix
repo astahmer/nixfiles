@@ -45,6 +45,7 @@ in
           hm.codexConfig
           hm.iris
           hm.work
+          hm.dshRuntime
 
           (
             { pkgs, ... }:
