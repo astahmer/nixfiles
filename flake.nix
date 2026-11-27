@@ -179,6 +179,10 @@
             };
             lightjj = pkgs'.callPackage ./packages/lightjj { pkgs = pkgs'; };
             mise = pkgs'.callPackage ./packages/mise { };
+            mistral-vibe = pkgs'.callPackage ./packages/mistral-vibe {
+              llmAgentsPackages = inputs.llm-agents.packages.${system};
+              llmNixpkgs = import inputs.llm-agents.inputs.nixpkgs { inherit system; };
+            };
             nub = pkgs'.callPackage ./packages/nub { };
             nh = pkgs'.callPackage ./packages/nh { };
             qmd = inputs.qmd.packages.${system}.default;
