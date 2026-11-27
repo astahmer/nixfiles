@@ -50,21 +50,22 @@
     };
 
     # jjw and secret-cli are source-only repositories; Nixfiles owns their
-    # Nix packaging and machine integration.
+    # Nix packaging and machine integration. They are public, so use GitHub
+    # HTTPS refs — this keeps a fresh Linux install usable without SSH keys.
     jjw = {
-      url = "git+ssh://git@github.com/astahmer/jjw.git?ref=main";
+      url = "github:astahmer/jjw";
       flake = false;
     };
 
     secret-cli = {
-      url = "git+ssh://git@github.com/astahmer/secret-cli.git?ref=main";
+      url = "github:astahmer/secret-cli";
       flake = false;
     };
 
-    # shiftshift is a private, local-first app repo; SSH keeps the input
+    # shiftshift is a local-first app repo; public HTTPS keeps the input
     # usable without putting GitHub credentials in the flake.
     shiftshift = {
-      url = "git+ssh://git@github.com/astahmer/shiftshift-app.git?ref=main";
+      url = "github:astahmer/shiftshift-app";
     };
 
     # Tokitoki's source flake provides the reproducible Bun/CLI package. The

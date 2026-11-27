@@ -338,16 +338,15 @@
       "locked": {
         "lastModified": 1790936969,
         "narHash": "sha256-0eRLNkURv5qsFD+EBnsdoHduWr1NHvnhaGydzBQ2QCE=",
-        "ref": "main",
+        "owner": "astahmer",
+        "repo": "jjw",
         "rev": "f2159f0a5c555ae5cf5da1065646bef4af42e2e0",
-        "revCount": 6,
-        "type": "git",
-        "url": "ssh://git@github.com/astahmer/jjw.git"
+        "type": "github"
       },
       "original": {
-        "ref": "main",
-        "type": "git",
-        "url": "ssh://git@github.com/astahmer/jjw.git"
+        "owner": "astahmer",
+        "repo": "jjw",
+        "type": "github"
       }
     },
     "llm-agents": {
@@ -673,16 +672,15 @@
       "locked": {
         "lastModified": 1795711540,
         "narHash": "sha256-z4IGxiGHYloe+UcwZ4vgU40IZWsE20ul1JfZWIInZSo=",
-        "ref": "main",
+        "owner": "astahmer",
+        "repo": "secret-cli",
         "rev": "517365f531ae54ec12cede187728baed75f4409e",
-        "revCount": 22,
-        "type": "git",
-        "url": "ssh://git@github.com/astahmer/secret-cli.git"
+        "type": "github"
       },
       "original": {
-        "ref": "main",
-        "type": "git",
-        "url": "ssh://git@github.com/astahmer/secret-cli.git"
+        "owner": "astahmer",
+        "repo": "secret-cli",
+        "type": "github"
       }
     },
     "shiftshift": {
@@ -694,16 +692,15 @@
       "locked": {
         "lastModified": 1791897269,
         "narHash": "sha256-V9RzGmdYzxx/xsb7Hs3ItSdKGV8p55qEZwEHvcmkMIk=",
-        "ref": "main",
+        "owner": "astahmer",
+        "repo": "shiftshift-app",
         "rev": "a34cbbaf8f7928bcd0b5f3c648dc087c84a7d3d9",
-        "revCount": 85,
-        "type": "git",
-        "url": "ssh://git@github.com/astahmer/shiftshift-app.git"
+        "type": "github"
       },
       "original": {
-        "ref": "main",
-        "type": "git",
-        "url": "ssh://git@github.com/astahmer/shiftshift-app.git"
+        "owner": "astahmer",
+        "repo": "shiftshift-app",
+        "type": "github"
       }
     },
     "systems": {
