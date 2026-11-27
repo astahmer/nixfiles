@@ -5,7 +5,7 @@
   swiftpm,
   secretSource,
 }:
-stdenv.mkDerivation {
+stdenv.mkDerivation ({
   pname = "secret";
   version = "2.7.0";
 
@@ -46,4 +46,9 @@ stdenv.mkDerivation {
     mainProgram = "secret";
     platforms = lib.platforms.all;
   };
-}
+} // lib.optionalAttrs stdenv.hostPlatform.isLinux {
+  # SwiftPM rejects the manifest's empty platform list on Linux.
+  postPatch = ''
+    substituteInPlace Package.swift --replace-fail "platforms: supportedPlatforms," ""
+  '';
+})

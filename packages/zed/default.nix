@@ -4,6 +4,8 @@
   fetchurl,
   autoPatchelfHook,
   alsa-lib,
+  glib,
+  libgcc,
 }:
 let
   sourceFor =
@@ -43,6 +45,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   buildInputs = lib.optionals stdenvNoCC.hostPlatform.isLinux [
     alsa-lib
+    glib
+    libgcc
   ];
 
   sourceRoot = "zed.app";

@@ -3,6 +3,7 @@
   stdenvNoCC,
   fetchurl,
   autoPatchelfHook,
+  libgcc,
 }:
 let
   version = "4.4.2";
@@ -35,6 +36,12 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = lib.optionals stdenvNoCC.hostPlatform.isLinux [
     autoPatchelfHook
+  ];
+
+  # The upstream Linux binary links libgcc_s.so.1 for unwinding; autoPatchelf
+  # needs it in buildInputs to find and wire it up.
+  buildInputs = lib.optionals stdenvNoCC.hostPlatform.isLinux [
+    libgcc
   ];
 
   installPhase = ''

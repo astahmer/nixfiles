@@ -17,7 +17,7 @@ let
       };
       x86_64-linux = {
         url = "https://github.com/nubjs/nub/releases/download/v${version}/nub-linux-x64-musl.tar.gz";
-        hash = "sha256-/0KOVPhShyy5qiWGekDE+xkRp9qX+teeuE6kI0gK+Z0=";
+        hash = "sha256-kQF1Sz/beixpOUBeNu/mBUrDT+HRNl0yHuzzsRGWknQ=";
       };
     }
     .${system} or (throw "Unsupported platform for nub: ${system}");

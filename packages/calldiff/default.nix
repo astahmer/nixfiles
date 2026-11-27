@@ -1,62 +1,34 @@
 {
   lib,
-  stdenvNoCC,
+  buildNpmPackage,
   fetchFromGitHub,
   nodejs_24,
 }:
-let
-  rev = "d58c48b33327c1c833b88df521f6838e9a5cc8c5";
-in
-stdenvNoCC.mkDerivation {
+buildNpmPackage rec {
   pname = "calldiff";
   version = "0.6.0";
 
   src = fetchFromGitHub {
     owner = "tanishqkancharla";
     repo = "calldiff";
-    inherit rev;
+    rev = "d58c48b33327c1c833b88df521f6838e9a5cc8c5";
     hash = "sha256-6Lefc0rq4bFyptycBK2Uz8bZR648ca5hymWMvgsJVC4=";
   };
 
-  outputHash = "sha256-Lkjjd4xiOaIwZq8vJdsBvyrMtsDEWqg2lA9Nx6tJYKk=";
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  dontFixup = true;
+  npmDepsHash = "sha256-hEhU73MH5ueh3RRYCaTfAI23diwWViThvEw7ip2O9j8=";
+  nodejs = nodejs_24;
+  npmFlags = [ "--ignore-scripts" ];
 
-  nativeBuildInputs = [ nodejs_24 ];
-
-  buildPhase = ''
-    runHook preBuild
-
-    export HOME="$(mktemp -d)"
-    export npm_config_cache="$HOME/.npm"
-    unset SSL_CERT_FILE CURL_CA_BUNDLE NIX_SSL_CERT_FILE
-    npm ci --ignore-scripts --no-audit --no-fund
-    npm run build
-    npm prune --omit=dev --ignore-scripts --no-audit --no-fund
-
-    runHook postBuild
+  # npm's tsc shim and other bin scripts use `#!/usr/bin/env node`, which does
+  # not exist in the Nix build sandbox. Patch them after the deps are linked
+  # and before the package's `npm run build` (tsc) runs.
+  preBuild = ''
+    patchShebangs node_modules
   '';
 
-  installPhase = ''
-    runHook preInstall
-
-    package_dir="$out/lib/node_modules/calldiff"
-    mkdir -p "$package_dir"
-    cp -R dist node_modules package.json README.md LICENSE "$package_dir/"
-
+  postInstall = ''
     mkdir -p "$out/share/calldiff/skills"
     cp -R skills/calldiff "$out/share/calldiff/skills/"
-
-    install -d "$out/bin"
-    cat > "$out/bin/calldiff" <<'EOF'
-    #!/bin/sh
-    script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-    exec ${nodejs_24}/bin/node "$script_dir/../lib/node_modules/calldiff/dist/cli.js" "$@"
-    EOF
-    chmod 755 "$out/bin/calldiff"
-
-    runHook postInstall
   '';
 
   meta = {

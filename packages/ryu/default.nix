@@ -13,7 +13,7 @@ let
       };
       x86_64-linux = {
         url = "https://github.com/dmmulroy/jj-ryu/releases/download/v${version}/ryu-linux-x64.tar.gz";
-        hash = "sha256-AhroefnYU5uzFKX+WyHZFgbUzIX/Ns7i/2boqM94yXw=";
+        hash = "sha256-fM3DQZYW5pJ6EaR1u1u0J4Sx44u0EUKW3JLU29xi/us=";
       };
     }
     .${system} or (throw "Unsupported platform for jj-ryu: ${system}");
