@@ -36,6 +36,7 @@
           echo "codex: initialized $config_file from template" >&2
         fi
 
+        ${pkgs.coreutils}/bin/rm -f "$candidate_config"
         ${pkgs.gawk}/bin/awk -f "${../assets/codex/normalize-root-model.awk}" "$config_file" > "$candidate_config"
         ${pkgs.coreutils}/bin/chmod 600 "$candidate_config"
         ${pkgs.coreutils}/bin/mv "$candidate_config" "$config_file"
