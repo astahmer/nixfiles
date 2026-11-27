@@ -178,6 +178,9 @@ in
               home.homeDirectory = "/home/${username}";
               home.username = username;
               targets.genericLinux.enable = true;
+              # The Mac runs Claude Code's native installer; here the CLI comes from llm-agents so the
+              # DSH runtime's Claude accounts can run `claude auth login`.
+              home.packages = [ inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.claude-code ];
               home.file.".config/autostart/tailscale-systray.desktop".text = ''
                 [Desktop Entry]
                 Type=Application
