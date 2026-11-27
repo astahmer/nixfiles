@@ -81,6 +81,8 @@
               "PNPM_HOME=${home}/.local/share/pnpm"
               "NODE_COMPILE_CACHE=${home}/.cache/dshfiles/node-compile-cache"
             ];
+            # Provider API keys (e.g. OPENCODE_API_KEY) live in this machine-local 0600 file, never in the repo.
+            EnvironmentFile = "-${home}/.config/dsh-runtime/runtime.env";
             ExecStart = "${start}";
             Restart = "on-failure";
             RestartSec = "10s";
