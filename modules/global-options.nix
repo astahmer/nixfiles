@@ -21,6 +21,18 @@
     description = "Name used for the standalone Home Manager profile.";
   };
 
+  options.nixfiles.linuxHomeName = lib.mkOption {
+    type = lib.types.str;
+    default = "cachyos";
+    description = "Name used for the standalone Linux Home Manager profile.";
+  };
+
+  options.nixfiles.linuxSystem = lib.mkOption {
+    type = lib.types.str;
+    default = "x86_64-linux";
+    description = "System string for the standalone Linux Home Manager profile.";
+  };
+
   options.nixfiles.nixosSystem = lib.mkOption {
     type = lib.types.str;
     default = "x86_64-linux";
